@@ -9,6 +9,17 @@
   "files": [
     "dist"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hawkeyexl/docmeta.git"
+  },
+  "homepage": "https://github.com/hawkeyexl/docmeta#readme",
+  "bugs": {
+    "url": "https://github.com/hawkeyexl/docmeta/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=20"
   },
