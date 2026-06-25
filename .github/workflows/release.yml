@@ -1,0 +1,65 @@
+# Release pipeline. On every push to a release branch, semantic-release reads
+# the conventional commits since the last tag, computes the next version, and
+# (when warranted) updates CHANGELOG/package.json, tags, creates a GitHub
+# Release, and publishes to npm.
+#
+#   main      -> @latest
+#   next      -> @next prerelease
+#   feat/**   -> per-branch prerelease channel
+#
+# Requires an NPM_TOKEN repository secret (npm automation token). The default
+# GITHUB_TOKEN is sufficient for the release commit, tag, and GitHub Release.
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+      - next
+      - "feat/**"
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write # npm provenance (public package)
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # The husky commit-msg hook isn't useful in CI, and semantic-release's
+    # release commit embeds the full changelog (long lines). Disable husky.
+    env:
+      HUSKY: "0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # NPM_TOKEN: @semantic-release/npm verifyConditions writes ~/.npmrc.
+          # NODE_AUTH_TOKEN: read by the npm CLI (setup-node configured the registry).
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npx semantic-release

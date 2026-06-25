@@ -1,9 +1,11 @@
 name: CI
 
+# PRs are validated here (and commit messages by commitlint.yml). Pushes to
+# release branches are validated + released by release.yml, so we don't also
+# run CI on them to avoid duplicate work.
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   build-test:
