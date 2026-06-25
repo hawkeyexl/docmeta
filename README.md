@@ -164,6 +164,11 @@ Implemented:
   line plus `:key: value` attribute entries. Attribute values are parsed as YAML
   scalars (so `2` → number, `true` → boolean); a valueless `:flag:` is `true`
   and an unset `:!flag:` is `false`.
+- **reStructuredText** (`.rst`) — accepts either a leading YAML frontmatter
+  block (`--- … ---`) or a native docinfo field list (`:key: value` entries at
+  the top of the document, after any title). Field values are parsed as YAML
+  scalars (so `2` → number, `[a, b]` → array); a valueless `:flag:` is `true`.
+  Section titles / headings are not extracted.
 - **XML** (`.xml`) — reads the root element's attributes (e.g.
   `<document type="concept" version="2">`). Values are parsed as YAML scalars
   (so `2` → number, `true` → boolean); `xmlns`/`xmlns:*` namespace declarations
@@ -173,11 +178,10 @@ Implemented:
   `content` parsed as a YAML scalar (so `2` → number, `true` → boolean); tags
   with neither `name` nor `property` (e.g. `charset`) are ignored.
 
-Metadata extraction is a pluggable layer. The following are defined against the
-extractor interface and will be added without changing validation, schema
-resolution, or reporting: **reStructuredText**. It currently reports a clear "not
-yet implemented" message. (MDX `export const meta` parsing is also future work,
-as is XML's metadata-element style.)
+Metadata extraction is a pluggable layer: new formats plug in behind the
+extractor interface without changing validation, schema resolution, or
+reporting. Future work includes MDX `export const meta` parsing and XML's
+metadata-element style.
 
 ## Programmatic API
 

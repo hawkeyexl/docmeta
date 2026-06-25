@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
 import { markdownExtractor } from "../src/extractors/markdown.js";
 import { mdxExtractor } from "../src/extractors/mdx.js";
 import { asciidocExtractor } from "../src/extractors/asciidoc.js";
+import { rstExtractor } from "../src/extractors/rst.js";
 import { xmlExtractor } from "../src/extractors/xml.js";
 import { htmlExtractor } from "../src/extractors/html.js";
 import {
@@ -9,7 +13,12 @@ import {
   extractorByName,
   supportedExtensions,
 } from "../src/extractors/index.js";
+import { createStubExtractor } from "../src/extractors/stub.js";
 import { DocmetaError } from "../src/types.js";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const readFixture = (name: string): string =>
+  readFileSync(`${here}/fixtures/${name}`, "utf8");
 
 const VALID = `---
 type: concept
@@ -156,6 +165,72 @@ describe("asciidoc extractor", () => {
   });
 });
 
+describe("rst extractor", () => {
+  it("extracts typed docinfo fields and skips the title", () => {
+    const r = rstExtractor.extract(readFixture("valid.rst"), "x.rst");
+    expect(r.present).toBe(true);
+    expect(r.format).toBe("rst");
+    expect(r.data.type).toBe("concept");
+    // `title` comes from the `:title:` field, not the page heading
+    expect(r.data.title).toBe("Hello");
+    // values are parsed as YAML scalars, so `[a, b]` is an array
+    expect(r.data.tags).toEqual(["a", "b"]);
+    expect(r.data.timestamp).toBe("2026-06-25T10:00:00Z");
+  });
+
+  it("maps docinfo fields to source lines past the skipped title", () => {
+    const r = rstExtractor.extract(readFixture("valid.rst"), "x.rst");
+    expect(r.lineFor("/type")).toBe(4);
+    expect(r.lineFor("/title")).toBe(5);
+    expect(r.lineFor("/tags")).toBe(6);
+    expect(r.lineFor("/timestamp")).toBe(7);
+  });
+
+  it("treats a valueless field as true", () => {
+    const r = rstExtractor.extract(":draft:\n:type: concept\n", "x.rst");
+    expect(r.data.draft).toBe(true);
+    expect(r.data.type).toBe("concept");
+  });
+
+  it("falls back to the first field line for the root pointer", () => {
+    const r = rstExtractor.extract(readFixture("valid.rst"), "x.rst");
+    expect(r.lineFor("")).toBe(4);
+  });
+
+  it("parses a leading YAML frontmatter block when present", () => {
+    const r = rstExtractor.extract(VALID, "x.rst");
+    expect(r.present).toBe(true);
+    expect(r.format).toBe("rst");
+    expect(r.data.type).toBe("concept");
+    expect(r.data.tags).toEqual(["a", "b"]);
+    expect(r.lineFor("/type")).toBe(2);
+  });
+
+  it("supports a docinfo field list with no preceding title", () => {
+    const r = rstExtractor.extract(":type: concept\n\nBody\n", "x.rst");
+    expect(r.present).toBe(true);
+    expect(r.data.type).toBe("concept");
+    expect(r.lineFor("/type")).toBe(1);
+  });
+
+  it("reports absent metadata for a document with no field list", () => {
+    const r = rstExtractor.extract(readFixture("no-frontmatter.rst"), "x.rst");
+    expect(r.present).toBe(false);
+    expect(r.data).toEqual({});
+    // No block present, so positions are unknown — don't annotate at line 1.
+    expect(r.lineFor("")).toBeUndefined();
+    expect(r.lineFor("/type")).toBeUndefined();
+  });
+
+  it("maps nested pointers to the field line via ancestor walk", () => {
+    // A YAML-typed array field: Ajv may report "/tags/0".
+    const r = rstExtractor.extract(":type: concept\n:tags: [a, b]\n", "x.rst");
+    expect(r.data.tags).toEqual(["a", "b"]);
+    expect(r.lineFor("/tags/0")).toBe(2);
+    expect(r.lineFor("/tags")).toBe(2);
+  });
+});
+
 const XML_DOC = `<?xml version="1.0" encoding="UTF-8"?>
 <!-- a comment -->
 <document type="concept"
@@ -289,6 +364,11 @@ describe("extractor registry", () => {
     expect(extractorForExtension(".ASCIIDOC")?.name).toBe("asciidoc");
   });
 
+  it("resolves rst by extension", () => {
+    expect(extractorForExtension(".rst")?.name).toBe("rst");
+    expect(extractorForExtension(".RST")?.name).toBe("rst");
+  });
+
   it("resolves xml by extension", () => {
     expect(extractorForExtension(".xml")?.name).toBe("xml");
     expect(extractorForExtension(".XML")?.name).toBe("xml");
@@ -307,19 +387,19 @@ describe("extractor registry", () => {
   it("lists supported (implemented) extensions", () => {
     expect(supportedExtensions()).toContain(".md");
     expect(supportedExtensions()).toContain(".adoc");
+    expect(supportedExtensions()).toContain(".rst");
     expect(supportedExtensions()).toContain(".xml");
     expect(supportedExtensions()).toContain(".html");
   });
 
   it("returns undefined for an unsupported extension", () => {
-    expect(extractorForExtension(".rst")).toBeUndefined();
+    expect(extractorForExtension(".txt")).toBeUndefined();
   });
 
-  it("stub extractors throw not-implemented", async () => {
-    const { rstExtractor } = await import("../src/extractors/rst.js");
-    expect(rstExtractor.implemented).toBe(false);
-    expect(() => rstExtractor.extract(".. meta::\n", "x.rst")).toThrow(
-      DocmetaError,
-    );
+  it("stub extractors throw not-implemented", () => {
+    // No registered format is a stub anymore; exercise the factory directly.
+    const stub = createStubExtractor("planned", [".planned"], "future format");
+    expect(stub.implemented).toBe(false);
+    expect(() => stub.extract("x", "x.planned")).toThrow(DocmetaError);
   });
 });
