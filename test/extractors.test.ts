@@ -163,24 +163,53 @@ describe("asciidoc extractor", () => {
 });
 
 describe("rst extractor", () => {
-  it("extracts typed docinfo fields and skips the title", () => {
+  it("extracts typed docinfo fields; a :title: field overrides the heading", () => {
     const r = rstExtractor.extract(readFixture("valid.rst"), "x.rst");
     expect(r.present).toBe(true);
     expect(r.format).toBe("rst");
     expect(r.data.type).toBe("concept");
-    // `title` comes from the `:title:` field, not the page heading
+    // an explicit `:title:` field takes precedence over the "Page Title" heading
     expect(r.data.title).toBe("Hello");
     // values are parsed as YAML scalars, so `[a, b]` is an array
     expect(r.data.tags).toEqual(["a", "b"]);
     expect(r.data.timestamp).toBe("2026-06-25T10:00:00Z");
   });
 
-  it("maps docinfo fields to source lines past the skipped title", () => {
+  it("maps fields to source lines; :title: field wins the /title line", () => {
     const r = rstExtractor.extract(readFixture("valid.rst"), "x.rst");
     expect(r.lineFor("/type")).toBe(4);
     expect(r.lineFor("/title")).toBe(5);
     expect(r.lineFor("/tags")).toBe(6);
     expect(r.lineFor("/timestamp")).toBe(7);
+  });
+
+  it("extracts an underlined section title into `title`", () => {
+    const r = rstExtractor.extract(
+      "Doc Heading\n===========\n\n:type: concept\n",
+      "x.rst",
+    );
+    expect(r.present).toBe(true);
+    expect(r.data.title).toBe("Doc Heading");
+    expect(r.lineFor("/title")).toBe(1);
+    expect(r.data.type).toBe("concept");
+    expect(r.lineFor("/type")).toBe(4);
+  });
+
+  it("extracts an over- and under-lined section title", () => {
+    const r = rstExtractor.extract(
+      "======\nHello\n======\n\n:type: concept\n",
+      "x.rst",
+    );
+    expect(r.data.title).toBe("Hello");
+    // the title text sits on the second line
+    expect(r.lineFor("/title")).toBe(2);
+  });
+
+  it("treats a document with only a title as present", () => {
+    const r = rstExtractor.extract("Just A Title\n============\n\nBody.\n", "x.rst");
+    expect(r.present).toBe(true);
+    expect(r.data.title).toBe("Just A Title");
+    expect(r.data).toEqual({ title: "Just A Title" });
   });
 
   it("treats a valueless field as true", () => {
@@ -189,9 +218,10 @@ describe("rst extractor", () => {
     expect(r.data.type).toBe("concept");
   });
 
-  it("falls back to the first field line for the root pointer", () => {
+  it("falls back to the metadata block start for the root pointer", () => {
+    // the block starts at the heading line, ahead of the field list
     const r = rstExtractor.extract(readFixture("valid.rst"), "x.rst");
-    expect(r.lineFor("")).toBe(4);
+    expect(r.lineFor("")).toBe(1);
   });
 
   it("parses a leading YAML frontmatter block when present", () => {

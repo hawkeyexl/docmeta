@@ -55,52 +55,73 @@ function lineForFactory(
 }
 
 /**
- * Advance past leading blank lines and an optional section title (with or
- * without an overline) so the docinfo field list that follows can be parsed.
- * Returns the index of the first line that is not blank/title adornment.
+ * Detect a leading section title — a text line underlined with punctuation,
+ * optionally also overlined — after any blank lines. The title is collected as
+ * page metadata; `next` is the index where docinfo field-list parsing resumes.
  */
-function skipToDocinfo(lines: string[]): number {
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i] ?? "";
-    if (line.trim() === "") {
-      i++;
-      continue;
-    }
-    // A field line marks the start of the docinfo block.
-    if (FIELD.test(line)) break;
-    const next = lines[i + 1] ?? "";
-    // Over+underlined title: adornment / text / adornment.
-    if (
-      ADORN.test(line) &&
-      next.trim() !== "" &&
-      ADORN.test(lines[i + 2] ?? "")
-    ) {
-      i += 3;
-      continue;
-    }
-    // Underlined title: text / adornment.
-    if (ADORN.test(next)) {
-      i += 2;
-      continue;
-    }
-    // Plain body text before any field list — there is no docinfo.
-    break;
-  }
-  return i;
+interface TitleInfo {
+  /** Title text, when a leading section title is present. */
+  title?: string;
+  /** 1-based source line of the title text. */
+  line?: number;
+  /** Index of the first line after the title (and its adornment lines). */
+  next: number;
 }
 
-/** Parse the native reStructuredText docinfo field list. */
+function parseTitle(lines: string[]): TitleInfo {
+  let i = 0;
+  while (i < lines.length && (lines[i] ?? "").trim() === "") i++;
+  if (i >= lines.length) return { next: i };
+
+  const first = lines[i] ?? "";
+  // A field line starts the docinfo block, not a title.
+  if (FIELD.test(first)) return { next: i };
+
+  // Over- and under-lined: adornment / title text / adornment.
+  const overTitle = lines[i + 1] ?? "";
+  if (
+    ADORN.test(first) &&
+    overTitle.trim() !== "" &&
+    !FIELD.test(overTitle) &&
+    ADORN.test(lines[i + 2] ?? "")
+  ) {
+    return { title: overTitle.trim(), line: i + 2, next: i + 3 };
+  }
+
+  // Underlined: title text / adornment.
+  if (!ADORN.test(first) && ADORN.test(lines[i + 1] ?? "")) {
+    return { title: first.trim(), line: i + 1, next: i + 2 };
+  }
+
+  return { next: i };
+}
+
+/**
+ * Parse the native reStructuredText page metadata: a leading section title
+ * (collected as `title`) followed by the docinfo field list. An explicit
+ * `:title:` field takes precedence over the heading.
+ */
 function extractDocinfo(content: string): ExtractedMetadata {
   const body = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
   const lines = body.split(/\r?\n/);
 
   const data: Record<string, unknown> = {};
   const map = new Map<string, number>();
-  let firstFieldLine = -1;
+  // First source line of the metadata block (title or, failing that, a field).
+  let blockStart = -1;
 
-  const start = skipToDocinfo(lines);
-  for (let i = start; i < lines.length; i++) {
+  const titleInfo = parseTitle(lines);
+  if (titleInfo.title != null && titleInfo.line != null) {
+    data.title = titleInfo.title;
+    map.set("/title", titleInfo.line);
+    blockStart = titleInfo.line;
+  }
+
+  // Skip blank lines between the title and the field list.
+  let i = titleInfo.next;
+  while (i < lines.length && (lines[i] ?? "").trim() === "") i++;
+
+  for (; i < lines.length; i++) {
     const line = lines[i] ?? "";
     // The field list ends at the first blank or non-field line.
     if (line.trim() === "") break;
@@ -109,16 +130,16 @@ function extractDocinfo(content: string): ExtractedMetadata {
 
     const name = field[1].trim();
     const value = field[2] === undefined ? true : typeValue(field[2]);
-    if (firstFieldLine === -1) firstFieldLine = i + 1;
+    if (blockStart === -1) blockStart = i + 1;
     data[name] = value;
     map.set(`/${escapePointerSegment(name)}`, i + 1);
   }
 
-  const present = firstFieldLine !== -1;
-  // Root pointer maps to the first field line (block start). When no field list
-  // is present we record nothing, so `lineFor` reports unknown rather than
-  // misleadingly annotating missing-metadata errors at line 1.
-  if (present) map.set("", firstFieldLine);
+  const present = blockStart !== -1;
+  // Root pointer maps to the block start. When no metadata is present we record
+  // nothing, so `lineFor` reports unknown rather than misleadingly annotating
+  // missing-metadata errors at line 1.
+  if (present) map.set("", blockStart);
 
   return {
     data,
