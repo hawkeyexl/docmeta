@@ -71,4 +71,27 @@ describe("docmeta CLI (built bin)", () => {
     const r = run(["validate", "-", "--as", "markdown"], "---\ntype: note\n---\n");
     expect(r.status).toBe(0);
   });
+
+  it("gets fields from positional paths (parallel to validate)", () => {
+    const r = run(["get", "title,type", "test/fixtures/valid.md", "-f", "json"]);
+    expect(r.status).toBe(0);
+    const parsed = JSON.parse(r.stdout);
+    expect(parsed[0].values.type).toBe("concept");
+    expect(parsed[0].values.title).toBe("A Valid Document");
+  });
+
+  it("gets fields from piped stdin with --as", () => {
+    const r = run(
+      ["get", "type", "-", "--as", "markdown", "-f", "json"],
+      "---\ntype: note\n---\n",
+    );
+    expect(r.status).toBe(0);
+    expect(JSON.parse(r.stdout)[0].values.type).toBe("note");
+  });
+
+  it("exits 2 when get is given no paths and no config", () => {
+    const r = run(["get", "type"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("No files");
+  });
 });

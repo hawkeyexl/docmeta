@@ -131,21 +131,61 @@ export function buildProgram(): Command {
 
   program
     .command("get")
-    .description("Print one or more metadata field values from each file")
-    .argument("<fields...>", "metadata fields to print")
-    .option("-i, --in <paths...>", "files, directories, or globs to read")
-    .option("--as <format>", "force an input format")
+    .description(
+      "Print metadata field values from the given files/dirs/globs",
+    )
+    .argument("<fields>", "comma-separated metadata fields to print")
+    .argument(
+      "[paths...]",
+      "files, directories, or globs to read (use - for stdin)",
+    )
+    .option("--ext <list>", "comma-separated extensions for directory walks")
     .option("--exclude <glob>", "glob to exclude; repeatable", collect, [])
+    .option("--as <format>", "force an input format (e.g. markdown, mdx)")
     .option("-f, --format <format>", "output: pretty | json", "pretty")
-    .action(async (fields: string[], options, command: Command) => {
+    .option("-c, --config <path>", "path to a docmeta config file")
+    .addHelpText(
+      "after",
+      [
+        "",
+        "Examples:",
+        "  docmeta get title,type docs/intro.md",
+        '  docmeta get type "**/*.md" -f json',
+        "  cat page.md | docmeta get title - --as markdown",
+      ].join("\n"),
+    )
+    .action(async (fieldsArg: string, paths: string[], options, command: Command) => {
       try {
+        const format = options.format as string;
+        if (format !== "pretty" && format !== "json") {
+          throw new DocmetaError(
+            `Unknown --format "${format}". Use pretty or json.`,
+          );
+        }
+        const fields = String(fieldsArg)
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const exts: string[] | undefined = options.ext
+          ? String(options.ext)
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : undefined;
+        const stdinContent = paths.includes("-")
+          ? await readStdin()
+          : undefined;
+
         const results = await runGet({
           fields,
-          inputs: options.in ?? [],
+          inputs: paths,
           as: options.as,
           exclude: options.exclude,
+          exts,
+          configPath: options.config,
+          stdinContent,
         });
-        if (options.format === "json") {
+        if (format === "json") {
           process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
         } else {
           const c = palette(resolveColor(command.parent ?? command));
