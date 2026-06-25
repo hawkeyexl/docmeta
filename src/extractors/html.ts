@@ -40,9 +40,14 @@ function lineForFactory(
   map: Map<string, number>,
 ): (pointer: string) => number | undefined {
   return (pointer: string) => {
-    if (map.has(pointer)) return map.get(pointer);
+    // A bare top-level key (e.g. "type") maps to its "/type" JSON pointer.
+    const start =
+      pointer !== "" && !pointer.startsWith("/")
+        ? `/${escapePointerSegment(pointer)}`
+        : pointer;
+    if (map.has(start)) return map.get(start);
     // Walk up to the nearest recorded ancestor (e.g. a nested Ajv pointer).
-    let p = pointer;
+    let p = start;
     while (p.length > 0) {
       const idx = p.lastIndexOf("/");
       if (idx < 0) break;

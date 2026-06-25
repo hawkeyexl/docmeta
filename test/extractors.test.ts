@@ -46,6 +46,8 @@ describe("markdown extractor", () => {
     // line 1 is the opening ---, so `type` is line 2
     expect(r.lineFor("/type")).toBe(2);
     expect(r.lineFor("/timestamp")).toBe(7);
+    // a bare top-level key resolves like its JSON pointer
+    expect(r.lineFor("type")).toBe(2);
   });
 
   it("maps array items to source lines", () => {
@@ -119,6 +121,8 @@ describe("asciidoc extractor", () => {
     expect(r.lineFor("/type")).toBe(2);
     expect(r.lineFor("/version")).toBe(3);
     expect(r.lineFor("/tags")).toBe(6);
+    // a bare top-level key resolves like its JSON pointer
+    expect(r.lineFor("type")).toBe(2);
   });
 
   it("falls back to the document start for the root pointer", () => {
@@ -183,6 +187,9 @@ describe("rst extractor", () => {
     expect(r.lineFor("/type")).toBe(4);
     expect(r.lineFor("/title")).toBe(5);
     expect(r.lineFor("/tags")).toBe(6);
+    // a bare top-level key resolves like its JSON pointer (distinct from the
+    // root fallback line, so this would fail without bare-key support)
+    expect(r.lineFor("title")).toBe(5);
     expect(r.lineFor("/timestamp")).toBe(7);
   });
 
@@ -261,6 +268,8 @@ describe("xml extractor", () => {
     expect(r.lineFor("/version")).toBe(4);
     expect(r.lineFor("/draft")).toBe(5);
     expect(r.lineFor("/title")).toBe(6);
+    // a bare top-level key resolves like its JSON pointer
+    expect(r.lineFor("version")).toBe(4);
   });
 
   it("falls back to the root line for unknown pointers", () => {
@@ -335,6 +344,8 @@ describe("html extractor", () => {
     expect(r.lineFor("/type")).toBe(5);
     expect(r.lineFor("/version")).toBe(6);
     expect(r.lineFor("/og:title")).toBe(7);
+    // a bare top-level key resolves like its JSON pointer
+    expect(r.lineFor("title")).toBe(4);
   });
 
   it("falls back to the document start for the root pointer", () => {
