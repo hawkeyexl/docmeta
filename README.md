@@ -94,9 +94,9 @@ See [examples/docmeta.config.yaml](examples/docmeta.config.yaml).
 ## CLI
 
 ```text
-docmeta validate [paths...]    Validate metadata (default command)
-docmeta get <fields...>        Print specific metadata values
-docmeta schemas                List built-in schemas and input formats
+docmeta validate [paths...]        Validate metadata (default command)
+docmeta get <fields> [paths...]    Print specific metadata values
+docmeta schemas                    List built-in schemas and input formats
 ```
 
 ### `validate`
@@ -120,9 +120,14 @@ cat page.md | docmeta validate - --as markdown
 
 ### `get`
 
+`get` shares `validate`'s input handling: positional files, directories, and
+globs; `-` for stdin (with `--as`); and `paths:` from config as a fallback.
+Fields are a single comma-separated argument.
+
 ```bash
-docmeta get title type --in "docs/**/*.md"
-docmeta get title --in docs/intro.md --format json
+docmeta get title,type docs/intro.md
+docmeta get type "**/*.md" --format json
+cat page.md | docmeta get title - --as markdown
 ```
 
 ### Output & exit codes
@@ -166,12 +171,19 @@ Implemented:
   values are parsed as YAML scalars (so `2` → number, `[a, b]` → array); a
   valueless `:flag:` is `true`. An explicit `:title:` field overrides the
   heading.
+- **XML** (`.xml`) — reads the root element's attributes (e.g.
+  `<document type="concept" version="2">`). Values are parsed as YAML scalars
+  (so `2` → number, `true` → boolean); `xmlns`/`xmlns:*` namespace declarations
+  are ignored.
+- **HTML** (`.html`, `.htm`) — reads `<title>` and `<meta>` tags. `<meta
+  name="X" content="Y">` (or `property="X"` for OpenGraph) becomes `X: Y`, with
+  `content` parsed as a YAML scalar (so `2` → number, `true` → boolean); tags
+  with neither `name` nor `property` (e.g. `charset`) are ignored.
 
-Metadata extraction is a pluggable layer. The following are defined against the
-extractor interface and will be added without changing validation, schema
-resolution, or reporting: **XML**, **HTML** `<meta>`. They
-currently report a clear "not yet implemented" message. (MDX `export const meta`
-parsing is also future work.)
+Metadata extraction is a pluggable layer: new formats plug in behind the
+extractor interface without changing validation, schema resolution, or
+reporting. Future work includes MDX `export const meta` parsing and XML's
+metadata-element style.
 
 ## Programmatic API
 

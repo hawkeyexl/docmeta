@@ -88,12 +88,12 @@ describe("runValidate", () => {
     );
   });
 
-  it("aborts on a stub format (not yet implemented)", async () => {
+  it("aborts on an unknown --as format", async () => {
     await expect(
       runValidate({
         inputs: ["-"],
-        as: "xml",
-        stdinContent: "<meta/>\n",
+        as: "bogus",
+        stdinContent: "x",
         cwd: root,
       }),
     ).rejects.toBeInstanceOf(DocmetaError);
@@ -110,19 +110,64 @@ describe("runGet", () => {
     expect(results[0]?.values.title).toBe("A Valid Document");
     expect(results[0]?.values.type).toBe("concept");
   });
+
+  it("reads from a glob of paths like validate", async () => {
+    const results = await runGet({
+      fields: ["type"],
+      inputs: ["test/fixtures/*.md"],
+      cwd: root,
+    });
+    expect(results.length).toBeGreaterThan(1);
+  });
+
+  it("reads stdin with --as", async () => {
+    const results = await runGet({
+      fields: ["type"],
+      inputs: ["-"],
+      as: "markdown",
+      stdinContent: "---\ntype: note\n---\n",
+      cwd: root,
+    });
+    expect(results[0]?.file).toBe("<stdin>");
+    expect(results[0]?.values.type).toBe("note");
+  });
+
+  it("requires --as when reading from stdin", async () => {
+    await expect(
+      runGet({ fields: ["type"], inputs: ["-"], stdinContent: "x", cwd: root }),
+    ).rejects.toBeInstanceOf(DocmetaError);
+  });
+
+  it("throws when no inputs and no config (parity with validate)", async () => {
+    await expect(
+      runGet({ fields: ["type"], inputs: [], cwd: root }),
+    ).rejects.toBeInstanceOf(DocmetaError);
+  });
+
+  it("falls back to config paths when no inputs are given", async () => {
+    const results = await runGet({
+      fields: ["type"],
+      inputs: [],
+      cwd: join(here, "fixtures"),
+      configPath: join(here, "fixtures", "docmeta.config.yaml"),
+    });
+    expect(results.length).toBeGreaterThan(0);
+  });
 });
 
 describe("getSchemasInfo", () => {
-  it("lists OKF and marks markdown, asciidoc and rst implemented, xml planned", () => {
+  it("lists OKF and marks markdown, asciidoc, rst, xml and html implemented", () => {
     const info = getSchemasInfo();
     expect(info.builtins.map((b) => b.id)).toContain("google:okf:0.1");
     const md = info.formats.find((f) => f.name === "markdown");
     const adoc = info.formats.find((f) => f.name === "asciidoc");
     const rst = info.formats.find((f) => f.name === "rst");
     const xml = info.formats.find((f) => f.name === "xml");
+    const html = info.formats.find((f) => f.name === "html");
     expect(md?.implemented).toBe(true);
     expect(adoc?.implemented).toBe(true);
     expect(rst?.implemented).toBe(true);
-    expect(xml?.implemented).toBe(false);
+    expect(xml?.implemented).toBe(true);
+    expect(html?.implemented).toBe(true);
   });
 });
