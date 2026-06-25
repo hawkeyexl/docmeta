@@ -19,6 +19,7 @@ describe("resolveTargets", () => {
     const files = await resolveTargets({ inputs: ["."], cwd: fixtures });
     expect(files).toContain("valid.md");
     expect(files).toContain("sample.mdx");
+    expect(files).toContain("valid.rst");
     // extra.schema.json is .json — not a supported document extension
     expect(files.some((f) => f.endsWith(".json"))).toBe(false);
   });
