@@ -164,10 +164,15 @@ Implemented:
   line plus `:key: value` attribute entries. Attribute values are parsed as YAML
   scalars (so `2` → number, `true` → boolean); a valueless `:flag:` is `true`
   and an unset `:!flag:` is `false`.
+- **reStructuredText** (`.rst`) — accepts either a leading YAML frontmatter
+  block (`--- … ---`) or a native docinfo field list (`:key: value` entries at
+  the top of the document, after any title). Field values are parsed as YAML
+  scalars (so `2` → number, `[a, b]` → array); a valueless `:flag:` is `true`.
+  Section titles / headings are not extracted.
 
 Metadata extraction is a pluggable layer. The following are defined against the
 extractor interface and will be added without changing validation, schema
-resolution, or reporting: **reStructuredText**, **XML**, **HTML** `<meta>`. They
+resolution, or reporting: **XML**, **HTML** `<meta>`. They
 currently report a clear "not yet implemented" message. (MDX `export const meta`
 parsing is also future work.)
 
