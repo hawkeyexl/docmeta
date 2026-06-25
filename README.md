@@ -170,6 +170,17 @@ const { results, summary } = await runValidate({
 });
 ```
 
+## Contributing & releases
+
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/) and are linted by commitlint (a husky `commit-msg` hook locally, and `commitlint.yml` on PRs).
+
+Releases are automated with [semantic-release](https://semantic-release.gitbook.io/):
+
+- Push/merge to `main` → version is computed from commit types (`fix:` → patch, `feat:` → minor, `feat!:`/`BREAKING CHANGE` → major; `perf:` does not release), then `CHANGELOG.md`/`package.json` are updated, a tag and GitHub Release are created, and the package is published to npm `@latest`.
+- `next` → `@next` prerelease channel; `feat/**` branches → per-branch prerelease channels.
+
+Requires an `NPM_TOKEN` repository secret (npm automation token); the default `GITHUB_TOKEN` handles the tag, release commit, and GitHub Release.
+
 ## License
 
 MIT
