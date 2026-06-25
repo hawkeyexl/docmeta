@@ -164,12 +164,20 @@ Implemented:
   line plus `:key: value` attribute entries. Attribute values are parsed as YAML
   scalars (so `2` → number, `true` → boolean); a valueless `:flag:` is `true`
   and an unset `:!flag:` is `false`.
+- **XML** (`.xml`) — reads the root element's attributes (e.g.
+  `<document type="concept" version="2">`). Values are parsed as YAML scalars
+  (so `2` → number, `true` → boolean); `xmlns`/`xmlns:*` namespace declarations
+  are ignored.
+- **HTML** (`.html`, `.htm`) — reads `<title>` and `<meta>` tags. `<meta
+  name="X" content="Y">` (or `property="X"` for OpenGraph) becomes `X: Y`, with
+  `content` parsed as a YAML scalar (so `2` → number, `true` → boolean); tags
+  with neither `name` nor `property` (e.g. `charset`) are ignored.
 
 Metadata extraction is a pluggable layer. The following are defined against the
 extractor interface and will be added without changing validation, schema
-resolution, or reporting: **reStructuredText**, **XML**, **HTML** `<meta>`. They
-currently report a clear "not yet implemented" message. (MDX `export const meta`
-parsing is also future work.)
+resolution, or reporting: **reStructuredText**. It currently reports a clear "not
+yet implemented" message. (MDX `export const meta` parsing is also future work,
+as is XML's metadata-element style.)
 
 ## Programmatic API
 
