@@ -1,0 +1,24 @@
+# Ready-made consumer workflow: validate document metadata on every push/PR.
+# Copy this into your repo's .github/workflows/ directory.
+name: Validate metadata
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  docmeta:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Validate all Markdown. `--format github` turns failures into inline PR
+      # annotations; the nonzero exit code fails the job.
+      - name: Validate frontmatter
+        run: npx -y docmeta validate "**/*.md" --format github
+
+      # Or, with a docmeta.config.yaml at the repo root, simply:
+      # - run: npx -y docmeta validate --format github

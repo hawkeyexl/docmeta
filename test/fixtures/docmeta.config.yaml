@@ -1,0 +1,10 @@
+paths:
+  - "*.md"
+exclude:
+  - "**/drafts/**"
+schemas:
+  - google:okf:0.1
+overrides:
+  - files: "schema-ref*.md"
+    schemas:
+      - google:okf:0.1

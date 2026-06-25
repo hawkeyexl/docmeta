@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "google:okf:0.1",
+  "title": "Open Knowledge Format (OKF) v0.1",
+  "description": "Frontmatter schema for OKF v0.1 concept files. OKF requires only `type`; all other fields are recommended, and unknown keys are explicitly tolerated. See https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md",
+  "type": "object",
+  "required": ["type"],
+  "additionalProperties": true,
+  "properties": {
+    "type": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A short string identifying the kind of concept. Used for routing, filtering, and presentation."
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable display name. If omitted, consumers MAY derive a title from the filename."
+    },
+    "description": {
+      "type": "string",
+      "description": "Single-sentence summary used for indexing and previews."
+    },
+    "resource": {
+      "type": "string",
+      "format": "uri",
+      "description": "A URI uniquely identifying the underlying asset. Absent for abstract concepts."
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Short strings for categorization."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 datetime of last meaningful change."
+    }
+  }
+}

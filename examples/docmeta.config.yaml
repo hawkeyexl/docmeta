@@ -1,0 +1,25 @@
+# Example docmeta config. Place a `docmeta.config.yaml` at your repo root so CI
+# can run a bare `docmeta validate`. All keys are optional.
+
+# Default targets when no paths are passed on the CLI. Files, dirs, or globs.
+paths:
+  - "docs/**/*.md"
+  - "articles/**/*.md"
+
+# Paths to skip (node_modules and .git are always excluded).
+exclude:
+  - "**/drafts/**"
+
+# Default schema SET applied to every matched file. Each file must satisfy ALL
+# of these. A ref is a built-in id (vendor:name:version), a local .json path,
+# or an http(s) URL.
+schemas:
+  - google:okf:0.1
+
+# Optional per-glob overrides (first match wins). Use these to require extra
+# schemas for a subset of files.
+overrides:
+  - files: "articles/**/*.md"
+    schemas:
+      - google:okf:0.1
+      # - doc-detective:1.0   # add your own / additional schemas here
