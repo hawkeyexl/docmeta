@@ -151,13 +151,20 @@ Drop [examples/docmeta.yml](examples/docmeta.yml) into `.github/workflows/`, or 
 
 ## Supported formats & roadmap
 
-Implemented: **Markdown** (`.md`, `.markdown`) and **MDX** (`.mdx`) YAML frontmatter.
+Implemented:
+
+- **Markdown** (`.md`, `.markdown`) and **MDX** (`.mdx`) — YAML frontmatter.
+- **AsciiDoc** (`.adoc`, `.asciidoc`) — accepts either a leading YAML
+  frontmatter block (`--- … ---`) or the native document header: the `= Title`
+  line plus `:key: value` attribute entries. Attribute values are parsed as YAML
+  scalars (so `2` → number, `true` → boolean); a valueless `:flag:` is `true`
+  and an unset `:!flag:` is `false`.
 
 Metadata extraction is a pluggable layer. The following are defined against the
 extractor interface and will be added without changing validation, schema
-resolution, or reporting: **AsciiDoc**, **reStructuredText**, **XML**, **HTML**
-`<meta>`. They currently report a clear "not yet implemented" message. (MDX
-`export const meta` parsing is also future work.)
+resolution, or reporting: **reStructuredText**, **XML**, **HTML** `<meta>`. They
+currently report a clear "not yet implemented" message. (MDX `export const meta`
+parsing is also future work.)
 
 ## Programmatic API
 
