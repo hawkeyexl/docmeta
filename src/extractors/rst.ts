@@ -68,6 +68,12 @@ interface TitleInfo {
   next: number;
 }
 
+/** A run of identical title-adornment punctuation, or null for any other line. */
+function adornment(line: string): { char: string; length: number } | null {
+  const m = ADORN.exec(line);
+  return m && m[1] != null ? { char: m[1], length: line.length } : null;
+}
+
 function parseTitle(lines: string[]): TitleInfo {
   let i = 0;
   while (i < lines.length && (lines[i] ?? "").trim() === "") i++;
@@ -77,19 +83,30 @@ function parseTitle(lines: string[]): TitleInfo {
   // A field line starts the docinfo block, not a title.
   if (FIELD.test(first)) return { next: i };
 
-  // Over- and under-lined: adornment / title text / adornment.
-  const overTitle = lines[i + 1] ?? "";
-  if (
-    ADORN.test(first) &&
-    overTitle.trim() !== "" &&
-    !FIELD.test(overTitle) &&
-    ADORN.test(lines[i + 2] ?? "")
-  ) {
-    return { title: overTitle.trim(), line: i + 2, next: i + 3 };
+  const over = adornment(first);
+  if (over) {
+    // Over- and under-lined: adornment / title text / matching adornment. RST
+    // requires the over- and underline to use the same character and length,
+    // and to be at least as long as the title text.
+    const text = lines[i + 1] ?? "";
+    const under = adornment(lines[i + 2] ?? "");
+    if (
+      text.trim() !== "" &&
+      !FIELD.test(text) &&
+      under != null &&
+      under.char === over.char &&
+      under.length === over.length &&
+      over.length >= text.trim().length
+    ) {
+      return { title: text.trim(), line: i + 2, next: i + 3 };
+    }
+    // A lone adornment that isn't a valid overlined title — not metadata.
+    return { next: i };
   }
 
-  // Underlined: title text / adornment.
-  if (!ADORN.test(first) && ADORN.test(lines[i + 1] ?? "")) {
+  // Underlined: title text / adornment at least as long as the title.
+  const under = adornment(lines[i + 1] ?? "");
+  if (under != null && under.length >= first.trim().length) {
     return { title: first.trim(), line: i + 1, next: i + 2 };
   }
 

@@ -212,6 +212,17 @@ describe("rst extractor", () => {
     expect(r.data).toEqual({ title: "Just A Title" });
   });
 
+  it("does not treat over/underlines with mismatched chars as a title", () => {
+    const r = rstExtractor.extract("======\nHello\n------\n\n:type: x\n", "x.rst");
+    expect(r.data.title).toBeUndefined();
+  });
+
+  it("does not treat an underline shorter than the title as a title", () => {
+    const r = rstExtractor.extract("A Long Title\n===\n\nBody.\n", "x.rst");
+    expect(r.data.title).toBeUndefined();
+    expect(r.present).toBe(false);
+  });
+
   it("treats a valueless field as true", () => {
     const r = rstExtractor.extract(":draft:\n:type: concept\n", "x.rst");
     expect(r.data.draft).toBe(true);
