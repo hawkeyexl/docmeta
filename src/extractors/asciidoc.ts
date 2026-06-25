@@ -37,8 +37,19 @@ function typeValue(raw: string): unknown {
 function lineForFactory(
   map: Map<string, number>,
 ): (pointer: string) => number | undefined {
-  return (pointer: string) =>
-    map.has(pointer) ? map.get(pointer) : map.get("");
+  return (pointer: string) => {
+    if (map.has(pointer)) return map.get(pointer);
+    // A YAML-typed value can be an array/object, so Ajv may report nested
+    // pointers like "/tags/0". Walk up to the nearest recorded ancestor.
+    let p = pointer;
+    while (p.length > 0) {
+      const idx = p.lastIndexOf("/");
+      if (idx < 0) break;
+      p = p.slice(0, idx);
+      if (map.has(p)) return map.get(p);
+    }
+    return map.get("");
+  };
 }
 
 /** Parse the native AsciiDoc document header (title + attribute entries). */
@@ -98,7 +109,13 @@ export const asciidocExtractor: MetadataExtractor = {
   implemented: true,
   extract(content) {
     const body = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
-    if (OPENING.test(body)) return extractFrontmatter(content, "asciidoc");
+    if (OPENING.test(body)) {
+      // Delegate only when a complete frontmatter block is actually present;
+      // a stray opening `---` with no closing delimiter should not shadow a
+      // native AsciiDoc header that follows.
+      const fm = extractFrontmatter(content, "asciidoc");
+      if (fm.present) return fm;
+    }
     return extractHeader(content);
   },
 };

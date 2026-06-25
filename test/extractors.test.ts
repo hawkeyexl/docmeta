@@ -137,6 +137,21 @@ describe("asciidoc extractor", () => {
     expect(r.present).toBe(false);
     expect(r.data).toEqual({});
   });
+
+  it("maps nested pointers to the attribute line via ancestor walk", () => {
+    // A YAML-typed array attribute: Ajv may report "/tags/0".
+    const r = asciidocExtractor.extract(":type: concept\n:tags: [a, b]\n", "x.adoc");
+    expect(r.data.tags).toEqual(["a", "b"]);
+    expect(r.lineFor("/tags/0")).toBe(2);
+    expect(r.lineFor("/tags")).toBe(2);
+  });
+
+  it("falls back to the native header when a frontmatter block is unterminated", () => {
+    // Opens with `---` but has no closing delimiter, so it is not frontmatter.
+    const r = asciidocExtractor.extract("---\n= Title\n:type: concept\n", "x.adoc");
+    expect(r.present).toBe(true);
+    expect(r.data.type).toBe("concept");
+  });
 });
 
 describe("extractor registry", () => {
