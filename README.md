@@ -94,9 +94,9 @@ See [examples/docmeta.config.yaml](examples/docmeta.config.yaml).
 ## CLI
 
 ```text
-docmeta validate [paths...]    Validate metadata (default command)
-docmeta get <fields...>        Print specific metadata values
-docmeta schemas                List built-in schemas and input formats
+docmeta validate [paths...]        Validate metadata (default command)
+docmeta get <fields> [paths...]    Print specific metadata values
+docmeta schemas                    List built-in schemas and input formats
 ```
 
 ### `validate`
@@ -120,9 +120,14 @@ cat page.md | docmeta validate - --as markdown
 
 ### `get`
 
+`get` shares `validate`'s input handling: positional files, directories, and
+globs; `-` for stdin (with `--as`); and `paths:` from config as a fallback.
+Fields are a single comma-separated argument.
+
 ```bash
-docmeta get title type --in "docs/**/*.md"
-docmeta get title --in docs/intro.md --format json
+docmeta get title,type docs/intro.md
+docmeta get type "**/*.md" --format json
+cat page.md | docmeta get title - --as markdown
 ```
 
 ### Output & exit codes

@@ -110,6 +110,49 @@ describe("runGet", () => {
     expect(results[0]?.values.title).toBe("A Valid Document");
     expect(results[0]?.values.type).toBe("concept");
   });
+
+  it("reads from a glob of paths like validate", async () => {
+    const results = await runGet({
+      fields: ["type"],
+      inputs: ["test/fixtures/*.md"],
+      cwd: root,
+    });
+    expect(results.length).toBeGreaterThan(1);
+  });
+
+  it("reads stdin with --as", async () => {
+    const results = await runGet({
+      fields: ["type"],
+      inputs: ["-"],
+      as: "markdown",
+      stdinContent: "---\ntype: note\n---\n",
+      cwd: root,
+    });
+    expect(results[0]?.file).toBe("<stdin>");
+    expect(results[0]?.values.type).toBe("note");
+  });
+
+  it("requires --as when reading from stdin", async () => {
+    await expect(
+      runGet({ fields: ["type"], inputs: ["-"], stdinContent: "x", cwd: root }),
+    ).rejects.toBeInstanceOf(DocmetaError);
+  });
+
+  it("throws when no inputs and no config (parity with validate)", async () => {
+    await expect(
+      runGet({ fields: ["type"], inputs: [], cwd: root }),
+    ).rejects.toBeInstanceOf(DocmetaError);
+  });
+
+  it("falls back to config paths when no inputs are given", async () => {
+    const results = await runGet({
+      fields: ["type"],
+      inputs: [],
+      cwd: join(here, "fixtures"),
+      configPath: join(here, "fixtures", "docmeta.config.yaml"),
+    });
+    expect(results.length).toBeGreaterThan(0);
+  });
 });
 
 describe("getSchemasInfo", () => {
