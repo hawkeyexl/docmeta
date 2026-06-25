@@ -1,0 +1,134 @@
+name: Claude PR Review - Auto
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, reopened, synchronize]
+
+concurrency:
+  group: claude-auto-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Only on non-draft PRs from the same repository. Forked PRs can't access
+    # the secret anyway, and gating here avoids running the job with write
+    # permissions in an untrusted-PR context. The guard step below additionally
+    # requires the secret to be present.
+    if: >-
+      !github.event.pull_request.draft &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    env:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+    steps:
+      # Skip gracefully (green) when the token secret is absent — e.g. before
+      # it has been configured, or on PRs from forks / Dependabot where secrets
+      # are unavailable — rather than hard-failing the check.
+      - name: Check for Claude token
+        id: guard
+        run: |
+          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "::notice::CLAUDE_CODE_OAUTH_TOKEN is not set; skipping Claude review. Add the secret to enable it."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout repository
+        if: steps.guard.outputs.enabled == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # We only read the tree; don't leave the token in .git/config where a
+          # later step/action could read it. The github MCP server uses the
+          # token via its own header, not git credentials.
+          persist-credentials: false
+
+      - name: Create MCP config
+        if: steps.guard.outputs.enabled == 'true'
+        run: |
+          cat > /tmp/mcp-config.json << 'EOF'
+          {
+            "mcpServers": {
+              "github": {
+                "type": "http",
+                "url": "https://api.githubcopilot.com/mcp/",
+                "headers": {
+                  "Authorization": "Bearer ${{ secrets.GITHUB_TOKEN }}"
+                }
+              },
+              "context7": {
+                "type": "http",
+                "url": "https://mcp.context7.com/mcp"
+              }
+            }
+          }
+          EOF
+
+      - name: Run Claude Code
+        id: claude
+        if: steps.guard.outputs.enabled == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          track_progress: true
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+            PR TITLE: ${{ github.event.pull_request.title }}
+            PR DESCRIPTION: ${{ github.event.pull_request.body }}
+
+            Perform a thorough code review of this pull request. docmeta is a
+            TypeScript CLI (published to npm) that validates document metadata
+            against JSON Schema. Focus areas:
+
+            Correctness & completeness
+            - Obvious bugs, logic errors, or areas with complex logic needing extra scrutiny
+            - Unfinished work, incomplete implementations, or low-quality code
+            - Breaking changes to the CLI surface, the programmatic API, or the
+              extractor/schema interfaces
+            - Missing error handling at boundaries (file I/O, parsing, schema loading)
+
+            Code quality
+            - Consistency with existing codebase style, architecture, and patterns
+              (e.g. the MetadataExtractor abstraction, the reporters/commands split)
+            - Readability and maintainability (naming, organization)
+            - DRY — flag duplicate/one-off code that should reuse existing utilities
+              (or extract reusable ones)
+            - TypeScript type safety; respect the strict settings already in tsconfig
+              (e.g. noUncheckedIndexedAccess) — avoid unsound casts and non-null assertions
+
+            Security & robustness
+            - Input validation and untrusted-content handling (file paths, globs, stdin)
+            - Path traversal and unintended filesystem access
+            - Catastrophic-backtracking (ReDoS) risk in regexes
+            - Dependency/supply-chain concerns and accidental secret leakage
+
+            Testing
+            - Vitest coverage for new logic — flag untested paths
+            - Source-line mapping correctness for new extractors (annotations must
+              point at the right line)
+
+            Keep feedback concise. Use suggested fixes where possible.
+
+            You MUST submit a proper GitHub Pull Request Review (not loose line comments). Flow:
+            1. mcp__github__get_pull_request_diff — load exact changed lines before commenting.
+            2. mcp__github__create_pending_pull_request_review — start a pending review.
+            3. mcp__github__add_pull_request_review_comment_to_pending_review — one call per specific-line issue, targeting a line present in the diff.
+            4. mcp__github__submit_pending_pull_request_review — submit with event = APPROVE, REQUEST_CHANGES, or COMMENT.
+
+            The review body is your summary comment. Structure it as:
+              - One-line verdict with reasoning.
+              - Issues grouped by severity: **Blocking**, **Important**, **Nit**. Each entry: short description + file:line link.
+              - If no issues: confirm PR looks good.
+
+            Prefer the pending-review flow over create_issue_comment / inline_comment tools — we want a single cohesive review on the PR, not scattered comments.
+          claude_args: |
+            --model claude-sonnet-4-6
+            --max-turns 50
+            --mcp-config /tmp/mcp-config.json
+            --allowedTools "Bash(git diff:*),Bash(git log:*),Read,Glob,mcp__github__get_pull_request_diff,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_issue_comments,mcp__context7__resolve-library-id,mcp__context7__query-docs"
