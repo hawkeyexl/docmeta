@@ -214,6 +214,9 @@ describe("rst extractor", () => {
     const r = rstExtractor.extract(readFixture("no-frontmatter.rst"), "x.rst");
     expect(r.present).toBe(false);
     expect(r.data).toEqual({});
+    // No block present, so positions are unknown — don't annotate at line 1.
+    expect(r.lineFor("")).toBeUndefined();
+    expect(r.lineFor("/type")).toBeUndefined();
   });
 
   it("maps nested pointers to the field line via ancestor walk", () => {

@@ -97,7 +97,7 @@ function extractDocinfo(content: string): ExtractedMetadata {
 
   const data: Record<string, unknown> = {};
   const map = new Map<string, number>();
-  let firstFieldLine = 1;
+  let firstFieldLine = -1;
 
   const start = skipToDocinfo(lines);
   for (let i = start; i < lines.length; i++) {
@@ -109,15 +109,17 @@ function extractDocinfo(content: string): ExtractedMetadata {
 
     const name = field[1].trim();
     const value = field[2] === undefined ? true : typeValue(field[2]);
-    if (Object.keys(data).length === 0) firstFieldLine = i + 1;
+    if (firstFieldLine === -1) firstFieldLine = i + 1;
     data[name] = value;
     map.set(`/${escapePointerSegment(name)}`, i + 1);
   }
 
-  // Root pointer maps to the first field line (block start).
-  map.set("", firstFieldLine);
+  const present = firstFieldLine !== -1;
+  // Root pointer maps to the first field line (block start). When no field list
+  // is present we record nothing, so `lineFor` reports unknown rather than
+  // misleadingly annotating missing-metadata errors at line 1.
+  if (present) map.set("", firstFieldLine);
 
-  const present = Object.keys(data).length > 0;
   return {
     data,
     present,
