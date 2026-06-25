@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { markdownExtractor } from "../src/extractors/markdown.js";
 import { mdxExtractor } from "../src/extractors/mdx.js";
+import { asciidocExtractor } from "../src/extractors/asciidoc.js";
 import {
   extractorForExtension,
   extractorByName,
@@ -72,11 +73,82 @@ describe("mdx extractor", () => {
   });
 });
 
+const ADOC_HEADER = `= My Document Title
+:type: concept
+:version: 2
+:draft:
+:!archived:
+:tags: a, b
+
+Body text here.
+`;
+
+describe("asciidoc extractor", () => {
+  it("extracts the title and typed header attributes", () => {
+    const r = asciidocExtractor.extract(ADOC_HEADER, "x.adoc");
+    expect(r.present).toBe(true);
+    expect(r.format).toBe("asciidoc");
+    expect(r.data.title).toBe("My Document Title");
+    expect(r.data.type).toBe("concept");
+    // values are parsed as YAML scalars, so `2` is a number
+    expect(r.data.version).toBe(2);
+    // a value with no array syntax stays a string
+    expect(r.data.tags).toBe("a, b");
+  });
+
+  it("treats a valueless attribute as true and a negated one as false", () => {
+    const r = asciidocExtractor.extract(ADOC_HEADER, "x.adoc");
+    expect(r.data.draft).toBe(true);
+    expect(r.data.archived).toBe(false);
+  });
+
+  it("maps the title and attributes to source lines", () => {
+    const r = asciidocExtractor.extract(ADOC_HEADER, "x.adoc");
+    expect(r.lineFor("/title")).toBe(1);
+    expect(r.lineFor("/type")).toBe(2);
+    expect(r.lineFor("/version")).toBe(3);
+    expect(r.lineFor("/tags")).toBe(6);
+  });
+
+  it("falls back to the document start for the root pointer", () => {
+    const r = asciidocExtractor.extract(ADOC_HEADER, "x.adoc");
+    expect(r.lineFor("")).toBe(1);
+  });
+
+  it("parses a leading YAML frontmatter block when present", () => {
+    const r = asciidocExtractor.extract(VALID, "x.adoc");
+    expect(r.present).toBe(true);
+    expect(r.format).toBe("asciidoc");
+    expect(r.data.type).toBe("concept");
+    expect(r.data.tags).toEqual(["a", "b"]);
+    expect(r.lineFor("/type")).toBe(2);
+  });
+
+  it("supports header attributes with no document title", () => {
+    const r = asciidocExtractor.extract(":type: concept\n\nBody\n", "x.adoc");
+    expect(r.present).toBe(true);
+    expect(r.data.title).toBeUndefined();
+    expect(r.data.type).toBe("concept");
+    expect(r.lineFor("/type")).toBe(1);
+  });
+
+  it("reports absent metadata for a document with no header", () => {
+    const r = asciidocExtractor.extract("Just a paragraph.\n\n:x: y\n", "x.adoc");
+    expect(r.present).toBe(false);
+    expect(r.data).toEqual({});
+  });
+});
+
 describe("extractor registry", () => {
   it("resolves markdown by extension", () => {
     expect(extractorForExtension(".md")?.name).toBe("markdown");
     expect(extractorForExtension(".MARKDOWN")?.name).toBe("markdown");
     expect(extractorForExtension(".mdx")?.name).toBe("mdx");
+  });
+
+  it("resolves asciidoc by extension", () => {
+    expect(extractorForExtension(".adoc")?.name).toBe("asciidoc");
+    expect(extractorForExtension(".ASCIIDOC")?.name).toBe("asciidoc");
   });
 
   it("resolves an extractor by --as name", () => {
@@ -85,19 +157,17 @@ describe("extractor registry", () => {
 
   it("lists supported (implemented) extensions", () => {
     expect(supportedExtensions()).toContain(".md");
-    expect(supportedExtensions()).not.toContain(".adoc");
+    expect(supportedExtensions()).toContain(".adoc");
   });
 
   it("returns undefined for an unsupported extension", () => {
-    expect(extractorForExtension(".adoc")).toBeUndefined();
+    expect(extractorForExtension(".rst")).toBeUndefined();
   });
 
   it("stub extractors throw not-implemented", async () => {
-    const { asciidocExtractor } = await import(
-      "../src/extractors/asciidoc.js"
-    );
-    expect(asciidocExtractor.implemented).toBe(false);
-    expect(() => asciidocExtractor.extract("= Title\n", "x.adoc")).toThrow(
+    const { rstExtractor } = await import("../src/extractors/rst.js");
+    expect(rstExtractor.implemented).toBe(false);
+    expect(() => rstExtractor.extract(".. meta::\n", "x.rst")).toThrow(
       DocmetaError,
     );
   });

@@ -92,8 +92,8 @@ describe("runValidate", () => {
     await expect(
       runValidate({
         inputs: ["-"],
-        as: "asciidoc",
-        stdinContent: "= Title\n",
+        as: "rst",
+        stdinContent: ".. meta::\n",
         cwd: root,
       }),
     ).rejects.toBeInstanceOf(DocmetaError);
@@ -113,12 +113,14 @@ describe("runGet", () => {
 });
 
 describe("getSchemasInfo", () => {
-  it("lists OKF and marks markdown implemented, asciidoc planned", () => {
+  it("lists OKF and marks markdown and asciidoc implemented, rst planned", () => {
     const info = getSchemasInfo();
     expect(info.builtins.map((b) => b.id)).toContain("google:okf:0.1");
     const md = info.formats.find((f) => f.name === "markdown");
     const adoc = info.formats.find((f) => f.name === "asciidoc");
+    const rst = info.formats.find((f) => f.name === "rst");
     expect(md?.implemented).toBe(true);
-    expect(adoc?.implemented).toBe(false);
+    expect(adoc?.implemented).toBe(true);
+    expect(rst?.implemented).toBe(false);
   });
 });
