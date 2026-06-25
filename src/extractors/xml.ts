@@ -21,6 +21,9 @@ function escapePointerSegment(key: string): string {
 
 /** Parse a raw attribute value as a YAML scalar, falling back to the string. */
 function typeValue(raw: string): unknown {
+  // An explicitly empty attribute (`title=""`) is the empty string, not the
+  // YAML `null` that parsing "" would yield.
+  if (raw === "") return "";
   try {
     return parseYamlScalar(raw);
   } catch {

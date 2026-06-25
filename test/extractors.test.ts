@@ -283,6 +283,12 @@ describe("xml extractor", () => {
     expect(r.data).toEqual({});
   });
 
+  it("keeps an empty attribute as an empty string, not null", () => {
+    const r = xmlExtractor.extract(`<doc title="" type="concept"/>`, "x.xml");
+    expect(r.data.title).toBe("");
+    expect(r.data.type).toBe("concept");
+  });
+
   it("throws on malformed XML", () => {
     expect(() => xmlExtractor.extract("<a><b></a>", "x.xml")).toThrow();
   });
@@ -343,6 +349,14 @@ describe("html extractor", () => {
       "x.html",
     );
     expect(r.data.summary).toBe("A & B");
+  });
+
+  it("keeps empty meta content as an empty string, not null", () => {
+    const r = htmlExtractor.extract(
+      `<meta name="summary" content="">`,
+      "x.html",
+    );
+    expect(r.data.summary).toBe("");
   });
 
   it("reports a document with no title or meta as absent", () => {
