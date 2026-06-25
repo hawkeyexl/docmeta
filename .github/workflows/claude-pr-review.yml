@@ -16,14 +16,31 @@ jobs:
       contents: read
       pull-requests: write
       id-token: write
+    env:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
     steps:
+      # Skip gracefully (green) when the token secret is absent — e.g. before
+      # it has been configured, or on PRs from forks / Dependabot where secrets
+      # are unavailable — rather than hard-failing the check.
+      - name: Check for Claude token
+        id: guard
+        run: |
+          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "::notice::CLAUDE_CODE_OAUTH_TOKEN is not set; skipping Claude review. Add the secret to enable it."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout repository
+        if: steps.guard.outputs.enabled == 'true'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create MCP config
+        if: steps.guard.outputs.enabled == 'true'
         run: |
           cat > /tmp/mcp-config.json << 'EOF'
           {
@@ -45,6 +62,7 @@ jobs:
 
       - name: Run Claude Code
         id: claude
+        if: steps.guard.outputs.enabled == 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
