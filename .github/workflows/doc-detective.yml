@@ -24,6 +24,12 @@ permissions:
 jobs:
   doc-detective:
     runs-on: ubuntu-latest
+    # The inline tests run shell commands (node dist/cli.js ...), so never run
+    # them for pull requests from forks — that would execute untrusted code on
+    # the runner. Same-repo branches and manual dispatch only.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -33,7 +39,8 @@ jobs:
       - run: npm ci
       # Produce dist/cli.js; the specs run the built binary, not the published package.
       - run: npm run build
-      - uses: doc-detective/github-action@v1
+      # Third-party action pinned to a full commit SHA (supply-chain hardening).
+      - uses: doc-detective/github-action@a2a4f5ceb1abfa55d567e4f6766223082ece2c18 # v1
         with:
           config: .doc-detective.json
           exit_on_fail: true
