@@ -289,11 +289,12 @@ docmeta is an ES module targeting Node.js 20 or newer. Import it from ESM (or a
 </CardGrid>
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the locally built CLI (node dist/cli.js) and committed fixtures.
-    Detected from this MDX markup; run with `npx doc-detective`. Config: .doc-detective.json. */}
+    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+    (see .github/workflows/doc-detective.yml), over committed fixtures.
+    Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"consume-results","description":"The three integration surfaces, exercised against the local build."} */}
-{/* step {"description":"--format json prints one structured object with summary counts.","runShell":{"command":"node dist/cli.js validate test/fixtures/bad-timestamp.md --format json","exitCodes":[1],"stdio":"/\"summary\":[\\s\\S]*\"failed\": 1/"}} */}
-{/* step {"description":"get --format json returns one object per file with present and values.","runShell":{"command":"node dist/cli.js get title test/fixtures/no-frontmatter.md -f json","exitCodes":[0],"stdio":"\"present\": false"}} */}
-{/* step {"description":"get does not accept --format github (validate-only); it is a usage error.","runShell":{"command":"node dist/cli.js get title test/fixtures/valid.md --format github","exitCodes":[2],"stdio":"Unknown --format"}} */}
-{/* step {"description":"The TypeScript API: runValidate runs the pipeline and returns { results, summary }. The .catch makes a failure self-diagnosing (exit 2) rather than an unhandled rejection.","runShell":{"command":"node --input-type=module -e \"import('./dist/index.js').then(m=>m.runValidate({inputs:['test/fixtures/valid.md']})).then(r=>console.log('passed='+r.summary.passed)).catch(e=>{console.error(e);process.exit(2)})\"","exitCodes":[0],"stdio":"passed=1"}} */}
+{/* step {"description":"--format json prints one structured object with summary counts.","runShell":{"command":"npx docmeta validate test/fixtures/bad-timestamp.md --format json","exitCodes":[1],"stdio":"/\"summary\":[\\s\\S]*\"failed\": 1/"}} */}
+{/* step {"description":"get --format json returns one object per file with present and values.","runShell":{"command":"npx docmeta get title test/fixtures/no-frontmatter.md -f json","exitCodes":[0],"stdio":"\"present\": false"}} */}
+{/* step {"description":"get does not accept --format github (validate-only); it is a usage error.","runShell":{"command":"npx docmeta get title test/fixtures/valid.md --format github","exitCodes":[2],"stdio":"Unknown --format"}} */}
+{/* step {"description":"The TypeScript API: runValidate runs the pipeline and returns { results, summary }. The .catch makes a failure self-diagnosing (exit 2) rather than an unhandled rejection.","runShell":{"command":"node --input-type=module -e \"import('docmeta').then(m=>m.runValidate({inputs:['test/fixtures/valid.md']})).then(r=>console.log('passed='+r.summary.passed)).catch(e=>{console.error(e);process.exit(2)})\"","exitCodes":[0],"stdio":"passed=1"}} */}
 {/* test end */}

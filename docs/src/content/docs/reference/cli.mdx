@@ -183,12 +183,13 @@ default. An explicitly named file is always read, even if it matches an ignore
 glob or is a dotfile.
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the locally built CLI (node dist/cli.js) and committed fixtures.
-    Detected from this MDX markup; run with `npx doc-detective`. Config: .doc-detective.json. */}
+    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+    (see .github/workflows/doc-detective.yml), over committed fixtures.
+    Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"cli-reference","description":"The documented command and flag surface, exercised against the local build."} */}
-{/* step {"description":"validate accepts multiple --schema refs (a set) and a passing file exits 0.","runShell":{"command":"node dist/cli.js validate test/fixtures/valid.md -s google:okf:0.1 -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
-{/* step {"description":"Shared input model: - reads stdin, with --as choosing the extractor.","runShell":{"command":"node dist/cli.js validate - --as markdown < test/fixtures/valid.md","exitCodes":[0],"stdio":"<stdin>"}} */}
-{/* step {"description":"get -f json prints an array of { file, present, values }.","runShell":{"command":"node dist/cli.js get title,type test/fixtures/valid.md -f json","exitCodes":[0],"stdio":"/\"present\": true[\\s\\S]*\"type\": \"concept\"/"}} */}
-{/* step {"description":"get reports an absent field as unset (pretty) and present:false for a file with no metadata block.","runShell":{"command":"node dist/cli.js get title test/fixtures/no-frontmatter.md","exitCodes":[0],"stdio":"title=(unset)"}} */}
-{/* step {"description":"schemas -f json prints { builtins, formats }.","runShell":{"command":"node dist/cli.js schemas -f json","exitCodes":[0],"stdio":"/\"builtins\"[\\s\\S]*\"formats\"/"}} */}
+{/* step {"description":"validate accepts multiple --schema refs (a set) and a passing file exits 0.","runShell":{"command":"docmeta validate test/fixtures/valid.md -s google:okf:0.1 -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"Shared input model: - reads stdin, with --as choosing the extractor.","runShell":{"command":"docmeta validate - --as markdown < test/fixtures/valid.md","exitCodes":[0],"stdio":"<stdin>"}} */}
+{/* step {"description":"get -f json prints an array of { file, present, values }.","runShell":{"command":"docmeta get title,type test/fixtures/valid.md -f json","exitCodes":[0],"stdio":"/\"present\": true[\\s\\S]*\"type\": \"concept\"/"}} */}
+{/* step {"description":"get reports an absent field as unset (pretty) and present:false for a file with no metadata block.","runShell":{"command":"docmeta get title test/fixtures/no-frontmatter.md","exitCodes":[0],"stdio":"title=(unset)"}} */}
+{/* step {"description":"schemas -f json prints { builtins, formats }.","runShell":{"command":"docmeta schemas -f json","exitCodes":[0],"stdio":"/\"builtins\"[\\s\\S]*\"formats\"/"}} */}
 {/* test end */}

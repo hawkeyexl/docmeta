@@ -137,10 +137,11 @@ For the full flag list, see the [CLI reference](/docmeta/reference/). For the co
 </Aside>
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the locally built CLI (node dist/cli.js) and committed fixtures.
-    Detected from this MDX markup; run with `npx doc-detective`. Config: .doc-detective.json. */}
+    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+    (see .github/workflows/doc-detective.yml), over committed fixtures.
+    Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"set-up-config","description":"Config-handling claims that are deterministic from the repo root."} */}
-{/* step {"description":"Explicit `-c <path>` to a missing file errors out (exit 2) rather than falling back to discovery.","runShell":{"command":"node dist/cli.js validate -c does-not-exist.yaml test/fixtures/valid.md","exitCodes":[2],"stdio":"Config file not found"}} */}
-{/* step {"description":"No positional paths and no config found exits 2 with the documented message.","runShell":{"command":"node dist/cli.js validate","exitCodes":[2],"stdio":"No files to validate"}} */}
-{/* step {"description":"Explicit file arguments are validated regardless of config; a passing fixture exits 0.","runShell":{"command":"node dist/cli.js validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"Explicit `-c <path>` to a missing file errors out (exit 2) rather than falling back to discovery.","runShell":{"command":"npx docmeta validate -c does-not-exist.yaml test/fixtures/valid.md","exitCodes":[2],"stdio":"Config file not found"}} */}
+{/* step {"description":"No positional paths and no config found exits 2 with the documented message.","runShell":{"command":"npx docmeta validate","exitCodes":[2],"stdio":"No files to validate"}} */}
+{/* step {"description":"Explicit file arguments are validated regardless of config; a passing fixture exits 0.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 passed"}} */}
 {/* test end */}
