@@ -7,8 +7,16 @@
 #   next      -> @next prerelease
 #   feat/**   -> per-branch prerelease channel
 #
-# Requires an NPM_TOKEN repository secret (npm automation token). The default
-# GITHUB_TOKEN is sufficient for the release commit, tag, and GitHub Release.
+# Publishes to npm via OIDC trusted publishing (https://docs.npmjs.com/trusted-publishers):
+# no NPM_TOKEN secret. npm exchanges the workflow's OIDC token for a short-lived,
+# scoped publish credential, so the `id-token: write` permission below is what
+# authorizes the publish (and mints provenance automatically). The trusted
+# publisher configured on npmjs.com must name this workflow file (release.yml).
+# The default GITHUB_TOKEN covers the release commit, tag, and GitHub Release.
+#
+# Requires npm CLI >= 11.5.1 and @semantic-release/npm >= 13 (Node 24 bundles a
+# new enough npm). Do NOT set setup-node's registry-url or any NPM_TOKEN /
+# NODE_AUTH_TOKEN: a written-out auth token in .npmrc shadows OIDC and breaks it.
 name: Release
 
 on:
@@ -27,7 +35,7 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
-  id-token: write # npm provenance (public package)
+  id-token: write # OIDC trusted publishing to npm + provenance (public package)
 
 jobs:
   release:
@@ -48,7 +56,6 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: package-lock.json
-          registry-url: https://registry.npmjs.org
 
       - run: npm ci
       - run: npm run typecheck
@@ -57,9 +64,7 @@ jobs:
 
       - name: Release
         env:
+          # No NPM_TOKEN/NODE_AUTH_TOKEN: @semantic-release/npm authenticates the
+          # publish via OIDC trusted publishing using the id-token permission above.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # NPM_TOKEN: @semantic-release/npm verifyConditions writes ~/.npmrc.
-          # NODE_AUTH_TOKEN: read by the npm CLI (setup-node configured the registry).
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npx semantic-release
