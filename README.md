@@ -165,10 +165,12 @@ Implemented:
   scalars (so `2` → number, `true` → boolean); a valueless `:flag:` is `true`
   and an unset `:!flag:` is `false`.
 - **reStructuredText** (`.rst`) — accepts either a leading YAML frontmatter
-  block (`--- … ---`) or a native docinfo field list (`:key: value` entries at
-  the top of the document, after any title). Field values are parsed as YAML
-  scalars (so `2` → number, `[a, b]` → array); a valueless `:flag:` is `true`.
-  Section titles / headings are not extracted.
+  block (`--- … ---`) or native page metadata: the document title (a section
+  heading underlined, and optionally overlined, with punctuation) collected as
+  `title`, plus a docinfo field list (`:key: value` entries) below it. Field
+  values are parsed as YAML scalars (so `2` → number, `[a, b]` → array); a
+  valueless `:flag:` is `true`. An explicit `:title:` field overrides the
+  heading.
 - **XML** (`.xml`) — reads the root element's attributes (e.g.
   `<document type="concept" version="2">`). Values are parsed as YAML scalars
   (so `2` → number, `true` → boolean); `xmlns`/`xmlns:*` namespace declarations
