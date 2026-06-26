@@ -219,3 +219,14 @@ which need no flag.
     description="GitLab CI, Jenkins, and pre-commit, each wired to the exit-code contract."
   />
 </CardGrid>
+
+{/* Doc Detective inline tests: verify this page's documented docmeta behavior
+    against the locally built CLI (node dist/cli.js) and committed fixtures.
+    Detected from this MDX markup; run with `npx doc-detective`. Config: .doc-detective.json. */}
+{/* test {"testId":"exit-codes-and-annotations","description":"The contract between docmeta and a pipeline, exercised against the local build."} */}
+{/* step {"description":"Exit 0: every validated file satisfies its schema set.","runShell":{"command":"node dist/cli.js validate test/fixtures/valid.md","exitCodes":[0]}} */}
+{/* step {"description":"Exit 1: one or more files failed validation.","runShell":{"command":"node dist/cli.js validate test/fixtures/missing-type.md","exitCodes":[1]}} */}
+{/* step {"description":"Exit 2: an operational/usage error (unknown --format).","runShell":{"command":"node dist/cli.js validate test/fixtures/valid.md -f xml","exitCodes":[2],"stdio":"Unknown --format"}} */}
+{/* step {"description":"github annotation line carries file= and line= for an error with a known line.","runShell":{"command":"node dist/cli.js validate test/fixtures/bad-timestamp.md --format github","exitCodes":[1],"stdio":"/::error file=test/fixtures/bad-timestamp.md,line=4::/"}} */}
+{/* step {"description":"github is validate-only: get rejects --format github as a usage error (exit 2).","runShell":{"command":"node dist/cli.js get type test/fixtures/valid.md --format github","exitCodes":[2],"stdio":"Unknown --format"}} */}
+{/* test end */}

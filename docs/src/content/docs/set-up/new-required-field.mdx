@@ -138,3 +138,12 @@ A new required field that arrived without a wall of red checks. You enforced its
     description="How docmeta decides which schema set applies to each file, including override precedence."
   />
 </CardGrid>
+
+{/* Doc Detective inline tests: verify this page's documented docmeta behavior
+    against the locally built CLI (node dist/cli.js) and committed fixtures.
+    Detected from this MDX markup; run with `npx doc-detective`. Config: .doc-detective.json. */}
+{/* test {"testId":"new-required-field","description":"Staged ratchet, demonstrated with optional-vs-required `owner` schema fixtures and the get probe."} */}
+{/* step {"description":"Stage 1 (optional-but-validated): a doc without `owner` still passes when `owner` is in properties but not required.","runShell":{"command":"node dist/cli.js validate test/fixtures/valid.md -s ./test/fixtures/dd/owner-optional.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"Stage 2 (coverage probe): `get` reads the field across files for a coverage map.","runShell":{"command":"node dist/cli.js get owner test/fixtures/valid.md -f json","exitCodes":[0],"stdio":"test/fixtures/valid.md"}} */}
+{/* step {"description":"Stage 4 (promote to required): once `owner` is in `required`, a doc lacking it fails.","runShell":{"command":"node dist/cli.js validate test/fixtures/valid.md -s ./test/fixtures/dd/owner-required.schema.json","exitCodes":[1],"stdio":"must have required property 'owner'"}} */}
+{/* test end */}

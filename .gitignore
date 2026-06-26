@@ -5,3 +5,7 @@ dist/
 .DS_Store
 coverage/
 .vitest/
+
+# Doc Detective generated output. The tests live inline in docs/ (.mdx) and the
+# config is .doc-detective.json at the repo root; this directory is run output only.
+.doc-detective/

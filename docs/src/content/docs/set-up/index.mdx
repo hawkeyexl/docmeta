@@ -108,3 +108,12 @@ A committed `docmeta.config.yaml` that defines which files to check and which sc
     description="Move beyond the built-in OKF schema and encode your own required and recommended fields."
   />
 </CardGrid>
+
+{/* Doc Detective inline tests: verify this page's documented docmeta behavior
+    against the locally built CLI (node dist/cli.js) and committed fixtures.
+    Detected from this MDX markup; run with `npx doc-detective`. Config: .doc-detective.json. */}
+{/* test {"testId":"set-up-overview","description":"Stand-it-up steps, mapped to the local CLI build over the fixtures directory."} */}
+{/* step {"description":"Validate a folder with no setup: walking a directory of mixed fixtures fails (exit 1).","runShell":{"command":"node dist/cli.js validate test/fixtures","exitCodes":[1],"stdio":"files checked"}} */}
+{/* step {"description":"No positional paths and no config is an operational error: exit 2 with a clear message.","runShell":{"command":"node dist/cli.js validate","exitCodes":[2],"stdio":"No files to validate"}} */}
+{/* step {"description":"The CI command shape: `--format github` turns failures into inline annotations and still fails.","runShell":{"command":"node dist/cli.js validate test/fixtures/missing-type.md --format github","exitCodes":[1],"stdio":"::error file="}} */}
+{/* test end */}
