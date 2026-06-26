@@ -100,9 +100,17 @@ function cellList(line) {
 const isSeparatorRow = (cells) => cells.every((c) => /^:?-{2,}:?$/.test(c));
 const longsIn = (text) =>
   [...text.matchAll(/--[a-z][a-z-]*/g)].map((m) => stripDashes(m[0]));
-const argNameIn = (text) => {
-  const m = text.match(/[`[<]+\s*([a-zA-Z][\w-]*)/);
-  return m ? m[1] : null;
+// Parse an argument cell like `<fields>` or `[paths...]` into its name and its
+// required/variadic shape, so the check enforces those (not just the name).
+const parseArgToken = (text) => {
+  const token = text.replace(/`/g, "").trim();
+  const m = token.match(/([a-zA-Z][\w-]*)/);
+  if (!m) return null;
+  return {
+    name: m[1],
+    required: /^</.test(token), // `<arg>` required, `[arg]` optional
+    variadic: token.includes("..."),
+  };
 };
 
 for (const line of lines) {
@@ -114,7 +122,7 @@ for (const line of lines) {
       section = { command: cmd[1] };
       docCommands.set(cmd[1], {
         options: new Set(),
-        args: new Set(),
+        args: new Map(), // name -> { required, variadic }
         defaults: new Map(),
       });
     } else if (/^global options$/i.test(title)) {
@@ -165,8 +173,8 @@ for (const line of lines) {
       }
     }
   } else if (argCol >= 0) {
-    const name = argNameIn(cells[argCol] ?? "");
-    if (name) bucket.args.add(name);
+    const arg = parseArgToken(cells[argCol] ?? "");
+    if (arg) bucket.args.set(arg.name, { required: arg.required, variadic: arg.variadic });
   }
 }
 
@@ -196,11 +204,23 @@ for (const [name, code] of codeCommands) {
   const doc = docCommands.get(name);
   if (!doc) continue; // already reported as a missing command
   diff(`${name} options`, code.options, doc.options);
-  diff(
-    `${name} arguments`,
-    new Set(code.args.map((a) => a.name)),
-    doc.args,
-  );
+  // Argument parity: names, plus required (`<arg>` vs `[arg]`) and variadic.
+  const codeArgs = new Map(code.args.map((a) => [a.name, a]));
+  diff(`${name} arguments`, new Set(codeArgs.keys()), new Set(doc.args.keys()));
+  for (const [argName, codeArg] of codeArgs) {
+    const docArg = doc.args.get(argName);
+    if (!docArg) continue; // missing arg already reported by diff()
+    if (codeArg.required !== docArg.required) {
+      problems.push(
+        `${name} arguments: \`${argName}\` is ${codeArg.required ? "required (<arg>)" : "optional ([arg])"} in code but documented as ${docArg.required ? "required (<arg>)" : "optional ([arg])"}`,
+      );
+    }
+    if (codeArg.variadic !== docArg.variadic) {
+      problems.push(
+        `${name} arguments: \`${argName}\` variadic mismatch (code: ${codeArg.variadic}, docs: ${docArg.variadic})`,
+      );
+    }
+  }
   for (const [opt, codeDefault] of code.defaults) {
     if (!doc.options.has(opt)) continue;
     const docDefault = doc.defaults.get(opt);
