@@ -1,0 +1,76 @@
+name: Docs
+
+# Build the Starlight docs site and publish it to GitHub Pages on every push to
+# main. The deploy is gated on docmeta validating its own docs frontmatter
+# (dogfooding): if a page is missing a required field, the site does not ship.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Least privilege for the deploy: read the repo, write Pages, mint the OIDC
+# token deploy-pages needs.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one Pages deploy at a time; let an in-flight run finish rather than
+# cancelling it (avoids leaving Pages in a half-deployed state).
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  # Dogfood: build the docmeta CLI from this repo and use it to validate the
+  # frontmatter of the docs pages. -s overrides the default OKF schema (which
+  # requires `type`) with a docs-specific schema that requires title +
+  # description.
+  validate-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Check CLI reference is in sync with src/cli.ts
+        run: npm run docs:check-cli
+      - name: Validate docs frontmatter (dogfood)
+        run: |
+          node dist/cli.js validate "docs/src/content/docs/**/*.{md,mdx}" \
+            -s ./docs/doc-frontmatter.schema.json --format github
+
+  # Build the Astro/Starlight static site and upload it as a Pages artifact.
+  build:
+    needs: validate-docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+      - name: Install docs dependencies
+        run: npm ci
+        working-directory: docs
+      - name: Build docs site
+        run: npm run build
+        working-directory: docs
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/dist
+
+  # Deploy the uploaded artifact to GitHub Pages.
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
