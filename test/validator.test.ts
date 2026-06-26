@@ -92,6 +92,9 @@ describe("Validator with remote schemas of different dialects", () => {
       "/draft07.json": {
         json: dialectSchema("http://json-schema.org/draft-07/schema#"),
       },
+      "/draft06.json": {
+        json: dialectSchema("http://json-schema.org/draft-06/schema#"),
+      },
       "/draft04.json": {
         json: dialectSchema("http://json-schema.org/draft-04/schema#"),
       },
@@ -105,6 +108,7 @@ describe("Validator with remote schemas of different dialects", () => {
   it.each([
     ["2020-12", "/2020.json"],
     ["draft-07", "/draft07.json"],
+    ["draft-06", "/draft06.json"],
     ["draft-04", "/draft04.json"],
   ])("compiles and validates a %s schema fetched by URL", async (_d, path) => {
     const v = new Validator();

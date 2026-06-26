@@ -44,7 +44,15 @@ type Dialect = "2020" | "2019" | "draft7" | "draft4";
 function dialectOf(schema: Record<string, unknown>): Dialect {
   const meta = typeof schema.$schema === "string" ? schema.$schema : "";
   if (meta.includes("2019-09")) return "2019";
-  if (meta.includes("draft-07") || meta.includes("draft/7")) return "draft7";
+  // draft-06 shares the draft-07 build (its meta-schema is registered there).
+  if (
+    meta.includes("draft-07") ||
+    meta.includes("draft/7") ||
+    meta.includes("draft-06") ||
+    meta.includes("draft/6")
+  ) {
+    return "draft7";
+  }
   if (meta.includes("draft-04") || meta.includes("draft/4")) return "draft4";
   return "2020";
 }
