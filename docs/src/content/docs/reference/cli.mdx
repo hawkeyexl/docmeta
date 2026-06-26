@@ -1,0 +1,183 @@
+---
+title: CLI reference
+description: Every docmeta command, argument, and flag — validate, get, and schemas — with the shared input model and default ignores.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+{/* The command, argument, and option tables on this page are drift-checked
+    against src/cli.ts by scripts/check-cli-reference.mjs (npm run docs:check-cli),
+    enforced in CI. Keep flags, arguments, and defaults in sync with the code;
+    descriptions are free-form. */}
+
+docmeta exposes three subcommands: [`validate`](#validate) (the default),
+[`get`](#get), and [`schemas`](#schemas). `validate` and `get` share an
+[input model](#shared-input-model) and several flags with identical semantics.
+
+```sh
+docmeta [global options] [command] [command options] [arguments]
+```
+
+## Global options
+
+Global options are accepted before the subcommand.
+
+| Option | Description |
+|---|---|
+| `-V, --version` | Print the docmeta version and exit. |
+| `--no-color` | Disable colored output. See [color behavior](/docmeta/reference/output-and-exit-codes/#color-behavior). |
+| `-h, --help` | Print help for the program or a subcommand. |
+
+`validate` is the default command, so `docmeta <paths...>` runs validation
+without naming the subcommand.
+
+## `validate`
+
+Validate the metadata in the given files, directories, or globs against the
+resolved [schema set](/docmeta/reference/schema-resolution/) for each file. This is the
+default command.
+
+```sh
+docmeta validate [paths...] [options]
+docmeta [paths...] [options]
+```
+
+### Arguments
+
+| Argument | Description |
+|---|---|
+| `[paths...]` | Files, directories, or globs to validate. Use `-` to read from stdin. Optional — falls back to config `paths:`. See the [shared input model](#shared-input-model). |
+
+### Options
+
+| Option | Argument | Default | Description |
+|---|---|---|---|
+| `-s, --schema` | `<ref>` | — | Schema to validate against. Repeatable. When given, it overrides `$schema` and config for every file. See [reference kinds](/docmeta/reference/schema-resolution/#reference-kinds). |
+| `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
+| `--exclude` | `<glob>` | — | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
+| `--as` | `<format>` | — | Force an input [format](/docmeta/reference/formats/) (extractor name, e.g. `markdown`). Required when reading from stdin. |
+| `-f, --format` | `<pretty\|json\|github>` | `pretty` | [Output format](/docmeta/reference/output-and-exit-codes/). An unknown value is an error (exit 2). |
+| `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). When set, the file must exist or docmeta exits 2. |
+| `-q, --quiet` | — | off | In `pretty` output, hide passing files. Has no effect on `json` or `github`. |
+
+<Aside type="note">
+Repeatable flags (`-s/--schema`, `--exclude`) accumulate; pass the flag once per
+value, for example `-s a -s b`.
+</Aside>
+
+### Examples
+
+```sh
+docmeta validate docs/                          # walk a directory
+docmeta validate "**/*.md" -f github            # CI annotations
+docmeta validate page.md -s google:okf:0.1 -s ./my.schema.json
+cat page.md | docmeta validate - --as markdown  # read from stdin
+```
+
+## `get`
+
+Print the values of one or more metadata fields from each file. Useful for
+scripted extraction. `get` reads and reports values; it does not validate.
+
+```sh
+docmeta get <fields> [paths...] [options]
+```
+
+### Arguments
+
+| Argument | Description |
+|---|---|
+| `<fields>` | Comma-separated metadata field names to print. **Required.** |
+| `[paths...]` | Files, directories, or globs to read. Use `-` to read from stdin. Optional — falls back to config `paths:`. See the [shared input model](#shared-input-model). |
+
+A requested field that is absent from a file is reported as unset rather than
+as an error.
+
+### Options
+
+| Option | Argument | Default | Description |
+|---|---|---|---|
+| `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
+| `--exclude` | `<glob>` | — | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
+| `--as` | `<format>` | — | Force an input [format](/docmeta/reference/formats/) (extractor name). Required when reading from stdin. |
+| `-f, --format` | `<pretty\|json>` | `pretty` | Output format. `get` has no `github` format. An unknown value is an error (exit 2). |
+| `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). When set, the file must exist or docmeta exits 2. |
+
+### Output
+
+In `pretty` format, `get` prints one `<file>: <field>=<value>` line per
+requested field per file. Unset fields print as `(unset)`. In `json` format it
+prints an array of `{ file, present, values }` objects, where `values` maps each
+requested field to its value; a requested field that is unset is omitted from
+`values`. `present` reports whether the file had a metadata block at all.
+
+### Examples
+
+```sh
+docmeta get title,type docs/intro.md
+docmeta get type "**/*.md" -f json
+cat page.md | docmeta get title - --as markdown
+```
+
+## `schemas`
+
+List the built-in schemas and the supported input formats. Takes no positional
+arguments and reads no files.
+
+```sh
+docmeta schemas [options]
+```
+
+### Options
+
+| Option | Argument | Default | Description |
+|---|---|---|---|
+| `-f, --format` | `<pretty\|json>` | `pretty` | Output format. |
+
+In `pretty` format, `schemas` lists each built-in schema by id and title, then
+each input format with its extensions and whether it is implemented. In `json`
+format it prints `{ builtins, formats }`, where `builtins` is an array of
+`{ id, title, description }` and `formats` is an array of
+`{ name, extensions, implemented }`.
+
+```sh
+docmeta schemas
+docmeta schemas -f json
+```
+
+## Shared input model
+
+`validate` and `get` resolve their inputs the same way.
+
+- **Positional paths** are files, directories, or globs. A named file is always
+  read. A directory or glob is expanded and filtered to the extensions in
+  `--ext` (or, by default, the extensions of the [implemented
+  formats](/docmeta/reference/formats/)).
+- **`-` reads stdin.** Stdin requires `--as <format>` to choose an extractor,
+  because there is no filename extension to detect from. Without `--as`, docmeta
+  exits 2.
+- **Config `paths:` is the fallback.** When no positional paths are given,
+  docmeta uses `paths:` from the [config file](/docmeta/reference/configuration/).
+  Positional paths, when present, override config `paths:` entirely.
+- **No input and no config is an error.** If you pass no paths and no config
+  supplies `paths:`, docmeta reports an operational error and exits 2. It does
+  not silently produce empty output.
+
+<Aside type="caution">
+`--as` forces one extractor for every input in the run. Use it for stdin, or to
+read a file whose extension docmeta would not otherwise recognize.
+</Aside>
+
+### Default ignores
+
+Directory and glob expansion always skips these globs, in addition to anything
+from `--exclude` or config `exclude:`:
+
+| Glob | Skips |
+|---|---|
+| `**/node_modules/**` | Dependency directories. |
+| `**/.git/**` | The Git metadata directory. |
+
+Dotfiles and dot-directories are also excluded from directory and glob walks by
+default. An explicitly named file is always read, even if it matches an ignore
+glob or is a dotfile.

@@ -1,0 +1,140 @@
+---
+title: Supported formats reference
+description: Every docmeta input format — Markdown, MDX, AsciiDoc, reStructuredText, XML, and HTML — with extensions and how metadata is read from each.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+docmeta reads metadata from a document using a per-format **extractor**. The
+extractor is chosen from the file extension, or forced with
+[`--as <format>`](/docmeta/reference/cli/#shared-input-model). Every extractor below is
+implemented and counts toward directory and glob walks.
+
+## Formats
+
+| Format (`--as` name) | Extensions | Metadata source |
+|---|---|---|
+| `markdown` | `.md`, `.markdown` | Leading YAML frontmatter (`--- … ---`). |
+| `mdx` | `.mdx` | Leading YAML frontmatter (`--- … ---`). |
+| `asciidoc` | `.adoc`, `.asciidoc` | YAML frontmatter, or the native header: `= Title` plus `:key: value` attributes. |
+| `rst` | `.rst` | YAML frontmatter, or the native section title plus `:key: value` docinfo fields. |
+| `xml` | `.xml` | Attributes of the root element. |
+| `html` | `.html`, `.htm` | `<title>` plus `<meta name="…" content="…">` tags. |
+
+The `--as` name is the extractor name in the first column. The extension match
+is case-insensitive.
+
+## How each format is read
+
+### Markdown and MDX
+
+Both read a leading YAML frontmatter block delimited by `---` on its own line,
+closed by a matching `---` or `...`. The block is parsed as YAML, so values keep
+their YAML types (strings, numbers, booleans, lists, maps). MDX uses the same
+frontmatter logic as Markdown; `export const meta = {…}` is not read.
+
+```md
+---
+type: guide
+title: Getting started
+tags: [setup, onboarding]
+---
+```
+
+Malformed YAML in the block is reported as a per-file parse error rather than
+stopping the run. A file with no frontmatter block reports its metadata as not
+present.
+
+### AsciiDoc
+
+AsciiDoc accepts two metadata styles. If the file opens with a complete YAML
+frontmatter block, that block is used. Otherwise docmeta reads the native
+document header — the lines from the top of the file down to the first blank
+line:
+
+- A leading `= Title` line becomes `title`.
+- Each `:name: value` line becomes a `name` key. A `:name:` with no value is
+  `true`; an unset attribute (`:!name:` or `:name!:`) is `false`.
+- Other header lines (such as author or revision lines) are ignored.
+
+```asciidoc
+= Getting started
+:type: guide
+:draft: false
+```
+
+### reStructuredText
+
+reStructuredText also accepts two styles. A complete leading YAML frontmatter
+block is used when present (as some MyST setups produce it). Otherwise docmeta
+reads the native page metadata:
+
+- A leading section title (a line underlined — and optionally overlined — with
+  punctuation) becomes `title`.
+- The docinfo field list that follows — a run of `:name: value` fields — becomes
+  the remaining keys. A `:name:` with no value is `true`. An explicit `:title:`
+  field takes precedence over the heading.
+
+```rst
+Getting started
+===============
+
+:type: guide
+:tags: [setup, onboarding]
+```
+
+### XML
+
+XML metadata comes from the **attributes of the root element**. Namespace
+declarations (`xmlns` and `xmlns:*`) are dropped as transport noise.
+
+```xml
+<document type="concept" version="2" />
+```
+
+This yields `type: "concept"` and `version: 2`. Malformed XML is reported as a
+per-file parse error.
+
+### HTML
+
+HTML metadata comes from the document head:
+
+- `<title>…</title>` becomes `title` (the first `<title>` wins; its text is kept
+  verbatim).
+- `<meta name="X" content="Y">` becomes `X: Y`. `property="X"` is accepted in
+  place of `name` for OpenGraph-style tags.
+- `<meta>` tags with neither `name` nor `property` (such as `charset` or
+  `http-equiv`) carry no metadata and are skipped. For duplicate keys, the last
+  tag wins.
+
+```html
+<title>Getting started</title>
+<meta name="type" content="guide">
+<meta name="draft" content="false">
+```
+
+HTML parsing recovers from malformed markup, so extraction does not throw a
+parse error.
+
+## Type coercion
+
+For every format except Markdown and MDX, individual values are parsed as YAML
+scalars, matching frontmatter typing. This means string-looking inputs are
+coerced to their natural types:
+
+| Raw value | Becomes | Type |
+|---|---|---|
+| `2` | `2` | number |
+| `true` | `true` | boolean |
+| `[a, b]` | `["a", "b"]` | array |
+
+An explicitly empty value (`title=""` in XML, `content=""` in HTML) stays the
+empty string rather than becoming `null`. Markdown and MDX get their types from
+parsing the whole frontmatter block as YAML, so the same coercions apply there
+through normal YAML rules.
+
+<Aside type="note">
+Type coercion matters for validation: a schema field typed as `integer` or
+`boolean` will match a coerced `2` or `true`, but not the literal strings `"2"`
+or `"true"`. Author your schemas to expect the coerced types.
+</Aside>

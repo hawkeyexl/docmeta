@@ -1,0 +1,214 @@
+---
+title: How schema resolution works & how to wire it
+description: The precedence order that decides which schema validates a file, the three kinds of schema reference, and how dialects are detected.
+sidebar:
+  label: How resolution works
+  order: 2
+---
+
+import { Steps, Tabs, TabItem, Card, CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
+
+A schema is only useful once docmeta knows *which* schema applies to *which* file. In a real repo, several signals compete to answer that question: a flag on the command line, a `$schema` key inside the document, a directory rule in your config, a repo-wide default. docmeta settles the competition with a fixed precedence order — and once you know that order, wiring schemas to documents becomes predictable instead of mysterious.
+
+This page documents the precedence chain, the three kinds of schema reference you can use anywhere a schema is named, and how docmeta detects a schema's JSON Schema dialect.
+
+## The precedence chain
+
+For every file, docmeta builds a **schema set** — the list of schemas that file will be validated against — by checking five sources in order. The **first source that yields a schema wins**, and the search stops there. Nothing lower in the list is consulted.
+
+<Steps>
+
+1. **CLI `-s`/`--schema`** — if you pass one or more `--schema` flags, they apply to *every* file in the run and override everything else. Repeatable; the flags together form the set.
+
+2. **The file's own `$schema` key** — a `$schema` field in the document's metadata. May be a single string or a list of strings.
+
+3. **The first matching `overrides` entry in config** — config `overrides` are checked in order; the first whose glob matches the file path supplies the set.
+
+4. **Config `schemas`** — the repo-wide default list in `docmeta.config.yaml`.
+
+5. **The built-in default** — if nothing above matched, docmeta uses `google:okf:0.1`.
+
+</Steps>
+
+<Aside type="note" title="First match wins — completely">
+Precedence is not a merge. If you pass `--schema`, the file's `$schema` key and all config rules are ignored for that run. If a file has a `$schema` key, config `overrides` and `schemas` are skipped. Each level is a full stop, not an addition. To combine schemas, list them at a *single* level (several `--schema` flags, a list-valued `$schema`, or multiple entries in one config rule) — see [Validating against more than one schema](#validating-against-more-than-one-schema).
+</Aside>
+
+Here is the same chain as a quick-reference table:
+
+| Order | Source | Scope | Notes |
+|------:|--------|-------|-------|
+| 1 | CLI `-s`/`--schema` | All files in the run | Repeatable; overrides everything below. |
+| 2 | File `$schema` key | That one file | String or list of strings. Reserved key — stripped before validation. |
+| 3 | Config `overrides` | Files matching a glob | First matching entry wins; later entries ignored. |
+| 4 | Config `schemas` | All files (repo default) | Used when no override matched. |
+| 5 | Built-in default | All files (last resort) | `google:okf:0.1`. |
+
+Levels 3 and 4 come from your `docmeta.config.yaml`. Here is the config the worked example below assumes — a repo-wide default plus one directory override:
+
+```yaml title="docmeta.config.yaml"
+# Level 4: the repo-wide default applied to every file...
+schemas:
+  - google:okf:0.1
+
+# Level 3: ...unless a file matches an override glob, checked top to bottom.
+overrides:
+  - files: "api/**"
+    schemas:
+      - ./schemas/api.schema.json
+```
+
+Each `overrides` entry pairs a `files` glob with a `schemas` list. Entries are tried in order, and the first whose glob matches the file supplies the set. (For every config key, type, and default, see the [Configuration reference](/docmeta/reference/configuration/).)
+
+<Aside type="tip" title="A worked example">
+With the config above — a repo-wide default of `google:okf:0.1` (level 4) and an override applying `api.schema.json` to `api/**` (level 3) — resolution plays out like this:
+
+- `api/auth.md` with no `$schema` key → matches the override → validated against **`api.schema.json`**.
+- `guides/intro.md` with no `$schema` key → no override matches → falls through to the config default, **`google:okf:0.1`**.
+- Any file with `$schema: ./special.schema.json` in its frontmatter → the file key (level 2) beats both config levels → validated against **`./special.schema.json`**.
+- The whole run invoked with `--schema ./audit.schema.json` → level 1 overrides all of the above → *every* file validated against **`./audit.schema.json`**.
+</Aside>
+
+## The `$schema` key is reserved
+
+When a document names its own schema with a `$schema` key, that key is a *directive to docmeta*, not part of the document's metadata. docmeta strips `$schema` out of the metadata before handing it to the validator.
+
+This matters for one specific case: a schema with `"additionalProperties": false` rejects any field it doesn't declare. Without special handling, a document carrying `$schema:` would fail against such a schema — because `$schema` isn't one of the schema's declared properties. Because docmeta removes `$schema` first, that never happens. You never need to add `$schema` to your schema's `properties`, and a self-describing document validates cleanly against even the strictest schema.
+
+The `$schema` value can be a single reference or a list:
+
+<Tabs>
+<TabItem label="Single schema">
+
+```markdown
+---
+$schema: ./schemas/metadata.schema.json
+type: guide
+title: My page
+---
+```
+
+</TabItem>
+<TabItem label="Multiple schemas">
+
+```markdown
+---
+$schema:
+  - google:okf:0.1
+  - ./schemas/house-style.schema.json
+type: guide
+title: My page
+---
+```
+
+The file is validated against *both* schemas — see [below](#validating-against-more-than-one-schema).
+
+</TabItem>
+</Tabs>
+
+<Aside type="caution" title="$schema must be a string or a list of strings">
+A `$schema` value that is anything else — a number, an object, a list with non-string entries — is a configuration error, and docmeta reports it rather than guessing. Keep it to a single reference or a flat list of references.
+</Aside>
+
+## The three reference kinds
+
+Everywhere a schema is named — a `--schema` flag, a `$schema` key, a config entry — the value is a **reference**, and docmeta classifies it into one of three kinds by its shape. You don't declare the kind; docmeta infers it.
+
+<CardGrid>
+  <Card title="Built-in" icon="seti:json">
+  A `vendor:name:version` id with no path separators and not ending in `.json`.
+
+  Example: `google:okf:0.1`
+
+  Resolved from the schemas bundled into docmeta. A typo'd id (e.g. an unknown vendor) is reported as an unknown built-in, not silently treated as a missing file.
+  </Card>
+  <Card title="File" icon="document">
+  A path that ends in `.json` **or** contains a path separator (`/` or `\`).
+
+  Examples: `./schemas/api.schema.json`, `schemas/house.json`
+
+  Read from the local filesystem. Relative paths resolve against the current working directory.
+  </Card>
+  <Card title="URL" icon="external">
+  Anything starting with `http://` or `https://`.
+
+  Example: `https://example.com/schemas/okf-1.0.json`
+
+  Fetched over the network with a **10-second timeout** and **cached for the run**, so the same URL is downloaded only once even across thousands of files.
+  </Card>
+</CardGrid>
+
+<Aside type="note" title="How the kind is decided">
+The classification is purely structural, applied in this order: a value starting with `http(s)://` is a **URL**; otherwise a value with no slash or backslash, not ending in `.json`, and shaped like `vendor:name:version` is a **built-in**; everything else is a **file**. That last rule is why a Windows path like `C:\schemas\my.schema.json` is correctly treated as a file rather than mistaken for a built-in id.
+</Aside>
+
+<Aside type="caution" title="A schema that can't be loaded is a hard error">
+If a reference can't be resolved, docmeta stops with an operational error (exit code 2) rather than skipping the file or falling back to the default. This applies to an unknown built-in id, a missing schema file, and a URL that 404s or times out after the 10-second limit. Treat the schema reference as load-bearing: a broken one fails the run, which is what you want in CI.
+</Aside>
+
+URL references are the foundation for governing one schema across many repos — a central, versioned schema URL that every consumer points at. That workflow, including the fetch timeout and caching behavior in depth, is covered in [Govern a shared schema by URL](/docmeta/ci/govern-shared-schema/).
+
+## Validating against more than one schema
+
+When a file's schema set contains more than one reference, docmeta validates the file against **every schema in the set** and reports the union of all violations, each tagged with the schema that produced it. A file passes only if it satisfies all of them.
+
+A multi-schema set is what you get when you name several schemas at a single precedence level:
+
+- several `--schema` flags on the command line,
+- a list-valued `$schema` key in a document,
+- or multiple entries in one config `overrides` rule or in config `schemas`.
+
+This is useful for layering a shared organizational schema with a local one — for example, validate against a company-wide `house-style.schema.json` *and* a team-specific `api.schema.json` at once. Each schema is compiled and cached separately, so layering is cheap.
+
+Because the file must satisfy *every* schema in the set, the strictest member governs. If any schema in the set sets `"additionalProperties": false`, an unknown key fails the file even when another schema in the set allows it. Keep that in mind when combining a lenient shared schema with a strict local one — the strict one wins on every rule it imposes.
+
+## Dialects are detected automatically
+
+JSON Schema has evolved through several versions, called *dialects* (draft-04, draft-06, draft-07, 2019-09, 2020-12). A schema written for one dialect can fail to compile under another, so docmeta reads each schema's **own `$schema` line** — the URI at the top of the schema file that points at the dialect's *meta-schema* (the schema that defines the dialect itself) — and selects the matching validation engine.
+
+docmeta supports these dialects:
+
+| Dialect | Detected from a `$schema` URI containing |
+|---------|------------------------------------------|
+| 2020-12 | `2020-12` (also the fallback) |
+| 2019-09 | `2019-09` |
+| draft-07 | `draft-07` or `draft/7` |
+| draft-06 | `draft-06` or `draft/6` (shares the draft-07 engine) |
+| draft-04 | `draft-04` or `draft/4` |
+
+If a schema omits its `$schema` line or uses an unrecognized one, docmeta falls back to **2020-12** — the dialect of the built-in schemas. This auto-detection is why a schema you fetch from a remote URL that targets draft-07 validates correctly alongside a local 2020-12 schema in the same run.
+
+<Aside type="tip" title="Always declare your dialect">
+Relying on the fallback works, but stating the dialect explicitly removes ambiguity for both docmeta and the humans reading your schema. Keep a `"$schema"` line at the top of every schema file:
+
+```json
+{ "$schema": "https://json-schema.org/draft/2020-12/schema", ... }
+```
+</Aside>
+
+For the full lookup table of precedence, reference kinds, and dialects in one place, see the [Schema resolution reference](/docmeta/reference/schema-resolution/).
+
+## Where to go next
+
+<CardGrid>
+  <LinkCard
+    title="Author a schema for your metadata standard"
+    href="/docmeta/schemas/"
+    description="Write the JSON Schema that this resolution chain points your documents at."
+  />
+  <LinkCard
+    title="Versioning & dialects"
+    href="/docmeta/schemas/versioning/"
+    description="Ship a stricter schema — and migrate consumers — without breaking CI everywhere at once."
+  />
+  <LinkCard
+    title="Govern a shared schema by URL"
+    href="/docmeta/ci/govern-shared-schema/"
+    description="Centralize one schema, reference it by URL, and version it across many repos."
+  />
+  <LinkCard
+    title="Schema resolution reference"
+    href="/docmeta/reference/schema-resolution/"
+    description="The precedence, reference-kind, and dialect tables as a flat lookup."
+  />
+</CardGrid>

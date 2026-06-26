@@ -1,0 +1,126 @@
+---
+title: Schema resolution reference
+description: How docmeta picks the schema set for each file — the precedence chain, the three reference kinds, and the supported JSON Schema dialects.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+For each file, docmeta resolves a **schema set** — one or more schema references
+— then validates the file's metadata against every schema in that set. This page
+documents how the set is chosen, what a reference can be, and which JSON Schema
+dialects are supported.
+
+## Precedence
+
+docmeta determines the schema set for a file by checking these sources in order
+and using the **first** one that yields a non-empty set:
+
+| Level | Source | Scope |
+|---|---|---|
+| 1 | `-s/--schema` on the command line | All files in the run. |
+| 2 | `$schema` in the file's own metadata | That file only. |
+| 3 | First matching config `overrides` entry (by glob) | Files matching the glob. |
+| 4 | Config `schemas` | All files not matched above. |
+| 5 | Built-in default `google:okf:0.1` | Every file, when nothing else applies. |
+
+Once a level produces a set, lower levels are not consulted for that file.
+Within a resolved set, duplicate references are removed.
+
+<Aside type="note">
+`--schema` is the only level that applies to the whole run. When present, it
+replaces every per-file `$schema` and all config rules. See the [precedence note
+in the configuration reference](/docmeta/reference/configuration/#how-config-merges-with-cli-flags).
+</Aside>
+
+### The `$schema` key in a file
+
+A file can name its own schema with a `$schema` key in its metadata. The value
+may be a single reference or a list of references:
+
+```yaml
+---
+$schema: ./schemas/guide.schema.json
+type: guide
+---
+```
+
+```yaml
+---
+$schema:
+  - google:okf:0.1
+  - ./schemas/extra.schema.json
+type: concept
+---
+```
+
+`$schema` is a docmeta directive, not part of the document's metadata. It is
+**reserved and stripped** before validation, so a schema with
+`additionalProperties: false` will not flag it. A `$schema` value that is
+neither a string nor a list of strings is an error for that file.
+
+## Reference kinds
+
+A schema reference — wherever it comes from (CLI, `$schema`, or config) — is
+classified into one of three kinds by its shape:
+
+| Kind | Looks like | Resolved from |
+|---|---|---|
+| **builtin** | `vendor:name:version`, e.g. `google:okf:0.1` | A schema shipped with docmeta. |
+| **file** | A `.json` path or any path containing a separator, e.g. `./my.schema.json` | The local filesystem. |
+| **url** | An `http://` or `https://` URL | Fetched over the network. |
+
+How a reference is classified:
+
+- A reference starting with `http://` or `https://` is a **url**.
+- Otherwise, a reference is a **builtin** when it contains no path separator
+  (`/` or `\`), does not end in `.json`, and matches the built-in id pattern
+  (colon-separated segments of `[a-z0-9._-]`, such as `google:okf:0.1`).
+- Everything else is a **file**.
+
+This deliberately classifies a Windows path (`C:\...`), a URL, and any `.json`
+reference as non-builtin, so a typo'd built-in id is reported as an unknown
+built-in rather than silently treated as a missing file.
+
+### URL references
+
+A `url` reference is fetched with a default **10-second timeout**. Within a
+single run, fetched schemas are **cached per URL**, so the same URL is only
+retrieved once even when many files reference it. A timeout, a non-2xx HTTP
+status, or a response that is not valid JSON is an error (exit 2).
+
+<Aside type="caution">
+The URL cache lives only for the duration of one run. Each invocation re-fetches
+remote schemas; docmeta does not persist a cross-run cache.
+</Aside>
+
+## Dialects
+
+Every schema declares its dialect through its own `$schema` meta-schema URI.
+docmeta auto-detects the dialect from that URI and compiles the schema with the
+matching validator. Schemas of different dialects can coexist in one run.
+
+| Dialect | Detected from meta-schema URI containing | Notes |
+|---|---|---|
+| Draft 2020-12 | `2020-12` (or anything unrecognized) | The dialect of the built-in schemas, and the **fallback**. |
+| Draft 2019-09 | `2019-09` | |
+| Draft-07 | `draft-07` / `draft/7` | |
+| Draft-06 | `draft-06` / `draft/6` | Shares the draft-07 validator. |
+| Draft-04 | `draft-04` / `draft/4` | |
+
+A schema with a missing or unrecognized `$schema` meta-schema URI falls back to
+Draft 2020-12. Schemas are compiled in non-strict mode, so lax metadata still
+compiles. A schema that fails to compile is an error (exit 2).
+
+<Aside type="note">
+Two different `$schema` keys are at play. A schema's **own** `$schema` (its
+meta-schema URI) selects the dialect, as described here. A **document's**
+`$schema` selects which schema(s) validate that document, as described in
+[the precedence section](#the-schema-key-in-a-file).
+</Aside>
+
+## Validating against the whole set
+
+When a file's resolved set contains more than one schema, docmeta validates the
+file's metadata against **every** schema in the set and reports the union of all
+violations. A file passes only when it satisfies all schemas in its set. Each
+reported error is tagged with the schema that produced it.

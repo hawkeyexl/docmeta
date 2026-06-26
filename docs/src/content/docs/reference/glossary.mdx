@@ -1,0 +1,129 @@
+---
+title: Glossary
+description: Definitions of the terms docmeta uses — frontmatter, metadata, extractor, schema set, schema reference, $schema, dialect, JSON Pointer, OKF, override, and validation vs. extraction.
+---
+
+The terms below are defined as docmeta uses them. Where a concept has a fuller
+reference page, the entry links to it.
+
+## frontmatter
+
+A block of metadata at the very top of a document, set off from the body. In
+Markdown and MDX it's a YAML block fenced by `---`; other formats carry it
+differently (AsciiDoc attributes, an RST field list, XML or HTML elements). docmeta
+reads the frontmatter, not the body. The block must be the first thing in the
+file, or docmeta won't recognize it. See [Supported formats](/docmeta/reference/formats/)
+for where each format keeps its frontmatter.
+
+## metadata
+
+The key/value pairs docmeta validates — `type`, `title`, `timestamp`, and so on.
+Metadata is what an [extractor](#extractor) pulls out of a document's
+[frontmatter](#frontmatter); everything in docmeta after extraction operates on
+this generic key/value shape, regardless of the original format. docmeta checks
+the **presence and format** of metadata, never the document's prose.
+
+## extractor
+
+The format-specific component that reads metadata out of a document. docmeta has
+one extractor per input format — Markdown, MDX, AsciiDoc, reStructuredText, XML,
+and HTML. The extractor is the only part of docmeta that knows about a file's
+format; once it produces metadata, validation and reporting work the same for
+every format. You can force a specific extractor with `--as`, which is required
+when reading from stdin. See [Supported formats](/docmeta/reference/formats/).
+
+## schema
+
+A [JSON Schema](https://json-schema.org/) document that declares which metadata
+fields are required, which are optional, and what shape each value must take.
+docmeta validates a file's metadata against one or more schemas. A schema can be
+shipped with docmeta (a [builtin](#schema-reference)), a local file, or a remote
+URL.
+
+## schema set
+
+The one-or-more schemas resolved for a single file. docmeta resolves a schema
+**set** per file, then validates the file's metadata against **every** schema in
+it. A file passes only when it satisfies all schemas in its set, and each
+reported error is tagged with the schema that produced it. See
+[Schema resolution](/docmeta/reference/schema-resolution/#validating-against-the-whole-set).
+
+## schema reference
+
+A pointer to a schema — what appears in a `--schema` flag, a document's
+[`$schema`](#schema-document-key) key, or config. docmeta classifies each
+reference into one of three kinds by its shape:
+
+- **builtin** — a `vendor:name:version` id such as `google:okf:0.1`, resolved to
+  a schema shipped with docmeta.
+- **file** — a `.json` path or any path with a separator, such as
+  `./my.schema.json`, resolved from the local filesystem.
+- **url** — an `http://` or `https://` URL, fetched over the network.
+
+See [Reference kinds](/docmeta/reference/schema-resolution/#reference-kinds).
+
+## `$schema` (document key)
+
+A reserved key a document can put in its own metadata to name the schema(s) it
+should be validated against — a single reference or a list. Because it's a
+docmeta directive rather than real metadata, `$schema` is **stripped before
+validation**, so a schema with `additionalProperties: false` won't flag it. In
+the [precedence chain](#override) it sits above config but below a `--schema`
+flag. See [The `$schema` key in a file](/docmeta/reference/schema-resolution/#the-schema-key-in-a-file).
+
+## `$schema` (meta-schema URI)
+
+A different use of the same key, found **inside a schema** rather than a document.
+There, `$schema` is the meta-schema URI that declares the schema's
+[dialect](#dialect) — for example
+`https://json-schema.org/draft/2020-12/schema`. docmeta reads it to decide which
+validator to compile the schema with. Don't confuse it with the document
+[`$schema`](#schema-document-key) above: one selects a dialect, the other selects
+which schema validates a document.
+
+## dialect
+
+A version of the JSON Schema specification — Draft 2020-12, 2019-09, draft-07,
+draft-06, or draft-04. docmeta auto-detects a schema's dialect from its
+[`$schema` meta-schema URI](#schema-meta-schema-uri) and compiles it with the matching
+validator; a missing or unrecognized URI falls back to Draft 2020-12. Schemas of
+different dialects can coexist in one run. See [Dialects](/docmeta/reference/schema-resolution/#dialects).
+
+## JSON Pointer
+
+The standard ([RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901)) syntax
+docmeta uses to name the field an error is about. A pointer like `/tags/0` means
+"the first item of the `tags` array"; an empty pointer (shown as `(root)` in
+pretty output) means the document as a whole — most often a required field that's
+missing entirely. Pointers appear in error output and in the `instancePath` field
+of JSON output.
+
+## OKF
+
+The Open Knowledge Format, whose v0.1 schema (`google:okf:0.1`) ships with
+docmeta as the built-in default. OKF requires only `type` and treats every other
+field — `title`, `description`, `resource`, `tags`, `timestamp` — as recommended,
+tolerating unknown keys. It's what validates your files when nothing else is
+configured. See [the built-in OKF schema](/docmeta/reference/okf-schema/).
+
+## override
+
+In docmeta, "override" has two related senses:
+
+- A config **`overrides`** entry assigns a schema set to files matching a glob, so
+  different folders can use different schemas. See
+  [Apply different schemas to different folders](/docmeta/set-up/different-schemas-per-folder/).
+- More broadly, schema resolution is a chain of overrides: a `--schema` flag
+  overrides a document's [`$schema`](#schema-document-key), which overrides config
+  `overrides`, which overrides config `schemas`, which overrides the built-in
+  default. The first source that yields a schema wins. See
+  [Precedence](/docmeta/reference/schema-resolution/#precedence).
+
+## validation vs. extraction
+
+Two distinct operations, exposed as two commands. **Extraction** reads metadata
+out of a document — the `get` command prints named field values and validates
+nothing. **Validation** checks that extracted metadata satisfies its
+[schema set](#schema-set) — the `validate` command, the one CI gates on. Every
+validation begins with an extraction, but you can extract without validating. See
+the [CLI reference](/docmeta/reference/cli/).

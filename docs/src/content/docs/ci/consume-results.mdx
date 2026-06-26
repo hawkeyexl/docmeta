@@ -1,0 +1,289 @@
+---
+title: Consume results programmatically
+description: Feed docmeta validation output into your own tooling — the json output format with jq, the get command for scripted field extraction, and the TypeScript API for tools built on top of docmeta.
+---
+
+import { Tabs, TabItem, Aside, Steps, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+A gate that only passes or fails is the floor. Once docmeta is running, the same
+data behind the pass/fail decision can feed dashboards, PR bots, content
+catalogs, and custom checks — without re-parsing documents yourself.
+
+docmeta exposes its results three ways, each suited to a different integration
+style:
+
+- **`--format json`** — a single structured object per run, for pipelines that
+  shell out and parse stdout.
+- **The `get` command** — pull specific metadata field values out of files, for
+  scripts that need a few values rather than a full validation report.
+- **The TypeScript API** — call docmeta's command cores directly from Node.js,
+  for tools built on top of it.
+
+<Tabs>
+<TabItem label="JSON output">
+
+## --format json
+
+`docmeta validate --format json` prints one JSON object to stdout describing the
+whole run. It is the path for any tool that runs docmeta as a subprocess and
+reads its output.
+
+```sh
+npx -y docmeta validate "docs/**/*.md" --format json
+```
+
+The object has a `summary` and a `results` array:
+
+```json
+{
+  "summary": {
+    "files": 1,
+    "passed": 0,
+    "failed": 1,
+    "errors": 1
+  },
+  "results": [
+    {
+      "file": "bad-timestamp.md",
+      "format": "markdown",
+      "ok": false,
+      "schemas": ["google:okf:0.1"],
+      "errors": [
+        {
+          "schema": "google:okf:0.1",
+          "instancePath": "/timestamp",
+          "message": "must match format \"date-time\"",
+          "line": 4
+        }
+      ]
+    }
+  ]
+}
+```
+
+The fields:
+
+- **`summary`** — run-wide counts: `files` checked, `passed`, `failed`, and the
+  total `errors` across all files.
+- **`results`** — one object per file: `file` (the path as docmeta saw it),
+  `format` (the extractor that read it), `ok`, `schemas` (the resolved schema
+  set), and `errors`.
+- **Each error** — `schema` (the schema id that produced it), `instancePath` (a
+  JSON Pointer to the field, `""` for the document root), `message`, and `line`
+  (1-based, when docmeta can locate it).
+
+<Aside type="note" title="line and col are optional; col is absent today">
+`line` appears only when docmeta can map an error back to a source position, so
+parse it as optional. The contract also defines a `col` field, but current
+extractors resolve errors to a line only, so `col` is never present in practice
+today. Check for each field rather than assuming it exists.
+</Aside>
+
+The output is plain (never colorized) and goes to stdout, so it pipes cleanly
+into [`jq`](https://jqlang.github.io/jq/). List the files that failed:
+
+```sh
+npx -y docmeta validate "docs/**/*.md" --format json \
+  | jq -r '.results[] | select(.ok == false) | .file'
+```
+
+Flatten every error into a `file:line  message` line for a log:
+
+```sh
+npx -y docmeta validate "docs/**/*.md" --format json \
+  | jq -r '.results[] | .file as $f
+           | .errors[] | "\($f):\(.line // "?")  \(.message)"'
+```
+
+Read just the summary counts:
+
+```sh
+npx -y docmeta validate "docs/**/*.md" --format json | jq '.summary'
+```
+
+<Aside type="tip" title="Preserve the exit code through a pipe">
+Piping into `jq` replaces docmeta's exit code with `jq`'s. When you need both the
+parsed output and the gate to fail on validation errors, write the report to a
+file with `tee` first — `docmeta validate ... --format json | tee report.json` —
+then run `jq` over `report.json` in a later step. See the
+[CI recipes](/docmeta/ci/recipes/) for capturing JSON as a build artifact.
+</Aside>
+
+</TabItem>
+<TabItem label="get command">
+
+## The get command
+
+When a script needs metadata *values* rather than a validation verdict — say, to
+build an index of every page's `title` and `type` — use `docmeta get`. It reads
+the named fields from each file and prints them, sharing `validate`'s input
+handling (positional paths, directories, globs, `-` for stdin with `--as`, and
+`paths:` from config as a fallback).
+
+Pass the fields as a single comma-separated argument, then the targets:
+
+```sh
+npx -y docmeta get title,tags docs/intro.md
+```
+
+For scripting, add `--format json` to get a structured array — one object per
+file:
+
+```sh
+npx -y docmeta get title,tags "docs/**/*.md" --format json
+```
+
+```json
+[
+  {
+    "file": "docs/intro.md",
+    "present": true,
+    "values": {
+      "title": "Introduction",
+      "tags": ["onboarding", "guide"]
+    }
+  }
+]
+```
+
+Each object reports:
+
+- **`file`** — the file path.
+- **`present`** — whether the file had a metadata block at all (`false` for a
+  document with no frontmatter).
+- **`values`** — the requested fields and their values.
+
+<Aside type="caution" title="Unset fields are omitted from JSON, not null">
+A requested field that the file does not define is left unset internally, and
+`JSON.stringify` drops unset values. So a field that is absent in the source does
+**not** appear as `"field": null` in the JSON — its key is omitted from `values`
+entirely. When you read the output, treat a missing key as "not present" rather
+than expecting an explicit null. In the `pretty` format the same case prints as
+`field=(unset)`.
+</Aside>
+
+Extract one field across a tree into a shell list with `jq`:
+
+```sh
+npx -y docmeta get type "docs/**/*.md" --format json \
+  | jq -r '.[] | "\(.file)\t\(.values.type // "(none)")"'
+```
+
+<Aside type="note" title="get supports pretty and json only">
+`docmeta get` accepts `--format pretty` (the default) and `--format json`. It
+does **not** accept `--format github` — that format is specific to `validate`.
+Passing an unsupported format is a usage error and exits `2`.
+</Aside>
+
+</TabItem>
+<TabItem label="TypeScript API">
+
+## The TypeScript API
+
+For tools built on top of docmeta — a custom reporter, a bespoke gate, a script
+that validates and then acts on the results — call the command cores directly
+instead of shelling out. docmeta ships a programmatic entry point that exports
+the same cores the CLI is built on, so you get structured results without
+spawning a process or parsing stdout.
+
+The most common call is `runValidate`, which runs the full validation pipeline
+and returns the same `{ results, summary }` structure that backs `--format
+json`:
+
+```ts
+import { runValidate } from "docmeta";
+
+const { results, summary } = await runValidate({
+  inputs: ["docs/**/*.md"],
+  cliSchemas: ["google:okf:0.1"],
+});
+
+console.log(`${summary.passed}/${summary.files} files passed`);
+
+for (const result of results) {
+  if (result.ok) continue;
+  for (const err of result.errors) {
+    console.log(`${result.file}: ${err.instancePath} ${err.message}`);
+  }
+}
+```
+
+`runValidate` accepts a `ValidateOptions` object. The fields mirror the CLI:
+
+- **`inputs`** — files, directories, or globs to validate. When empty, docmeta
+  falls back to `paths:` from the config, exactly as the CLI does.
+- **`cliSchemas`** — schema references that override `$schema` and config (the
+  programmatic equivalent of `--schema`).
+- **`exts`**, **`exclude`**, **`as`**, **`configPath`** — directory-walk
+  extensions, exclude globs, a forced extractor name, and a config-file path.
+- **`stdinContent`** — content for a `-` (stdin) input, supplied directly rather
+  than read from the process.
+
+It resolves to a `ValidateRun` — `{ results, summary }` — using the
+`ValidationResult` and `RunSummary` shapes that the JSON format serializes.
+
+Alongside `runValidate`, the entry point exports the other cores and helpers:
+
+| Export | Purpose |
+|---|---|
+| `runValidate` | Run the validation pipeline; returns `{ results, summary }`. |
+| `runGet` | Read metadata field values from files; returns one result per file. |
+| `getSchemasInfo` | List built-in schemas and supported input formats. |
+| `Validator` | The Ajv-backed validation engine, for validating already-extracted metadata. |
+| `resolveSchemaSet`, `DEFAULT_SCHEMA` | Resolve a file's schema set; the built-in default id. |
+| `loadConfig`, `parseConfig` | Load or parse a `docmeta.config.yaml`. |
+| `listBuiltins`, `loadSchema`, `classifyRef` | Enumerate, fetch, and classify schema references. |
+| `render` | Format a result set as `pretty`, `json`, or `github` text. |
+| `DocmetaError` and the result types | The operational-error class and `ValidationResult` / `RunSummary` / `FieldError` interfaces. |
+
+<Aside type="caution" title="Operational failures throw DocmetaError">
+The cores throw a `DocmetaError` for operational problems — no inputs and no
+config, an unknown `--as` format, an unreadable config, an unresolvable schema.
+This is the same condition the CLI maps to exit `2`. A validation *failure*, by
+contrast, is not thrown: it comes back as a `result` with `ok: false`. Wrap calls
+in `try`/`catch` to handle the operational case, and inspect `summary.failed` (or
+each `result.ok`) for the validation case.
+</Aside>
+
+<Aside type="note" title="ESM, Node 20+">
+docmeta is an ES module targeting Node.js 20 or newer. Import it from ESM (or a
+`.mts` / `.ts` file compiled to ESM); there is no CommonJS `require` entry.
+</Aside>
+
+</TabItem>
+</Tabs>
+
+## Which one to reach for
+
+<Steps>
+
+1. **A subprocess in any language?** Use `--format json` and parse stdout. It is
+   language-agnostic and the most stable surface.
+
+2. **A shell script that needs a few field values?** Use `get` — it is purpose-built
+   for pulling named fields without a full validation report.
+
+3. **A Node.js or TypeScript tool?** Call the API. You skip process spawning and
+   stdout parsing, and you get typed results.
+
+</Steps>
+
+## Next steps
+
+<CardGrid>
+  <LinkCard
+    title="Exit codes & PR annotations"
+    href="/docmeta/ci/exit-codes-and-annotations/"
+    description="The full json shape, the 0/1/2 exit contract, and the github annotation format."
+  />
+  <LinkCard
+    title="Govern a shared schema by URL"
+    href="/docmeta/ci/govern-shared-schema/"
+    description="Point many repos at one central, versioned schema and feed the results here."
+  />
+  <LinkCard
+    title="CI recipes"
+    href="/docmeta/ci/recipes/"
+    description="Capture JSON as a build artifact on GitLab CI, Jenkins, and pre-commit."
+  />
+</CardGrid>

@@ -1,0 +1,155 @@
+---
+title: FAQ
+description: Short answers to the questions that come up most when a docmeta check fails — no frontmatter, which schema fired, validating one field, stdin, exit codes, and more.
+---
+
+import { Aside, LinkCard } from '@astrojs/starlight/components';
+
+Quick answers to the questions contributors ask most when a docmeta check goes
+red. Each one links to the page that covers it in full. If you're staring at a
+failing check right now, start with [Fix a failing check](/docmeta/fix/) — this page is
+for the "wait, but what about…" follow-ups.
+
+## What if a file has no frontmatter at all?
+
+It still fails, as long as the schema requires any field. A file with no
+frontmatter block reads as empty metadata, so a schema that requires `type` (the
+built-in default does) reports the same "must have required property 'type'"
+error it would for a file that simply left `type` out.
+
+So an empty or frontmatter-less file is not a free pass — it's the maximally
+failing case. If you expected the file to have metadata, the usual cause is a
+missing opening `---` fence, or content sitting above the block. See
+[No frontmatter at all](/docmeta/fix/#no-frontmatter-at-all) for the fix.
+
+## Which schema validated my file, and why did *this* rule fire?
+
+Every error line ends with the schema that produced it, in brackets — for
+example `[google:okf:0.1]`. That's the schema whose rule you tripped. If you're
+surprised by *which* schema applied, docmeta picks it through a fixed precedence
+chain: a `--schema` flag wins over a `$schema` key in your file, which wins over
+config `overrides`, then config `schemas`, then the built-in default.
+
+The first source that yields a schema wins, and lower sources are ignored for
+that file. So if your repo's config assigns a strict schema to `/api/**` and
+your file is under `/api`, that's the rule that fired — even if you never set
+anything in the file itself.
+
+<LinkCard
+  title="How schema resolution works"
+  href="/docmeta/reference/schema-resolution/"
+  description="The full precedence chain, the three reference kinds, and how each error is tagged with its schema."
+/>
+
+## Can I validate just one field?
+
+No — `validate` checks a file against whole schemas, not individual fields. There
+is no "validate only `type`" mode. What you *can* do is narrow which schema
+applies (via `$schema`, config `overrides`, or `--schema`) so that only the rules
+you care about run.
+
+If your goal is just to *read* a field's value rather than validate it, that's a
+different command: `get` extracts named field values without validating anything.
+
+```sh
+docmeta get type docs/guide.md
+```
+
+See the [`validate`](/docmeta/reference/cli/#validate) and [`get`](/docmeta/reference/cli/#get)
+references for each command's full surface.
+
+## How do I validate content coming from stdin?
+
+Pass `-` as the path and tell docmeta which format to use with `--as`, since
+there's no filename extension to detect from:
+
+```sh
+cat page.md | docmeta validate - --as markdown
+```
+
+`--as` takes an extractor name (`markdown`, `mdx`, `asciidoc`, and so on). The
+same pattern works for `get`. Without `--as`, stdin is an error.
+
+<LinkCard
+  title="CLI reference — shared input model"
+  href="/docmeta/reference/cli/#shared-input-model"
+  description="How paths, stdin, and --as work the same way across validate and get."
+/>
+
+## How do I check only Markdown and skip my other formats?
+
+Use `--ext` to restrict which extensions directory and glob walks pick up:
+
+```sh
+docmeta validate docs/ --ext md
+```
+
+This walks `docs/` but considers only `.md` files, leaving `.mdx`, `.adoc`, and
+the rest untouched. Pass a comma-separated list for more than one — `--ext md,mdx`.
+
+<Aside type="note">
+  `--ext` filters directory and glob expansion. An explicit file path you pass
+  directly is always validated, regardless of its extension.
+</Aside>
+
+## What exit code does CI see?
+
+One of three:
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Every file passed. The check is green. |
+| `1` | One or more files **failed validation** — a missing or malformed field. The red check you're here to fix. |
+| `2` | An **operational error** — docmeta couldn't run the check at all (a missing or unreadable schema, an unsupported file type, no files to validate). The message goes to stderr, prefixed `docmeta:`. |
+
+A `1` means fix your document. A `2` means fix the setup, not the content. CI
+gates on this code, so the distinction matters when you read a raw log.
+
+<LinkCard
+  title="Output formats & exit codes"
+  href="/docmeta/reference/output-and-exit-codes/"
+  description="The exact 0/1/2 contract, plus the pretty, JSON, and GitHub output shapes."
+/>
+
+## Does docmeta check my prose or page content?
+
+No. docmeta validates the **presence and format of metadata** — the fields in
+your frontmatter — and nothing about the body of the document. It won't flag
+spelling, broken links, tone, or anything in the prose. A red check always points
+at a frontmatter field, never at your writing.
+
+## How do I exclude drafts from validation?
+
+Exclude them by glob. On the command line:
+
+```sh
+docmeta validate docs/ --exclude "**/drafts/**"
+```
+
+`--exclude` is repeatable and merges with the default ignores (`node_modules`,
+`.git`) and anything in your config. To make the exclusion permanent for the
+whole repo, add it under `exclude:` in `docmeta.config.yaml` instead, so every
+run — local and CI — skips the same files.
+
+<Aside type="tip">
+  If you control the config, prefer the config `exclude:` key so local runs and
+  CI agree. Use the `--exclude` flag for one-off runs.
+</Aside>
+
+<LinkCard
+  title="Configuration reference"
+  href="/docmeta/reference/configuration/"
+  description="The exclude key, paths, schemas, and overrides — with how config merges with CLI flags."
+/>
+
+## Still stuck?
+
+If your error doesn't match anything here or on the fix-it page, the
+[Reference](/docmeta/reference/) shelf documents every flag, output format, exit code,
+and resolution rule in full.
+
+<LinkCard
+  title="Read & fix a validation failure"
+  href="/docmeta/fix/"
+  description="Decode the error line, map it to a field and line, fix it, and confirm green locally."
+/>
