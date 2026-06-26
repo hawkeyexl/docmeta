@@ -51,6 +51,24 @@ A schema reference (`<ref>`) is one of:
 - a local file path ending in `.json`
 - an `http(s)://` URL
 
+### Remote schemas (`http(s)://`)
+
+Any ref — whether from `$schema`, `--schema`, or the config — may be a URL. The
+schema is fetched once and cached for the run, then used like any other:
+
+```yaml
+---
+$schema: https://example.com/schemas/article.json
+type: concept
+---
+```
+
+The dialect is auto-detected from the fetched schema's own `$schema`
+meta-schema; **2020-12, 2019-09, draft-07, draft-06, and draft-04** are
+supported (a schema with no `$schema` is treated as 2020-12). Fetch failures —
+an unreachable host, a non-2xx status, a request that exceeds the 10s timeout,
+or a body that isn't valid JSON — are operational errors and exit `2`.
+
 ### Validating against multiple schemas (a schema *set*)
 
 Each file is validated against a **set** of schemas and passes only if it satisfies **every** one. Each error is tagged with the schema that produced it. The set is chosen by precedence:
