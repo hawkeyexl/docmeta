@@ -14,6 +14,10 @@
     "outDir": "dist",
     "rootDir": ".",
     "verbatimModuleSyntax": false,
+    // TODO: remove once tsup stops injecting the deprecated `baseUrl` during
+    // its DTS bundle pass. This silences TS 6.0-promoted deprecations
+    // project-wide, so re-check the build emits no other deprecation warnings
+    // when dropping it.
     "ignoreDeprecations": "6.0"
   },
   "include": ["src", "test"]
