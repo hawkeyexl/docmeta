@@ -1,0 +1,44 @@
+---
+title: Reference
+description: Complete lookup reference for the docmeta CLI, configuration file, schema resolution, supported formats, output modes, and built-in schema.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Precise, lookup-oriented pages that the task-based guides link into. Each page
+is a flat reference for one part of docmeta — commands, config keys, resolution
+rules, formats, output, and the built-in schema. Use the table of contents on
+each page to jump to the exact entry you need.
+
+<CardGrid>
+  <LinkCard
+    title="CLI reference"
+    href="/docmeta/reference/cli/"
+    description="Every command, argument, and flag: validate, get, and schemas — plus the shared input model."
+  />
+  <LinkCard
+    title="Configuration reference"
+    href="/docmeta/reference/configuration/"
+    description="docmeta.config.yaml keys, types, defaults, discovery rules, and how config merges with CLI flags."
+  />
+  <LinkCard
+    title="Schema resolution"
+    href="/docmeta/reference/schema-resolution/"
+    description="The precedence chain, the three reference kinds, and the supported JSON Schema dialects."
+  />
+  <LinkCard
+    title="Supported formats"
+    href="/docmeta/reference/formats/"
+    description="Extractors, file extensions, and how metadata is read from each input format."
+  />
+  <LinkCard
+    title="Output & exit codes"
+    href="/docmeta/reference/output-and-exit-codes/"
+    description="The pretty, json, and github output formats; exit codes; and color behavior."
+  />
+  <LinkCard
+    title="Built-in OKF schema"
+    href="/docmeta/reference/okf-schema/"
+    description="The google:okf:0.1 schema shipped with docmeta: fields, formats, and dialect."
+  />
+</CardGrid>

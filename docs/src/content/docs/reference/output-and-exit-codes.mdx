@@ -1,0 +1,160 @@
+---
+title: Output formats & exit codes
+description: The pretty, json, and github output formats; the 0/1/2 exit-code contract; and color, stdout/stderr behavior for docmeta validate.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+`docmeta validate` renders results in one of three formats, chosen with
+[`-f/--format`](/docmeta/reference/cli/#options). Whatever the format, the process exit
+code follows a fixed [contract](#exit-codes) so CI can branch on it.
+
+## Output formats
+
+<Tabs>
+<TabItem label="pretty">
+
+The default. Human-readable, one line per file, with per-error detail and a
+summary. A passing file is marked `✓`; a failing file is marked `✗`.
+
+```
+✓ docs/intro.md
+✗ docs/api.md
+    type  must have required property 'type'  (line 2)  [google:okf:0.1]
+
+2 files checked, 1 passed, 1 failed, 1 error
+```
+
+Each error line has the form:
+
+```
+<field>  <message>  (line N)  [schema-id]
+```
+
+- `<field>` is the failing field's path, or `(root)` for a whole-document error
+  such as a missing required field.
+- `(line N)` is omitted when no source line is known.
+- `[schema-id]` is the schema that produced the error.
+
+The summary line is `N files checked, M passed, K failed, E errors`, where `E`
+is the total number of error lines across all files. Pass
+[`-q/--quiet`](/docmeta/reference/cli/#options) to hide passing files and show only
+failures and the summary.
+
+</TabItem>
+<TabItem label="json">
+
+Machine-readable. Prints a single JSON object with a run `summary` and a
+`results` array.
+
+```json
+{
+  "summary": { "files": 2, "passed": 1, "failed": 1, "errors": 1 },
+  "results": [
+    {
+      "file": "docs/intro.md",
+      "format": "markdown",
+      "ok": true,
+      "schemas": ["google:okf:0.1"],
+      "errors": []
+    },
+    {
+      "file": "docs/api.md",
+      "format": "markdown",
+      "ok": false,
+      "schemas": ["google:okf:0.1"],
+      "errors": [
+        {
+          "schema": "google:okf:0.1",
+          "instancePath": "",
+          "message": "must have required property 'type'",
+          "line": 2
+        }
+      ]
+    }
+  ]
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `summary.files` | number | Files checked. |
+| `summary.passed` | number | Files that passed. |
+| `summary.failed` | number | Files that failed. |
+| `summary.errors` | number | Total errors across all files. |
+| `results[].file` | string | File path. |
+| `results[].format` | string | Extractor that read the file. |
+| `results[].ok` | boolean | Whether the file passed every schema in its set. |
+| `results[].schemas` | string[] | The schema set the file was validated against. |
+| `results[].errors[].schema` | string | Schema that produced the error. |
+| `results[].errors[].instancePath` | string | JSON Pointer to the field (`""` for the root). |
+| `results[].errors[].message` | string | Human-readable message. |
+| `results[].errors[].line` | number | 1-based source line. Omitted when unknown. |
+| `results[].errors[].col` | number | 1-based column. Omitted when unknown. |
+
+</TabItem>
+<TabItem label="github">
+
+GitHub Actions workflow-command annotations. Prints one `::error::` line per
+error, which GitHub renders inline on the pull request. Files with no errors
+produce no output.
+
+```
+::error file=docs/api.md,line=2::[google:okf:0.1] (root) must have required property 'type'
+```
+
+Each line has the form:
+
+```
+::error file=<file>,line=<N>,col=<N>::[<schema-id>] <field> <message>
+```
+
+`line` and `col` are included only when known. `<field>` is the field path, or
+`(root)` for a whole-document error.
+
+</TabItem>
+</Tabs>
+
+<Aside type="note">
+A file that cannot be parsed (such as malformed YAML frontmatter) becomes a
+failing result with a single error whose `schema` is `(parse)` and whose
+`schemas` set is empty. The rest of the run continues.
+</Aside>
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | All files passed (or nothing failed). |
+| `1` | One or more files failed validation. |
+| `2` | Operational or usage error (a `DocmetaError`) — for example, no inputs, an unknown `--format`, a missing config file, or an unresolvable schema. |
+
+Exit code `1` reflects validation failures in the documents. Exit code `2`
+reflects a problem running docmeta itself, and means no validation verdict was
+produced.
+
+## stdout vs stderr
+
+- **Primary output** — the rendered report in any format — goes to **stdout**.
+- **Diagnostics** — operational errors that cause exit 2 — go to **stderr**,
+  prefixed with `docmeta: `.
+
+This separation lets you capture machine-readable output cleanly:
+
+```sh
+docmeta validate docs/ -f json > results.json
+```
+
+## Color behavior
+
+Color applies only to `pretty` output, and only when it is appropriate for the
+destination:
+
+| Condition | Color |
+|---|---|
+| `--no-color` passed | off |
+| `NO_COLOR` environment variable set to a non-empty value | off |
+| stdout is **not** a TTY (e.g. piped or redirected) | off |
+| stdout is a TTY and none of the above | on |
+
+The `json` and `github` formats are never colored.

@@ -1,0 +1,209 @@
+---
+title: Version & evolve a schema safely
+description: Encode a schema version consumers can pin, roll out tightening changes as a staged ratchet, and let docmeta auto-detect the JSON Schema dialect — without breaking CI everywhere at once.
+sidebar:
+  label: Versioning & dialects
+  order: 3
+---
+
+import { Steps, Tabs, TabItem, Card, CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
+
+A schema is never finished. Requirements shift, a field that was nice-to-have becomes mandatory, a format gets stricter. The hard part isn't making the change — it's making it without turning every consuming repo's CI red the moment you publish. This page covers the two things that make schema evolution safe: **versioning** the standard so consumers choose when to adopt a change, and understanding **dialects** so the JSON Schema flavor you write in is never the thing that breaks.
+
+## Why a version is the safety valve
+
+When many repos validate against one schema, an in-place edit is a deployment to all of them at once. Add a required field, and every document that lacks it fails on the next run — across repos you don't own and can't fix. A version turns that all-at-once edit into a choice each consumer makes on their own schedule: they keep pinning the old version until they're ready, then move to the new one deliberately.
+
+So the first move in evolving a schema safely is making sure your schema *has* a version that consumers can pin to.
+
+## Encode a version consumers can pin
+
+How you express the version depends on which of the three reference kinds your consumers use to name the schema. (For how docmeta classifies a reference as built-in, file, or URL, see [the three reference kinds](/docmeta/schemas/resolution/#the-three-reference-kinds).)
+
+<Tabs>
+<TabItem label="Built-in">
+
+A built-in id already carries its version in the third segment of `vendor:name:version`. The bundled OKF schema is `google:okf:0.1` — the `0.1` *is* the pin. A future revision ships as a new id (`google:okf:0.2`), and a consumer naming `google:okf:0.1` keeps validating against exactly the schema they chose until they edit that reference themselves.
+
+```yaml title="docmeta.config.yaml"
+schemas:
+  - google:okf:0.1   # pinned; a new built-in version is a new id
+```
+
+Built-in versions are decided by docmeta, not by you — you adopt them, you don't author them. If you're defining your own standard, you'll version a file or URL schema instead.
+
+</TabItem>
+<TabItem label="File">
+
+A schema you keep in the repo has no built-in version field, so encode the version in the **path or filename**. Both of these read as a pin at a glance:
+
+```yaml title="docmeta.config.yaml"
+schemas:
+  # version in the filename
+  - ./schemas/metadata-1.2.schema.json
+  # ...or version in a directory
+  - ./schemas/v1/metadata.schema.json
+```
+
+When you ship a breaking change, add `metadata-1.3.schema.json` (or `v2/metadata.schema.json`) alongside the old file rather than overwriting it. Consumers move by editing the reference, and you can keep the previous version in the repo for as long as anyone still pins it.
+
+</TabItem>
+<TabItem label="URL">
+
+A URL schema — the foundation for governing one schema across many repos — versions the same way, in the path. Publish each version at a distinct, stable URL:
+
+```yaml title="docmeta.config.yaml"
+schemas:
+  - https://schemas.example.com/metadata/1.2/schema.json
+```
+
+Consumers pin by referencing a versioned URL, never a "latest" one. Keep old versions reachable so pinned repos don't break, and announce a new version rather than mutating an existing URL in place. The fetch timeout and per-run caching that make URL schemas practical at scale are covered in [Govern a shared schema by URL](/docmeta/ci/govern-shared-schema/).
+
+</TabItem>
+</Tabs>
+
+<Aside type="caution" title="Don't mutate a published version in place">
+The whole point of a version is that a consumer pinning it gets the *same* schema every run. Editing `metadata-1.2.schema.json` (or the schema behind a `1.2` URL) after repos depend on it defeats that — a "minor" tweak can fail a build with no change on the consumer's side. Ship changes as a new version; leave published ones frozen.
+</Aside>
+
+## Additive changes are safe; tightening is breaking
+
+Once your schema is versioned, the next question is which changes you can make freely and which need a careful rollout. The line runs between changes that can only *accept more* documents and changes that can *reject documents that used to pass*.
+
+<CardGrid>
+  <Card title="Safe (additive)" icon="approve-check">
+  Changes that never fail a document that passed before:
+
+  - Adding a new **optional** field to `properties` (validated when present, not demanded).
+  - Loosening a constraint — removing a field from `required`, widening an `enum`, dropping a `format`.
+  - Relaxing `additionalProperties` from `false` to `true`.
+  - Editing `description`/`title` text in the schema.
+
+  These you can usually ship as a routine update without a staged rollout.
+  </Card>
+  <Card title="Breaking (tightening)" icon="warning">
+  Changes that can fail a document that passed before:
+
+  - Adding a field to `required`.
+  - Adding a new constraint — a `format`, a `pattern`, a narrower `enum`, a `minLength`.
+  - Tightening `additionalProperties` from `true` to `false`.
+  - Changing a field's `type`.
+
+  These need the staged ratchet below, and a new version so consumers opt in.
+  </Card>
+</CardGrid>
+
+The most common breaking change is also the most useful one: promoting a field from recommended to required. That's worth its own playbook.
+
+### The staged ratchet for a new required field
+
+Demanding a field that documents don't yet carry fails every one of them at once. The safe path is to add the field, populate it across the repo while it's still optional, and only then make it required — so the day you flip the switch, everything already complies.
+
+<Steps>
+
+1. **Add the field as optional.** Describe it in `properties` but leave it out of `required`. It's validated when present and ignored when absent, so nothing fails yet.
+
+2. **Backfill the field across existing documents.** With the field optional, docmeta won't block the repo while you work through it. Land the values incrementally.
+
+3. **Promote the field to `required`.** Once coverage is complete, move it into `required` and ship that as a new schema version. Consumers adopt the stricter version when they pin to it.
+
+</Steps>
+
+This add-then-ratchet pattern is the heart of tightening a standard without a flag day. The full walkthrough — including staging the rollout across a large repo and using config to apply the stricter schema gradually — lives in [Roll out a new required field without breaking the build](/docmeta/set-up/new-required-field/).
+
+## Dialects are detected, not configured
+
+The second thing that can break a schema isn't a field you changed — it's the JSON Schema *dialect* you wrote it in. JSON Schema has evolved through several versions (draft-04, draft-06, draft-07, 2019-09, 2020-12), and they aren't fully compatible: a schema written for one dialect can fail to compile under another. docmeta handles this for you. It reads each schema's own `$schema` line — the URI at the top that names the dialect's *meta-schema* — and compiles that schema with the matching validation engine.
+
+docmeta supports these dialects:
+
+| Dialect | Detected from a `$schema` URI containing |
+|---------|------------------------------------------|
+| 2020-12 | `2020-12` (also the fallback) |
+| 2019-09 | `2019-09` |
+| draft-07 | `draft-07` or `draft/7` |
+| draft-06 | `draft-06` or `draft/6` (shares the draft-07 engine) |
+| draft-04 | `draft-04` or `draft/4` |
+
+If a schema omits its `$schema` line, or uses one docmeta doesn't recognize, validation falls back to **2020-12** — the dialect of the built-in schemas.
+
+### Declare your dialect explicitly
+
+Relying on the fallback works, but stating the dialect removes ambiguity for docmeta and for anyone reading the schema. Keep a `$schema` line at the top of every schema file, pointing at the meta-schema for the dialect you wrote in:
+
+<Tabs>
+<TabItem label="2020-12">
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["type"],
+  "properties": {
+    "type": { "type": "string", "minLength": 1 }
+  }
+}
+```
+
+</TabItem>
+<TabItem label="draft-07">
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["type"],
+  "properties": {
+    "type": { "type": "string", "minLength": 1 }
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+Both schemas validate the same documents here; the only difference is which engine docmeta compiles them with. Declaring the dialect is what lets you write to a specific version's features without guessing how docmeta will read the file.
+
+### Mixing dialects across a schema set is fine
+
+When a file is validated against more than one schema — a list-valued `$schema`, several config entries, or layered `--schema` flags — the schemas don't all have to share a dialect. docmeta detects the dialect of **each schema independently** and compiles each one in its own engine. A 2020-12 house-style schema and a draft-07 schema you fetched from a partner can validate the same file in the same run, each held to its own dialect's rules.
+
+This is why adopting a schema from elsewhere — an older internal standard, a third-party schema that still targets draft-07 — never forces you to rewrite it to match your other schemas. Drop it into the set as-is; its `$schema` line tells docmeta how to read it.
+
+<Aside type="tip" title="Dialect choice and evolution">
+A schema's dialect is itself a property worth pinning. If you write a new version of your standard, keep its `$schema` dialect line consistent with the previous version unless you have a reason to move — switching dialects mid-evolution is a change in how rules are interpreted, layered on top of whatever fields you changed. When you do move dialects, treat it as a versioned change like any other.
+</Aside>
+
+<Aside type="caution" title="Two different `$schema` keys — don't confuse them">
+The word `$schema` names two unrelated things, and keeping them straight prevents a common mix-up:
+
+- **A *schema's* own `$schema`** is the line *inside a schema file* that names the JSON Schema dialect it's written in (e.g. `https://json-schema.org/draft/2020-12/schema`). It selects the **validation engine**. That's the one this section is about.
+- **A *document's* `$schema`** is a key in a *document's frontmatter* that names which schema validates that document (e.g. `google:okf:0.1`). It selects **which schema applies**, and docmeta strips it before validating. See [Point a document at its schema](/docmeta/schemas/#point-a-document-at-its-schema).
+
+Same key name, different files, different jobs: one points at a meta-schema, the other points at your schema.
+</Aside>
+
+## Where to go next
+
+<CardGrid>
+  <LinkCard
+    title="Roll out a new required field without breaking the build"
+    href="/docmeta/set-up/new-required-field/"
+    description="The staged ratchet in full — add, backfill, and tighten across a large repo without a flag day."
+  />
+  <LinkCard
+    title="Govern a shared schema by URL"
+    href="/docmeta/ci/govern-shared-schema/"
+    description="Centralize one versioned schema, reference it by URL, and pin it across many repos."
+  />
+  <LinkCard
+    title="How schema resolution works"
+    href="/docmeta/schemas/resolution/"
+    description="The precedence chain and the three reference kinds you version a schema through."
+  />
+  <LinkCard
+    title="Schema resolution reference"
+    href="/docmeta/reference/schema-resolution/"
+    description="The precedence, reference-kind, and supported-dialect tables as a flat lookup."
+  />
+</CardGrid>

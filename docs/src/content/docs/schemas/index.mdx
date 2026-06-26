@@ -1,0 +1,268 @@
+---
+title: Author a schema for your metadata standard
+description: Write a JSON Schema that docmeta validates against — required vs. recommended fields, value formats, and how a document names its own schema.
+sidebar:
+  label: Author a schema
+  order: 1
+---
+
+import { Steps, Tabs, TabItem, CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
+
+Your metadata standard already exists, even if it only lives in a style guide or in people's heads: "every page needs a `type`," "`timestamp` should be an ISO date," "API pages must declare a `version`." A JSON Schema turns those agreements into a file that docmeta can enforce on every commit. This page walks through writing that schema — from a minimal one-field example up to the fuller built-in OKF schema — and shows how a document points itself at the schema you wrote.
+
+<Aside type="note" title="What docmeta checks — and what it doesn't">
+docmeta validates the **presence and format** of metadata: that required fields exist, that values match the types and formats your schema declares, and that no disallowed fields slipped in. It does **not** judge prose quality, check that a `description` is *well written*, or follow links to confirm a `resource` URI resolves. Your schema is a contract about the *shape* of the frontmatter, not its meaning.
+</Aside>
+
+## A schema is just a JSON file
+
+docmeta validates against standard [JSON Schema](https://json-schema.org/). If you can write JSON, you can write a docmeta schema — there is no docmeta-specific schema format to learn. A schema describes the frontmatter object: which keys are required, what type each value should be, and whether unexpected keys are allowed.
+
+Here is the smallest schema worth shipping. It says: the metadata must be an object, it must have a `title`, and that `title` must be a non-empty string.
+
+```json title="title.schema.json"
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["title"],
+  "properties": {
+    "title": { "type": "string", "minLength": 1 }
+  }
+}
+```
+
+This is the [`extra.schema.json`](https://github.com/hawkeyexl/docmeta/blob/main/test/fixtures/extra.schema.json) fixture that docmeta's own test suite runs, so you can trust it compiles and validates exactly as shown. Four things are doing the work:
+
+- **`"$schema"`** at the top names the JSON Schema *dialect* this file is written in — here, draft 2020-12. docmeta reads this line to pick the right validation engine. (This is the schema's own dialect declaration. It is different from the `$schema` key you put in a *document* to choose a schema — covered [below](#point-a-document-at-its-schema).)
+- **`"type": "object"`** says the metadata is a set of key/value pairs, which frontmatter always is.
+- **`"required": ["title"]`** is the list of fields that *must* be present. A document missing `title` fails validation.
+- **`"properties"`** describes individual fields. `title` must be a string, and `minLength: 1` rejects an empty `title:` that a contributor left blank.
+
+A document with this frontmatter passes:
+
+```markdown
+---
+title: Getting started
+---
+```
+
+A document with empty or missing `title` fails. That is the whole loop: declare the shape, and docmeta holds every file to it.
+
+## Required vs. recommended fields
+
+The single most important decision in a metadata schema is which fields are *required* and which are merely *recommended*. JSON Schema models this with one list:
+
+- **Required** — list the field in `"required"`. Its absence is a hard failure.
+- **Recommended (optional)** — describe the field in `"properties"` but leave it out of `"required"`. If the field is present, docmeta checks its type and format; if it's absent, that's fine.
+
+This distinction is what lets you encode a standard that has a strict core and a softer edge. In the example below, `type` is mandatory, while `title` and `tags` are validated *when present* but never demanded:
+
+```json title="metadata.schema.json"
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["type"],
+  "properties": {
+    "type": { "type": "string", "minLength": 1 },
+    "title": { "type": "string" },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
+```
+
+<Aside type="tip" title="Start small, ratchet up">
+A common pattern is to require almost nothing at first — so existing docs pass — then promote fields from recommended to required over time as the repo catches up. The usual move is to add a new field to `"properties"` first (validated when present, but not yet demanded), land it across your docs, then move it into `"required"` once coverage is high. Moving a field into `"required"` is the lever for tightening the standard. The [Versioning &amp; dialects](/docmeta/schemas/versioning/) guide covers staging that rollout across a large repo.
+</Aside>
+
+## Constrain values with types and formats
+
+Requiring a field guarantees it exists; constraining it guarantees it's *usable*. JSON Schema gives you the building blocks, and docmeta supports the standard `format` checks through [ajv-formats](https://github.com/ajv-validator/ajv-formats). Two formats come up constantly in document metadata:
+
+<Tabs>
+<TabItem label="date-time">
+
+Use `"format": "date-time"` to require an ISO 8601 timestamp. This catches the classic fat-fingered date — `2026-13-01`, `June 5th`, or a bare `2026-06-25` where a full timestamp was expected.
+
+```json
+"timestamp": {
+  "type": "string",
+  "format": "date-time",
+  "description": "ISO 8601 datetime of last meaningful change."
+}
+```
+
+Passes: `2026-06-25T14:30:00Z`
+Fails: `June 5th`, `2026-13-01`
+
+</TabItem>
+<TabItem label="uri">
+
+Use `"format": "uri"` for fields that must hold a well-formed URI, such as a canonical resource link. This checks the *shape* of the URI; it does not fetch the URL.
+
+```json
+"resource": {
+  "type": "string",
+  "format": "uri",
+  "description": "A URI uniquely identifying the underlying asset."
+}
+```
+
+Passes: `https://example.com/asset/42`
+Fails: `not a url`, `example.com` (no scheme)
+
+</TabItem>
+</Tabs>
+
+Beyond formats, the everyday constraints carry most of the weight:
+
+- **`enum`** — restrict a field to a fixed set of values, ideal for a controlled `type` or `status`: `"enum": ["guide", "reference", "tutorial"]`.
+- **`minLength`** — reject empty strings (`"minLength": 1`).
+- **`array` + `items`** — validate every element of a list, as with the `tags` example above.
+
+## Decide whether unknown fields are allowed
+
+By default, JSON Schema lets a document carry fields your schema never mentions. Whether to permit that is a deliberate choice, controlled by `additionalProperties`:
+
+- **`"additionalProperties": true`** (or omitting it) — extra keys are tolerated. Contributors can add experimental or tool-specific frontmatter without tripping the check. This is the lenient default and a good fit for a young or shared standard.
+- **`"additionalProperties": false`** — every key must be declared in `"properties"`. An unexpected key is a failure. Use this to catch typos like `titel:` or to keep frontmatter tightly governed.
+
+<Aside type="caution" title="Strict schemas and the $schema directive">
+Setting `"additionalProperties": false`? A document's own `$schema:` key won't trip it — docmeta strips `$schema` before validating, so you never need to add it to your schema's `properties`. See [The `$schema` key is reserved](/docmeta/schemas/resolution/#the-schema-key-is-reserved) for the full mechanism.
+</Aside>
+
+## A fuller example: the built-in OKF schema
+
+docmeta ships with one built-in schema, [Open Knowledge Format (OKF) v0.1](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md), addressed as `google:okf:0.1`. It's a useful reference because it combines every technique on this page in a realistic standard. Reading it is the fastest way to see how the pieces fit together — and it's the schema docmeta falls back to when no other schema applies.
+
+```json title="src/schemas/okf/0.1.json"
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "google:okf:0.1",
+  "title": "Open Knowledge Format (OKF) v0.1",
+  "description": "Frontmatter schema for OKF v0.1 concept files. OKF requires only `type`; all other fields are recommended, and unknown keys are explicitly tolerated.",
+  "type": "object",
+  "required": ["type"],
+  "additionalProperties": true,
+  "properties": {
+    "type": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A short string identifying the kind of concept."
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable display name."
+    },
+    "description": {
+      "type": "string",
+      "description": "Single-sentence summary used for indexing and previews."
+    },
+    "resource": {
+      "type": "string",
+      "format": "uri",
+      "description": "A URI uniquely identifying the underlying asset."
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Short strings for categorization."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 datetime of last meaningful change."
+    }
+  }
+}
+```
+
+Notice the design choices OKF makes, each one a decision you'll face in your own schema:
+
+- **Exactly one required field** (`type`). OKF demands the bare minimum, so adopting it rarely breaks existing files.
+- **`additionalProperties: true`**, stated explicitly. Unknown keys are welcome by design — OKF is meant to be extended.
+- **Recommended fields with real constraints.** `title`, `description`, and `tags` are optional, but if present they're checked. `resource` and `timestamp` carry `uri` and `date-time` formats.
+- **A `$id` and human-readable `title`/`description`.** These aren't required for validation, but they document the schema for the humans who read it — and `$id` is what gives the *built-in* its `google:okf:0.1` address. Setting a `$id` in a schema *file* of your own is documentation only; it does not register a new built-in id (built-ins are bundled into docmeta). You'd reference your own schema by its file path or URL, not by its `$id`.
+
+<Aside type="tip" title="Start from OKF or start from scratch">
+If OKF's field set is close to what you need, copy it into a file and adjust — add your required fields, tighten `additionalProperties`, change the formats. If your standard is very different, start from the minimal one-field schema at the top of this page and grow it. Either way, keep the `$schema` dialect line; docmeta needs it to choose a validation engine.
+</Aside>
+
+## Point a document at its schema
+
+A schema only matters once documents are validated against it. The most direct way to connect the two is to let a document name its own schema with a `$schema` key in its frontmatter. docmeta reads that key and validates the file against whatever it points to.
+
+Here is a document naming the built-in OKF schema — the [`schema-ref.md`](https://github.com/hawkeyexl/docmeta/blob/main/test/fixtures/schema-ref.md) fixture:
+
+```markdown title="schema-ref.md"
+---
+$schema: google:okf:0.1
+type: guide
+title: Self-Describing Document
+---
+
+# Self-Describing Document
+
+This file names its own schema via `$schema`.
+```
+
+The `$schema` value can be a built-in id (as here), a path to a `.json` file you wrote, or a URL. To point at a local schema file instead:
+
+```markdown
+---
+$schema: ./schemas/metadata.schema.json
+type: guide
+title: My page
+---
+```
+
+<Aside type="caution" title="Where a relative path resolves from">
+A relative file path like `./schemas/metadata.schema.json` resolves from the **working directory where you run docmeta** — not from the document. In CI, that's usually the repo root, so prefer a path from the repo root over one that looks relative to the file. See [the three reference kinds](/docmeta/schemas/resolution/#the-three-reference-kinds) for how docmeta classifies file, built-in, and URL references.
+</Aside>
+
+<Steps>
+
+1. **Write your schema** as a `.json` file using the patterns above, keeping the `"$schema"` dialect line at the top.
+
+2. **Add `$schema:` to a document's frontmatter**, pointing at your file (or a built-in id, or a URL).
+
+3. **Validate it:**
+
+   ```sh
+   npx docmeta validate path/to/document.md
+   ```
+
+   docmeta resolves the document's `$schema`, validates the frontmatter, and reports any missing or malformed fields.
+
+</Steps>
+
+<Aside type="note" title="$schema is one of several ways to wire a schema">
+Naming the schema inside a document is the most self-contained option, but you can also apply a schema to a whole directory from config, or set one from the command line. When several could apply to one file, a fixed precedence order decides which wins. The next guide, [How schema resolution works](/docmeta/schemas/resolution/), lays out that order and the three kinds of schema reference (built-in, file, and URL).
+</Aside>
+
+## Where to go next
+
+<CardGrid>
+  <LinkCard
+    title="How schema resolution works"
+    href="/docmeta/schemas/resolution/"
+    description="The precedence order that decides which schema applies to a file, and the three reference kinds."
+  />
+  <LinkCard
+    title="Versioning & dialects"
+    href="/docmeta/schemas/versioning/"
+    description="Evolve a schema — and tighten required fields — without breaking CI in every consuming repo."
+  />
+  <LinkCard
+    title="Schema resolution reference"
+    href="/docmeta/reference/schema-resolution/"
+    description="The lookup table for precedence, reference kinds, and supported JSON Schema dialects."
+  />
+  <LinkCard
+    title="Built-in OKF schema, explained"
+    href="/docmeta/reference/okf-schema/"
+    description="Every field in google:okf:0.1, its dialect, and the upstream spec."
+  />
+</CardGrid>

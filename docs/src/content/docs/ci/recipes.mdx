@@ -1,0 +1,222 @@
+---
+title: 'CI recipes: GitLab CI, Jenkins, pre-commit'
+description: Copy-paste recipes that add a docmeta metadata gate to GitLab CI, Jenkins, and pre-commit, each wired to the exit-code contract.
+---
+
+import { Tabs, TabItem, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+docmeta is a plain CLI with a stable exit-code contract, so it drops into any CI
+system that can run a Node.js command and read its exit code. This page gives
+complete, runnable recipes for three common setups beyond GitHub Actions.
+
+Every recipe relies on the same contract: docmeta exits `0` when all files are
+valid, `1` when one or more files fail validation, and `2` on an operational or
+usage error. Each platform fails the job on a non-zero exit, so the gate is
+enforced without extra scripting. For the full definition, see
+[Exit codes & PR annotations](/docmeta/ci/exit-codes-and-annotations/).
+
+<Aside type="note" title="The github format is GitHub-specific">
+`--format github` emits GitHub Actions workflow commands (`::error ...`). On
+GitLab, Jenkins, and pre-commit it has no special effect — the lines print as
+plain text. Use the default `pretty` output (or `--format json` to feed another
+tool) on these platforms. The annotation format is documented in
+[Exit codes & PR annotations](/docmeta/ci/exit-codes-and-annotations/).
+</Aside>
+
+## GitLab CI
+
+Add a job to `.gitlab-ci.yml`. The official `node:20` image already has Node.js
+and `npx`, so the job is a single script line. GitLab marks the job failed on
+any non-zero exit, which is exactly docmeta's contract.
+
+<Tabs>
+<TabItem label="Explicit targets">
+
+```yaml title=".gitlab-ci.yml"
+validate-metadata:
+  stage: test
+  image: node:20
+  script:
+    - npx -y docmeta validate "docs/**/*.md"
+```
+
+</TabItem>
+<TabItem label="Targets from docmeta.config.yaml">
+
+```yaml title=".gitlab-ci.yml"
+validate-metadata:
+  stage: test
+  image: node:20
+  # Targets come from paths: in docmeta.config.yaml at the repo root.
+  script:
+    - npx -y docmeta validate
+```
+
+</TabItem>
+</Tabs>
+
+<Aside type="tip" title="Pin the version">
+`npx -y docmeta` resolves the latest published version on each run. Pin a
+specific version for reproducible pipelines: `npx -y docmeta@0.1.0 validate ...`.
+</Aside>
+
+If you collect machine-readable reports, capture the JSON output as an artifact:
+
+```yaml title=".gitlab-ci.yml"
+validate-metadata:
+  stage: test
+  image: node:20
+  script:
+    - npx -y docmeta validate "docs/**/*.md" --format json | tee docmeta-report.json
+  artifacts:
+    when: always
+    paths:
+      - docmeta-report.json
+```
+
+`tee` writes the report to a file while passing docmeta's exit code through, so
+the job still fails on validation errors. `when: always` keeps the artifact even
+when the job fails.
+
+## Jenkins
+
+Use a declarative `Jenkinsfile` stage. A `sh` step fails the stage when the
+command returns a non-zero exit code, so the metadata gate works with no
+explicit status check.
+
+```groovy title="Jenkinsfile"
+pipeline {
+  agent any
+  stages {
+    stage('Validate metadata') {
+      steps {
+        // Requires Node.js 20+ on the agent (npx ships with npm).
+        sh 'npx -y docmeta validate "docs/**/*.md"'
+      }
+    }
+  }
+}
+```
+
+If your agents do not have Node.js 20+ on the `PATH`, provision it first. With
+the NodeJS plugin installed and a tool named `node20` configured in **Manage
+Jenkins → Tools**, wrap the stage:
+
+```groovy title="Jenkinsfile"
+pipeline {
+  agent any
+  tools {
+    nodejs 'node20'
+  }
+  stages {
+    stage('Validate metadata') {
+      steps {
+        sh 'npx -y docmeta validate "docs/**/*.md"'
+      }
+    }
+  }
+}
+```
+
+To archive a machine-readable report, write JSON to a file and archive it. Run
+docmeta in a way that preserves its exit code:
+
+```groovy title="Jenkinsfile"
+stage('Validate metadata') {
+  steps {
+    sh 'npx -y docmeta validate "docs/**/*.md" --format json | tee docmeta-report.json'
+  }
+  post {
+    always {
+      archiveArtifacts artifacts: 'docmeta-report.json', allowEmptyArchive: true
+    }
+  }
+}
+```
+
+## pre-commit
+
+<Aside type="caution" title="No official pre-commit hook repository">
+docmeta does **not** publish a [pre-commit](https://pre-commit.com/) hook
+repository, so you cannot reference it as a remote hook (`repo: https://...`).
+The supported approach is a **local** hook that calls the docmeta CLI directly.
+The recipes below use that approach.
+</Aside>
+
+A pre-commit hook catches metadata errors before they reach CI. Because there is
+no published hook repo, define a `local` hook in `.pre-commit-config.yaml` that
+runs docmeta through `npx`. The hook fails the commit when docmeta returns a
+non-zero exit code.
+
+<Tabs>
+<TabItem label="Validate staged files">
+
+```yaml title=".pre-commit-config.yaml"
+repos:
+  - repo: local
+    hooks:
+      - id: docmeta
+        name: docmeta validate
+        entry: npx -y docmeta validate
+        language: system
+        # Run only on Markdown; pre-commit appends the staged file paths.
+        files: \.md$
+```
+
+With `entry: npx -y docmeta validate` and no positional paths in the entry,
+pre-commit appends the list of staged, matched files as arguments, so each
+commit validates exactly what changed. `language: system` tells pre-commit to
+use the `npx` already on your `PATH` rather than managing its own environment;
+Node.js 20+ must be installed locally.
+
+</TabItem>
+<TabItem label="Validate the whole repo">
+
+```yaml title=".pre-commit-config.yaml"
+repos:
+  - repo: local
+    hooks:
+      - id: docmeta
+        name: docmeta validate
+        entry: npx -y docmeta validate "docs/**/*.md"
+        language: system
+        pass_filenames: false
+        always_run: true
+```
+
+Set `pass_filenames: false` so pre-commit does not append staged paths, and
+docmeta validates the fixed glob in the entry instead. `always_run: true` makes
+the hook run even when no matching files are staged.
+
+</TabItem>
+</Tabs>
+
+Install and test the hook:
+
+```sh
+pre-commit install              # wire the hook into git
+pre-commit run docmeta --all-files   # run it across the repo once
+```
+
+<Aside type="tip" title="Prefer a documented one-liner?">
+If you do not use the pre-commit framework, a plain Git `pre-commit` hook script
+works too. Add `npx -y docmeta validate "docs/**/*.md"` to
+`.git/hooks/pre-commit` (and `exit` on its status). The commit aborts when
+docmeta exits non-zero. This is a per-clone hook and is not shared through the
+repository, which is why the pre-commit framework above is usually preferable.
+</Aside>
+
+## Next steps
+
+<CardGrid>
+  <LinkCard
+    title="Exit codes & PR annotations"
+    href="/docmeta/ci/exit-codes-and-annotations/"
+    description="The exact 0/1/2 contract and the pretty, json, and github output shapes."
+  />
+  <LinkCard
+    title="GitHub Actions recipe"
+    href="/docmeta/ci/"
+    description="The ready-made GitHub Actions workflow with inline PR annotations."
+  />
+</CardGrid>

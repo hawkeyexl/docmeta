@@ -1,0 +1,137 @@
+---
+title: Create your docmeta.config.yaml
+description: Define your repo's default targets, exclusions, and schema set in one file so CI can run a bare docmeta validate.
+---
+
+import { Aside, LinkCard } from '@astrojs/starlight/components';
+
+A `docmeta.config.yaml` stores what "valid" means for your repo: which files to check, which to skip, and which schema set they must satisfy. With it committed at your repo root, both you and CI can run a bare `docmeta validate` and get a consistent, repeatable result.
+
+Every key is optional. This page covers where docmeta looks for the file, then each key in turn, a complete worked example, and how command-line flags combine with what you configure.
+
+## Where docmeta looks for the config
+
+docmeta finds your config in one of two ways:
+
+- **Discovery.** With no `--config` flag, docmeta looks in the current working directory for `docmeta.config.yaml`, then `docmeta.config.yml`. The first one it finds wins.
+- **Explicit path.** Pass `-c <path>` (or `--config <path>`) to point at a specific file. If that file does not exist, docmeta exits with an error rather than falling back to discovery.
+
+<Aside type="note">
+Discovery only checks the current directory — docmeta does not walk up parent folders. Run `docmeta validate` from your repo root, or pass `--config` with an explicit path.
+</Aside>
+
+## The keys
+
+### `paths`
+
+A list of files, directories, or globs to validate. This is the **fallback** docmeta uses when you do not pass any positional paths on the command line.
+
+```yaml title="docmeta.config.yaml"
+paths:
+  - "docs/**/*.md"
+  - "articles/**/*.md"
+```
+
+With this in place, a bare `docmeta validate` checks everything under `docs/` and `articles/`. Pass paths explicitly and they take priority — `docmeta validate README.md` validates only `README.md`, ignoring `paths`.
+
+<Aside type="caution">
+If you provide no positional paths **and** `paths` is empty or absent (and no config is found), docmeta exits with code `2` and the message `No files to validate.` This is an operational error — docmeta will not silently do nothing.
+</Aside>
+
+### `exclude`
+
+A list of globs to skip. Your excludes are **merged with** docmeta's built-in defaults and any `--exclude` flags passed on the command line — they add to the exclusion set rather than replacing it.
+
+```yaml title="docmeta.config.yaml"
+exclude:
+  - "**/drafts/**"
+```
+
+docmeta always ignores `**/node_modules/**` and `**/.git/**`, so you never need to list those. The example above additionally skips any `drafts` folder.
+
+<Aside type="note" title="How excludes combine">
+The final exclusion set is: the built-in defaults (`**/node_modules/**`, `**/.git/**`) + your config `exclude` + any `--exclude` flags. There is no way to remove the built-in defaults.
+</Aside>
+
+### `schemas`
+
+The default schema **set** applied to every matched file. Each file must satisfy **all** schemas in the list — they are validated against the set, not against the first match.
+
+```yaml title="docmeta.config.yaml"
+schemas:
+  - google:okf:0.1
+```
+
+A schema reference can be one of three kinds:
+
+- A **built-in id** in `vendor:name:version` form, such as `google:okf:0.1`.
+- A **local file path** to a `.json` schema, such as `./schemas/article.json`.
+- An **`http(s)` URL** to a remotely hosted schema.
+
+If you omit `schemas` entirely, docmeta falls back to the built-in [`google:okf:0.1`](/docmeta/schemas/) schema, which requires a `type` field.
+
+### `overrides`
+
+A list of per-glob rules that assign a different schema set to a subset of files. Each entry has a `files` glob and a `schemas` list. The first override whose glob matches a file wins, and its schema set replaces the default `schemas` for that file.
+
+```yaml title="docmeta.config.yaml"
+overrides:
+  - files: "api/**/*.md"
+    schemas:
+      - google:okf:0.1
+      - ./schemas/api-reference.json
+```
+
+Overrides are how you require stricter metadata for one area of the repo without affecting the rest. They are not the last word, though: a file's own `$schema` field and the CLI `--schema` flag both take precedence over them. The dedicated overrides guide walks through the full resolution order.
+
+<LinkCard
+  title="Apply different schemas to different folders"
+  href="/docmeta/set-up/different-schemas-per-folder/"
+  description="A full walkthrough of overrides, glob precedence, and validating one file against multiple schemas."
+/>
+
+## A complete example
+
+This config validates Markdown under `docs/` and `articles/`, skips drafts, applies the OKF schema everywhere by default, and layers an extra schema onto `articles/`.
+
+```yaml title="docmeta.config.yaml"
+# Default targets when no paths are passed on the command line.
+paths:
+  - "docs/**/*.md"
+  - "articles/**/*.md"
+
+# Paths to skip (node_modules and .git are always excluded).
+exclude:
+  - "**/drafts/**"
+
+# The schema set every matched file must satisfy by default.
+schemas:
+  - google:okf:0.1
+
+# Per-glob overrides (first match wins).
+overrides:
+  - files: "articles/**/*.md"
+    schemas:
+      - google:okf:0.1
+      - ./schemas/article.json
+```
+
+Run it from your repo root:
+
+```bash
+npx docmeta validate
+```
+
+## How CLI flags combine with the config
+
+Some command-line flags layer onto the config; others replace it. Keep the distinction in mind when you run docmeta locally with extra flags:
+
+| Flag | Effect relative to config |
+|---|---|
+| positional `[paths...]` | **Replaces** `paths` for this run. |
+| `--exclude <glob>` | **Merges** with config `exclude` and the built-in defaults. |
+| `-s, --schema <ref>` | **Overrides** all schema resolution — config `schemas`, `overrides`, and file `$schema` are ignored. |
+
+<Aside type="tip">
+For the full flag list, see the [CLI reference](/docmeta/reference/). For the complete schema-resolution precedence chain, see the [Schema resolution reference](/docmeta/reference/schema-resolution/).
+</Aside>

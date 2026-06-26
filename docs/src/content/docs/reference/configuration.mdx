@@ -1,0 +1,95 @@
+---
+title: Configuration reference
+description: Every docmeta.config.yaml key — paths, exclude, schemas, overrides — with types, defaults, discovery rules, and how config merges with CLI flags.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+A `docmeta.config.yaml` file supplies default targets, excludes, the default
+[schema set](/docmeta/reference/schema-resolution/), and optional per-glob overrides, so
+CI can run a bare `docmeta validate`. The config is optional — every key has a
+default, and docmeta runs without a config when you pass paths and schemas on
+the command line.
+
+## Keys
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `paths` | `string[]` | none | Default files, directories, or globs to process when no positional paths are given. |
+| `exclude` | `string[]` | none | Globs to exclude from directory and glob walks. Merged with `--exclude` and the [default ignores](/docmeta/reference/cli/#default-ignores). |
+| `schemas` | `string[]` | none | Default [schema set](/docmeta/reference/schema-resolution/) applied to every file that no higher-precedence rule matches. |
+| `overrides` | `Override[]` | none | Per-glob schema overrides. The first matching entry wins. See [Overrides](#overrides). |
+
+The top level must be a YAML mapping. Each of `paths`, `exclude`, and `schemas`
+must be a list of strings; a non-list or a list containing a non-string value is
+an error (exit 2).
+
+### Overrides
+
+`overrides` is a list of mappings, each applying a schema set to files matching
+a glob.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `files` | `string` | yes | A glob matched against each file's path. |
+| `schemas` | `string[]` | yes | The schema set applied to matching files. |
+
+For a given file, docmeta uses the **first** override whose `files` glob matches
+(in list order); later matching overrides are ignored. See [schema
+resolution](/docmeta/reference/schema-resolution/#precedence) for where overrides sit in
+the precedence chain.
+
+## Example
+
+```yaml
+# docmeta.config.yaml
+paths:
+  - "docs/**/*.md"
+  - "docs/**/*.mdx"
+exclude:
+  - "docs/drafts/**"
+schemas:
+  - google:okf:0.1
+overrides:
+  - files: "docs/api/**"
+    schemas:
+      - ./schemas/api.schema.json
+  - files: "docs/guides/**"
+    schemas:
+      - ./schemas/guide.schema.json
+```
+
+## Discovery
+
+When you do not pass `-c/--config`, docmeta looks in the current working
+directory for these files, in order, and uses the first one it finds:
+
+1. `docmeta.config.yaml`
+2. `docmeta.config.yml`
+
+If neither exists, docmeta runs with no config. When you pass `-c/--config
+<path>` explicitly, that file must exist — a missing config file is an error
+(exit 2).
+
+<Aside type="note">
+Discovery only checks the current working directory; docmeta does not search
+parent directories. Run docmeta from your repo root, or point at the config with
+`-c/--config`.
+</Aside>
+
+## How config merges with CLI flags
+
+CLI flags and config values combine per setting. Some flags override the
+corresponding config value; others merge with it.
+
+| Setting | CLI flag | Config key | How they combine |
+|---|---|---|---|
+| Inputs | `[paths...]` | `paths` | CLI positional paths **override** config `paths` entirely. Config `paths` is used only when no positional paths are given. |
+| Excludes | `--exclude` | `exclude` | **Merged.** The effective exclude set is config `exclude` plus every `--exclude` glob plus the [default ignores](/docmeta/reference/cli/#default-ignores). |
+| Schemas | `-s/--schema` | `schemas` / `overrides` | CLI `--schema` **overrides** both `schemas` and `overrides` for every file. See [precedence](/docmeta/reference/schema-resolution/#precedence). |
+
+<Aside type="caution">
+`--schema` is all-or-nothing: passing it once makes that schema set apply to
+**every** file in the run, bypassing config `overrides` and per-file `$schema`.
+Use config `overrides` when different folders need different schemas.
+</Aside>

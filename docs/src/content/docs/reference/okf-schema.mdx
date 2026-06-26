@@ -1,0 +1,79 @@
+---
+title: Built-in OKF schema
+description: The google:okf:0.1 schema shipped with docmeta — its required and recommended fields, value formats, and JSON Schema dialect.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+docmeta ships one built-in schema, **`google:okf:0.1`** — the Open Knowledge
+Format (OKF) v0.1 frontmatter schema. It is the [default
+schema](/docmeta/reference/schema-resolution/#precedence): when no `--schema`, file
+`$schema`, or config rule applies, docmeta validates against `google:okf:0.1`.
+
+| Property | Value |
+|---|---|
+| Id | `google:okf:0.1` |
+| Title | Open Knowledge Format (OKF) v0.1 |
+| Dialect | [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects) |
+| Additional properties | Allowed (`additionalProperties: true`) |
+| Reference kind | [builtin](/docmeta/reference/schema-resolution/#reference-kinds) |
+
+OKF requires only `type`. Every other field is recommended, and unknown keys are
+explicitly tolerated, so a file may carry extra metadata without failing.
+
+## Fields
+
+| Field | Type | Format | Constraint | Status |
+|---|---|---|---|---|
+| `type` | string | — | `minLength: 1` | **Required** |
+| `title` | string | — | — | Recommended |
+| `description` | string | — | — | Recommended |
+| `resource` | string | `uri` | — | Recommended |
+| `tags` | array of string | — | — | Recommended |
+| `timestamp` | string | `date-time` | — | Recommended |
+
+- **`type`** — a short string identifying the kind of concept; used for routing,
+  filtering, and presentation. Must be a non-empty string.
+- **`title`** — human-readable display name. When omitted, consumers may derive
+  a title from the filename.
+- **`description`** — single-sentence summary used for indexing and previews.
+- **`resource`** — a URI uniquely identifying the underlying asset. Absent for
+  abstract concepts.
+- **`tags`** — short strings for categorization.
+- **`timestamp`** — ISO 8601 date-time of the last meaningful change.
+
+<Aside type="note">
+Only `type` makes a file fail by default. The recommended fields are validated
+for **format** when present — a `resource` that is not a valid URI, or a
+`timestamp` that is not a valid date-time, fails — but their absence does not.
+</Aside>
+
+## Example
+
+A minimal file that passes against `google:okf:0.1`:
+
+```md
+---
+type: concept
+---
+```
+
+A fuller file using the recommended fields:
+
+```md
+---
+type: concept
+title: Schema resolution
+description: How docmeta picks a schema set for each file.
+resource: https://example.com/docs/schema-resolution
+tags: [reference, schemas]
+timestamp: 2026-06-25T12:00:00Z
+---
+```
+
+## Specification
+
+`google:okf:0.1` encodes the Open Knowledge Format v0.1 frontmatter contract.
+See the
+[OKF specification](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
+for the full standard.

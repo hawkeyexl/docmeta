@@ -1,0 +1,140 @@
+---
+title: Roll out a new required field without breaking the build
+description: Add a new required metadata field in stages — validate it only when present, drive coverage across existing docs, then promote it to required once the repo is ready.
+---
+
+import { Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+Your metadata standard needs to grow. Maybe you want every doc to carry an `owner`, or you decided `description` should be mandatory rather than recommended. The risk is obvious: flip a field to required in one commit and the next CI run fails on every existing doc that predates the rule. On a large repo that is hundreds of red checks at once, and no contributor can merge until the backlog is cleared.
+
+There is a calmer path. Add the field in a **lenient** form first — validated for format whenever it appears, but not required — then drive coverage across the repo, and only **promote** it to required once almost every doc already has it. The build stays green the whole way, and the day you make the field mandatory, there is nothing left to break.
+
+<Aside type="note" title="Why this works">
+A JSON Schema only fails a file for a missing field when that field is listed in `required`. A field that lives in `properties` but not `required` is checked for **format** when present and ignored when absent. That gap is the staging area: you get format enforcement immediately and defer the presence requirement until coverage catches up.
+</Aside>
+
+This guide assumes you already have a working `docmeta.config.yaml` and a schema you control. If you are still using the built-in OKF schema, [author your own schema first](/docmeta/schemas/) so you have a file to edit — you cannot add fields to a built-in.
+
+## Stage 1 — Add the field as optional-but-validated
+
+Start by adding the new field to your schema's `properties`, with a `type` and any format constraint, but leave it out of `required`.
+
+```json title="schemas/doc.json" {10-13}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["type"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}
+```
+
+A doc that omits `owner` still passes. A doc that includes it must give a non-empty string — so a fat-fingered `owner:` with no value fails right away. You are enforcing the format of the new field before a single doc is required to have it.
+
+Commit this and run a validation pass to confirm the build is still green:
+
+```bash
+npx docmeta validate
+```
+
+Nothing that passed yesterday fails today. The field is now part of the contract; it just is not mandatory yet.
+
+## Stage 2 — Find the docs that are missing it
+
+Before you can require the field, you need to know how far coverage already extends and which files still lack it. The `get` command reads a field's value from every matched file, which makes it a fast coverage probe.
+
+<Steps>
+
+1. **List the field across the repo.** Ask `get` for the new field in JSON so the result is easy to scan or pipe into other tooling.
+
+   ```bash
+   npx docmeta get owner "docs/**/*.md" -f json
+   ```
+
+   Every file appears in the output. Files that already carry `owner` report its value; files that do not report it as unset. That split is your coverage map.
+
+2. **Drive the count down.** Work through the unset files and add the field. As contributors and scripts fill it in, rerun the same command and watch the unset list shrink.
+
+</Steps>
+
+<Aside type="tip" title="Make the gap visible to everyone">
+You do not have to backfill every file yourself. Because Stage 1 already validates the field's format, you can publish the new field in your contributor guide, ask teams to add it as they touch their pages, and let coverage accrue. The `get` probe tells you when you are close enough to promote.
+</Aside>
+
+## Stage 3 — Enforce it on new areas first (optional)
+
+If coverage will take a while to reach the whole repo, you do not have to wait for the slowest corner before getting any enforcement. Use a per-folder **override** to require the stricter rule where you *can* hold the line today — typically a new or actively maintained area — while the rest of the repo stays on the lenient schema.
+
+```yaml title="docmeta.config.yaml"
+# Lenient default: owner is validated when present, not required.
+schemas:
+  - ./schemas/doc.json
+
+# Strict rule for the new area: owner is mandatory here.
+overrides:
+  - files: "docs/platform/**/*.md"
+    schemas:
+      - ./schemas/doc-strict.json
+```
+
+Here `doc-strict.json` is the same schema with `owner` added to `required`. Files under `docs/platform/` must carry `owner`; everything else is held to the lenient default. New docs land already compliant, so the strict zone never accumulates a backlog, and you expand the override's glob as other areas reach full coverage.
+
+<Aside type="caution" title="A file with no frontmatter still gets checked">
+Promoting a field to required flags **every** non-compliant file — including any file with no frontmatter block at all. An empty or frontmatter-free doc has no `owner`, so a required-field rule fails it just as it fails a doc that has frontmatter but omits the field. Account for these files when you read your coverage probe; they will not show up as "almost there."
+</Aside>
+
+## Stage 4 — Promote the field to required
+
+Once your coverage probe shows the unset list at or near zero, make the field mandatory for everyone. Add it to the schema's `required` array.
+
+```json title="schemas/doc.json" {4}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["type", "owner"],
+  "properties": {
+    "type": { "type": "string", "minLength": 1 },
+    "owner": { "type": "string", "minLength": 1 }
+  }
+}
+```
+
+Run one final validation pass before you commit, so you catch any stragglers locally rather than in CI:
+
+```bash
+npx docmeta validate
+```
+
+If the run is green, the promotion is safe — every doc already satisfies the new rule, so flipping it to required changes nothing about the build except that future omissions now fail. If a few files still trip, your coverage probe missed them (frontmatter-free files are the usual suspects); fix those and rerun.
+
+## What you have now
+
+A new required field that arrived without a wall of red checks. You enforced its format from day one, measured coverage with `get`, optionally held a strict line on new areas with an override, and promoted it to required only when the repo was ready. The same sequence works for making any existing recommended field mandatory — start by validating its format, then ratchet to required.
+
+## Where to go next
+
+<CardGrid>
+  <LinkCard
+    title="Apply different schemas to different folders"
+    href="/docmeta/set-up/different-schemas-per-folder/"
+    description="The full mechanics of overrides and glob precedence, used here to enforce a strict schema on one area first."
+  />
+  <LinkCard
+    title="Retrofit docmeta into an existing repo"
+    href="/docmeta/set-up/retrofit/"
+    description="Adopting docmeta from scratch on a repo that has never had metadata validation — start permissive, then ratchet."
+  />
+  <LinkCard
+    title="Schema resolution reference"
+    href="/docmeta/reference/schema-resolution/"
+    description="How docmeta decides which schema set applies to each file, including override precedence."
+  />
+</CardGrid>

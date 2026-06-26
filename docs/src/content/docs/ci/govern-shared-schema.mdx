@@ -1,0 +1,217 @@
+---
+title: Govern a shared schema by URL
+description: Point many repositories at one central, versioned JSON Schema by http(s) URL — how docmeta classifies URL references, the 10-second fetch timeout, per-run caching, and a versioning pattern for safe rollout.
+---
+
+import { Steps, Tabs, TabItem, Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+When you run docmeta across dozens of repositories, you do not want a copy of the
+schema in each one. Copies drift: one repo tightens a field, another never gets
+the update, and the standard you thought you were enforcing fractures.
+
+docmeta lets any schema reference be an `http(s)://` URL. Host the schema once,
+reference it by URL from every repo, and all of them validate against the same
+definition. This page covers how docmeta recognizes a URL reference, how it
+fetches and caches the schema during a run, what happens when a fetch fails, and
+a versioning pattern that lets consumers pin a stable release.
+
+## How a URL becomes a schema
+
+docmeta classifies every schema reference into one of three kinds before it does
+anything with it:
+
+| Kind | Looks like | Example |
+|---|---|---|
+| Built-in | a `vendor:name:version` id with no path separators and no `.json` | `google:okf:0.1` |
+| File | a local path or any reference ending in `.json` | `./schemas/article.json` |
+| URL | a reference starting with `http://` or `https://` | `https://schemas.example.com/article/1.json` |
+
+The URL test is checked first: any reference matching `^https?://` is treated as
+a URL, regardless of what follows. A reference that is not a URL and contains no
+`/` or `\`, does not end in `.json`, and matches the `vendor:name:version`
+pattern is a built-in id; everything else is treated as a file path. That
+ordering means a URL is never mistaken for a file, and a typo in a built-in id
+surfaces as an unknown-id error rather than a missing-file error.
+
+A URL reference can be supplied the same three ways any reference can:
+
+<Tabs>
+<TabItem label="In the file ($schema)">
+
+A document names its own schema with a `$schema` key in its frontmatter. This is
+the most common pattern for governance: each document declares which version of
+the standard it follows.
+
+```yaml title="docs/concepts/overview.md"
+---
+$schema: https://schemas.example.com/article/1.json
+type: concept
+---
+```
+
+</TabItem>
+<TabItem label="In docmeta.config.yaml">
+
+Set a URL as the repository's default schema in `docmeta.config.yaml`, so every
+file the repo validates uses it without per-file `$schema` keys.
+
+```yaml title="docmeta.config.yaml"
+schemas:
+  - https://schemas.example.com/article/1.json
+```
+
+You can also scope a URL schema to a subtree with an `overrides` entry. See the
+[configuration reference](/docmeta/reference/configuration/) for the full set of keys.
+
+</TabItem>
+<TabItem label="On the command line (--schema)">
+
+Pass a URL to `-s` / `--schema` to override `$schema` and config for the whole
+run — useful for a one-off check against a candidate schema version.
+
+```sh
+npx -y docmeta validate "docs/**/*.md" -s https://schemas.example.com/article/1.json
+```
+
+</TabItem>
+</Tabs>
+
+Whichever source supplies the URL, docmeta resolves the schema set for each file
+by the same precedence chain (`--schema` → file `$schema` → config `overrides` →
+config `schemas` → built-in default). Governing by URL does not change that
+chain; it only changes what a single reference in it points to. For the full
+chain and how the kinds interact, see the
+[schema resolution reference](/docmeta/reference/schema-resolution/).
+
+## How docmeta fetches and caches
+
+When a run needs a URL schema, docmeta fetches it over HTTP and uses the
+response like any other schema. Two properties keep this predictable in CI.
+
+**A 10-second fetch timeout.** Each fetch is bounded by a 10-second timeout
+(`AbortSignal.timeout(10_000)`). If the host does not respond within that
+window, the fetch is aborted and the run fails rather than hanging your
+pipeline. The timeout is per request, not per run.
+
+**A per-run cache.** The first time a run fetches a given URL, docmeta stores the
+parsed schema in an in-memory cache keyed by the exact URL string. Every later
+reference to that same URL in the same run is served from the cache — it is
+fetched once, not once per file. Validating two thousand files against one URL
+schema makes a single network request.
+
+<Aside type="note" title="The cache lives for one run only">
+The cache is in-memory and per-process: it speeds up a single `docmeta` run and
+is gone when the run exits. The next run fetches the schema again. docmeta does
+not write a schema cache to disk, so there is no cache to invalidate or clear
+between runs, and a freshly published schema version is picked up on the next
+run with no extra step. URLs are matched as exact strings, so
+`.../article/1.json` and `.../article/1.json?v=2` are distinct cache entries.
+</Aside>
+
+## When a fetch fails
+
+A URL schema that cannot be turned into a usable schema makes the *run itself*
+fail. docmeta treats this as an operational error: it raises a `DocmetaError`
+and exits with code `2`, distinct from a validation failure (exit `1`). A gate
+that distinguishes the two can tell "a document is non-conformant" from "the
+schema host is unreachable." For the full exit-code contract, see
+[Exit codes & PR annotations](/docmeta/ci/exit-codes-and-annotations/).
+
+These are the fetch-failure cases, all of which exit `2`:
+
+| Failure | What docmeta reports |
+|---|---|
+| The request exceeds the 10-second timeout | `Failed to fetch schema "<url>": timed out after 10000ms.` |
+| The server responds with a non-2xx status | `Failed to fetch schema "<url>": HTTP <status>.` |
+| The host is unreachable or the request errors | `Failed to fetch schema "<url>": <reason>.` |
+| The response body is not valid JSON | `Schema "<url>" did not return valid JSON: <reason>.` |
+
+<Aside type="caution" title="A broken schema host blocks every consumer">
+Because the schema is fetched at validation time, the host's availability is part
+of your CI's critical path. If the host returns a 404 or 500, or DNS fails, every
+consuming repo's gate exits `2` until the host recovers. Treat the schema host as
+production infrastructure: serve it from somewhere highly available, and prefer
+immutable, versioned URLs (below) so a change to the standard can never break a
+repo that did not opt into it.
+</Aside>
+
+## A governance pattern
+
+The goal is one canonical schema that many repos share, evolved without breaking
+consumers who have not migrated. A pattern that holds up:
+
+<Steps>
+
+1. **Host the schema at a stable, versioned URL.** Put the version in the path so
+   each release has its own immutable URL — for example
+   `https://schemas.example.com/article/1.json`,
+   `.../article/2.json`. Serve it from infrastructure your CI can always reach
+   (an object store, a CDN, or a docs site). Avoid a single "latest" URL whose
+   contents change underneath consumers; that is exactly the drift you are trying
+   to eliminate, just relocated.
+
+2. **Have consumers pin a version.** Each repo references a specific version, in
+   the document's `$schema` or in `docmeta.config.yaml`:
+
+   ```yaml title="docmeta.config.yaml"
+   schemas:
+     - https://schemas.example.com/article/1.json
+   ```
+
+   Because the URL is immutable, a repo's validation result depends only on its
+   own content and the version it pinned — not on when the run happened.
+
+3. **Publish a new version under a new URL.** When the standard changes, publish
+   `.../article/2.json` alongside the old one rather than editing the old file in
+   place. Existing repos keep validating against version 1 and stay green.
+
+4. **Roll consumers forward deliberately.** Update each repo's pinned URL to
+   version 2 when its content is ready, repo by repo. A consumer migrates by
+   changing one line. If you need to add a required field without failing every
+   not-yet-migrated document at once, combine this with the staged-rollout
+   approach in [Roll out a new required field](/docmeta/set-up/new-required-field/) on
+   the schema author's side.
+
+</Steps>
+
+<Aside type="tip" title="Keep the schema's own dialect explicit">
+docmeta auto-detects a fetched schema's JSON Schema dialect from the schema's own
+`$schema` meta-schema URI (2020-12, 2019-09, draft-07, draft-06, and draft-04 are
+supported; a schema with no `$schema` is treated as 2020-12). Set `$schema`
+explicitly in your hosted schema so its dialect is unambiguous to every consumer.
+</Aside>
+
+## Verify it works
+
+To confirm a repo is wired to the shared schema, run docmeta against one file and
+check that the resolved schema set names your URL. The `json` output reports the
+resolved schema set per file, so a normal validate run on a known-good file is
+the quickest check:
+
+```sh
+npx -y docmeta validate docs/concepts/overview.md --format json
+```
+
+In the JSON output, the file's `schemas` array lists the URL it was validated
+against. A clean run exits `0`; an unreachable host exits `2` with one of the
+fetch-failure messages above.
+
+## Next steps
+
+<CardGrid>
+  <LinkCard
+    title="Schema resolution reference"
+    href="/docmeta/reference/schema-resolution/"
+    description="The full precedence chain, the three reference kinds, and supported dialects."
+  />
+  <LinkCard
+    title="Consume results programmatically"
+    href="/docmeta/ci/consume-results/"
+    description="Feed validation output into your tooling with JSON, get, and the TypeScript API."
+  />
+  <LinkCard
+    title="Exit codes & PR annotations"
+    href="/docmeta/ci/exit-codes-and-annotations/"
+    description="The 0/1/2 contract — why a fetch failure is exit 2, not exit 1."
+  />
+</CardGrid>

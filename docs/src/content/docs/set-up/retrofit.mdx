@@ -1,0 +1,150 @@
+---
+title: Retrofit docmeta into an existing docs repo
+description: Adopt docmeta on a repo that has never had metadata validation — start with a permissive schema so the build goes green on day one, wire the CI gate, then ratchet strictness over time.
+---
+
+import { Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+Adding metadata validation to a mature docs repo has a chicken-and-egg problem. The reason you want validation is that the existing metadata is inconsistent — fields missing, values fat-fingered, no enforcement. But if your very first CI run holds every page to a strict standard, hundreds of long-lived docs fail at once and the gate is unmergeable before anyone has written a single new line.
+
+The way through is to adopt **incrementally**. Land a permissive schema that the repo already satisfies, so the build is green on day one and the gate is real. Then tighten the standard over time, on your schedule, while the gate quietly catches new regressions from the start.
+
+<Aside type="note" title="The goal on day one">
+A green build with a working gate beats a red build with a perfect standard. Once the check is wired and passing, every future pull request is held to whatever the schema currently requires — so even a near-empty schema immediately stops *new* metadata from getting worse while you work on the backlog.
+</Aside>
+
+## Step 1 — Start with a permissive schema
+
+The built-in [`google:okf:0.1`](/docmeta/schemas/) schema requires a single field, `type`. That is lenient, but on a repo that has never enforced metadata, even one required field may fail a lot of pages. For a true day-one-green adoption, start from a schema that **requires nothing** and tighten from there.
+
+```json title="schemas/permissive.json"
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [],
+  "properties": {
+    "type": { "type": "string", "minLength": 1 },
+    "title": { "type": "string", "minLength": 1 }
+  }
+}
+```
+
+This schema requires no field. It only checks format **when a field is present** — so a `title:` that is accidentally empty fails, but a doc with no `title` at all passes. You get format enforcement immediately without demanding any field be filled in yet.
+
+Point your config at it:
+
+```yaml title="docmeta.config.yaml"
+paths:
+  - "docs/**/*.md"
+
+schemas:
+  - ./schemas/permissive.json
+```
+
+Run a full pass to confirm the repo is green as it stands:
+
+```bash
+npx docmeta validate
+```
+
+If something still fails here, it is a genuine format problem — a malformed `timestamp`, an empty required-by-you field — not a missing-field avalanche. Fix those few, and your baseline is clean.
+
+<Aside type="caution" title="Files with no frontmatter">
+A file with no frontmatter block at all still gets validated. With a require-nothing schema it passes, because there is no required field to be missing. But the moment you add a field to `required`, every frontmatter-free file fails it — a blank doc has no `type`, so a rule that requires `type` flags it. Keep this in mind before you ratchet: run a coverage probe (below) so frontmatter-free files do not surprise you in CI.
+</Aside>
+
+## Step 2 — Wire the CI gate
+
+With a green baseline committed, add the gate now — not after the standard is perfect. docmeta exits `0` when everything passes and `1` when a file fails, so any CI system can use a bare `docmeta validate` as a pass/fail step. Wiring it early means the gate starts catching regressions immediately, even while the schema is still permissive.
+
+```bash
+npx -y docmeta validate --format github
+```
+
+The `--format github` flag turns failures into inline annotations on the pull-request diff. The full recipe — workflow file, the exit-code contract, and annotation behavior — lives in the CI track; copy the ready-made recipe rather than assembling your own.
+
+<LinkCard
+  title="Run it in CI"
+  href="/docmeta/ci/"
+  description="Ready-made recipes for GitHub Actions, GitLab CI, Jenkins, and pre-commit, plus the exit-code and annotation contract."
+/>
+
+## Step 3 — Scope what gets checked
+
+A real repo has files you do not want to validate yet: archived content, generated pages, drafts. Narrow the gate with `paths` and `exclude` so it covers only what you are ready to stand behind on day one, then widen it as you go.
+
+<Steps>
+
+1. **Limit `paths` to the areas you have reviewed.** The `paths` key is the fallback target set when no paths are passed on the command line. Point it at the subtree you have confirmed is green rather than the whole repo.
+
+   ```yaml title="docmeta.config.yaml"
+   paths:
+     - "docs/guides/**/*.md"
+   ```
+
+2. **Exclude the corners you are not ready for.** Your `exclude` globs merge with docmeta's built-in ignores (`**/node_modules/**` and `**/.git/**` are always skipped) and add to them.
+
+   ```yaml title="docmeta.config.yaml"
+   exclude:
+     - "**/drafts/**"
+     - "docs/archive/**"
+   ```
+
+</Steps>
+
+Excluding an area is not surrender — it is sequencing. You bring each subtree under the gate when its metadata is clean, instead of blocking the whole adoption on the messiest folder.
+
+## Step 4 — Roll out folder by folder
+
+You rarely tighten the whole repo at once. Use per-folder **overrides** to hold a stricter schema where the metadata is already clean, while the rest of the repo stays on the permissive default. New and well-maintained areas adopt the real standard first; legacy areas catch up on their own timeline.
+
+```yaml title="docmeta.config.yaml"
+# Permissive default for the long tail.
+schemas:
+  - ./schemas/permissive.json
+
+# Stricter rule for an area that is already clean.
+overrides:
+  - files: "docs/guides/**/*.md"
+    schemas:
+      - ./schemas/guide.json
+```
+
+Files under `docs/guides/` are held to `guide.json` (which can require `type`, `title`, and more); everything else stays on the permissive default. As another area reaches full coverage, add an override for it — or widen an existing glob. Overrides are evaluated in order and the first matching glob wins, so order them most-specific first.
+
+<LinkCard
+  title="Apply different schemas to different folders"
+  href="/docmeta/set-up/different-schemas-per-folder/"
+  description="The full mechanics of overrides — glob precedence, first-match-wins, and validating one file against multiple schemas."
+/>
+
+## Step 5 — Ratchet strictness over time
+
+The permissive schema was a starting line, not a destination. Once an area is under the gate and contributors are keeping it clean, tighten the standard: add a recommended field, then make it required when coverage is high. Do this one field at a time so the build never takes a big hit.
+
+The staged technique — validate a field's format first, drive coverage, then promote it to `required` — has its own guide. Follow it each time you raise the bar.
+
+<LinkCard
+  title="Roll out a new required field without breaking the build"
+  href="/docmeta/set-up/new-required-field/"
+  description="The staged ratchet: add a field as optional-but-validated, measure coverage with get, then promote it to required."
+/>
+
+## What you have now
+
+A repo that went green on day one, a CI gate that has been catching regressions since before the standard was finished, and a folder-by-folder path to the stricter rules you actually want. You adopted docmeta without a flag day and without a backlog of red checks blocking everyone's work.
+
+## Where to go next
+
+<CardGrid>
+  <LinkCard
+    title="Create your docmeta.config.yaml"
+    href="/docmeta/set-up/config/"
+    description="Every config key explained — paths, exclude, schemas, and overrides — with a complete worked example."
+  />
+  <LinkCard
+    title="Author a schema for your standard"
+    href="/docmeta/schemas/"
+    description="Encode your metadata standard as a JSON Schema, starting permissive and adding required fields deliberately."
+  />
+</CardGrid>

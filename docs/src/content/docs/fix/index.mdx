@@ -1,0 +1,267 @@
+---
+title: Fix a failing check
+description: Read a docmeta validation error, map it to the offending field and line, fix it, and confirm green locally.
+---
+
+import { Steps, Aside, LinkCard } from '@astrojs/starlight/components';
+
+Your PR's docmeta check is red and you'd like it green again. You're in the right
+place. This page decodes the error, points you at the exact field and line to
+change, and shows you how to confirm the fix locally before you re-push. You
+don't need to know how docmeta was set up — just what its output is telling you.
+
+<Aside type="tip" title="The fastest path">
+  Find your error message in the [common failures](#common-failures) below, apply
+  the matching fix, then [run docmeta locally](#reproduce-and-confirm-locally) to
+  confirm it's green. Done.
+</Aside>
+
+## Decode the error line
+
+A failing file in `pretty` output (the default) looks like this:
+
+```
+✗ docs/guide.md
+    (root)  must have required property 'type'  [google:okf:0.1]
+```
+
+The first line is the file that failed. Each indented line below it is one
+problem, in this shape:
+
+```
+<field>  <message>  (line N)  [schema-id]
+```
+
+| Part | What it tells you |
+| --- | --- |
+| `<field>` | Which field is wrong. It's a [JSON Pointer](https://datatracker.ietf.org/doc/html/rfc6901) such as `/timestamp`, or a bare key name. `(root)` means the document as a whole — most often a *required field is missing entirely*. |
+| `<message>` | What's wrong, e.g. `must have required property 'type'` or `must match format "date-time"`. |
+| `(line N)` | The source line of the offending field, when docmeta can locate it. A missing required field has no line, so this part is absent. |
+| `[schema-id]` | The schema that flagged it, e.g. `google:okf:0.1`. Useful when more than one schema applies. |
+
+<Aside type="note">
+  Need machine-readable output instead? `--format json` gives you the same
+  information as structured data, and `--format github` emits inline PR
+  annotations. See the [output reference](/docmeta/reference/) for the exact shapes.
+</Aside>
+
+## Common failures
+
+These cover the overwhelming majority of red checks. The first four are problems
+in your document; the last, [Schema not found](#schema-not-found), is a setup
+problem rather than something in your file. Each shows the error, the cause, and
+a fix.
+
+### Missing a required field
+
+```
+✗ docs/guide.md
+    (root)  must have required property 'type'  [google:okf:0.1]
+```
+
+The schema requires a field your frontmatter doesn't have. The field name is in
+the message — here, `type`. The location is `(root)` because the field is absent,
+so there's no line to point at.
+
+**Fix:** add the field to your frontmatter.
+
+```diff lang="md" title="docs/guide.md"
+  ---
+  title: My Guide
+  description: A short summary of this guide.
++ type: concept
+  ---
+```
+
+<Aside type="tip">
+  Not sure what value `type` should be? The built-in OKF schema accepts any
+  non-empty string — pick the kind of doc this is, such as `concept`, `guide`,
+  or `reference`. If your repo uses a custom schema, it may restrict `type` to a
+  specific list; the error message will say so (for example, `must be equal to
+  one of the allowed values`).
+</Aside>
+
+### A value in the wrong format
+
+```
+✗ docs/guide.md
+    /timestamp  must match format "date-time"  (line 4)  [google:okf:0.1]
+```
+
+The field is present, but its value doesn't match the format the schema expects.
+Here `timestamp` must be an ISO 8601 `date-time`, and the file has something
+like `last Tuesday`:
+
+```md title="docs/guide.md" {4}
+---
+type: concept
+title: My Guide
+timestamp: last Tuesday
+---
+```
+
+The `/timestamp` pointer and `(line 4)` take you straight to the offending line.
+
+**Fix:** replace the value with a properly formatted one. An ISO 8601 `date-time`
+looks like `2026-06-25T10:00:00Z`:
+
+```diff lang="md" title="docs/guide.md"
+  ---
+  type: concept
+  title: My Guide
+- timestamp: last Tuesday
++ timestamp: 2026-06-25T10:00:00Z
+  ---
+```
+
+The same pattern applies to other formats: a `uri` field needs a full URL
+(`https://example.com/...`), and an enum field needs one of its allowed values.
+The message names the format or constraint that failed.
+
+### No frontmatter at all
+
+```
+✗ docs/guide.md
+    (root)  must have required property 'type'  [google:okf:0.1]
+```
+
+A file with no frontmatter block reads as empty metadata, so it fails the same
+way a file missing a required field does. If you expected this file to have
+metadata, it's probably missing its opening `---` fence, or the block isn't at
+the very top of the file.
+
+**Fix:** add a frontmatter block at the top of the file, between `---` fences:
+
+```diff lang="md" title="docs/guide.md"
++ ---
++ type: concept
++ title: My Guide
++ ---
++
+  # My Guide
+
+  Body content goes here.
+```
+
+<Aside type="caution">
+  The frontmatter block must be the **first** thing in the file. A blank line or
+  any text above the opening `---` means docmeta won't recognize it as
+  frontmatter.
+</Aside>
+
+### A YAML parse error
+
+```
+✗ docs/guide.md
+    (root)  Invalid YAML frontmatter: <parser detail>  [(parse)]
+```
+
+The frontmatter block exists but isn't valid YAML, so docmeta can't read it. The
+schema in brackets is `[(parse)]` rather than a real schema id — this is a syntax
+problem, not a rule violation. Common causes are an unquoted value containing a
+colon, bad indentation, or a tab character.
+
+**Fix:** correct the YAML. A frequent culprit is a value with a colon that needs
+quoting:
+
+```diff lang="md" title="docs/guide.md"
+  ---
+  type: concept
+- title: Versioning: a primer
++ title: "Versioning: a primer"
+  ---
+```
+
+<Aside type="tip">
+  The parser detail after the colon (truncated as `<parser detail>` above)
+  usually points at the line and character where parsing broke. Read it closely
+  — it's the fastest clue.
+</Aside>
+
+### Schema not found
+
+Sometimes docmeta stops before validating any file and prints a single line to
+**stderr**, prefixed with `docmeta:`:
+
+```
+docmeta: Unknown built-in schema "google:okf:0.2". Available: google:okf:0.1.
+```
+
+or:
+
+```
+docmeta: Schema file not found: "./schemas/my.schema.json".
+```
+
+This isn't a problem with your document — it's a configuration problem. docmeta
+couldn't load the schema it was told to use, so it can't validate anything. This
+exits with code `2` (an operational error), not `1`.
+
+**Fix:** this usually isn't yours to fix in a content PR. Check that the schema
+reference — in `docmeta.config.yaml`, a `$schema` field in your file, or a
+`--schema` flag — points at a schema that exists. A misspelled built-in id, a
+wrong file path, or an unreachable URL all produce this. If you didn't change
+the schema setup, flag it to whoever maintains the repo's docmeta config.
+
+## Reproduce and confirm locally
+
+Don't guess and re-push. Run the exact check on your machine so you see green
+before CI does.
+
+<Steps>
+
+1. **Run docmeta on just your file.** No install needed:
+
+   ```sh
+   npx docmeta validate docs/guide.md
+   ```
+
+   You'll see the same `✗` and error lines CI showed you.
+
+2. **Apply the fix** from the matching section above.
+
+3. **Run it again** and confirm the green check:
+
+   ```
+   ✓ docs/guide.md
+
+   1 file checked, 1 passed, 0 failed, 0 errors
+   ```
+
+4. **Re-push.** With a passing local run, your CI check should now be green too.
+
+</Steps>
+
+<Aside type="tip">
+  If your repo has a `docmeta.config.yaml`, running `npx docmeta validate` with
+  no path validates the same fileset CI does, using the same schema. To match CI
+  exactly, run it from the repo root.
+</Aside>
+
+## What the exit code means
+
+docmeta's exit code is the contract CI gates on. If you're scripting the check
+or reading raw CI logs, here's what each code means:
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Every file passed. The check is green. |
+| `1` | One or more files **failed validation** — a missing or malformed field. This is the red check you came here to fix. |
+| `2` | An **operational error** — docmeta couldn't run the check at all. A missing or unreadable schema, an unsupported file type, or no files to validate. The message goes to stderr, prefixed `docmeta:`. |
+
+A code `1` means fix your document. A code `2` means fix the setup — see
+[Schema not found](#schema-not-found) above, or escalate to whoever configured
+docmeta.
+
+## Still stuck?
+
+If the error doesn't match anything here, the [Reference](/docmeta/reference/) section
+documents every output format, exit code, and schema-resolution rule. To
+understand which schema applied to your file and why, see
+[how schema resolution works](/docmeta/schemas/).
+
+<LinkCard
+  title="Output formats & exit codes"
+  href="/docmeta/reference/"
+  description="The full pretty, JSON, and GitHub output shapes, and the 0/1/2 exit-code contract."
+/>
