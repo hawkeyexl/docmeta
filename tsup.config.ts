@@ -6,7 +6,7 @@ export default defineConfig({
     index: "src/index.ts",
   },
   format: ["esm"],
-  target: "node20",
+  target: "node24",
   platform: "node",
   clean: true,
   dts: true,

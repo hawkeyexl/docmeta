@@ -14,7 +14,7 @@ npm install -g docmeta
 npx docmeta validate "**/*.md"
 ```
 
-Requires Node.js 20 or later.
+Requires Node.js 24 or later.
 
 ## Quick start
 

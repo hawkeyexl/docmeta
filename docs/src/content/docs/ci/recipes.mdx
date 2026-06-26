@@ -90,7 +90,7 @@ pipeline {
   stages {
     stage('Validate metadata') {
       steps {
-        // Requires Node.js 20+ on the agent (npx ships with npm).
+        // Requires Node.js 24+ on the agent (npx ships with npm).
         sh 'npx -y docmeta validate "docs/**/*.md"'
       }
     }
@@ -98,15 +98,15 @@ pipeline {
 }
 ```
 
-If your agents do not have Node.js 20+ on the `PATH`, provision it first. With
-the NodeJS plugin installed and a tool named `node20` configured in **Manage
+If your agents do not have Node.js 24+ on the `PATH`, provision it first. With
+the NodeJS plugin installed and a tool named `node24` configured in **Manage
 Jenkins → Tools**, wrap the stage:
 
 ```groovy title="Jenkinsfile"
 pipeline {
   agent any
   tools {
-    nodejs 'node20'
+    nodejs 'node24'
   }
   stages {
     stage('Validate metadata') {
@@ -167,7 +167,7 @@ With `entry: npx -y docmeta validate` and no positional paths in the entry,
 pre-commit appends the list of staged, matched files as arguments, so each
 commit validates exactly what changed. `language: system` tells pre-commit to
 use the `npx` already on your `PATH` rather than managing its own environment;
-Node.js 20+ must be installed locally.
+Node.js 24+ must be installed locally.
 
 </TabItem>
 <TabItem label="Validate the whole repo">
