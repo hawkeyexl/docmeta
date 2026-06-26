@@ -5,6 +5,7 @@ import { runValidate } from "../src/commands/validate.js";
 import { runGet } from "../src/commands/get.js";
 import { getSchemasInfo } from "../src/commands/schemas.js";
 import { DocmetaError } from "../src/types.js";
+import { startSchemaServer, type SchemaServer } from "./helpers/schema-server.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
@@ -86,6 +87,42 @@ describe("runValidate", () => {
     await expect(runValidate({ inputs: [], cwd: root })).rejects.toBeInstanceOf(
       DocmetaError,
     );
+  });
+
+  it("fetches a URL $schema from frontmatter and validates against it", async () => {
+    const server = await startSchemaServer({
+      "/draft07.json": {
+        json: {
+          $schema: "http://json-schema.org/draft-07/schema#",
+          type: "object",
+          required: ["type"],
+          additionalProperties: true,
+        },
+      },
+    });
+    try {
+      const url = `${server.url}/draft07.json`;
+      const pass = await runValidate({
+        inputs: ["-"],
+        as: "markdown",
+        stdinContent: `---\n$schema: ${url}\ntype: note\n---\n# Hi\n`,
+        cwd: root,
+      });
+      expect(pass.results[0]?.ok).toBe(true);
+      expect(pass.results[0]?.schemas).toEqual([url]);
+
+      const fail = await runValidate({
+        inputs: ["-"],
+        as: "markdown",
+        stdinContent: `---\n$schema: ${url}\ntitle: no type\n---\n# Hi\n`,
+        cwd: root,
+      });
+      expect(fail.results[0]?.ok).toBe(false);
+      expect(fail.results[0]?.errors[0]?.schema).toBe(url);
+      expect(fail.results[0]?.errors[0]?.message).toMatch(/type/);
+    } finally {
+      await server.close();
+    }
   });
 
   it("aborts on an unknown --as format", async () => {

@@ -53,8 +53,19 @@ export function classifyRef(ref: string): { kind: RefKind; ref: string } {
 
 const urlCache = new Map<string, Record<string, unknown>>();
 
+/** Default network timeout for fetching a remote (`http(s)`) schema. */
+const DEFAULT_TIMEOUT_MS = 10_000;
+
+export interface LoadSchemaOptions {
+  /** Abort a remote fetch after this many ms (default 10_000). */
+  timeoutMs?: number;
+}
+
 /** Load and return the JSON Schema object for a reference. */
-export async function loadSchema(ref: string): Promise<Record<string, unknown>> {
+export async function loadSchema(
+  ref: string,
+  options: LoadSchemaOptions = {},
+): Promise<Record<string, unknown>> {
   const { kind } = classifyRef(ref);
 
   if (kind === "builtin") {
@@ -71,20 +82,32 @@ export async function loadSchema(ref: string): Promise<Record<string, unknown>> 
   if (kind === "url") {
     const cached = urlCache.get(ref);
     if (cached) return cached;
+    const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     let res: Response;
     try {
-      res = await fetch(ref);
+      res = await fetch(ref, { signal: AbortSignal.timeout(timeoutMs) });
     } catch (err) {
-      throw new DocmetaError(
-        `Failed to fetch schema "${ref}": ${(err as Error).message}`,
-      );
+      const e = err as Error;
+      if (e.name === "TimeoutError" || e.name === "AbortError") {
+        throw new DocmetaError(
+          `Failed to fetch schema "${ref}": timed out after ${timeoutMs}ms.`,
+        );
+      }
+      throw new DocmetaError(`Failed to fetch schema "${ref}": ${e.message}`);
     }
     if (!res.ok) {
       throw new DocmetaError(
         `Failed to fetch schema "${ref}": HTTP ${res.status}.`,
       );
     }
-    const json = (await res.json()) as Record<string, unknown>;
+    let json: Record<string, unknown>;
+    try {
+      json = (await res.json()) as Record<string, unknown>;
+    } catch (err) {
+      throw new DocmetaError(
+        `Schema "${ref}" did not return valid JSON: ${(err as Error).message}`,
+      );
+    }
     urlCache.set(ref, json);
     return json;
   }

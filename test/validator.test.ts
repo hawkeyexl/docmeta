@@ -1,7 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { Validator } from "../src/core/validator.js";
+import { startSchemaServer, type SchemaServer } from "./helpers/schema-server.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const extra = join(here, "fixtures", "extra.schema.json");
@@ -70,5 +71,52 @@ describe("Validator", () => {
     const schemas = errors.map((e) => e.schema);
     expect(schemas).toContain("google:okf:0.1");
     expect(schemas).toContain(extra);
+  });
+});
+
+describe("Validator with remote schemas of different dialects", () => {
+  let server: SchemaServer;
+
+  const dialectSchema = (metaSchema: string) => ({
+    $schema: metaSchema,
+    type: "object",
+    required: ["type"],
+    additionalProperties: true,
+  });
+
+  beforeAll(async () => {
+    server = await startSchemaServer({
+      "/2020.json": {
+        json: dialectSchema("https://json-schema.org/draft/2020-12/schema"),
+      },
+      "/draft07.json": {
+        json: dialectSchema("http://json-schema.org/draft-07/schema#"),
+      },
+      "/draft06.json": {
+        json: dialectSchema("http://json-schema.org/draft-06/schema#"),
+      },
+      "/draft04.json": {
+        json: dialectSchema("http://json-schema.org/draft-04/schema#"),
+      },
+    });
+  });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  it.each([
+    ["2020-12", "/2020.json"],
+    ["draft-07", "/draft07.json"],
+    ["draft-06", "/draft06.json"],
+    ["draft-04", "/draft04.json"],
+  ])("compiles and validates a %s schema fetched by URL", async (_d, path) => {
+    const v = new Validator();
+    const ref = `${server.url}${path}`;
+    expect(await v.validate({ type: "concept" }, [ref], lineFor)).toEqual([]);
+    const errors = await v.validate({ title: "no type" }, [ref], lineFor);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.schema).toBe(ref);
+    expect(errors[0]?.message).toMatch(/type/);
   });
 });
