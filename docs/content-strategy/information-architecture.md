@@ -50,7 +50,7 @@ Home — "What do you want to do?" router + 30-second proof
 | Page | CUJ | ★ | Notes |
 |---|---|---|---|
 | Landing / router page | All | ★ | Value prop, who it's for, 30-second quickstart. Links to each persona track. |
-| Install & first validation | M1 | ★ | `npx docmeta validate <file>`, read pass/fail output, Node 20+ requirement. |
+| Install & first validation | M1 | ★ | `npx docmeta validate <file>`, read pass/fail output, Node 24+ requirement. |
 
 ### Set up validation (Maya)
 

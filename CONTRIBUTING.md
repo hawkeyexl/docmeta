@@ -4,7 +4,7 @@ Thanks for your interest in improving docmeta. This guide covers local setup, th
 
 ## Prerequisites
 
-- **Node.js 20 or later** (see `engines` in `package.json`).
+- **Node.js 24 or later** (see `engines` in `package.json`).
 - npm (ships with Node).
 
 ## Setup

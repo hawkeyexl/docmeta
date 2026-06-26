@@ -11,7 +11,7 @@ and reports each failure as an inline annotation on the pull request diff.
 
 You do not need to install docmeta into your repository. The recipes here run it
 with `npx`, which fetches the published `docmeta` package on demand. The only
-requirement on the runner is Node.js 20 or newer.
+requirement on the runner is Node.js 24 or newer.
 
 <Aside type="tip" title="Just want the workflow?">
 The repository ships a ready-made workflow at
@@ -63,7 +63,7 @@ from [`examples/docmeta.yml`](https://github.com/hawkeyexl/docmeta/blob/main/exa
          - uses: actions/checkout@v4
          - uses: actions/setup-node@v4
            with:
-             node-version: 20
+             node-version: 24
 
          # Validate all Markdown. `--format github` turns failures into inline
          # PR annotations; the nonzero exit code fails the job.
@@ -106,7 +106,7 @@ locally and in CI, and you change what gets validated in one place. See
 ## Add a step to an existing workflow
 
 You do not need a dedicated workflow. If you already run a docs or lint job, add
-docmeta as one more step. It needs a checkout and a Node.js 20+ toolchain — if
+docmeta as one more step. It needs a checkout and a Node.js 24+ toolchain — if
 the job already has those, the validation step is a single line.
 
 <Tabs>
@@ -122,7 +122,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
       - name: Validate frontmatter
         run: npx -y docmeta validate "docs/**/*.md" --format github
 ```
@@ -138,7 +138,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       # ... your existing build/lint steps ...
 
