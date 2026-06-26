@@ -267,12 +267,13 @@ understand which schema applied to your file and why, see
 />
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the locally built CLI (node dist/cli.js) and committed fixtures.
-    Detected from this MDX markup; run with `npx doc-detective`. Config: .doc-detective.json. */}
+    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+    (see .github/workflows/doc-detective.yml), over committed fixtures.
+    Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"fix-a-failing-check","description":"The common-failures catalog and the reproduce-locally loop, mapped to fixtures."} */}
-{/* step {"description":"Missing a required field: (root) ... must have required property, tagged with the schema.","runShell":{"command":"node dist/cli.js validate test/fixtures/missing-type.md","exitCodes":[1],"stdio":"must have required property 'type'"}} */}
-{/* step {"description":"A value in the wrong format: a malformed timestamp is flagged on its source line.","runShell":{"command":"node dist/cli.js validate test/fixtures/bad-timestamp.md","exitCodes":[1],"stdio":"/timestamp  must match format \"date-time\"  \\(line 4\\)/"}} */}
-{/* step {"description":"A YAML parse error reports the schema as [(parse)] rather than a real schema id.","runShell":{"command":"node dist/cli.js validate test/fixtures/dd/malformed-yaml.md","exitCodes":[1],"stdio":"[(parse)]"}} */}
-{/* step {"description":"Schema not found is a setup problem, not a document problem: it exits 2 to stderr.","runShell":{"command":"node dist/cli.js validate test/fixtures/valid.md -s google:okf:0.2","exitCodes":[2],"stdio":"Unknown built-in schema"}} */}
-{/* step {"description":"Reproduce and confirm locally: after the fix, the file passes with a green summary.","runShell":{"command":"node dist/cli.js validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 file checked, 1 passed, 0 failed, 0 errors"}} */}
+{/* step {"description":"Missing a required field: (root) ... must have required property, tagged with the schema.","runShell":{"command":"npx docmeta validate test/fixtures/missing-type.md","exitCodes":[1],"stdio":"must have required property 'type'"}} */}
+{/* step {"description":"A value in the wrong format: a malformed timestamp is flagged on its source line.","runShell":{"command":"npx docmeta validate test/fixtures/bad-timestamp.md","exitCodes":[1],"stdio":"/timestamp  must match format \"date-time\"  \\(line 4\\)/"}} */}
+{/* step {"description":"A YAML parse error reports the schema as [(parse)] rather than a real schema id.","runShell":{"command":"npx docmeta validate test/fixtures/dd/malformed-yaml.md","exitCodes":[1],"stdio":"[(parse)]"}} */}
+{/* step {"description":"Schema not found is a setup problem, not a document problem: it exits 2 to stderr.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md -s google:okf:0.2","exitCodes":[2],"stdio":"Unknown built-in schema"}} */}
+{/* step {"description":"Reproduce and confirm locally: after the fix, the file passes with a green summary.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 file checked, 1 passed, 0 failed, 0 errors"}} */}
 {/* test end */}

@@ -189,10 +189,11 @@ npx -y docmeta validate "docs/**/*.md"
 </CardGrid>
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the locally built CLI (node dist/cli.js) and committed fixtures.
-    Detected from this MDX markup; run with `npx doc-detective`. Config: .doc-detective.json. */}
+    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+    (see .github/workflows/doc-detective.yml), over committed fixtures.
+    Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"ci-github","description":"The two properties the GitHub integration rests on, run against the local CLI build."} */}
-{/* step {"description":"Clean run exits 0 so the job stays green.","runShell":{"command":"node dist/cli.js validate test/fixtures/valid.md --format github","exitCodes":[0]}} */}
-{/* step {"description":"A failure exits 1 (fails the job) and emits a ::error workflow command pinned to file and line.","runShell":{"command":"node dist/cli.js validate test/fixtures/missing-type.md --format github","exitCodes":[1],"stdio":"/::error file=.*line=/"}} */}
-{/* step {"description":"An operational error (no inputs, no config) exits 2, distinct from a validation failure.","runShell":{"command":"node dist/cli.js validate","exitCodes":[2],"stdio":"No files to validate"}} */}
+{/* step {"description":"Clean run exits 0 so the job stays green.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md --format github","exitCodes":[0]}} */}
+{/* step {"description":"A failure exits 1 (fails the job) and emits a ::error workflow command pinned to file and line.","runShell":{"command":"npx docmeta validate test/fixtures/missing-type.md --format github","exitCodes":[1],"stdio":"/::error file=.*line=/"}} */}
+{/* step {"description":"An operational error (no inputs, no config) exits 2, distinct from a validation failure.","runShell":{"command":"npx docmeta validate","exitCodes":[2],"stdio":"No files to validate"}} */}
 {/* test end */}

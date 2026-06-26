@@ -1,10 +1,11 @@
 name: Doc Detective
 
 # Runs the Doc Detective inline tests embedded in the docs (.mdx) under
-# docs/src/content/docs/, which exercise the documented CLI procedures against
-# the locally built binary. The build step is required: the tests invoke
-# `node dist/cli.js`, and dist/ is gitignored, so it must be produced before the
-# action runs.
+# docs/src/content/docs/, which exercise the documented CLI procedures using the
+# exact commands the docs present (`docmeta` / `npx docmeta`) — resolved to the
+# freshly built local CLI via `npm link`, not the published package. The build +
+# link steps below are required: dist/ is gitignored, and docmeta is unpublished,
+# so the tests would have nothing to run without them.
 #
 # Like ci.yml, this validates on PRs only (release.yml covers release pushes),
 # scoped to changes that can affect docs<->CLI agreement.
@@ -24,9 +25,9 @@ permissions:
 jobs:
   doc-detective:
     runs-on: ubuntu-latest
-    # The inline tests run shell commands (node dist/cli.js ...), so never run
-    # them for pull requests from forks — that would execute untrusted code on
-    # the runner. Same-repo branches and manual dispatch only.
+    # The inline tests run shell commands (docmeta ...), so never run them for
+    # pull requests from forks — that would execute untrusted code on the
+    # runner. Same-repo branches and manual dispatch only.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event.pull_request.head.repo.full_name == github.repository
@@ -37,8 +38,14 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      # Produce dist/cli.js; the specs run the built binary, not the published package.
+      # Build dist/, then expose it as the `docmeta` command the docs invoke.
+      # `npm link` puts `docmeta` on PATH (for bare `docmeta ...`); `npm link
+      # docmeta` adds node_modules/.bin/docmeta so `npx docmeta ...` resolves the
+      # local build. docmeta is unpublished, so `npx docmeta` can never fetch a
+      # different package — it uses the link or fails loudly.
       - run: npm run build
+      - run: npm link
+      - run: npm link docmeta
       # Third-party action pinned to a full commit SHA (supply-chain hardening).
       - uses: doc-detective/github-action@a2a4f5ceb1abfa55d567e4f6766223082ece2c18 # v1
         with:

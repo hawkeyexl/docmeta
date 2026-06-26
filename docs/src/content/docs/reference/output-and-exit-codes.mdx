@@ -160,12 +160,13 @@ destination:
 The `json` and `github` formats are never colored.
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the locally built CLI (node dist/cli.js) and committed fixtures.
-    Detected from this MDX markup; run with `npx doc-detective`. Config: .doc-detective.json. */}
+    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+    (see .github/workflows/doc-detective.yml), over committed fixtures.
+    Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"output-and-exit-codes","description":"The reference shapes, exercised against the local build."} */}
-{/* step {"description":"json prints a single object with a summary and results.","runShell":{"command":"node dist/cli.js validate test/fixtures/bad-timestamp.md --format json","exitCodes":[1],"stdio":"/\"summary\"[\\s\\S]*\"results\"/"}} */}
-{/* step {"description":"json error objects carry schema, instancePath, message, and line.","runShell":{"command":"node dist/cli.js validate test/fixtures/bad-timestamp.md --format json","exitCodes":[1],"stdio":"\"instancePath\": \"/timestamp\""}} */}
-{/* step {"description":"An unparseable file becomes a failing result whose schema is (parse).","runShell":{"command":"node dist/cli.js validate test/fixtures/dd/malformed-yaml.md --format json","exitCodes":[1],"stdio":"\"(parse)\""}} */}
-{/* step {"description":"-q/--quiet still prints the summary line.","runShell":{"command":"node dist/cli.js validate test/fixtures/valid.md -q","exitCodes":[0],"stdio":"1 file checked, 1 passed, 0 failed, 0 errors"}} */}
-{/* step {"description":"--no-color is a global flag placed before the subcommand.","runShell":{"command":"node dist/cli.js --no-color validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"json prints a single object with a summary and results.","runShell":{"command":"docmeta validate test/fixtures/bad-timestamp.md --format json","exitCodes":[1],"stdio":"/\"summary\"[\\s\\S]*\"results\"/"}} */}
+{/* step {"description":"json error objects carry schema, instancePath, message, and line.","runShell":{"command":"docmeta validate test/fixtures/bad-timestamp.md --format json","exitCodes":[1],"stdio":"\"instancePath\": \"/timestamp\""}} */}
+{/* step {"description":"An unparseable file becomes a failing result whose schema is (parse).","runShell":{"command":"docmeta validate test/fixtures/dd/malformed-yaml.md --format json","exitCodes":[1],"stdio":"\"(parse)\""}} */}
+{/* step {"description":"-q/--quiet still prints the summary line.","runShell":{"command":"docmeta validate test/fixtures/valid.md -q","exitCodes":[0],"stdio":"1 file checked, 1 passed, 0 failed, 0 errors"}} */}
+{/* step {"description":"--no-color is a global flag placed before the subcommand.","runShell":{"command":"docmeta --no-color validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 passed"}} */}
 {/* test end */}

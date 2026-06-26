@@ -268,12 +268,13 @@ Naming the schema inside a document is the most self-contained option, but you c
 </CardGrid>
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the locally built CLI (node dist/cli.js) and committed fixtures.
-    Detected from this MDX markup; run with `npx doc-detective`. Config: .doc-detective.json. */}
+    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+    (see .github/workflows/doc-detective.yml), over committed fixtures.
+    Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"author-a-schema","description":"Schema-authoring claims, demonstrated with the committed fixtures the page itself cites."} */}
-{/* step {"description":"A document points itself at a schema via $schema (schema-ref.md names google:okf:0.1) and validates against it.","runShell":{"command":"node dist/cli.js validate test/fixtures/schema-ref.md","exitCodes":[0],"stdio":"1 passed"}} */}
-{/* step {"description":"The minimal title.schema.json shape (the extra.schema.json fixture) passes a doc that has a title.","runShell":{"command":"node dist/cli.js validate test/fixtures/valid.md -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
-{/* step {"description":"A required field that is absent is a hard failure: a frontmatter-free doc fails the required `title`.","runShell":{"command":"node dist/cli.js validate test/fixtures/no-frontmatter.md -s ./test/fixtures/extra.schema.json","exitCodes":[1],"stdio":"must have required property 'title'"}} */}
-{/* step {"description":"The date-time format is enforced: a malformed timestamp fails against OKF.","runShell":{"command":"node dist/cli.js validate test/fixtures/bad-timestamp.md","exitCodes":[1],"stdio":"date-time"}} */}
-{/* step {"description":"`schemas` lists the built-in OKF schema the page documents as the fallback.","runShell":{"command":"node dist/cli.js schemas","exitCodes":[0],"stdio":"google:okf:0.1"}} */}
+{/* step {"description":"A document points itself at a schema via $schema (schema-ref.md names google:okf:0.1) and validates against it.","runShell":{"command":"npx docmeta validate test/fixtures/schema-ref.md","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"The minimal title.schema.json shape (the extra.schema.json fixture) passes a doc that has a title.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"A required field that is absent is a hard failure: a frontmatter-free doc fails the required `title`.","runShell":{"command":"npx docmeta validate test/fixtures/no-frontmatter.md -s ./test/fixtures/extra.schema.json","exitCodes":[1],"stdio":"must have required property 'title'"}} */}
+{/* step {"description":"The date-time format is enforced: a malformed timestamp fails against OKF.","runShell":{"command":"npx docmeta validate test/fixtures/bad-timestamp.md","exitCodes":[1],"stdio":"date-time"}} */}
+{/* step {"description":"`schemas` lists the built-in OKF schema the page documents as the fallback.","runShell":{"command":"npx docmeta schemas","exitCodes":[0],"stdio":"google:okf:0.1"}} */}
 {/* test end */}

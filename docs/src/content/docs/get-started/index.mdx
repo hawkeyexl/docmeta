@@ -159,12 +159,13 @@ whole repo, add a config file and a schema, then wire it into CI.
 />
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the locally built CLI (node dist/cli.js) and committed fixtures.
-    Detected from this MDX markup; run with `npx doc-detective`. Config: .doc-detective.json. */}
+    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+    (see .github/workflows/doc-detective.yml), over committed fixtures.
+    Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"get-started","description":"Install/validate flow and result reading, run against the local CLI build and committed fixtures."} */}
 {/* step {"description":"Node.js prerequisite: `node --version` reports a version (page requires Node 20+).","runShell":{"command":"node --version","exitCodes":[0],"stdio":"/v\\d+\\./"}} */}
-{/* step {"description":"Validate a passing file: a fixture satisfying OKF exits 0 with a green summary.","runShell":{"command":"node dist/cli.js validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 passed"}} */}
-{/* step {"description":"Read a passing result: the summary line format the page documents.","runShell":{"command":"node dist/cli.js validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 file checked, 1 passed, 0 failed, 0 errors"}} */}
-{/* step {"description":"Read a failing result: a file missing `type` exits 1 and names the missing property.","runShell":{"command":"node dist/cli.js validate test/fixtures/missing-type.md","exitCodes":[1],"stdio":"must have required property 'type'"}} */}
-{/* step {"description":"The failing result also cites the flagging schema in brackets.","runShell":{"command":"node dist/cli.js validate test/fixtures/missing-type.md","exitCodes":[1],"stdio":"google:okf:0.1"}} */}
+{/* step {"description":"Validate a passing file: a fixture satisfying OKF exits 0 with a green summary.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"Read a passing result: the summary line format the page documents.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 file checked, 1 passed, 0 failed, 0 errors"}} */}
+{/* step {"description":"Read a failing result: a file missing `type` exits 1 and names the missing property.","runShell":{"command":"npx docmeta validate test/fixtures/missing-type.md","exitCodes":[1],"stdio":"must have required property 'type'"}} */}
+{/* step {"description":"The failing result also cites the flagging schema in brackets.","runShell":{"command":"npx docmeta validate test/fixtures/missing-type.md","exitCodes":[1],"stdio":"google:okf:0.1"}} */}
 {/* test end */}
