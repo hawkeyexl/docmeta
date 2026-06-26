@@ -1,0 +1,46 @@
+name: Doc Detective
+
+# Runs the Doc Detective inline tests embedded in the docs (.mdx) under
+# docs/src/content/docs/, which exercise the documented CLI procedures against
+# the locally built binary. The build step is required: the tests invoke
+# `node dist/cli.js`, and dist/ is gitignored, so it must be produced before the
+# action runs.
+#
+# Like ci.yml, this validates on PRs only (release.yml covers release pushes),
+# scoped to changes that can affect docs<->CLI agreement.
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "src/**"
+      - "test/fixtures/**"
+      - ".doc-detective.json"
+      - ".github/workflows/doc-detective.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  doc-detective:
+    runs-on: ubuntu-latest
+    # The inline tests run shell commands (node dist/cli.js ...), so never run
+    # them for pull requests from forks — that would execute untrusted code on
+    # the runner. Same-repo branches and manual dispatch only.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # Produce dist/cli.js; the specs run the built binary, not the published package.
+      - run: npm run build
+      # Third-party action pinned to a full commit SHA (supply-chain hardening).
+      - uses: doc-detective/github-action@a2a4f5ceb1abfa55d567e4f6766223082ece2c18 # v1
+        with:
+          config: .doc-detective.json
+          exit_on_fail: true

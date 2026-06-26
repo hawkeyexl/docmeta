@@ -148,3 +148,11 @@ A repo that went green on day one, a CI gate that has been catching regressions 
     description="Encode your metadata standard as a JSON Schema, starting permissive and adding required fields deliberately."
   />
 </CardGrid>
+
+{/* Doc Detective inline tests: verify this page's documented docmeta behavior
+    against the locally built CLI (node dist/cli.js) and committed fixtures.
+    Detected from this MDX markup; run with `npx doc-detective`. Config: .doc-detective.json. */}
+{/* test {"testId":"set-up-retrofit","description":"Start-permissive claim, demonstrated with a require-nothing schema fixture vs. OKF."} */}
+{/* step {"description":"A frontmatter-free file passes the permissive schema (nothing is required).","runShell":{"command":"node dist/cli.js validate test/fixtures/no-frontmatter.md -s ./test/fixtures/dd/permissive.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"The same file fails OKF, which requires `type` — the avalanche the permissive start avoids.","runShell":{"command":"node dist/cli.js validate test/fixtures/no-frontmatter.md -s google:okf:0.1","exitCodes":[1],"stdio":"must have required property 'type'"}} */}
+{/* test end */}

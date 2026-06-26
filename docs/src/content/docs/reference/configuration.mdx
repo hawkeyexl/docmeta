@@ -93,3 +93,12 @@ corresponding config value; others merge with it.
 **every** file in the run, bypassing config `overrides` and per-file `$schema`.
 Use config `overrides` when different folders need different schemas.
 </Aside>
+
+{/* Doc Detective inline tests: verify this page's documented docmeta behavior
+    against the locally built CLI (node dist/cli.js) and committed fixtures.
+    Detected from this MDX markup; run with `npx doc-detective`. Config: .doc-detective.json. */}
+{/* test {"testId":"configuration-reference","description":"Config discovery, validation, and merge claims, exercised against the local build."} */}
+{/* step {"description":"An explicit -c to a missing file exits 2 rather than falling back to discovery.","runShell":{"command":"node dist/cli.js validate -c does-not-exist.yaml test/fixtures/valid.md","exitCodes":[2],"stdio":"Config file not found"}} */}
+{/* step {"description":"A config whose paths is not a list of strings is a usage error (exit 2).","runShell":{"command":"node dist/cli.js validate -c test/fixtures/dd/bad-config.yaml test/fixtures/valid.md","exitCodes":[2],"stdio":"\"paths\" must be a list of strings"}} */}
+{/* step {"description":"--schema overrides config/file schema resolution for every file in the run.","runShell":{"command":"node dist/cli.js validate test/fixtures/missing-type.md -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* test end */}

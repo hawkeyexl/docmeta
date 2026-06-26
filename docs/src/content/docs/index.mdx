@@ -105,3 +105,11 @@ which requires only `type`.
 
 New here? The [Get started](/docmeta/get-started/) page installs docmeta and walks you
 through your first passing and failing result in under a minute.
+
+{/* Doc Detective inline tests: verify this page's documented docmeta behavior
+    against the locally built CLI (node dist/cli.js) and committed fixtures.
+    Detected from this MDX markup; run with `npx doc-detective`. Config: .doc-detective.json. */}
+{/* test {"testId":"landing-proof","description":"The hero proof, run against the local CLI build and committed fixtures."} */}
+{/* step {"description":"A file with complete, well-formed metadata passes with a green summary.","runShell":{"command":"node dist/cli.js validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 file checked, 1 passed, 0 failed, 0 errors"}} */}
+{/* step {"description":"A file missing a required field fails and names the field and the flagging schema.","runShell":{"command":"node dist/cli.js validate test/fixtures/missing-type.md","exitCodes":[1],"stdio":"/must have required property 'type'.*google:okf:0.1/"}} */}
+{/* test end */}

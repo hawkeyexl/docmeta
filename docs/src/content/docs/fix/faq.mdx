@@ -153,3 +153,14 @@ and resolution rule in full.
   href="/docmeta/fix/"
   description="Decode the error line, map it to a field and line, fix it, and confirm green locally."
 />
+
+{/* Doc Detective inline tests: verify this page's documented docmeta behavior
+    against the locally built CLI (node dist/cli.js) and committed fixtures.
+    Detected from this MDX markup; run with `npx doc-detective`. Config: .doc-detective.json. */}
+{/* test {"testId":"fix-faq","description":"The how-do-I answers that map to runnable commands."} */}
+{/* step {"description":"Read a field's value (not validate it) with get.","runShell":{"command":"node dist/cli.js get type test/fixtures/valid.md","exitCodes":[0],"stdio":"type=concept"}} */}
+{/* step {"description":"Validate content from stdin: pass - and tell docmeta the format with --as.","runShell":{"command":"node dist/cli.js validate - --as markdown < test/fixtures/valid.md","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"Stdin without --as is an operational error (exit 2).","runShell":{"command":"node dist/cli.js validate - < test/fixtures/valid.md","exitCodes":[2],"stdio":"requires --as"}} */}
+{/* step {"description":"Restrict a directory walk to one extension with --ext. Mirrors the page's documented --ext form, so the walk is intentionally unfiltered: it includes the dd/ mixed-content fixtures (the next step shows excluding them). The assertion checks only 'files checked' + exit 1, so it does not depend on the file count.","runShell":{"command":"node dist/cli.js validate test/fixtures --ext md","exitCodes":[1],"stdio":"files checked"}} */}
+{/* step {"description":"Exclude a glob from a walk; --exclude is repeatable and merges with config and defaults.","runShell":{"command":"node dist/cli.js validate test/fixtures --ext md --exclude \"test/fixtures/dd/**\"","exitCodes":[1],"stdio":"files checked"}} */}
+{/* test end */}

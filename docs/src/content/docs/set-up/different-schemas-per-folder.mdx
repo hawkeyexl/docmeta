@@ -109,3 +109,12 @@ npx docmeta validate
 ```
 
 If a file matches the wrong override, check the order of your `overrides` entries — remember the first matching glob wins.
+
+{/* Doc Detective inline tests: verify this page's documented docmeta behavior
+    against the locally built CLI (node dist/cli.js) and committed fixtures.
+    Detected from this MDX markup; run with `npx doc-detective`. Config: .doc-detective.json. */}
+{/* test {"testId":"schemas-per-folder","description":"Multi-schema-set and precedence claims, demonstrated with repeated --schema flags."} */}
+{/* step {"description":"Validate one file against a set of two schemas; a file satisfying both passes.","runShell":{"command":"node dist/cli.js validate test/fixtures/schema-ref.md -s google:okf:0.1 -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"The file must satisfy EVERY schema in the set: missing `type` fails the set even though it has a title.","runShell":{"command":"node dist/cli.js validate test/fixtures/missing-type.md -s google:okf:0.1 -s ./test/fixtures/extra.schema.json","exitCodes":[1],"stdio":"must have required property 'type'"}} */}
+{/* step {"description":"CLI --schema sits at the top of the resolution chain: forcing a schema the file satisfies makes it pass, overriding the default OKF set it would otherwise fail.","runShell":{"command":"node dist/cli.js validate test/fixtures/missing-type.md -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* test end */}
