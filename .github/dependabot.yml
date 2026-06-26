@@ -1,0 +1,24 @@
+# Keep dependencies current across the CLI package, the docs site, and the
+# GitHub Actions workflows. Grouped, weekly, with a small open-PR cap so updates
+# don't flood review.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      dev-dependencies:
+        dependency-type: development
+
+  - package-ecosystem: npm
+    directory: "/docs"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
