@@ -13,7 +13,8 @@
     "declaration": true,
     "outDir": "dist",
     "rootDir": ".",
-    "verbatimModuleSyntax": false
+    "verbatimModuleSyntax": false,
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src", "test"]
 }

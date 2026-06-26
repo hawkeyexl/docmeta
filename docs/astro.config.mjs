@@ -10,27 +10,27 @@ export default defineConfig({
       sidebar: [
         {
           label: "Get started",
-          autogenerate: { directory: "get-started" },
+          items: [{ autogenerate: { directory: "get-started" } }],
         },
         {
           label: "Set up validation",
-          autogenerate: { directory: "set-up" },
+          items: [{ autogenerate: { directory: "set-up" } }],
         },
         {
           label: "Run it in CI",
-          autogenerate: { directory: "ci" },
+          items: [{ autogenerate: { directory: "ci" } }],
         },
         {
           label: "Define & evolve schemas",
-          autogenerate: { directory: "schemas" },
+          items: [{ autogenerate: { directory: "schemas" } }],
         },
         {
           label: "Fix a failing check",
-          autogenerate: { directory: "fix" },
+          items: [{ autogenerate: { directory: "fix" } }],
         },
         {
           label: "Reference",
-          autogenerate: { directory: "reference" },
+          items: [{ autogenerate: { directory: "reference" } }],
         },
       ],
     }),
