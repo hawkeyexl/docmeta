@@ -79,7 +79,7 @@ export async function runGet(opts: GetOptions): Promise<GetFileResult[]> {
     }
     const extracted = extractor.extract(content, label);
     const values: Record<string, unknown> = {};
-    for (const f of opts.fields) values[f] = extracted.data[f];
+    for (const f of opts.fields) values[f] = resolveField(extracted.data, f);
     out.push({ file: label, present: extracted.present, values });
   };
 
@@ -98,4 +98,43 @@ export async function runGet(opts: GetOptions): Promise<GetFileResult[]> {
   }
 
   return out;
+}
+
+/**
+ * Resolve a single field reference against extracted metadata.
+ *
+ * A reference starting with `/` is a JSON Pointer (RFC 6901) — the same
+ * convention the validator and reporters already use for nested error paths,
+ * so a pointer copied from a validation error works verbatim. Any other
+ * reference is dot-notation (`author.name`, `tags.0`). Pointers also escape
+ * keys that contain literal dots or slashes (`/odd.key`, `/a~1b` for `a/b`).
+ *
+ * Returns `undefined` when any segment is missing or descends into a scalar.
+ * A bare top-level key (no `/`, no `.`) resolves to a single segment, so the
+ * historical `get title` behavior is unchanged.
+ */
+function resolveField(data: Record<string, unknown>, field: string): unknown {
+  const segments = field.startsWith("/")
+    ? parseJsonPointer(field)
+    : field.split(".");
+  let current: unknown = data;
+  for (const segment of segments) {
+    if (Array.isArray(current)) {
+      if (!/^\d+$/.test(segment)) return undefined;
+      current = current[Number(segment)];
+    } else if (current !== null && typeof current === "object") {
+      current = (current as Record<string, unknown>)[segment];
+    } else {
+      return undefined;
+    }
+  }
+  return current;
+}
+
+/** Decode a JSON Pointer into path segments, unescaping `~1`→`/` and `~0`→`~`. */
+function parseJsonPointer(pointer: string): string[] {
+  return pointer
+    .split("/")
+    .slice(1)
+    .map((s) => s.replace(/~1/g, "/").replace(/~0/g, "~"));
 }

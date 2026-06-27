@@ -26,10 +26,19 @@ describe("runValidate", () => {
     const ok = byFile(results);
     expect(ok["valid.md"]).toBe(true);
     expect(ok["schema-ref.md"]).toBe(true);
-    expect(ok["missing-type.md"]).toBe(false);
-    expect(ok["bad-timestamp.md"]).toBe(false);
-    expect(ok["no-frontmatter.md"]).toBe(false);
-    expect(summary.failed).toBe(3);
+    // Assert the exact set of failures rather than a bare count, so adding a
+    // new *passing* fixture to test/fixtures/ doesn't break this test while a
+    // new *failing* one is still surfaced deliberately.
+    const failed = results
+      .filter((r) => !r.ok)
+      .map((r) => r.file.split("/").pop())
+      .sort();
+    expect(failed).toEqual([
+      "bad-timestamp.md",
+      "missing-type.md",
+      "no-frontmatter.md",
+    ]);
+    expect(summary.failed).toBe(failed.length);
   });
 
   it("validates against multiple schemas (a set)", async () => {
@@ -146,6 +155,68 @@ describe("runGet", () => {
     });
     expect(results[0]?.values.title).toBe("A Valid Document");
     expect(results[0]?.values.type).toBe("concept");
+  });
+
+  it("reads nested fields via dot-notation", async () => {
+    const results = await runGet({
+      fields: ["author.name", "author.email", "tags.0"],
+      inputs: ["test/fixtures/nested/doc.md"],
+      cwd: root,
+    });
+    expect(results[0]?.values["author.name"]).toBe("Jane");
+    expect(results[0]?.values["author.email"]).toBe("jane@example.com");
+    expect(results[0]?.values["tags.0"]).toBe("intro");
+  });
+
+  it("reads nested fields via JSON Pointer", async () => {
+    const results = await runGet({
+      fields: ["/author/name", "/tags/1"],
+      inputs: ["test/fixtures/nested/doc.md"],
+      cwd: root,
+    });
+    expect(results[0]?.values["/author/name"]).toBe("Jane");
+    expect(results[0]?.values["/tags/1"]).toBe("setup");
+  });
+
+  it("returns the whole object when a parent key is requested", async () => {
+    const results = await runGet({
+      fields: ["author"],
+      inputs: ["test/fixtures/nested/doc.md"],
+      cwd: root,
+    });
+    expect(results[0]?.values.author).toEqual({
+      name: "Jane",
+      email: "jane@example.com",
+    });
+  });
+
+  it("returns undefined for a missing nested path", async () => {
+    const results = await runGet({
+      fields: ["author.phone", "/author/phone", "missing.deep"],
+      inputs: ["test/fixtures/nested/doc.md"],
+      cwd: root,
+    });
+    expect(results[0]?.values["author.phone"]).toBeUndefined();
+    expect(results[0]?.values["/author/phone"]).toBeUndefined();
+    expect(results[0]?.values["missing.deep"]).toBeUndefined();
+  });
+
+  it("does not descend into scalars", async () => {
+    const results = await runGet({
+      fields: ["title.nope"],
+      inputs: ["test/fixtures/nested/doc.md"],
+      cwd: root,
+    });
+    expect(results[0]?.values["title.nope"]).toBeUndefined();
+  });
+
+  it("treats a leading-slash key as a JSON Pointer, allowing literal dots", async () => {
+    const results = await runGet({
+      fields: ["/author/email"],
+      inputs: ["test/fixtures/nested/doc.md"],
+      cwd: root,
+    });
+    expect(results[0]?.values["/author/email"]).toBe("jane@example.com");
   });
 
   it("reads from a glob of paths like validate", async () => {

@@ -80,6 +80,21 @@ describe("docmeta CLI (built bin)", () => {
     expect(parsed[0].values.title).toBe("A Valid Document");
   });
 
+  it("gets nested fields via dot-notation and JSON Pointer", () => {
+    const r = run([
+      "get",
+      "author.name,/author/email,tags.0",
+      "test/fixtures/nested/doc.md",
+      "-f",
+      "json",
+    ]);
+    expect(r.status).toBe(0);
+    const parsed = JSON.parse(r.stdout);
+    expect(parsed[0].values["author.name"]).toBe("Jane");
+    expect(parsed[0].values["/author/email"]).toBe("jane@example.com");
+    expect(parsed[0].values["tags.0"]).toBe("intro");
+  });
+
   it("gets fields from piped stdin with --as", () => {
     const r = run(
       ["get", "type", "-", "--as", "markdown", "-f", "json"],

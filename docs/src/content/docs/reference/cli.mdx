@@ -87,11 +87,27 @@ docmeta get <fields> [paths...] [options]
 
 | Argument | Description |
 |---|---|
-| `<fields>` | Comma-separated metadata field names to print. **Required.** |
+| `<fields>` | Comma-separated metadata field references to print. Each is a top-level key (`title`), a dot-notation path into nested objects and arrays (`author.name`, `tags.0`), or a [JSON Pointer](https://datatracker.ietf.org/doc/html/rfc6901) when prefixed with `/` (`/author/name`, `/tags/0`). **Required.** |
 | `[paths...]` | Files, directories, or globs to read. Use `-` to read from stdin. Optional — falls back to config `paths:`. See the [shared input model](#shared-input-model). |
 
 A requested field that is absent from a file is reported as unset rather than
 as an error.
+
+#### Nested fields
+
+A field reference descends into nested objects and arrays. Two syntaxes are
+accepted:
+
+- **Dot-notation** — `author.name`, `tags.0`. Concise, but a key containing a
+  literal `.` cannot be addressed this way.
+- **JSON Pointer** ([RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901)) —
+  any reference beginning with `/`, e.g. `/author/name` or `/tags/0`. This is
+  the same pointer `validate` prints in error locations, so a path copied from a
+  validation failure works verbatim. Use it to address keys that contain dots
+  (`/odd.key`) or slashes (`/a~1b` for the key `a/b`).
+
+Requesting a parent key (`author`) returns the whole nested value. A path that
+descends into a scalar, or whose segment is missing, is reported as unset.
 
 ### Options
 
@@ -115,6 +131,7 @@ requested field to its value; a requested field that is unset is omitted from
 
 ```sh
 docmeta get title,type docs/intro.md
+docmeta get author.name,/author/email docs/intro.md
 docmeta get type "**/*.md" -f json
 cat page.md | docmeta get title - --as markdown
 ```
@@ -191,5 +208,7 @@ glob or is a dotfile.
 {/* step {"description":"Shared input model: - reads stdin, with --as choosing the extractor.","runShell":{"command":"docmeta validate - --as markdown < test/fixtures/valid.md","exitCodes":[0],"stdio":"<stdin>"}} */}
 {/* step {"description":"get -f json prints an array of { file, present, values }.","runShell":{"command":"docmeta get title,type test/fixtures/valid.md -f json","exitCodes":[0],"stdio":"/\"present\": true[\\s\\S]*\"type\": \"concept\"/"}} */}
 {/* step {"description":"get reports an absent field as unset (pretty) and present:false for a file with no metadata block.","runShell":{"command":"docmeta get title test/fixtures/no-frontmatter.md","exitCodes":[0],"stdio":"title=(unset)"}} */}
+{/* step {"description":"Nested fields: dot-notation, JSON Pointer (/author/email), and array index all resolve in one comma-separated request.","runShell":{"command":"docmeta get author.name,/author/email,tags.0 test/fixtures/nested/doc.md -f json","exitCodes":[0],"stdio":"/\"Jane\"[\\s\\S]*\"jane@example.com\"[\\s\\S]*\"intro\"/"}} */}
+{/* step {"description":"Requesting a parent key returns the whole nested object.","runShell":{"command":"docmeta get author test/fixtures/nested/doc.md -f json","exitCodes":[0],"stdio":"/\"name\": \"Jane\"[\\s\\S]*\"email\": \"jane@example.com\"/"}} */}
 {/* step {"description":"schemas -f json prints { builtins, formats }.","runShell":{"command":"docmeta schemas -f json","exitCodes":[0],"stdio":"/\"builtins\"[\\s\\S]*\"formats\"/"}} */}
 {/* test end */}
