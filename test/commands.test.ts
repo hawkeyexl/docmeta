@@ -210,13 +210,37 @@ describe("runGet", () => {
     expect(results[0]?.values["title.nope"]).toBeUndefined();
   });
 
-  it("treats a leading-slash key as a JSON Pointer, allowing literal dots", async () => {
+  it("addresses a key with a literal dot via JSON Pointer, not dot-notation", async () => {
     const results = await runGet({
-      fields: ["/author/email"],
+      fields: ["/odd.key", "odd.key"],
       inputs: ["test/fixtures/nested/doc.md"],
       cwd: root,
     });
-    expect(results[0]?.values["/author/email"]).toBe("jane@example.com");
+    // The pointer treats `odd.key` as one segment and resolves the key.
+    expect(results[0]?.values["/odd.key"]).toBe("dotted");
+    // Dot-notation splits it into `odd` -> `key`, which does not exist.
+    expect(results[0]?.values["odd.key"]).toBeUndefined();
+  });
+
+  it("decodes RFC 6901 escape sequences in JSON Pointer keys", async () => {
+    const results = await runGet({
+      fields: ["/a~1b", "/a~0b"],
+      inputs: ["test/fixtures/nested/doc.md"],
+      cwd: root,
+    });
+    expect(results[0]?.values["/a~1b"]).toBe("slashed"); // ~1 -> "/", key "a/b"
+    expect(results[0]?.values["/a~0b"]).toBe("tilded"); // ~0 -> "~", key "a~b"
+  });
+
+  it("does not resolve inherited object members", async () => {
+    const results = await runGet({
+      fields: ["author.toString", "__proto__.polluted", "author.constructor"],
+      inputs: ["test/fixtures/nested/doc.md"],
+      cwd: root,
+    });
+    expect(results[0]?.values["author.toString"]).toBeUndefined();
+    expect(results[0]?.values["__proto__.polluted"]).toBeUndefined();
+    expect(results[0]?.values["author.constructor"]).toBeUndefined();
   });
 
   it("reads from a glob of paths like validate", async () => {

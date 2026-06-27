@@ -107,7 +107,13 @@ accepted:
   (`/odd.key`) or slashes (`/a~1b` for the key `a/b`).
 
 Requesting a parent key (`author`) returns the whole nested value. A path that
-descends into a scalar, or whose segment is missing, is reported as unset.
+descends into a scalar, or whose segment is missing, is reported as unset. Only
+a key's own properties resolve — inherited members such as `toString` or
+`__proto__` are treated as missing.
+
+On Git Bash/MSYS2 (Windows), quote a leading-slash pointer — `'/author/name'` —
+so the shell does not rewrite it as a filesystem path. Other shells are
+unaffected.
 
 ### Options
 

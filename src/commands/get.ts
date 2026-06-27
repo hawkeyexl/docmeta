@@ -123,6 +123,11 @@ function resolveField(data: Record<string, unknown>, field: string): unknown {
       if (!/^\d+$/.test(segment)) return undefined;
       current = current[Number(segment)];
     } else if (current !== null && typeof current === "object") {
+      // Own-property check only: never resolve inherited members like
+      // `toString` or `__proto__` — those are "missing", not values.
+      if (!Object.prototype.hasOwnProperty.call(current, segment)) {
+        return undefined;
+      }
       current = (current as Record<string, unknown>)[segment];
     } else {
       return undefined;

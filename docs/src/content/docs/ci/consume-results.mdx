@@ -172,13 +172,17 @@ that contain a literal `.`:
 ```sh
 # frontmatter: author: { name: Jane }, tags: [intro, setup]
 npx -y docmeta get author.name,tags.0 docs/intro.md   # dot-notation
-npx -y docmeta get /author/name docs/intro.md         # JSON Pointer
+npx -y docmeta get '/author/name' docs/intro.md       # JSON Pointer
 ```
 
 The JSON Pointer form is the same path `validate` prints in an error location,
 so a pointer copied from a validation failure works verbatim. Requesting the
 parent key (`author`) still returns the whole nested object. See the
 [`get` field reference](/docmeta/reference/cli/#get) for the full syntax.
+
+Quote a leading-slash pointer (`'/author/name'`) so Git Bash/MSYS2 on Windows
+does not rewrite it as a filesystem path. Other shells (PowerShell, cmd, POSIX)
+are unaffected, but quoting is harmless everywhere.
 
 Extract one field across a tree into a shell list with `jq`:
 

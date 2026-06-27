@@ -6,6 +6,9 @@ author:
 tags:
   - intro
   - setup
+odd.key: dotted
+a/b: slashed
+a~b: tilded
 ---
 
 # Nested Example
