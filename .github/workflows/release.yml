@@ -12,7 +12,15 @@
 # scoped publish credential, so the `id-token: write` permission below is what
 # authorizes the publish (and mints provenance automatically). The trusted
 # publisher configured on npmjs.com must name this workflow file (release.yml).
-# The default GITHUB_TOKEN covers the release commit, tag, and GitHub Release.
+#
+# The release commit (CHANGELOG/package.json bump), tag, and GitHub Release are
+# pushed/created using a GitHub App token, NOT the default GITHUB_TOKEN. `main`
+# has a ruleset requiring all changes via PR, and the default token can't bypass
+# it, so @semantic-release/git's direct push is rejected (GH013). The App is
+# added as the sole bypass actor on that ruleset; its short-lived token is what
+# lets the release commit land. Requires two secrets — RELEASE_APP_ID and
+# RELEASE_APP_PRIVATE_KEY — and the App installed with Contents/Issues/Pull
+# requests: read & write. See docs/maintainers/releasing.md for the one-time setup.
 #
 # Requires npm CLI >= 11.5.1 and @semantic-release/npm >= 13 (Node 24 bundles a
 # new enough npm). Do NOT set setup-node's registry-url or any NPM_TOKEN /
@@ -46,12 +54,20 @@ jobs:
     env:
       HUSKY: "0"
     steps:
-      - uses: actions/checkout@v4
+      # Mint a short-lived token for the App that's whitelisted to bypass the
+      # `main` ruleset, so semantic-release can push the release commit.
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 24
           cache: npm
@@ -64,7 +80,9 @@ jobs:
 
       - name: Release
         env:
-          # No NPM_TOKEN/NODE_AUTH_TOKEN: @semantic-release/npm authenticates the
-          # publish via OIDC trusted publishing using the id-token permission above.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # App token (not the default GITHUB_TOKEN): semantic-release uses it both
+          # to push the release commit/tag past the main ruleset and for the GitHub
+          # Release + issue/PR comments. No NPM_TOKEN/NODE_AUTH_TOKEN: the npm
+          # publish authenticates via OIDC trusted publishing (id-token above).
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: npx semantic-release
