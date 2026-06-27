@@ -40,7 +40,7 @@ jobs:
 
       - name: Checkout repository
         if: steps.guard.outputs.enabled == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           # We only read the tree; don't leave the token in .git/config where a
