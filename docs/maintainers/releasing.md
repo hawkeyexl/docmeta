@@ -70,13 +70,17 @@ a **GitHub App** that is the sole bypass actor on the ruleset.
    select the App). Set its bypass mode to **Always** — the release pushes
    directly, not through a PR.
 
-   Equivalent via the API (replace `<APP_ID>`; ruleset id is `18181715`):
+   Equivalent via the API (replace `<APP_ID>`):
 
    ```bash
-   gh api repos/hawkeyexl/docmeta/rulesets/18181715 > /tmp/rs.json
+   # Find the current ruleset ID for `main` (don't hardcode it — it changes if
+   # the ruleset is deleted and recreated):
+   RULESET_ID=$(gh api repos/hawkeyexl/docmeta/rulesets --jq '.[] | select(.name=="main") | .id')
+
+   gh api repos/hawkeyexl/docmeta/rulesets/$RULESET_ID > /tmp/rs.json
    jq '.bypass_actors += [{"actor_id": <APP_ID>, "actor_type": "Integration", "bypass_mode": "always"}]' \
      /tmp/rs.json > /tmp/rs.new.json
-   gh api repos/hawkeyexl/docmeta/rulesets/18181715 --method PUT --input /tmp/rs.new.json
+   gh api repos/hawkeyexl/docmeta/rulesets/$RULESET_ID --method PUT --input /tmp/rs.new.json
    ```
 
    For an `"Integration"` bypass actor, `actor_id` is the **App ID** (the same
@@ -84,6 +88,8 @@ a **GitHub App** that is the sole bypass actor on the ruleset.
 
 The workflow mints a short-lived token from this App
 (`actions/create-github-app-token`) and hands it to semantic-release as
-`GITHUB_TOKEN`, so the release commit is authored by the App and bypasses the
-ruleset. The release commit message ends with `[skip ci]`, so it doesn't
-re-trigger the workflow.
+`GITHUB_TOKEN`, so the release commit is pushed by the App and bypasses the
+ruleset. (The token controls which actor authenticates the push, not the git
+`author`/`committer` fields, which semantic-release sets independently.) The
+release commit message ends with `[skip ci]`, so it doesn't re-trigger the
+workflow.
