@@ -150,6 +150,7 @@ export function buildProgram(): Command {
         "",
         "Examples:",
         "  docmeta get title,type docs/intro.md",
+        "  docmeta get author.name,/author/email docs/intro.md",
         '  docmeta get type "**/*.md" -f json',
         "  cat page.md | docmeta get title - --as markdown",
       ].join("\n"),

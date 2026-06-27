@@ -162,6 +162,28 @@ than expecting an explicit null. In the `pretty` format the same case prints as
 `field=(unset)`.
 </Aside>
 
+### Reach into nested metadata
+
+When frontmatter nests objects or arrays, a field reference can address the
+inner value instead of pulling the whole parent. Use **dot-notation** for the
+common case, or a **JSON Pointer** (any reference beginning with `/`) for keys
+that contain a literal `.`:
+
+```sh
+# frontmatter: author: { name: Jane }, tags: [intro, setup]
+npx -y docmeta get author.name,tags.0 docs/intro.md   # dot-notation
+npx -y docmeta get '/author/name' docs/intro.md       # JSON Pointer
+```
+
+The JSON Pointer form is the same path `validate` prints in an error location,
+so a pointer copied from a validation failure works verbatim. Requesting the
+parent key (`author`) still returns the whole nested object. See the
+[`get` field reference](/docmeta/reference/cli/#get) for the full syntax.
+
+Quote a leading-slash pointer (`'/author/name'`) so Git Bash/MSYS2 on Windows
+does not rewrite it as a filesystem path. Other shells (PowerShell, cmd, POSIX)
+are unaffected, but quoting is harmless everywhere.
+
 Extract one field across a tree into a shell list with `jq`:
 
 ```sh
@@ -295,6 +317,7 @@ docmeta is an ES module targeting Node.js 24 or newer. Import it from ESM (or a
 {/* test {"testId":"consume-results","description":"The three integration surfaces, exercised against the local build."} */}
 {/* step {"description":"--format json prints one structured object with summary counts.","runShell":{"command":"npx docmeta validate test/fixtures/bad-timestamp.md --format json","exitCodes":[1],"stdio":"/\"summary\":[\\s\\S]*\"failed\": 1/"}} */}
 {/* step {"description":"get --format json returns one object per file with present and values.","runShell":{"command":"npx docmeta get title test/fixtures/no-frontmatter.md -f json","exitCodes":[0],"stdio":"\"present\": false"}} */}
+{/* step {"description":"Reach into nested metadata: dot-notation and JSON Pointer resolve nested object and array values.","runShell":{"command":"npx docmeta get author.name,/author/email,tags.0 test/fixtures/nested/doc.md -f json","exitCodes":[0],"stdio":"/\"Jane\"[\\s\\S]*\"jane@example.com\"[\\s\\S]*\"intro\"/"}} */}
 {/* step {"description":"get does not accept --format github (validate-only); it is a usage error.","runShell":{"command":"npx docmeta get title test/fixtures/valid.md --format github","exitCodes":[2],"stdio":"Unknown --format"}} */}
 {/* step {"description":"The TypeScript API: runValidate runs the pipeline and returns { results, summary }. The .catch makes a failure self-diagnosing (exit 2) rather than an unhandled rejection.","runShell":{"command":"node --input-type=module -e \"import('docmeta').then(m=>m.runValidate({inputs:['test/fixtures/valid.md']})).then(r=>console.log('passed='+r.summary.passed)).catch(e=>{console.error(e);process.exit(2)})\"","exitCodes":[0],"stdio":"passed=1"}} */}
 {/* test end */}
