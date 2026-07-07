@@ -35,14 +35,18 @@ function typeValue(raw: string): unknown {
   }
 }
 
-/** Parse the native AsciiDoc document header (title + attribute entries). */
-function extractHeader(content: string): ExtractedMetadata {
+/**
+ * Parse the native AsciiDoc document header (title + attribute entries).
+ * `lineOffset` shifts reported source lines when the caller has sliced content
+ * off the front (e.g. a stray fence line), so annotations stay aligned.
+ */
+function extractHeader(content: string, lineOffset = 0): ExtractedMetadata {
   const body = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
   const lines = body.split(/\r?\n/);
 
   const data: Record<string, unknown> = {};
   const map = new Map<string, number>();
-  map.set("", 1);
+  map.set("", 1 + lineOffset);
 
   const setKey = (key: string, value: unknown, line: number): void => {
     data[key] = value;
@@ -56,7 +60,7 @@ function extractHeader(content: string): ExtractedMetadata {
     if (i === 0) {
       const title = TITLE.exec(line);
       if (title?.[1] != null) {
-        setKey("title", title[1], i + 1);
+        setKey("title", title[1], i + 1 + lineOffset);
         continue;
       }
     }
@@ -64,14 +68,14 @@ function extractHeader(content: string): ExtractedMetadata {
     const unset = UNSET.exec(line);
     if (unset) {
       const name = unset[1] ?? unset[2];
-      if (name != null) setKey(name, false, i + 1);
+      if (name != null) setKey(name, false, i + 1 + lineOffset);
       continue;
     }
 
     const set = SET.exec(line);
     if (set?.[1] != null) {
       const value = set[2] === undefined ? true : typeValue(set[2]);
-      setKey(set[1], value, i + 1);
+      setKey(set[1], value, i + 1 + lineOffset);
       continue;
     }
     // Non-attribute header lines (e.g. author/revision) are ignored.
@@ -97,14 +101,14 @@ export const asciidocExtractor: MetadataExtractor = {
       // native AsciiDoc header that follows.
       const fm = extractFrontmatter(content, "asciidoc");
       if (fm.present) return fm;
-      // Note: unlike rst, we do NOT slice the stray fence line off here.
-      // `extractHeader` already ignores the fence line in place and keeps every
-      // `:name: value` attribute on its true source line. Slicing would either
-      // break the blank-line-terminated header scan (a blanked line 1 ends it)
-      // or shift every attribute line by one. The document title is not
-      // recovered in this case — which is correct: an AsciiDoc `= Title` is only
-      // the document title on the very first line, so a stray fence above it
-      // disqualifies it as a title.
+      // A stray opening fence with no closing delimiter is not frontmatter. Slice
+      // the fence line off entirely (not blank it — `extractHeader` stops at the
+      // first blank line) so a native `= Title` lands at the header start, and
+      // pass a matching line offset so every attribute keeps its true source
+      // line. `= Title` on line 2 must be at the header start to count, since an
+      // AsciiDoc document title is only recognized as the first header line.
+      const nl = content.indexOf("\n");
+      if (nl !== -1) return extractHeader(content.slice(nl + 1), 1);
     }
     return extractHeader(content);
   },

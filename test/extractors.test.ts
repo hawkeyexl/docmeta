@@ -311,20 +311,20 @@ describe("asciidoc extractor", () => {
 
   it("falls back to the native header when a frontmatter block is unterminated", () => {
     // Opens with a fence but has no closing delimiter, so it is not frontmatter;
-    // the native header that follows is still read. Covers all three fences.
+    // the native header that follows is still read — title included — with each
+    // field on its true source line. Covers all three fences.
     for (const fence of ["---", "+++", ";;;"]) {
       const r = asciidocExtractor.extract(
         `${fence}\n= Title\n:type: concept\n`,
         "x.adoc",
       );
       expect(r.present).toBe(true);
+      expect(r.data.title).toBe("Title");
       expect(r.data.type).toBe("concept");
-      // Attributes keep their true source line (`:type:` is on line 3); the
-      // fence line is ignored in place, not sliced off.
+      // The fence line is sliced off, but a line offset keeps annotations
+      // aligned: `= Title` is line 2, `:type:` is line 3.
+      expect(r.lineFor("/title")).toBe(2);
       expect(r.lineFor("/type")).toBe(3);
-      // The `= Title` on line 2 is deliberately not treated as the document
-      // title — an AsciiDoc title is only valid on the first line.
-      expect(r.data.title).toBeUndefined();
     }
   });
 });
