@@ -50,6 +50,11 @@ YAML, TOML, or JSON — is a per-file parse failure (exit code `1`; see
 [Output & exit codes](/docmeta/reference/output-and-exit-codes/)), and the rest
 of the run continues.
 
+Error annotations point at the offending field's own source line. For TOML this
+is best-effort: bare and simply-quoted top-level keys (`key = …`, `"key" = …`)
+map to their line, while dotted keys, keys nested under a `[table]`, and quoted
+keys containing escape sequences fall back to the block's opening fence line.
+
 ## How each format is read
 
 ### Markdown and MDX

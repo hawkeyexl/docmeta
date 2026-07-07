@@ -13,17 +13,18 @@
  */
 import { parse as parseYamlScalar } from "yaml";
 import type { ExtractedMetadata, MetadataExtractor } from "../types.js";
-import { extractFrontmatter, hasFrontmatterFence } from "./frontmatter.js";
+import {
+  extractFrontmatter,
+  hasFrontmatterFence,
+  escapePointerSegment,
+  lineForFactory,
+} from "./frontmatter.js";
 
 const TITLE = /^=\s+(.+?)\s*$/;
 // `:!name:` or `:name!:` — an unset attribute.
 const UNSET = /^:(?:!([^:\s]+)|([^:\s]+)!):\s*$/;
 // `:name:` or `:name: value` — a set attribute (value optional).
 const SET = /^:([^:\s!][^:\s]*):(?:\s+(.*\S))?\s*$/;
-
-function escapePointerSegment(key: string): string {
-  return key.replace(/~/g, "~0").replace(/\//g, "~1");
-}
 
 /** Parse a raw attribute value as a YAML scalar, falling back to the string. */
 function typeValue(raw: string): unknown {
@@ -32,29 +33,6 @@ function typeValue(raw: string): unknown {
   } catch {
     return raw;
   }
-}
-
-function lineForFactory(
-  map: Map<string, number>,
-): (pointer: string) => number | undefined {
-  return (pointer: string) => {
-    // A bare top-level key (e.g. "type") maps to its "/type" JSON pointer.
-    const start =
-      pointer !== "" && !pointer.startsWith("/")
-        ? `/${escapePointerSegment(pointer)}`
-        : pointer;
-    if (map.has(start)) return map.get(start);
-    // A YAML-typed value can be an array/object, so Ajv may report nested
-    // pointers like "/tags/0". Walk up to the nearest recorded ancestor.
-    let p = start;
-    while (p.length > 0) {
-      const idx = p.lastIndexOf("/");
-      if (idx < 0) break;
-      p = p.slice(0, idx);
-      if (map.has(p)) return map.get(p);
-    }
-    return map.get("");
-  };
 }
 
 /** Parse the native AsciiDoc document header (title + attribute entries). */

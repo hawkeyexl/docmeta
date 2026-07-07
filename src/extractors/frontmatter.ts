@@ -78,7 +78,7 @@ function splitFrontmatter(content: string): Block | null {
   };
 }
 
-function escapePointerSegment(key: string): string {
+export function escapePointerSegment(key: string): string {
   return key.replace(/~/g, "~0").replace(/\//g, "~1");
 }
 
@@ -124,14 +124,17 @@ function buildLineMap(
   return map;
 }
 
-// A bare TOML key assignment (`key = …`) or a `[table]` / `[[array]]` header.
-const TOML_KEY = /^\s*([A-Za-z0-9_-]+)\s*=/;
+// A top-level TOML key assignment — bare (`key = …`) or simply quoted
+// (`"my key" = …` / `'my-key' = …`) — or a `[table]` / `[[array of tables]]`
+// header. Dotted keys and basic-quoted keys containing escape sequences are not
+// matched (best-effort: they fall back to the block's opening line).
+const TOML_KEY = /^\s*(?:([A-Za-z0-9_-]+)|"([^"\\]*)"|'([^']*)')\s*=/;
 const TOML_TABLE = /^\s*\[\[?\s*([A-Za-z0-9_-]+)/;
 
 /**
  * Best-effort TOML line map: `smol-toml` returns a plain object without
  * positions, so scan the raw block for top-level `key =` assignments and
- * `[table]` / `[[array]]` headers. Only keys in the root-table context are
+ * `[table]` / `[[array of tables]]` headers. Only keys in the root-table context are
  * top-level pointers — once a table header appears, subsequent `key =` lines are
  * nested under it, so they are not recorded as top-level keys (that would
  * mis-attribute e.g. `[meta]\ntitle = …` to the root `/title`). Nested pointers
@@ -157,13 +160,15 @@ function buildTomlLineMap(raw: string, prefixLines: number): Map<string, number>
       return;
     }
     if (!inRootTable) return;
-    const key = TOML_KEY.exec(line);
-    if (key?.[1] != null) record(key[1], i);
+    const km = TOML_KEY.exec(line);
+    // Group 1 = bare key, 2 = basic-quoted, 3 = literal-quoted.
+    const key = km?.[1] ?? km?.[2] ?? km?.[3];
+    if (key != null) record(key, i);
   });
   return map;
 }
 
-function lineForFactory(
+export function lineForFactory(
   map: Map<string, number>,
 ): (pointer: string) => number | undefined {
   return (pointer: string) => {

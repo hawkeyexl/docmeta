@@ -109,6 +109,16 @@ describe("toml frontmatter", () => {
     expect(toml().lineFor("/tags/0")).toBe(5);
   });
 
+  it("maps a simply-quoted top-level key to its source line", () => {
+    const r = markdownExtractor.extract(
+      '+++\ntype = "concept"\n"my key" = 1\n+++\n',
+      "x.md",
+    );
+    expect(r.data["my key"]).toBe(1);
+    expect(r.lineFor("/my key")).toBe(3);
+    expect(r.lineFor("my key")).toBe(3);
+  });
+
   it("does not map a nested [table] key as a top-level pointer", () => {
     // `title` here lives under [meta], so /title must not point at line 5; it
     // falls back to the block start. The [meta] header itself is recorded.
@@ -179,6 +189,14 @@ describe("json frontmatter", () => {
     const r = markdownExtractor.extract(";;;\n{}\n;;;\n# Body\n", "x.md");
     expect(r.present).toBe(true);
     expect(r.data).toEqual({});
+  });
+
+  it("treats a non-object root (array/scalar) as present with no data", () => {
+    // Metadata is a key/value object; a root array or scalar carries no fields
+    // (consistent with the YAML path). A schema requiring fields still fails.
+    const arr = markdownExtractor.extract(';;;\n["a", "b"]\n;;;\n', "x.md");
+    expect(arr.present).toBe(true);
+    expect(arr.data).toEqual({});
   });
 
   it("throws on malformed JSON frontmatter", () => {
@@ -283,10 +301,16 @@ describe("asciidoc extractor", () => {
   });
 
   it("falls back to the native header when a frontmatter block is unterminated", () => {
-    // Opens with `---` but has no closing delimiter, so it is not frontmatter.
-    const r = asciidocExtractor.extract("---\n= Title\n:type: concept\n", "x.adoc");
-    expect(r.present).toBe(true);
-    expect(r.data.type).toBe("concept");
+    // Opens with a fence but has no closing delimiter, so it is not frontmatter;
+    // the native header that follows is still read. Covers all three fences.
+    for (const fence of ["---", "+++", ";;;"]) {
+      const r = asciidocExtractor.extract(
+        `${fence}\n= Title\n:type: concept\n`,
+        "x.adoc",
+      );
+      expect(r.present).toBe(true);
+      expect(r.data.type).toBe("concept");
+    }
   });
 });
 
