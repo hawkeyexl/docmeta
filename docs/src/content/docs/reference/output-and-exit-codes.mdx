@@ -116,9 +116,9 @@ Each line has the form:
 </Tabs>
 
 <Aside type="note">
-A file that cannot be parsed (such as malformed YAML frontmatter) becomes a
-failing result with a single error whose `schema` is `(parse)` and whose
-`schemas` set is empty. The rest of the run continues.
+A file that cannot be parsed (such as malformed YAML, TOML, or JSON frontmatter)
+becomes a failing result with a single error whose `schema` is `(parse)` and
+whose `schemas` set is empty. The rest of the run continues.
 </Aside>
 
 ## Exit codes

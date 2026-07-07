@@ -14,24 +14,57 @@ implemented and counts toward directory and glob walks.
 
 | Format (`--as` name) | Extensions | Metadata source |
 |---|---|---|
-| `markdown` | `.md`, `.markdown` | Leading YAML frontmatter (`--- … ---`). |
-| `mdx` | `.mdx` | Leading YAML frontmatter (`--- … ---`). |
-| `asciidoc` | `.adoc`, `.asciidoc` | YAML frontmatter, or the native header: `= Title` plus `:key: value` attributes. |
-| `rst` | `.rst` | YAML frontmatter, or the native section title plus `:key: value` docinfo fields. |
+| `markdown` | `.md`, `.markdown` | Leading fenced frontmatter — YAML (`--- … ---`), TOML (`+++ … +++`), or JSON (`;;; … ;;;`). |
+| `mdx` | `.mdx` | Leading fenced frontmatter — YAML, TOML, or JSON. |
+| `asciidoc` | `.adoc`, `.asciidoc` | Fenced frontmatter, or the native header: `= Title` plus `:key: value` attributes. |
+| `rst` | `.rst` | Fenced frontmatter, or the native section title plus `:key: value` docinfo fields. |
 | `xml` | `.xml` | Attributes of the root element. |
 | `html` | `.html`, `.htm` | `<title>` plus `<meta name="…" content="…">` tags. |
 
 The `--as` name is the extractor name in the first column. The extension match
 is case-insensitive.
 
+## Frontmatter flavors
+
+Wherever docmeta reads frontmatter — Markdown, MDX, and the fenced-block path of
+AsciiDoc and reStructuredText — it accepts three interchangeable flavors (a
+convention also used by [Vale](https://docs.vale.sh/formats/front-matter)). The
+flavor is auto-detected from the opening fence, so no flag or `--as` name is
+needed:
+
+| Flavor | Fence | Inner syntax |
+|---|---|---|
+| YAML | `---` … `---` (or `...` close) | YAML |
+| TOML | `+++` … `+++` | TOML |
+| JSON | `;;;` … `;;;` | a JSON object |
+
+YAML additionally accepts the conventional `...` document-end marker as a closing
+fence; TOML and JSON close on a repeat of their own opening fence.
+
+All three are fenced blocks at the very top of the file: the opening fence on its
+own line, the content beneath, and a matching closing fence. A fence that never
+closes is **not** treated as frontmatter — for AsciiDoc and rst the native header
+is read instead, and for Markdown and MDX (which have no native fallback) the
+metadata is reported as absent, not as an error. A malformed block — invalid
+YAML, TOML, or JSON — is a per-file parse failure (exit code `1`; see
+[Output & exit codes](/docmeta/reference/output-and-exit-codes/)), and the rest
+of the run continues.
+
+Error annotations point at the offending field's own source line. For TOML this
+is best-effort: bare and simply-quoted top-level keys (`key = …`, `"key" = …`)
+map to their line, while dotted keys, keys nested under a `[table]`, and quoted
+keys containing escape sequences fall back to the block's opening fence line.
+
 ## How each format is read
 
 ### Markdown and MDX
 
-Both read a leading YAML frontmatter block delimited by `---` on its own line,
-closed by a matching `---` or `...`. The block is parsed as YAML, so values keep
-their YAML types (strings, numbers, booleans, lists, maps). MDX uses the same
-frontmatter logic as Markdown; `export const meta = {…}` is not read.
+Both read a leading fenced frontmatter block in any of the three
+[flavors](#frontmatter-flavors). MDX uses the same logic as Markdown;
+`export const meta = {…}` is not read. A file with no frontmatter reports its
+metadata as not present.
+
+The three blocks below are equivalent:
 
 ```md
 ---
@@ -41,16 +74,30 @@ tags: [setup, onboarding]
 ---
 ```
 
-Malformed YAML in the block is reported as a per-file parse error rather than
-stopping the run. A file with no frontmatter block reports its metadata as not
-present.
+```md
++++
+type = "guide"
+title = "Getting started"
+tags = ["setup", "onboarding"]
++++
+```
+
+```md
+;;;
+{
+  "type": "guide",
+  "title": "Getting started",
+  "tags": ["setup", "onboarding"]
+}
+;;;
+```
 
 ### AsciiDoc
 
-AsciiDoc accepts two metadata styles. If the file opens with a complete YAML
-frontmatter block, that block is used. Otherwise docmeta reads the native
-document header — the lines from the top of the file down to the first blank
-line:
+AsciiDoc accepts two metadata styles. If the file opens with a complete fenced
+frontmatter block (YAML, TOML, or JSON), that block is used. Otherwise docmeta
+reads the native document header — the lines from the top of the file down to
+the first blank line:
 
 - A leading `= Title` line becomes `title`.
 - Each `:name: value` line becomes a `name` key. A `:name:` with no value is
@@ -65,9 +112,9 @@ line:
 
 ### reStructuredText
 
-reStructuredText also accepts two styles. A complete leading YAML frontmatter
-block is used when present (as some MyST setups produce it). Otherwise docmeta
-reads the native page metadata:
+reStructuredText also accepts two styles. A complete leading fenced frontmatter
+block (YAML, TOML, or JSON) is used when present (as some MyST setups produce
+it). Otherwise docmeta reads the native page metadata:
 
 - A leading section title (a line underlined — and optionally overlined — with
   punctuation) becomes `title`.
@@ -118,9 +165,10 @@ parse error.
 
 ## Type coercion
 
-For every format except Markdown and MDX, individual values are parsed as YAML
-scalars, matching frontmatter typing. This means string-looking inputs are
-coerced to their natural types:
+On the **native** metadata paths — the AsciiDoc header, the reStructuredText
+docinfo field list, XML attributes, and HTML `<meta>`/`<title>` — each value is
+parsed as a YAML scalar. This means string-looking inputs are coerced to their
+natural types:
 
 | Raw value | Becomes | Type |
 |---|---|---|
@@ -129,12 +177,29 @@ coerced to their natural types:
 | `[a, b]` | `["a", "b"]` | array |
 
 An explicitly empty value (`title=""` in XML, `content=""` in HTML) stays the
-empty string rather than becoming `null`. Markdown and MDX get their types from
-parsing the whole frontmatter block as YAML, so the same coercions apply there
-through normal YAML rules.
+empty string rather than becoming `null`.
+
+**Fenced frontmatter** carries its own native types instead — no per-value
+scalar re-parsing is applied. YAML types come from normal YAML rules, and TOML
+and JSON from their own type systems (so `version = 2` and `"version": 2` are
+both the number `2`, and a TOML/JSON array is a list).
+
+Because the value's type is decided by how it's written, quoting is a real
+authoring choice in every flavor: a quoted `"2"` (or YAML `version: "2"`) is the
+**string** `"2"`, which will *not* satisfy a schema field typed `integer`.
 
 <Aside type="note">
 Type coercion matters for validation: a schema field typed as `integer` or
 `boolean` will match a coerced `2` or `true`, but not the literal strings `"2"`
-or `"true"`. Author your schemas to expect the coerced types.
+or `"true"` — whichever flavor the value came from. Author your schemas to expect
+the coerced types.
+</Aside>
+
+<Aside type="caution" title="TOML dates are not strings">
+TOML has a **native** date-time type: an *unquoted* `published = 2024-01-15T10:00:00Z`
+parses as a date value, not a string. JSON Schema's `format: date-time` only
+constrains `type: string`, so a field typed `{"type": "string", "format": "date-time"}`
+**fails** on a TOML native date (`must be string`) even though the same value
+written as a quoted string — in JSON, YAML, or TOML — passes. If your schema
+expects a string date, quote it in TOML: `published = "2024-01-15T10:00:00Z"`.
 </Aside>
