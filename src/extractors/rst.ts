@@ -176,11 +176,16 @@ export const rstExtractor: MetadataExtractor = {
   implemented: true,
   extract(content) {
     if (hasFrontmatterFence(content)) {
-      // Delegate only when a complete frontmatter block is actually present;
-      // a stray opening fence with no closing delimiter should not shadow a
-      // native docinfo field list that follows.
+      // Delegate only when a complete frontmatter block is actually present.
       const fm = extractFrontmatter(content, "rst");
       if (fm.present) return fm;
+      // A stray opening fence with no closing delimiter is not frontmatter, and
+      // it must not shadow a native docinfo field list that follows. Blank the
+      // fence line (keeping its newline so source lines stay aligned) before
+      // reading the native metadata — otherwise docinfo parsing would stop on
+      // the fence line.
+      const nl = content.indexOf("\n");
+      if (nl !== -1) return extractDocinfo(content.slice(nl));
     }
     return extractDocinfo(content);
   },

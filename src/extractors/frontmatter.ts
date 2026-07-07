@@ -131,20 +131,34 @@ const TOML_TABLE = /^\s*\[\[?\s*([A-Za-z0-9_-]+)/;
 /**
  * Best-effort TOML line map: `smol-toml` returns a plain object without
  * positions, so scan the raw block for top-level `key =` assignments and
- * `[table]` headers. Nested pointers resolve to the nearest recorded ancestor
- * via `lineForFactory`.
+ * `[table]` / `[[array]]` headers. Only keys in the root-table context are
+ * top-level pointers — once a table header appears, subsequent `key =` lines are
+ * nested under it, so they are not recorded as top-level keys (that would
+ * mis-attribute e.g. `[meta]\ntitle = …` to the root `/title`). Nested pointers
+ * resolve to the nearest recorded ancestor via `lineForFactory`.
  */
 function buildTomlLineMap(raw: string, prefixLines: number): Map<string, number> {
   const map = new Map<string, number>();
   map.set("", 1);
+  // First occurrence wins; record a pointer only if not already seen.
+  const record = (key: string, i: number): void => {
+    const ptr = `/${escapePointerSegment(key)}`;
+    if (!map.has(ptr)) map.set(ptr, i + 1 + prefixLines);
+  };
+
+  let inRootTable = true;
   raw.split("\n").forEach((line, i) => {
-    const m = TOML_KEY.exec(line) ?? TOML_TABLE.exec(line);
-    const key = m?.[1];
-    if (key != null) {
-      const ptr = `/${escapePointerSegment(key)}`;
-      // First occurrence wins (top-level key over a later nested repeat).
-      if (!map.has(ptr)) map.set(ptr, i + 1 + prefixLines);
+    const table = TOML_TABLE.exec(line);
+    if (table?.[1] != null) {
+      // A `[table]` / `[[array]]` header: record it, then leave root context —
+      // every following `key =` belongs to a table, not the document root.
+      record(table[1], i);
+      inRootTable = false;
+      return;
     }
+    if (!inRootTable) return;
+    const key = TOML_KEY.exec(line);
+    if (key?.[1] != null) record(key[1], i);
   });
   return map;
 }

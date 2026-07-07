@@ -109,6 +109,22 @@ describe("toml frontmatter", () => {
     expect(toml().lineFor("/tags/0")).toBe(5);
   });
 
+  it("does not map a nested [table] key as a top-level pointer", () => {
+    // `title` here lives under [meta], so /title must not point at line 5; it
+    // falls back to the block start. The [meta] header itself is recorded.
+    const r = markdownExtractor.extract(
+      '+++\ntype = "concept"\n\n[meta]\ntitle = "nested"\n+++\n',
+      "x.md",
+    );
+    expect(r.data.type).toBe("concept");
+    expect(r.data.meta).toEqual({ title: "nested" });
+    expect(r.lineFor("/type")).toBe(2);
+    expect(r.lineFor("/meta")).toBe(4);
+    // /title is nested, so it resolves to the root fallback (opening fence),
+    // not the nested assignment on line 5.
+    expect(r.lineFor("/title")).toBe(1);
+  });
+
   it("falls back to the opening fence for the root pointer", () => {
     expect(toml().lineFor("")).toBe(1);
   });
@@ -368,6 +384,17 @@ describe("rst extractor", () => {
     const j = rstExtractor.extract(';;;\n{ "type": "concept" }\n;;;\n', "x.rst");
     expect(j.present).toBe(true);
     expect(j.data.type).toBe("concept");
+  });
+
+  it("falls back to the native docinfo when a fence is unterminated", () => {
+    // An opening fence with no closing delimiter is not frontmatter; the native
+    // docinfo field list that follows must still be read, on its true line.
+    for (const fence of ["---", "+++", ";;;"]) {
+      const r = rstExtractor.extract(`${fence}\n:type: concept\n`, "x.rst");
+      expect(r.present).toBe(true);
+      expect(r.data.type).toBe("concept");
+      expect(r.lineFor("/type")).toBe(2);
+    }
   });
 
   it("supports a docinfo field list with no preceding title", () => {
