@@ -76,6 +76,13 @@ describe("markdown extractor", () => {
   it("throws on malformed YAML frontmatter", () => {
     expect(() => markdownExtractor.extract("---\n: : :\n---\n", "x.md")).toThrow();
   });
+
+  it("throws on a non-object YAML root (sequence or scalar)", () => {
+    // Uniform with JSON: metadata must be a mapping, not a top-level list/scalar.
+    expect(() =>
+      markdownExtractor.extract("---\n- a\n- b\n---\n", "x.md"),
+    ).toThrow(/root must be an object/);
+  });
 });
 
 describe("toml frontmatter", () => {
@@ -191,12 +198,14 @@ describe("json frontmatter", () => {
     expect(r.data).toEqual({});
   });
 
-  it("treats a non-object root (array/scalar) as present with no data", () => {
-    // Metadata is a key/value object; a root array or scalar carries no fields
-    // (consistent with the YAML path). A schema requiring fields still fails.
-    const arr = markdownExtractor.extract(';;;\n["a", "b"]\n;;;\n', "x.md");
-    expect(arr.present).toBe(true);
-    expect(arr.data).toEqual({});
+  it("throws on a non-object JSON root (array or scalar)", () => {
+    // Metadata is a key/value object; a root array or scalar is malformed.
+    expect(() =>
+      markdownExtractor.extract(';;;\n["a", "b"]\n;;;\n', "x.md"),
+    ).toThrow(/root must be an object/);
+    expect(() => markdownExtractor.extract(";;;\n42\n;;;\n", "x.md")).toThrow(
+      /root must be an object/,
+    );
   });
 
   it("throws on malformed JSON frontmatter", () => {

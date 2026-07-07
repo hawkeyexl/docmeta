@@ -191,11 +191,18 @@ export function lineForFactory(
   };
 }
 
-/** Coerce a parsed document root to the metadata object shape. */
-function asData(parsed: unknown): Record<string, unknown> {
-  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-    ? (parsed as Record<string, unknown>)
-    : {};
+/**
+ * Coerce a parsed document root to the metadata object shape. An empty document
+ * (`null`/`undefined`) is treated as no metadata (`{}`). A scalar or array root
+ * is malformed frontmatter — metadata is a key/value object — so it throws,
+ * uniformly across flavors. `label` names the flavor for the error message.
+ */
+function rootObject(parsed: unknown, label: string): Record<string, unknown> {
+  if (parsed == null) return {};
+  if (typeof parsed === "object" && !Array.isArray(parsed)) {
+    return parsed as Record<string, unknown>;
+  }
+  throw new Error(`Invalid ${label} frontmatter: root must be an object`);
 }
 
 function parseYamlBlock(
@@ -211,7 +218,7 @@ function parseYamlBlock(
     // failure so the rest of the run continues.
     throw new Error(`Invalid YAML frontmatter: ${e?.message ?? "parse error"}`);
   }
-  const data = asData(doc.toJS({ maxAliasCount: 100 }) as unknown);
+  const data = rootObject(doc.toJS({ maxAliasCount: 100 }) as unknown, "YAML");
   const map = buildLineMap(doc, lc, prefixLines);
   return { data, present: true, format, lineFor: lineForFactory(map) };
 }
@@ -228,14 +235,16 @@ function parseJsonBlock(
   format: string,
 ): ExtractedMetadata {
   if (raw.trim() === "") return emptyBlock(format);
-  let data: Record<string, unknown>;
+  let parsed: unknown;
   try {
-    data = asData(JSON.parse(raw) as unknown);
+    parsed = JSON.parse(raw);
   } catch (e) {
     throw new Error(
       `Invalid JSON frontmatter: ${e instanceof Error ? e.message : "parse error"}`,
     );
   }
+  // Thrown outside the try so its message isn't re-wrapped as a parse error.
+  const data = rootObject(parsed, "JSON");
   // JSON is a strict subset of YAML: reuse the YAML AST purely for the line map.
   const lc = new LineCounter();
   const doc = parseDocument(raw, { lineCounter: lc });
@@ -249,14 +258,16 @@ function parseTomlBlock(
   format: string,
 ): ExtractedMetadata {
   if (raw.trim() === "") return emptyBlock(format);
-  let data: Record<string, unknown>;
+  let parsed: unknown;
   try {
-    data = asData(parseToml(raw) as unknown);
+    parsed = parseToml(raw);
   } catch (e) {
     throw new Error(
       `Invalid TOML frontmatter: ${e instanceof Error ? e.message : "parse error"}`,
     );
   }
+  // A valid TOML document is always a table, but stay uniform with the others.
+  const data = rootObject(parsed, "TOML");
   const map = buildTomlLineMap(raw, prefixLines);
   return { data, present: true, format, lineFor: lineForFactory(map) };
 }
