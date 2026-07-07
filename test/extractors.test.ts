@@ -78,6 +78,100 @@ describe("markdown extractor", () => {
   });
 });
 
+describe("toml frontmatter", () => {
+  const toml = (): ReturnType<typeof markdownExtractor.extract> =>
+    markdownExtractor.extract(readFixture("valid-toml.md"), "x.md");
+
+  it("extracts a +++ fenced TOML block with native types", () => {
+    const r = toml();
+    expect(r.present).toBe(true);
+    expect(r.format).toBe("markdown");
+    expect(r.data.type).toBe("concept");
+    expect(r.data.title).toBe("Hello");
+    // TOML has native types, so numbers and arrays come through directly
+    expect(r.data.version).toBe(2);
+    expect(r.data.tags).toEqual(["a", "b"]);
+  });
+
+  it("maps top-level keys to source lines", () => {
+    const r = toml();
+    // line 1 is the opening +++, so `type` is line 2
+    expect(r.lineFor("/type")).toBe(2);
+    expect(r.lineFor("/version")).toBe(4);
+    expect(r.lineFor("/tags")).toBe(5);
+    expect(r.lineFor("/timestamp")).toBe(6);
+    // a bare top-level key resolves like its JSON pointer
+    expect(r.lineFor("type")).toBe(2);
+  });
+
+  it("resolves a nested pointer to the key line via ancestor walk", () => {
+    // best-effort TOML mapping records top-level keys; Ajv may report "/tags/0"
+    expect(toml().lineFor("/tags/0")).toBe(5);
+  });
+
+  it("falls back to the opening fence for the root pointer", () => {
+    expect(toml().lineFor("")).toBe(1);
+  });
+
+  it("reports an empty TOML block as present with no data", () => {
+    const r = markdownExtractor.extract("+++\n+++\n# Body\n", "x.md");
+    expect(r.present).toBe(true);
+    expect(r.data).toEqual({});
+  });
+
+  it("throws on malformed TOML frontmatter", () => {
+    expect(() =>
+      markdownExtractor.extract('+++\ntitle = "unterminated\n+++\n', "x.md"),
+    ).toThrow();
+  });
+});
+
+describe("json frontmatter", () => {
+  const json = (): ReturnType<typeof markdownExtractor.extract> =>
+    markdownExtractor.extract(readFixture("valid-json.md"), "x.md");
+
+  it("extracts a ;;; fenced JSON block with native types", () => {
+    const r = json();
+    expect(r.present).toBe(true);
+    expect(r.format).toBe("markdown");
+    expect(r.data.type).toBe("concept");
+    expect(r.data.title).toBe("Hello");
+    // JSON has native types, so numbers and arrays come through directly
+    expect(r.data.version).toBe(2);
+    expect(r.data.tags).toEqual(["a", "b"]);
+  });
+
+  it("maps keys and array items to source lines", () => {
+    const r = json();
+    expect(r.lineFor("/type")).toBe(3);
+    expect(r.lineFor("/title")).toBe(4);
+    expect(r.lineFor("/version")).toBe(5);
+    expect(r.lineFor("/tags")).toBe(6);
+    // JSON is parsed with the YAML AST, so array items get precise lines
+    expect(r.lineFor("/tags/0")).toBe(7);
+    expect(r.lineFor("/tags/1")).toBe(8);
+    expect(r.lineFor("/timestamp")).toBe(10);
+    // a bare top-level key resolves like its JSON pointer
+    expect(r.lineFor("type")).toBe(3);
+  });
+
+  it("falls back to the opening fence for the root pointer", () => {
+    expect(json().lineFor("")).toBe(1);
+  });
+
+  it("reports an empty JSON block as present with no data", () => {
+    const r = markdownExtractor.extract(";;;\n{}\n;;;\n# Body\n", "x.md");
+    expect(r.present).toBe(true);
+    expect(r.data).toEqual({});
+  });
+
+  it("throws on malformed JSON frontmatter", () => {
+    expect(() =>
+      markdownExtractor.extract(';;;\n{ "type": }\n;;;\n', "x.md"),
+    ).toThrow();
+  });
+});
+
 describe("mdx extractor", () => {
   it("reuses frontmatter logic under the mdx format name", () => {
     const r = mdxExtractor.extract(VALID, "x.mdx");
@@ -137,6 +231,17 @@ describe("asciidoc extractor", () => {
     expect(r.data.type).toBe("concept");
     expect(r.data.tags).toEqual(["a", "b"]);
     expect(r.lineFor("/type")).toBe(2);
+  });
+
+  it("parses a leading TOML (+++) or JSON (;;;) frontmatter block", () => {
+    const t = asciidocExtractor.extract('+++\ntype = "concept"\n+++\n', "x.adoc");
+    expect(t.present).toBe(true);
+    expect(t.format).toBe("asciidoc");
+    expect(t.data.type).toBe("concept");
+
+    const j = asciidocExtractor.extract(';;;\n{ "type": "concept" }\n;;;\n', "x.adoc");
+    expect(j.present).toBe(true);
+    expect(j.data.type).toBe("concept");
   });
 
   it("supports header attributes with no document title", () => {
@@ -252,6 +357,17 @@ describe("rst extractor", () => {
     expect(r.data.type).toBe("concept");
     expect(r.data.tags).toEqual(["a", "b"]);
     expect(r.lineFor("/type")).toBe(2);
+  });
+
+  it("parses a leading TOML (+++) or JSON (;;;) frontmatter block", () => {
+    const t = rstExtractor.extract('+++\ntype = "concept"\n+++\n', "x.rst");
+    expect(t.present).toBe(true);
+    expect(t.format).toBe("rst");
+    expect(t.data.type).toBe("concept");
+
+    const j = rstExtractor.extract(';;;\n{ "type": "concept" }\n;;;\n', "x.rst");
+    expect(j.present).toBe(true);
+    expect(j.data.type).toBe("concept");
   });
 
   it("supports a docinfo field list with no preceding title", () => {

@@ -2,9 +2,10 @@
  * AsciiDoc metadata extractor.
  *
  * Two metadata styles are accepted:
- *  1. A leading YAML frontmatter block (`--- … ---`), as some static-site
- *     generators use. This delegates to the shared `extractFrontmatter` so the
- *     values are typed and the line map comes for free.
+ *  1. A leading fenced frontmatter block (YAML `--- … ---`, TOML `+++ … +++`,
+ *     or JSON `;;; … ;;;`), as some static-site generators use. This delegates
+ *     to the shared `extractFrontmatter` so the values are typed and the line
+ *     map comes for free.
  *  2. The native AsciiDoc document header: the `= Title` line plus `:key: value`
  *     attribute entries, running from the first line until the first blank line.
  *     Attribute values are parsed as YAML scalars so `2` -> number, `true` ->
@@ -12,9 +13,8 @@
  */
 import { parse as parseYamlScalar } from "yaml";
 import type { ExtractedMetadata, MetadataExtractor } from "../types.js";
-import { extractFrontmatter } from "./markdown.js";
+import { extractFrontmatter, hasFrontmatterFence } from "./frontmatter.js";
 
-const OPENING = /^---\r?\n/;
 const TITLE = /^=\s+(.+?)\s*$/;
 // `:!name:` or `:name!:` — an unset attribute.
 const UNSET = /^:(?:!([^:\s]+)|([^:\s]+)!):\s*$/;
@@ -113,10 +113,9 @@ export const asciidocExtractor: MetadataExtractor = {
   extensions: [".adoc", ".asciidoc"],
   implemented: true,
   extract(content) {
-    const body = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
-    if (OPENING.test(body)) {
+    if (hasFrontmatterFence(content)) {
       // Delegate only when a complete frontmatter block is actually present;
-      // a stray opening `---` with no closing delimiter should not shadow a
+      // a stray opening fence with no closing delimiter should not shadow a
       // native AsciiDoc header that follows.
       const fm = extractFrontmatter(content, "asciidoc");
       if (fm.present) return fm;

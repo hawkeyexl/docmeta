@@ -130,7 +130,8 @@ way a file missing a required field does. If you expected this file to have
 metadata, it's probably missing its opening `---` fence, or the block isn't at
 the very top of the file.
 
-**Fix:** add a frontmatter block at the top of the file, between `---` fences:
+**Fix:** add a frontmatter block at the top of the file, between `---` fences (or
+`+++`/`;;;` for [TOML/JSON](/docmeta/reference/formats/#frontmatter-flavors)):
 
 ```diff lang="md" title="docs/guide.md"
 + ---
@@ -149,20 +150,20 @@ the very top of the file.
   frontmatter.
 </Aside>
 
-### A YAML parse error
+### A frontmatter parse error
 
 ```
 ✗ docs/guide.md
     (root)  Invalid YAML frontmatter: <parser detail>  [(parse)]
 ```
 
-The frontmatter block exists but isn't valid YAML, so docmeta can't read it. The
-schema in brackets is `[(parse)]` rather than a real schema id — this is a syntax
-problem, not a rule violation. Common causes are an unquoted value containing a
-colon, bad indentation, or a tab character.
+The frontmatter block exists but isn't valid, so docmeta can't read it. The
+message names the flavor — `Invalid YAML frontmatter`, `Invalid TOML frontmatter`,
+or `Invalid JSON frontmatter` — and the schema in brackets is `[(parse)]` rather
+than a real schema id, so this is a syntax problem, not a rule violation.
 
-**Fix:** correct the YAML. A frequent culprit is a value with a colon that needs
-quoting:
+**Fix:** correct the block's syntax for its flavor. In YAML a frequent culprit is
+a value with a colon that needs quoting:
 
 ```diff lang="md" title="docs/guide.md"
   ---
@@ -171,6 +172,11 @@ quoting:
 + title: "Versioning: a primer"
   ---
 ```
+
+In JSON, the usual culprits are a trailing comma or an unquoted key; in TOML, an
+unquoted string or a malformed `[table]` header. See
+[frontmatter flavors](/docmeta/reference/formats/#frontmatter-flavors) for each
+flavor's fences and syntax.
 
 <Aside type="tip">
   The parser detail after the colon (truncated as `<parser detail>` above)
@@ -273,7 +279,7 @@ understand which schema applied to your file and why, see
 {/* test {"testId":"fix-a-failing-check","description":"The common-failures catalog and the reproduce-locally loop, mapped to fixtures."} */}
 {/* step {"description":"Missing a required field: (root) ... must have required property, tagged with the schema.","runShell":{"command":"npx docmeta validate test/fixtures/missing-type.md","exitCodes":[1],"stdio":"must have required property 'type'"}} */}
 {/* step {"description":"A value in the wrong format: a malformed timestamp is flagged on its source line.","runShell":{"command":"npx docmeta validate test/fixtures/bad-timestamp.md","exitCodes":[1],"stdio":"/timestamp  must match format \"date-time\"  \\(line 4\\)/"}} */}
-{/* step {"description":"A YAML parse error reports the schema as [(parse)] rather than a real schema id.","runShell":{"command":"npx docmeta validate test/fixtures/dd/malformed-yaml.md","exitCodes":[1],"stdio":"[(parse)]"}} */}
+{/* step {"description":"A frontmatter parse error (malformed YAML) reports the schema as [(parse)] rather than a real schema id.","runShell":{"command":"npx docmeta validate test/fixtures/dd/malformed-yaml.md","exitCodes":[1],"stdio":"[(parse)]"}} */}
 {/* step {"description":"Schema not found is a setup problem, not a document problem: it exits 2 to stderr.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md -s google:okf:0.2","exitCodes":[2],"stdio":"Unknown built-in schema"}} */}
 {/* step {"description":"Reproduce and confirm locally: after the fix, the file passes with a green summary.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 file checked, 1 passed, 0 failed, 0 errors"}} */}
 {/* test end */}

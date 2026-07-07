@@ -69,6 +69,7 @@
     "parse5": "^8.0.1",
     "picocolors": "^1.1.1",
     "picomatch": "^4.0.4",
+    "smol-toml": "^1.7.0",
     "yaml": "^2.6.1"
   },
   "devDependencies": {

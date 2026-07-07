@@ -8,12 +8,17 @@ reference page, the entry links to it.
 
 ## frontmatter
 
-A block of metadata at the very top of a document, set off from the body. In
-Markdown and MDX it's a YAML block fenced by `---`; other formats carry it
-differently (AsciiDoc attributes, an RST field list, XML or HTML elements). docmeta
-reads the frontmatter, not the body. The block must be the first thing in the
-file, or docmeta won't recognize it. See [Supported formats](/docmeta/reference/formats/)
-for where each format keeps its frontmatter.
+A block of metadata at the very top of a document, set off from the body.
+Markdown, MDX, AsciiDoc, and reStructuredText all accept the same fenced block in
+any of three flavors — YAML (`---`), TOML (`+++`), or JSON (`;;;`); AsciiDoc and
+rst fall back to a native header (AsciiDoc attributes, an RST field list) when no
+fence is present, and XML and HTML have no fenced form (their metadata lives in
+element attributes or head tags). A fenced block must be the first thing in the
+file, or docmeta won't recognize it. Whichever flavor or format is used, docmeta
+reads only the frontmatter — never the body — and normalizes it to the same
+[metadata](#metadata) shape it validates. See
+[Supported formats](/docmeta/reference/formats/#frontmatter-flavors) for the
+fence flavors and where each format keeps its frontmatter.
 
 ## metadata
 

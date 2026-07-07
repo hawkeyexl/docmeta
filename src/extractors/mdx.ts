@@ -1,8 +1,9 @@
 /**
- * MDX extractor. MDX frontmatter is identical to Markdown's YAML block, so we
- * reuse the same logic. Parsing `export const meta = {...}` is future work.
+ * MDX extractor. MDX frontmatter is identical to Markdown's, so we reuse the
+ * same logic (YAML/TOML/JSON fenced blocks). Parsing `export const meta = {...}`
+ * is future work.
  */
-import { extractFrontmatter } from "./markdown.js";
+import { extractFrontmatter } from "./frontmatter.js";
 import type { MetadataExtractor } from "../types.js";
 
 export const mdxExtractor: MetadataExtractor = {

@@ -2,10 +2,10 @@
  * reStructuredText metadata extractor.
  *
  * Two metadata styles are accepted:
- *  1. A leading YAML frontmatter block (`--- … ---`), as some static-site
- *     generators (e.g. MyST) use. This delegates to the shared
- *     `extractFrontmatter` so the values are typed and the line map comes for
- *     free.
+ *  1. A leading fenced frontmatter block (YAML `--- … ---`, TOML `+++ … +++`,
+ *     or JSON `;;; … ;;;`), as some static-site generators (e.g. MyST) use.
+ *     This delegates to the shared `extractFrontmatter` so the values are typed
+ *     and the line map comes for free.
  *  2. The native reStructuredText docinfo field list: the run of `:name: value`
  *     entries at the top of the document, optionally preceded by a section
  *     title (which we skip — only page-level metadata is extracted, not
@@ -14,9 +14,8 @@
  */
 import { parse as parseYamlScalar } from "yaml";
 import type { ExtractedMetadata, MetadataExtractor } from "../types.js";
-import { extractFrontmatter } from "./markdown.js";
+import { extractFrontmatter, hasFrontmatterFence } from "./frontmatter.js";
 
-const OPENING = /^---\r?\n/;
 // `:name:` or `:name: value` — a docinfo field (value optional). The name may
 // contain spaces but not a colon; the value (if any) may.
 const FIELD = /^:([^:]+):(?:\s+(.*\S))?\s*$/;
@@ -176,10 +175,9 @@ export const rstExtractor: MetadataExtractor = {
   extensions: [".rst"],
   implemented: true,
   extract(content) {
-    const body = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
-    if (OPENING.test(body)) {
+    if (hasFrontmatterFence(content)) {
       // Delegate only when a complete frontmatter block is actually present;
-      // a stray opening `---` with no closing delimiter should not shadow a
+      // a stray opening fence with no closing delimiter should not shadow a
       // native docinfo field list that follows.
       const fm = extractFrontmatter(content, "rst");
       if (fm.present) return fm;
