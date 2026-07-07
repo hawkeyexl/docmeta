@@ -97,6 +97,14 @@ export const asciidocExtractor: MetadataExtractor = {
       // native AsciiDoc header that follows.
       const fm = extractFrontmatter(content, "asciidoc");
       if (fm.present) return fm;
+      // Note: unlike rst, we do NOT slice the stray fence line off here.
+      // `extractHeader` already ignores the fence line in place and keeps every
+      // `:name: value` attribute on its true source line. Slicing would either
+      // break the blank-line-terminated header scan (a blanked line 1 ends it)
+      // or shift every attribute line by one. The document title is not
+      // recovered in this case — which is correct: an AsciiDoc `= Title` is only
+      // the document title on the very first line, so a stray fence above it
+      // disqualifies it as a title.
     }
     return extractHeader(content);
   },

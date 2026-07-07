@@ -153,8 +153,8 @@ function buildTomlLineMap(raw: string, prefixLines: number): Map<string, number>
   raw.split("\n").forEach((line, i) => {
     const table = TOML_TABLE.exec(line);
     if (table?.[1] != null) {
-      // A `[table]` / `[[array]]` header: record it, then leave root context —
-      // every following `key =` belongs to a table, not the document root.
+      // A `[table]` / `[[array of tables]]` header: record it, then leave root
+      // context — every following `key =` belongs to a table, not the root.
       record(table[1], i);
       inRootTable = false;
       return;

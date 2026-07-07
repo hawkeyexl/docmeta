@@ -319,6 +319,12 @@ describe("asciidoc extractor", () => {
       );
       expect(r.present).toBe(true);
       expect(r.data.type).toBe("concept");
+      // Attributes keep their true source line (`:type:` is on line 3); the
+      // fence line is ignored in place, not sliced off.
+      expect(r.lineFor("/type")).toBe(3);
+      // The `= Title` on line 2 is deliberately not treated as the document
+      // title — an AsciiDoc title is only valid on the first line.
+      expect(r.data.title).toBeUndefined();
     }
   });
 });
