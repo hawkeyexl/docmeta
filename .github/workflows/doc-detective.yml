@@ -47,7 +47,7 @@ jobs:
       - run: npm link
       - run: npm link docmeta
       # Third-party action pinned to a full commit SHA (supply-chain hardening).
-      - uses: doc-detective/github-action@a2a4f5ceb1abfa55d567e4f6766223082ece2c18 # v1
+      - uses: doc-detective/github-action@49c73785b0ff864356ec2ef71b728f0623a8621d # v1
         with:
           config: .doc-detective.json
           exit_on_fail: true
