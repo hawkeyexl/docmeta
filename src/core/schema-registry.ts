@@ -7,6 +7,7 @@ import { readFile } from "node:fs/promises";
 import { DocmetaError } from "../types.js";
 
 import okf01 from "../schemas/okf/0.1.json" with { type: "json" };
+import docevals01 from "../schemas/docevals/0.1.json" with { type: "json" };
 
 export interface BuiltinInfo {
   id: string;
@@ -17,6 +18,7 @@ export interface BuiltinInfo {
 /** Built-in schemas keyed by `vendor:name:version` id. */
 const BUILTINS = new Map<string, Record<string, unknown>>([
   ["google:okf:0.1", okf01 as Record<string, unknown>],
+  ["docevals:frontmatter:0.1", docevals01 as Record<string, unknown>],
 ]);
 
 export function listBuiltins(): BuiltinInfo[] {

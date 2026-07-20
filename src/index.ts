@@ -15,4 +15,9 @@ export {
 } from "./core/schema-registry.js";
 export { render } from "./reporters/index.js";
 export type { ReportFormat } from "./reporters/index.js";
+export { extractFrontmatter } from "./extractors/frontmatter.js";
+export {
+  extractorForExtension,
+  supportedExtensions,
+} from "./extractors/index.js";
 export * from "./types.js";
