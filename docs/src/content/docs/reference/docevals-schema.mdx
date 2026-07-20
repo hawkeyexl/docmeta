@@ -1,0 +1,86 @@
+---
+title: Built-in docevals schema
+description: The docevals:frontmatter:0.1 schema shipped with docmeta — page-level eval declarations under the `docevals` frontmatter key.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+docmeta ships **`docevals:frontmatter:0.1`**, the frontmatter schema for
+[docevals](https://github.com/hawkeyexl/docevals) — a tool that runs
+deterministic and LLM-as-judge evals against documentation pages. Pages declare
+their evals under a single `docevals` frontmatter key; this schema validates
+that key's shape. It is not the default schema — opt in per file, via config,
+or on the command line:
+
+```bash
+docmeta validate --schema docevals:frontmatter:0.1 docs/
+```
+
+| Property | Value |
+|---|---|
+| Id | `docevals:frontmatter:0.1` |
+| Title | docevals frontmatter |
+| Dialect | [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects) |
+| Additional properties | Allowed at the root; the `docevals` key itself is closed |
+| Reference kind | [builtin](/docmeta/reference/schema-resolution/#reference-kinds) |
+
+The root is open (`additionalProperties` is not restricted), so this schema
+composes with other schemas — like `google:okf:0.1` — in a
+[schema set](/docmeta/reference/schema-resolution/). Only the `docevals` key is
+constrained.
+
+## The `docevals` key
+
+| Field | Type | Constraint |
+|---|---|---|
+| `suite` | string | Named suite from `docevals.config.yaml` |
+| `skip` | boolean | Skip the page entirely (default `false`) |
+| `generatedBy` | string | Model that generated the page content, if any |
+| `evals` | array | Eval entries — see below |
+
+Each `evals` entry is one of three forms:
+
+- **String shorthand** — the name of an eval defined centrally:
+  `- no-future-promises`
+- **Reference with overrides** — `{ use, type?, skip?, severity?, options? }`
+- **Inline eval** — a full eval definition:
+
+| Field | Type | Constraint |
+|---|---|---|
+| `name` | string | **Required.** Kebab-case: `^[a-z0-9][a-z0-9-]*$` |
+| `assertion` | string | The testable claim. Required for `llm`-graded evals |
+| `type` | `capability` \| `regression` | Default `regression` |
+| `grader` | string | `llm` (default), `command`, `human`, or `tool:<name>` |
+| `evidence` | string | Hint scoping where the judge should look |
+| `examples` | object | `pass` / `fail` anchor descriptions |
+| `command` | array of string | Command to run; `{file}` expands to the page path |
+| `successExitCodes` | array of integer | Default `[0]` |
+| `timeoutMs` | integer | Command timeout |
+| `generated` | object | `assertionHash` — set by docevals script generation |
+| `options` | object | Tool-grader options |
+| `severity` | `error` \| `warning` \| `info` | Finding severity |
+| `skip` | boolean | Skip this eval |
+
+<Aside type="note">
+A `command`-graded eval may carry an `assertion` and no `command` — that is a
+plain-language deterministic check docevals turns into a generated script. An
+`llm`-graded (or grader-less) eval must carry an `assertion`.
+</Aside>
+
+## Example
+
+```md
+---
+title: Installation
+docevals:
+  suite: how-to
+  evals:
+    - no-future-promises
+    - name: install-command-accuracy
+      assertion: The documented install command is `npm i -g doc-detective`.
+      grader: llm
+      examples:
+        pass: Shows the current install command.
+        fail: Shows a deprecated command.
+---
+```
