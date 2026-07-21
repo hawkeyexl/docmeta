@@ -122,7 +122,8 @@
       "allOf": [
         {
           "if": {
-            "properties": { "grader": { "const": "llm" } }
+            "properties": { "grader": { "const": "llm" } },
+            "required": ["grader"]
           },
           "then": { "required": ["assertion"] }
         },
