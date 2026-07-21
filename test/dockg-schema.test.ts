@@ -18,7 +18,7 @@ describe("dockg:frontmatter:0.1 built-in", () => {
 
   it("passes a doc without a kg key entirely", async () => {
     const run = await runValidate({
-      inputs: [fixture("missing-type.md")],
+      inputs: [fixture("dockg-no-kg.md")],
       cliSchemas: ["dockg:frontmatter:0.1"],
     });
     expect(run.summary.failed).toBe(0);
@@ -30,7 +30,9 @@ describe("dockg:frontmatter:0.1 built-in", () => {
       cliSchemas: ["dockg:frontmatter:0.1"],
     });
     expect(run.summary.failed).toBe(1);
-    const messages = run.results[0]!.errors.map((e) => e.message).join("\n");
+    const result = run.results[0];
+    expect(result).toBeDefined();
+    const messages = (result?.errors ?? []).map((e) => e.message).join("\n");
     expect(messages).toMatch(/additional propert/i);
     expect(messages).toMatch(/prefLabel/);
   });
