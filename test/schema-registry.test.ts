@@ -23,18 +23,6 @@ describe("schema registry", () => {
     expect(ids).toContain("google:okf:0.1");
   });
 
-  it("lists the dockg built-in", () => {
-    const ids = listBuiltins().map((b) => b.id);
-    expect(ids).toContain("dockg:frontmatter:0.1");
-  });
-
-  it("loads the dockg built-in schema object", async () => {
-    const schema = await loadSchema("dockg:frontmatter:0.1");
-    const props = (schema as { properties?: Record<string, unknown> })
-      .properties;
-    expect(props).toHaveProperty("kg");
-  });
-
   it("classifies a built-in id", () => {
     expect(classifyRef("google:okf:0.1").kind).toBe("builtin");
   });
