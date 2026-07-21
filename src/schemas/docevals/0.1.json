@@ -2,10 +2,22 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "docevals:frontmatter:0.1",
   "title": "docevals frontmatter",
-  "description": "Page-level eval declarations for docevals under the `docevals` key. Evals are graded by code (command/tool graders), an LLM judge, or a human.",
+  "description": "Page-level eval declarations for docevals under the `evals` key. Evals are graded by code (command/tool graders), an LLM judge, or a human.",
   "type": "object",
   "properties": {
-    "docevals": {
+    "evals": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evalEntry" },
+          "description": "Shorthand: just the list of evals for this page."
+        },
+        { "$ref": "#/$defs/evalsObject" }
+      ]
+    }
+  },
+  "$defs": {
+    "evalsObject": {
       "type": "object",
       "properties": {
         "suite": {
@@ -27,9 +39,7 @@
         }
       },
       "additionalProperties": false
-    }
-  },
-  "$defs": {
+    },
     "evalEntry": {
       "oneOf": [
         { "type": "string", "minLength": 1 },

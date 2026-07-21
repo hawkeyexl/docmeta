@@ -32,7 +32,7 @@ describe("schema registry", () => {
     const schema = await loadSchema("docevals:frontmatter:0.1");
     const props = (schema as { properties?: Record<string, unknown> })
       .properties;
-    expect(props).toHaveProperty("docevals");
+    expect(props).toHaveProperty("evals");
   });
 
   it("classifies a built-in id", () => {

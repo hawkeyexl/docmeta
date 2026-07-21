@@ -1,6 +1,6 @@
 ---
 title: Built-in docevals schema
-description: The docevals:frontmatter:0.1 schema shipped with docmeta — page-level eval declarations under the `docevals` frontmatter key.
+description: The docevals:frontmatter:0.1 schema shipped with docmeta — page-level eval declarations under the `evals` frontmatter key.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -8,7 +8,7 @@ import { Aside } from '@astrojs/starlight/components';
 docmeta ships **`docevals:frontmatter:0.1`**, the frontmatter schema for
 [docevals](https://github.com/hawkeyexl/docevals) — a tool that runs
 deterministic and LLM-as-judge evals against documentation pages. Pages declare
-their evals under a single `docevals` frontmatter key; this schema validates
+their evals under a single `evals` frontmatter key; this schema validates
 that key's shape. It is not the default schema — opt in per file, via config,
 or on the command line:
 
@@ -26,10 +26,13 @@ docmeta validate --schema docevals:frontmatter:0.1 docs/
 
 The root is open (`additionalProperties` is not restricted), so this schema
 composes with other schemas — like `google:okf:0.1` — in a
-[schema set](/docmeta/reference/schema-resolution/). Only the `docevals` key is
+[schema set](/docmeta/reference/schema-resolution/). Only the `evals` key is
 constrained.
 
-## The `docevals` key
+## The `evals` key
+
+The key accepts two forms. The **array shorthand** is just the list of eval
+entries. The **object form** adds page-level fields:
 
 | Field | Type | Constraint |
 |---|---|---|
@@ -38,7 +41,7 @@ constrained.
 | `generatedBy` | string | Model that generated the page content, if any |
 | `evals` | array | Eval entries — see below |
 
-Each `evals` entry is one of three forms:
+Each eval entry is one of three forms:
 
 - **String shorthand** — the name of an eval defined centrally:
   `- no-future-promises`
@@ -67,12 +70,14 @@ plain-language deterministic check docevals turns into a generated script. An
 `llm`-graded (or grader-less) eval must carry an `assertion`.
 </Aside>
 
-## Example
+## Examples
+
+Object form, with a suite:
 
 ```md
 ---
 title: Installation
-docevals:
+evals:
   suite: how-to
   evals:
     - no-future-promises
@@ -82,5 +87,17 @@ docevals:
       examples:
         pass: Shows the current install command.
         fail: Shows a deprecated command.
+---
+```
+
+Array shorthand:
+
+```md
+---
+title: Concepts
+evals:
+  - no-future-promises
+  - name: defines-core-terms
+    assertion: The page defines every core concept it introduces.
 ---
 ```
