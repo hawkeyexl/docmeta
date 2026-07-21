@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "dockg:frontmatter:0.1",
+  "title": "dockg knowledge-graph frontmatter",
+  "description": "SKOS concept fields under the top-level `kg` key, consumed by dockg build and fill. Files without a `kg` key pass.",
+  "type": "object",
+  "properties": {
+    "kg": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "prefLabel": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Preferred label of the concept this document is primarily about."
+        },
+        "altLabels": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "description": "Alternative labels (synonyms, abbreviations) for the primary concept."
+        },
+        "broader": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "description": "Labels of broader (parent) concepts."
+        },
+        "narrower": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "description": "Labels of narrower (child) concepts."
+        },
+        "related": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "description": "Labels of associatively related concepts."
+        },
+        "subjects": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "description": "Subject labels for this document; behaves like tags."
+        }
+      },
+      "dependentRequired": {
+        "altLabels": ["prefLabel"],
+        "broader": ["prefLabel"],
+        "narrower": ["prefLabel"],
+        "related": ["prefLabel"]
+      }
+    }
+  }
+}
