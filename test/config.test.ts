@@ -53,4 +53,54 @@ describe("config", () => {
       DocmetaError,
     );
   });
+
+  describe("fill", () => {
+    it("parses the fill block", () => {
+      const cfg = parseConfig(
+        [
+          "fill:",
+          "  provider: anthropic",
+          "  model: claude-sonnet-4-5",
+          "  confidenceThreshold: 0.9",
+          "  maxCostUsd: 5",
+          "  concurrency: 8",
+        ].join("\n"),
+        "x.yaml",
+      );
+      expect(cfg.fill).toEqual({
+        provider: "anthropic",
+        model: "claude-sonnet-4-5",
+        confidenceThreshold: 0.9,
+        maxCostUsd: 5,
+        concurrency: 8,
+      });
+    });
+
+    it("leaves fill undefined when absent", () => {
+      expect(parseConfig("paths:\n  - x.md", "x.yaml").fill).toBeUndefined();
+    });
+
+    it("rejects a confidence threshold outside 0-1", () => {
+      expect(() =>
+        parseConfig("fill:\n  confidenceThreshold: 1.5", "x.yaml"),
+      ).toThrow(DocmetaError);
+      expect(() =>
+        parseConfig("fill:\n  confidenceThreshold: -0.1", "x.yaml"),
+      ).toThrow(DocmetaError);
+    });
+
+    it("rejects a non-finite threshold", () => {
+      // YAML parses 1e999 as Infinity, which a bare range check would accept.
+      expect(() =>
+        parseConfig("fill:\n  maxCostUsd: 1e999", "x.yaml"),
+      ).toThrow(DocmetaError);
+    });
+
+    it("rejects a non-mapping fill block and wrong-typed keys", () => {
+      expect(() => parseConfig("fill: nope", "x.yaml")).toThrow(DocmetaError);
+      expect(() => parseConfig("fill:\n  provider: 3", "x.yaml")).toThrow(
+        DocmetaError,
+      );
+    });
+  });
 });

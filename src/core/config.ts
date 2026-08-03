@@ -13,11 +13,22 @@ export interface SchemaOverride {
   schemas: string[];
 }
 
+/** Defaults for the `fill` command; every key is overridable by a CLI flag. */
+export interface FillConfig {
+  provider?: string;
+  model?: string;
+  /** Minimum self-reported confidence to write a value (0-1). */
+  confidenceThreshold?: number;
+  maxCostUsd?: number;
+  concurrency?: number;
+}
+
 export interface DocmetaConfig {
   paths?: string[];
   exclude?: string[];
   schemas?: string[];
   overrides?: SchemaOverride[];
+  fill?: FillConfig;
 }
 
 const CONFIG_NAMES = ["docmeta.config.yaml", "docmeta.config.yml"];
@@ -75,7 +86,50 @@ export function parseConfig(text: string, source: string): DocmetaConfig {
     });
   }
 
+  if (obj.fill !== undefined) config.fill = parseFill(obj.fill, source);
+
   return config;
+}
+
+function parseFill(value: unknown, source: string): FillConfig {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new DocmetaError(`${source}: "fill" must be a mapping.`);
+  }
+  const raw = value as Record<string, unknown>;
+  const fill: FillConfig = {};
+
+  const asString = (key: "provider" | "model"): void => {
+    const v = raw[key];
+    if (v === undefined) return;
+    if (typeof v !== "string") {
+      throw new DocmetaError(`${source}: "fill.${key}" must be a string.`);
+    }
+    fill[key] = v;
+  };
+  asString("provider");
+  asString("model");
+
+  const asNumber = (
+    key: "confidenceThreshold" | "maxCostUsd" | "concurrency",
+    min: number,
+    max: number,
+  ): void => {
+    const v = raw[key];
+    if (v === undefined) return;
+    // A YAML `1e999` parses to Infinity, and a bare range check would accept
+    // it, so require a finite number explicitly.
+    if (typeof v !== "number" || !Number.isFinite(v) || v < min || v > max) {
+      throw new DocmetaError(
+        `${source}: "fill.${key}" must be a number between ${min} and ${max}.`,
+      );
+    }
+    fill[key] = v;
+  };
+  asNumber("confidenceThreshold", 0, 1);
+  asNumber("maxCostUsd", 0, Number.MAX_SAFE_INTEGER);
+  asNumber("concurrency", 1, 64);
+
+  return fill;
 }
 
 /**
