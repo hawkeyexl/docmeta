@@ -6,7 +6,13 @@ import { listFormats } from "../extractors/index.js";
 
 export interface SchemasInfo {
   builtins: BuiltinInfo[];
-  formats: { name: string; extensions: string[]; implemented: boolean }[];
+  formats: {
+    name: string;
+    extensions: string[];
+    implemented: boolean;
+    /** Whether `docmeta fill` can write metadata back to this format. */
+    writable: boolean;
+  }[];
 }
 
 export function getSchemasInfo(): SchemasInfo {

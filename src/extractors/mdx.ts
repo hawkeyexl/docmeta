@@ -4,6 +4,7 @@
  * is future work.
  */
 import { extractFrontmatter } from "./frontmatter.js";
+import { applyFrontmatter } from "./frontmatter-write.js";
 import type { MetadataExtractor } from "../types.js";
 
 export const mdxExtractor: MetadataExtractor = {
@@ -11,4 +12,6 @@ export const mdxExtractor: MetadataExtractor = {
   extensions: [".mdx"],
   implemented: true,
   extract: (content) => extractFrontmatter(content, "mdx"),
+  apply: (content, patch, options) =>
+    applyFrontmatter(content, patch, options),
 };

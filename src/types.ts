@@ -23,6 +23,17 @@ export interface ExtractedMetadata {
   lineFor(pointer: string): number | undefined;
 }
 
+/** Fenced front matter flavors, in fence order: `---`, `+++`, `;;;`. */
+export type FrontmatterFlavor = "yaml" | "toml" | "json";
+
+/** Top-level metadata keys to set. Keys with `undefined` values are ignored. */
+export type MetadataPatch = Record<string, unknown>;
+
+export interface ApplyOptions {
+  /** Flavor to use when creating a block from scratch. Default "yaml". */
+  newBlockFlavor?: FrontmatterFlavor;
+}
+
 /** A pluggable metadata extractor for one document format. */
 export interface MetadataExtractor {
   /** Stable name, also used as `ExtractedMetadata.format`. */
@@ -33,6 +44,14 @@ export interface MetadataExtractor {
   implemented: boolean;
   /** Extract metadata from raw file content. */
   extract(content: string, filePath: string): ExtractedMetadata;
+  /**
+   * Return new content with every key in `patch` set at the top level. Pure:
+   * no IO, no mutation, deterministic; returns `content` itself for a no-op.
+   *
+   * Absent means the format is read-only. Present but throwing `DocmetaError`
+   * means this particular document cannot be rewritten safely.
+   */
+  apply?(content: string, patch: MetadataPatch, options?: ApplyOptions): string;
 }
 
 /** A single schema violation for one file, attributed to one schema. */

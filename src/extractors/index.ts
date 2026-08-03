@@ -46,11 +46,19 @@ export function supportedExtensions(): string[] {
   return EXTRACTORS.filter((e) => e.implemented).flatMap((e) => e.extensions);
 }
 
-/** All registered format names, with their implemented status. */
-export function listFormats(): { name: string; extensions: string[]; implemented: boolean }[] {
+/** All registered format names, with their implemented and writable status. */
+export function listFormats(): {
+  name: string;
+  extensions: string[];
+  implemented: boolean;
+  writable: boolean;
+}[] {
   return EXTRACTORS.map((e) => ({
     name: e.name,
     extensions: e.extensions,
     implemented: e.implemented,
+    // Writability is the presence of the optional `apply` method, so a format
+    // never has to declare it twice and the two can't drift apart.
+    writable: typeof e.apply === "function",
   }));
 }
