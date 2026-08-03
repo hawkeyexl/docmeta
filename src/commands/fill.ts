@@ -127,8 +127,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
     "concurrency",
     { min: 1, max: 64, integer: true },
   );
-  const maxCostUsd =
-    opts.maxCostUsd ?? config?.fill?.maxCostUsd ?? undefined;
+  const maxCostUsd = opts.maxCostUsd ?? config?.fill?.maxCostUsd;
   if (maxCostUsd !== undefined) {
     requireNumber(maxCostUsd, "maxCostUsd", { min: 0, max: Number.MAX_SAFE_INTEGER });
   }
@@ -194,12 +193,37 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
    * flight. Without the reservation, `concurrency` calls could all clear a
    * check made against a total that none of them had contributed to yet, and
    * the budget would overshoot by that many calls.
+   *
+   * The check and the `inFlight++` that follows it are not separated by an
+   * await, so they are atomic with respect to the event loop — two workers
+   * cannot both pass a check that only one of them fits into.
    */
   const projectedCost = (): number =>
     costUsd + (billedCalls > 0 ? (costUsd / billedCalls) * inFlight : 0);
 
   const overBudget = (): boolean =>
     maxCostUsd != null && projectedCost() >= maxCostUsd;
+
+  // The reservation needs an observed per-call cost, which does not exist until
+  // one call has finished. So when a budget is set, the first call runs alone
+  // and the rest wait for it; without this the entire first wave clears a check
+  // against $0 and the budget is meaningless for its first `concurrency` files.
+  let primingDone: Promise<void> | null = null;
+  let releasePriming: (() => void) | null = null;
+  const awaitPriming = async (): Promise<void> => {
+    if (maxCostUsd == null || billedCalls > 0) return;
+    if (primingDone === null) {
+      primingDone = new Promise<void>((res) => {
+        releasePriming = res;
+      });
+      return; // this worker is the primer
+    }
+    await primingDone;
+  };
+  const finishPriming = (): void => {
+    releasePriming?.();
+    releasePriming = null;
+  };
 
   const processOne = async (
     label: string,
@@ -290,6 +314,9 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
       cachedCount++;
       proposals = hit.proposals;
     } else {
+      // Wait behind the priming call, if one is in progress, so the budget
+      // check below sees a real per-call cost rather than $0.
+      await awaitPriming();
       if (overBudget()) {
         budgetExhausted = true;
         return errorResult(
@@ -331,11 +358,16 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
           schema: envelope,
           validate,
         });
+        // Bank the cost before releasing waiters, so the first of them sees a
+        // real per-call figure rather than the $0 it started with.
+        costUsd += costOfUsage(run.usage, pricing);
+        billedCalls++;
       } finally {
         inFlight--;
+        // In the finally so a throw (e.g. a missing API key surfacing from
+        // getProvider) cannot leave the other workers waiting forever.
+        finishPriming();
       }
-      costUsd += costOfUsage(run.usage, pricing);
-      billedCalls++;
       if (run.error != null || run.result == null) {
         return errorResult(
           label,

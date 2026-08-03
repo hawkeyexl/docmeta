@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MockProvider } from "@hawkeyexl/inference";
+import { MockProvider, type InferenceProvider } from "@hawkeyexl/inference";
 import { runFill, collectCandidates } from "../src/commands/fill.js";
 import { loadSchema } from "../src/core/schema-registry.js";
 import { DocmetaError } from "../src/types.js";
@@ -403,6 +403,124 @@ describe("runFill — writing", () => {
     });
     expect(results[0]?.file).toBe("<stdin>");
     expect(results[0]?.content).toContain("description: A summary.");
+  });
+});
+
+describe("runFill — cost budget", () => {
+  /**
+   * MockProvider's default model has no entry in the price table, so its cost
+   * is always $0 and the budget can never trigger. Naming a priced model makes
+   * each call cost $0.001 (500 in / 100 out at haiku rates), which is what
+   * makes this gate observable at all.
+   */
+  const priced = (): MockProvider =>
+    new MockProvider(
+      [
+        {
+          json: {
+            description: { value: "A.", confidence: 0.9, reasoning: "r" },
+          },
+        },
+      ],
+      "claude-haiku-4-5",
+    );
+
+  it("stops scheduling new files once the budget is reached", async () => {
+    await writeFile(join(dir, "a.md"), fixture("missing-keys.md"), "utf8");
+    await writeFile(join(dir, "b.md"), fixture("missing-keys.md"), "utf8");
+
+    const { results, summary, budgetExhausted } = await runFill({
+      ...base,
+      cwd: dir,
+      inputs: ["a.md", "b.md"],
+      fields: ["description"],
+      dryRun: true,
+      // Serial, so the first call's cost is banked before the second is
+      // considered — otherwise both would clear the check concurrently.
+      concurrency: 1,
+      maxCostUsd: 0.0005, // less than one call
+      inferenceProvider: priced(),
+    });
+
+    expect(budgetExhausted).toBe(true);
+    expect(summary.costUsd).toBeGreaterThan(0);
+    expect(results[0]?.error).toBeUndefined();
+    expect(results[1]?.error).toMatch(/cost budget reached/);
+  });
+
+  it("processes everything when the budget is ample", async () => {
+    await writeFile(join(dir, "a.md"), fixture("missing-keys.md"), "utf8");
+    await writeFile(join(dir, "b.md"), fixture("missing-keys.md"), "utf8");
+
+    const { results, budgetExhausted } = await runFill({
+      ...base,
+      cwd: dir,
+      inputs: ["a.md", "b.md"],
+      fields: ["description"],
+      dryRun: true,
+      concurrency: 1,
+      maxCostUsd: 10,
+      inferenceProvider: priced(),
+    });
+
+    expect(budgetExhausted).toBe(false);
+    expect(results.every((r) => r.error === undefined)).toBe(true);
+  });
+
+  /**
+   * MockProvider resolves within a microtask, so workers never actually
+   * overlap and the concurrency behavior is untestable with it. This provider
+   * takes real time, which lets every worker reach the budget check before any
+   * call has completed — the situation a network provider creates and the one
+   * the priming gate exists for.
+   */
+  class SlowProvider implements InferenceProvider {
+    readonly requests: unknown[] = [];
+    provider(): string {
+      return "mock";
+    }
+    modelName(): string {
+      return "claude-haiku-4-5";
+    }
+    async completeJSON(req: unknown): Promise<{
+      json: unknown;
+      usage: { inputTokens: number; outputTokens: number };
+    }> {
+      this.requests.push(req);
+      await new Promise((r) => setTimeout(r, 25));
+      return {
+        json: { description: { value: "A.", confidence: 0.9, reasoning: "r" } },
+        usage: { inputTokens: 500, outputTokens: 100 },
+      };
+    }
+  }
+
+  it("does not let a parallel first wave blow past the budget", async () => {
+    // Four files, concurrency 4, budget 0.0015 — room for one $0.001 call, not
+    // two. Every worker reaches the budget check before any call has completed,
+    // so without the priming gate all four would clear a check made against $0
+    // and bill $0.004. With it, the first call runs alone; the rest then see a
+    // real per-call cost and only one more fits.
+    for (const n of ["a", "b", "c", "d"]) {
+      await writeFile(join(dir, `${n}.md`), fixture("missing-keys.md"), "utf8");
+    }
+    const provider = new SlowProvider();
+    const { summary, budgetExhausted } = await runFill({
+      ...base,
+      cwd: dir,
+      inputs: ["a.md", "b.md", "c.md", "d.md"],
+      fields: ["description"],
+      dryRun: true,
+      concurrency: 4,
+      maxCostUsd: 0.0015,
+      inferenceProvider: provider,
+    });
+
+    // Exactly two: the primer, then one more that fits before the reservation
+    // for it pushes the projection over the limit.
+    expect(provider.requests).toHaveLength(2);
+    expect(summary.costUsd).toBeCloseTo(0.002, 6);
+    expect(budgetExhausted).toBe(true);
   });
 });
 
