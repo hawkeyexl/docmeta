@@ -89,11 +89,18 @@ describe("config", () => {
       ).toThrow(DocmetaError);
     });
 
-    it("rejects a non-finite threshold", () => {
+    it("rejects a non-finite maxCostUsd", () => {
       // YAML parses 1e999 as Infinity, which a bare range check would accept.
       expect(() =>
         parseConfig("fill:\n  maxCostUsd: 1e999", "x.yaml"),
       ).toThrow(DocmetaError);
+    });
+
+    it("rejects a fractional concurrency", () => {
+      // Silently truncating a worker count hides the mistake from the user.
+      expect(() =>
+        parseConfig("fill:\n  concurrency: 2.5", "x.yaml"),
+      ).toThrow(/whole number/);
     });
 
     it("rejects a non-mapping fill block and wrong-typed keys", () => {

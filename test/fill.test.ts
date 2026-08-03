@@ -463,6 +463,39 @@ describe("runFill — operational errors", () => {
     ).rejects.toThrow(/Unknown provider/);
   });
 
+  it("validates numeric options rather than trusting its caller", async () => {
+    // runFill is a public API and also reads config, so bad numbers must be
+    // rejected here — not just by the CLI's flag parsing. A NaN threshold
+    // would otherwise skip every field silently.
+    const file = await stage("missing-keys.md");
+    const bad = { ...base, cwd: dir, inputs: [file], inferenceProvider: propose({}) };
+    await expect(runFill({ ...bad, confidence: Number.NaN })).rejects.toThrow(
+      /confidence/,
+    );
+    await expect(runFill({ ...bad, confidence: 1.5 })).rejects.toThrow(
+      /between 0 and 1/,
+    );
+    await expect(runFill({ ...bad, concurrency: 2.5 })).rejects.toThrow(
+      /whole number/,
+    );
+    await expect(
+      runFill({ ...bad, maxCostUsd: Number.POSITIVE_INFINITY }),
+    ).rejects.toThrow(/maxCostUsd/);
+  });
+
+  it("names extractor formats, not extensions, for a bad --as", async () => {
+    // `--as` takes "markdown", so listing ".md" would point at the wrong value.
+    await expect(
+      runFill({
+        ...base,
+        cwd: dir,
+        inputs: ["-"],
+        as: "nonsense",
+        inferenceProvider: propose({}),
+      }),
+    ).rejects.toThrow(/markdown/);
+  });
+
   it("errors on an unknown --as format", async () => {
     await expect(
       runFill({

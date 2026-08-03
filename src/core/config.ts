@@ -113,6 +113,7 @@ function parseFill(value: unknown, source: string): FillConfig {
     key: "confidenceThreshold" | "maxCostUsd" | "concurrency",
     min: number,
     max: number,
+    integer = false,
   ): void => {
     const v = raw[key];
     if (v === undefined) return;
@@ -123,11 +124,18 @@ function parseFill(value: unknown, source: string): FillConfig {
         `${source}: "fill.${key}" must be a number between ${min} and ${max}.`,
       );
     }
+    // A fractional worker count would be silently truncated downstream rather
+    // than rejected, so catch it where the user can see the mistake.
+    if (integer && !Number.isInteger(v)) {
+      throw new DocmetaError(
+        `${source}: "fill.${key}" must be a whole number.`,
+      );
+    }
     fill[key] = v;
   };
   asNumber("confidenceThreshold", 0, 1);
   asNumber("maxCostUsd", 0, Number.MAX_SAFE_INTEGER);
-  asNumber("concurrency", 1, 64);
+  asNumber("concurrency", 1, 64, true);
 
   return fill;
 }

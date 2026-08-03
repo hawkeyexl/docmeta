@@ -39,6 +39,7 @@ import { resolveTargets, STDIN_TOKEN } from "../core/load-files.js";
 import {
   extractorByName,
   extractorForExtension,
+  listFormats,
   supportedExtensions,
 } from "../extractors/index.js";
 import { resolveSchemaSet, FILE_SCHEMA_KEY } from "../core/resolve-schema.js";
@@ -98,8 +99,12 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
 
   const forcedExtractor = opts.as ? extractorByName(opts.as) : undefined;
   if (opts.as && !forcedExtractor) {
+    // `--as` takes an extractor name ("markdown"), so list names — listing
+    // extensions here would point the user at the wrong kind of value.
     throw new DocmetaError(
-      `Unknown format "${opts.as}". Known formats: ${supportedExtensions().join(", ")}.`,
+      `Unknown format "${opts.as}". Known formats: ${listFormats()
+        .map((f) => f.name)
+        .join(", ")}.`,
     );
   }
   if (usingStdin && !forcedExtractor) {
@@ -108,11 +113,25 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
     );
   }
 
-  const threshold =
-    opts.confidence ?? config?.fill?.confidenceThreshold ?? DEFAULT_THRESHOLD;
-  const concurrency =
-    opts.concurrency ?? config?.fill?.concurrency ?? DEFAULT_CONCURRENCY;
-  const maxCostUsd = opts.maxCostUsd ?? config?.fill?.maxCostUsd;
+  // The CLI range-checks its flags, but runFill is also a public API and is
+  // called directly from config values, so it validates rather than trusting.
+  // A NaN threshold would silently skip every field; a fractional concurrency
+  // would be silently truncated by Array.from's ToLength coercion.
+  const threshold = requireNumber(
+    opts.confidence ?? config?.fill?.confidenceThreshold ?? DEFAULT_THRESHOLD,
+    "confidence",
+    { min: 0, max: 1 },
+  );
+  const concurrency = requireNumber(
+    opts.concurrency ?? config?.fill?.concurrency ?? DEFAULT_CONCURRENCY,
+    "concurrency",
+    { min: 1, max: 64, integer: true },
+  );
+  const maxCostUsd =
+    opts.maxCostUsd ?? config?.fill?.maxCostUsd ?? undefined;
+  if (maxCostUsd !== undefined) {
+    requireNumber(maxCostUsd, "maxCostUsd", { min: 0, max: Number.MAX_SAFE_INTEGER });
+  }
   const dryRun = Boolean(opts.dryRun);
   const only = opts.fields != null ? new Set(opts.fields) : undefined;
 
@@ -562,6 +581,29 @@ function errorResult(
 /** Document body sent to the model — the whole file is fine context. */
 function bodyOf(content: string): string {
   return content;
+}
+
+/**
+ * Range-check a numeric option. Every comparison against NaN is false, so the
+ * finite check has to be explicit or garbage passes silently.
+ */
+function requireNumber(
+  value: number,
+  name: string,
+  bounds: { min: number; max: number; integer?: boolean },
+): number {
+  const { min, max, integer } = bounds;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
+    throw new DocmetaError(
+      `fill: "${name}" must be a number between ${min} and ${max}, got ${String(value)}.`,
+    );
+  }
+  if (integer === true && !Number.isInteger(value)) {
+    throw new DocmetaError(
+      `fill: "${name}" must be a whole number, got ${String(value)}.`,
+    );
+  }
+  return value;
 }
 
 /** Provider names the inference layer accepts. */
