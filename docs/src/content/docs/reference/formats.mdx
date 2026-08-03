@@ -23,8 +23,8 @@ implemented and counts toward directory and glob walks.
 
 ### Why some formats are read-only
 
-Reading metadata and writing it back are not symmetric. `fill` will only write a
-format it can round-trip without disturbing the rest of the document.
+Writing metadata back is a harder problem than reading it. `fill` will only write
+a format it can round-trip without disturbing the rest of the document.
 
 Fenced frontmatter round-trips cleanly: docmeta replaces only the characters
 between the fences, so the body, the fence style, and — for YAML — comments and

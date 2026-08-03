@@ -274,12 +274,12 @@ docmeta fill docs/intro.md && docmeta validate docs/intro.md
 
 <Aside type="caution">
 `fill` edits the file in place — `--dry-run` is the preview. Review the diff
-before you commit; a proposed `description` is a draft, not a decision.
+before you commit; treat a proposed `description` as a first draft.
 </Aside>
 
 Anything below the confidence threshold is skipped and named, so you still get a
-short list of what needs you. `fill` never touches a field that is already
-present and valid, and it never writes its own confidence into your document.
+short list of what needs you. `fill` leaves any field that is already present and
+valid exactly as it is, and its confidence scores stay in the report.
 
 `fill` won't help with a **malformed** value it can't improve on, or with a
 [schema not found](#schema-not-found) error — those are the setup problems in the

@@ -198,10 +198,9 @@ metadata.
 
 ### The confidence gate
 
-Every proposal carries a self-reported confidence between 0 and 1. That number
-is a weak signal on its own, so it is the **last** gate rather than the only one.
-Three mechanical checks run first, and a high confidence cannot override any of
-them:
+Every proposal carries a self-reported confidence between 0 and 1. That number is
+a weak signal on its own, so it is the **last** of four gates. Three mechanical
+checks run first, and a high confidence cannot override any of them:
 
 1. **The value must satisfy the property's own subschema.** `fill` builds the
    response schema out of your schema's property definitions, so a `timestamp`
@@ -211,10 +210,10 @@ them:
 3. **The document must still validate afterwards.** Any value that would leave
    the page failing its own schema is reverted and reported.
 
-Only then is `--confidence` applied. Values below the threshold are **skipped and
-reported by name and score** — never silently dropped, and never written with a
-caveat. The confidence and the model's reasoning stay in the report; they are
-never written into your document.
+Only then is `--confidence` applied. Values below the threshold are **skipped,
+and reported by name and score** so you know what still needs a human. The
+confidence and the model's reasoning stay in the report; they never reach your
+document.
 
 Because the cache stores the proposal *before* gating, re-running with a
 different `--confidence` re-scores the cached proposals and costs nothing. That
