@@ -32,15 +32,15 @@ explicitly tolerated, so a file may carry extra metadata without failing.
 | `tags` | array of string | — | — | Recommended |
 | `timestamp` | string | `date-time` | — | Recommended |
 
-- **`type`** — a short string identifying the kind of concept; used for routing,
+- **`type`**: a short string identifying the kind of concept; used for routing,
   filtering, and presentation. Must be a non-empty string.
-- **`title`** — human-readable display name. When omitted, consumers may derive
+- **`title`**: human-readable display name. When omitted, consumers may derive
   a title from the filename.
-- **`description`** — single-sentence summary used for indexing and previews.
-- **`resource`** — a URI uniquely identifying the underlying asset. Absent for
+- **`description`**: single-sentence summary used for indexing and previews.
+- **`resource`**: a URI uniquely identifying the underlying asset. Absent for
   abstract concepts.
-- **`tags`** — short strings for categorization.
-- **`timestamp`** — ISO 8601 date-time of the last meaningful change.
+- **`tags`**: short strings for categorization.
+- **`timestamp`**: ISO 8601 date-time of the last meaningful change.
 
 <Aside type="note">
 Only `type` makes a file fail by default. The recommended fields are validated

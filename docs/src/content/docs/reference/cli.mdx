@@ -1,6 +1,6 @@
 ---
 title: CLI reference
-description: Every docmeta command, argument, and flag — validate, get, fill, and schemas — with the shared input model and default ignores.
+description: Every docmeta command, argument, and flag (validate, get, fill, and schemas), with the shared input model and default ignores.
 ---
 
 import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
@@ -99,9 +99,9 @@ as an error.
 A field reference descends into nested objects and arrays. Two syntaxes are
 accepted:
 
-- **Dot-notation** — `author.name`, `tags.0`. Concise, but a key containing a
+- **Dot-notation**: `author.name`, `tags.0`. Concise, but a key containing a
   literal `.` cannot be addressed this way.
-- **JSON Pointer** ([RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901)) —
+- **JSON Pointer** ([RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901)):
   any reference beginning with `/`, e.g. `/author/name` or `/tags/0`. This is
   the same pointer `validate` prints in error locations, so a path copied from a
   validation failure works verbatim. Use it to address keys that contain dots
@@ -109,10 +109,10 @@ accepted:
 
 Requesting a parent key (`author`) returns the whole nested value. A path that
 descends into a scalar, or whose segment is missing, is reported as unset. Only
-a key's own properties resolve — inherited members such as `toString` or
+a key's own properties resolve; inherited members such as `toString` or
 `__proto__` are treated as missing.
 
-On Git Bash/MSYS2 (Windows), quote a leading-slash pointer — `'/author/name'` —
+On Git Bash/MSYS2 (Windows), quote a leading-slash pointer, `'/author/name'`,
 so the shell does not rewrite it as a filesystem path. Other shells are
 unaffected.
 
@@ -193,7 +193,7 @@ for that provider (`ANTHROPIC_API_KEY` for `anthropic`, `OPENAI_API_KEY` for
 
 A schema property is a candidate when it is **missing** from the file's
 metadata, or **present but invalid**. A property that is already present and
-valid is never touched, and neither is `$schema` — that is schema wiring, not
+valid is never touched, and neither is `$schema`, which is schema wiring, not
 metadata.
 
 ### The confidence gate
@@ -220,14 +220,14 @@ different `--confidence` re-scores the cached proposals and costs nothing. That
 is the intended way to tune the threshold on a real docset.
 
 The cache lives in `.docmeta/cache` relative to the working directory. It is
-machine-local and safe to delete at any time — add `.docmeta/` to your
+machine-local and safe to delete at any time. Add `.docmeta/` to your
 `.gitignore`. Pass `--no-cache` to bypass it entirely.
 
 ### Which formats can be written
 
 `fill` can only write formats it can round-trip without disturbing the rest of
 the document. `markdown` and `mdx` are always writable. `rst` and `asciidoc` are
-writable **only when the file already has a fenced front matter block** — their
+writable **only when the file already has a fenced front matter block**, because their
 native docinfo and header syntax is lossy to read back, and a bare `---` means
 something else in both languages. `xml` and `html` are read-only. Run
 `docmeta schemas` to see which is which. Targeting a read-only file is reported
@@ -236,7 +236,7 @@ as a per-file error, not a failed run.
 ### Exit codes
 
 `fill` exits **1** when a property your schema lists as `required` could not be
-filled confidently, or when any file errored — that is work still to do. Skipped
+filled confidently, or when any file errored, which is work still to do. Skipped
 *optional* properties are a normal outcome and leave the exit code at **0**. Usage
 and operational failures exit **2**, as elsewhere.
 

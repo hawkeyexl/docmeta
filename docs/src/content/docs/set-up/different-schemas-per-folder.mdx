@@ -80,15 +80,15 @@ Overrides are one link in docmeta's schema-resolution chain. For any single file
 
 <Steps>
 
-1. **CLI `--schema` flag** — if you pass `-s <ref>` (repeatable), it overrides everything below for the whole run.
+1. **CLI `--schema` flag**: if you pass `-s <ref>` (repeatable), it overrides everything below for the whole run.
 
-2. **File `$schema` field** — a `$schema` key in the file's own frontmatter names its schema set and overrides the config.
+2. **File `$schema` field**: a `$schema` key in the file's own frontmatter names its schema set and overrides the config.
 
-3. **Config `overrides`** — the first matching override's `schemas`, as described on this page.
+3. **Config `overrides`**: the first matching override's `schemas`, as described on this page.
 
-4. **Config `schemas`** — the default set, when no override matches.
+4. **Config `schemas`**: the default set, when no override matches.
 
-5. **Built-in default** — [`google:okf:0.1`](/docmeta/schemas/), when nothing else resolves.
+5. **Built-in default**: [`google:okf:0.1`](/docmeta/schemas/), when nothing else resolves.
 
 </Steps>
 

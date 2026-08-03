@@ -18,15 +18,15 @@ For every file, docmeta builds a **schema set** — the list of schemas that fil
 
 <Steps>
 
-1. **CLI `-s`/`--schema`** — if you pass one or more `--schema` flags, they apply to *every* file in the run and override everything else. Repeatable; the flags together form the set.
+1. **CLI `-s`/`--schema`**: if you pass one or more `--schema` flags, they apply to *every* file in the run and override everything else. Repeatable; the flags together form the set.
 
-2. **The file's own `$schema` key** — a `$schema` field in the document's metadata. May be a single string or a list of strings.
+2. **The file's own `$schema` key**: a `$schema` field in the document's metadata. May be a single string or a list of strings.
 
-3. **The first matching `overrides` entry in config** — config `overrides` are checked in order; the first whose glob matches the file path supplies the set.
+3. **The first matching `overrides` entry in config**: config `overrides` are checked in order; the first whose glob matches the file path supplies the set.
 
-4. **Config `schemas`** — the repo-wide default list in `docmeta.config.yaml`.
+4. **Config `schemas`**: the repo-wide default list in `docmeta.config.yaml`.
 
-5. **The built-in default** — if nothing above matched, docmeta uses `google:okf:0.1`.
+5. **The built-in default**: if nothing above matched, docmeta uses `google:okf:0.1`.
 
 </Steps>
 

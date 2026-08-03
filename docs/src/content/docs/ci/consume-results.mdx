@@ -12,11 +12,11 @@ catalogs, and custom checks — without re-parsing documents yourself.
 docmeta exposes its results three ways, each suited to a different integration
 style:
 
-- **`--format json`** — a single structured object per run, for pipelines that
+- **`--format json`**: a single structured object per run, for pipelines that
   shell out and parse stdout.
-- **The `get` command** — pull specific metadata field values out of files, for
+- **The `get` command**: pull specific metadata field values out of files, for
   scripts that need a few values rather than a full validation report.
-- **The TypeScript API** — call docmeta's command cores directly from Node.js,
+- **The TypeScript API**: call docmeta's command cores directly from Node.js,
   for tools built on top of it.
 
 <Tabs>
@@ -63,12 +63,12 @@ The object has a `summary` and a `results` array:
 
 The fields:
 
-- **`summary`** — run-wide counts: `files` checked, `passed`, `failed`, and the
+- **`summary`**: run-wide counts: `files` checked, `passed`, `failed`, and the
   total `errors` across all files.
-- **`results`** — one object per file: `file` (the path as docmeta saw it),
+- **`results`**: one object per file: `file` (the path as docmeta saw it),
   `format` (the extractor that read it), `ok`, `schemas` (the resolved schema
   set), and `errors`.
-- **Each error** — `schema` (the schema id that produced it), `instancePath` (a
+- **Each error**: `schema` (the schema id that produced it), `instancePath` (a
   JSON Pointer to the field, `""` for the document root), `message`, and `line`
   (1-based, when docmeta can locate it).
 
@@ -148,10 +148,10 @@ npx -y docmeta get title,tags "docs/**/*.md" --format json
 
 Each object reports:
 
-- **`file`** — the file path.
-- **`present`** — whether the file had a metadata block at all (`false` for a
+- **`file`**: the file path.
+- **`present`**: whether the file had a metadata block at all (`false` for a
   document with no frontmatter).
-- **`values`** — the requested fields and their values.
+- **`values`**: the requested fields and their values.
 
 <Aside type="caution" title="Unset fields are omitted from JSON, not null">
 A requested field that the file does not define is left unset internally, and
@@ -232,13 +232,13 @@ for (const result of results) {
 
 `runValidate` accepts a `ValidateOptions` object. The fields mirror the CLI:
 
-- **`inputs`** — files, directories, or globs to validate. When empty, docmeta
+- **`inputs`**: files, directories, or globs to validate. When empty, docmeta
   falls back to `paths:` from the config, exactly as the CLI does.
-- **`cliSchemas`** — schema references that override `$schema` and config (the
+- **`cliSchemas`**: schema references that override `$schema` and config (the
   programmatic equivalent of `--schema`).
-- **`exts`**, **`exclude`**, **`as`**, **`configPath`** — directory-walk
+- **`exts`**, **`exclude`**, **`as`**, **`configPath`**: directory-walk
   extensions, exclude globs, a forced extractor name, and a config-file path.
-- **`stdinContent`** — content for a `-` (stdin) input, supplied directly rather
+- **`stdinContent`**: content for a `-` (stdin) input, supplied directly rather
   than read from the process.
 
 It resolves to a `ValidateRun` — `{ results, summary }` — using the

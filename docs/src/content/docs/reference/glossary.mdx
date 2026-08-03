@@ -59,11 +59,11 @@ A pointer to a schema — what appears in a `--schema` flag, a document's
 [`$schema`](#schema-document-key) key, or config. docmeta classifies each
 reference into one of three kinds by its shape:
 
-- **builtin** — a `vendor:name:version` id such as `google:okf:0.1`, resolved to
+- **builtin**: a `vendor:name:version` id such as `google:okf:0.1`, resolved to
   a schema shipped with docmeta.
-- **file** — a `.json` path or any path with a separator, such as
+- **file**: a `.json` path or any path with a separator, such as
   `./my.schema.json`, resolved from the local filesystem.
-- **url** — an `http://` or `https://` URL, fetched over the network.
+- **url**: an `http://` or `https://` URL, fetched over the network.
 
 See [Reference kinds](/docmeta/reference/schema-resolution/#reference-kinds).
 

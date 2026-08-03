@@ -1,13 +1,13 @@
 ---
 title: Configuration reference
-description: Every docmeta.config.yaml key — paths, exclude, schemas, overrides — with types, defaults, discovery rules, and how config merges with CLI flags.
+description: Every docmeta.config.yaml key (paths, exclude, schemas, overrides), with types, defaults, discovery rules, and how config merges with CLI flags.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
 A `docmeta.config.yaml` file supplies default targets, excludes, the default
 [schema set](/docmeta/reference/schema-resolution/), and optional per-glob overrides, so
-CI can run a bare `docmeta validate`. The config is optional — every key has a
+CI can run a bare `docmeta validate`. The config is optional; every key has a
 default, and docmeta runs without a config when you pass paths and schemas on
 the command line.
 
@@ -38,8 +38,8 @@ command. Every key is optional, and every one is overridden by its CLI flag.
 | `maxCostUsd` | `number` | none | Stop scheduling new files once this much has been spent. |
 | `concurrency` | `number` | `4` | Files inferred in parallel. Between 1 and 64. |
 
-A numeric key outside its range — or one that is not a finite number, such as
-YAML's `1e999` — is an error (exit 2).
+A numeric key outside its range, or one that is not a finite number such as
+YAML's `1e999`, is an error (exit 2).
 
 ```yaml title="docmeta.config.yaml"
 fill:
@@ -92,7 +92,7 @@ directory for these files, in order, and uses the first one it finds:
 2. `docmeta.config.yml`
 
 If neither exists, docmeta runs with no config. When you pass `-c/--config
-<path>` explicitly, that file must exist — a missing config file is an error
+<path>` explicitly, that file must exist; a missing config file is an error
 (exit 2).
 
 <Aside type="note">

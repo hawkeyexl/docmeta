@@ -108,18 +108,18 @@ $ docmeta validate bad-timestamp.md --format json
 
 The shape is stable:
 
-- **`summary`** — counts across the whole run.
+- **`summary`**: counts across the whole run.
   - `files` — number of files checked.
   - `passed` — files that satisfied every schema in their set.
   - `failed` — files with at least one validation error.
   - `errors` — total individual validation errors across all files.
-- **`results`** — one object per file.
+- **`results`**: one object per file.
   - `file` — the file path as docmeta saw it.
   - `format` — the extractor that read the file (for example `markdown`).
   - `ok` — `true` when the file passed every schema in its set.
   - `schemas` — the schema ids the file was validated against.
   - `errors` — the individual violations for this file (empty when `ok`).
-- **Each error** — one schema violation.
+- **Each error**: one schema violation.
   - `schema` — the schema id that produced the error.
   - `instancePath` — a JSON Pointer to the offending field (`""` for the
     document root, `"/tags/0"` for the first item of `tags`).
@@ -188,10 +188,10 @@ text so they parse reliably.
 
 docmeta decides whether to emit ANSI color like this, in order:
 
-1. **`--no-color`** — passing this flag disables color unconditionally.
-2. **`NO_COLOR`** — if the [`NO_COLOR`](https://no-color.org/) environment
+1. **`--no-color`**: passing this flag disables color unconditionally.
+2. **`NO_COLOR`**: if the [`NO_COLOR`](https://no-color.org/) environment
    variable is set to any non-empty value, color is disabled.
-3. **TTY detection** — otherwise, color is emitted only when stdout is an
+3. **TTY detection**: otherwise, color is emitted only when stdout is an
    interactive terminal (a TTY).
 
 In practice this means color turns off automatically in CI, because a piped or
