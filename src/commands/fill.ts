@@ -271,7 +271,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
     try {
       extractor.apply(content, {});
     } catch (err) {
-      return errorResult(label, extractor.name, (err as Error).message);
+      return errorResult(label, extractor.name, (err as Error).message, schemaSet);
     }
 
     // ---- Propose (cache first) -------------------------------------------
@@ -296,6 +296,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
           label,
           extractor.name,
           "Skipped: cost budget reached before this file was processed.",
+          schemaSet,
         );
       }
       const envelope = buildEnvelopeSchema(candidates, collectDefs(schemas));
@@ -311,6 +312,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
           label,
           extractor.name,
           `Could not build a proposal schema from ${schemaSet.join(", ")}: ${(err as Error).message}`,
+          schemaSet,
         );
       }
       inFlight++;
@@ -323,7 +325,8 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
             filePath: label,
             existing: extracted.data,
             candidates,
-            body: bodyOf(content),
+            // Whole file as context; truncation happens in buildUserPrompt.
+            body: content,
           }),
           schema: envelope,
           validate,
@@ -338,6 +341,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
           label,
           extractor.name,
           run.error ?? "The model returned no proposal.",
+          schemaSet,
         );
       }
       proposals = run.result;
@@ -384,7 +388,13 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
     try {
       next = extractor.apply(content, patchOf(writable));
     } catch (err) {
-      return errorResult(label, extractor.name, (err as Error).message, fields);
+      return errorResult(
+        label,
+        extractor.name,
+        (err as Error).message,
+        schemaSet,
+        fields,
+      );
     }
 
     const changed = next !== content;
@@ -569,18 +579,19 @@ function gate(
 // Plumbing
 // ---------------------------------------------------------------------------
 
+/**
+ * `schemas` is passed once resolution has succeeded, so a JSON consumer can
+ * tell "the schema set was never resolved" from "it resolved and then writing
+ * was refused" — the two need different follow-up.
+ */
 function errorResult(
   file: string,
   format: string,
   message: string,
+  schemas: string[] = [],
   fields: FilledField[] = [],
 ): FillFileResult {
-  return { file, format, schemas: [], fields, changed: false, error: message };
-}
-
-/** Document body sent to the model — the whole file is fine context. */
-function bodyOf(content: string): string {
-  return content;
+  return { file, format, schemas, fields, changed: false, error: message };
 }
 
 /**

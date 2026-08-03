@@ -274,6 +274,9 @@ describe("runFill — mechanical checks precede confidence", () => {
     expect(results[0]?.error).toMatch(/fenced/i);
     // The point of the check: no request was ever made.
     expect(provider.requests).toHaveLength(0);
+    // Schema resolution already succeeded, so the result must say so — "never
+    // resolved" and "resolved, then writing refused" need different follow-up.
+    expect(results[0]?.schemas).toEqual(["google:okf:0.1"]);
   });
 
   it("reports a read-only format as a per-file error, not a run abort", async () => {
@@ -483,29 +486,18 @@ describe("runFill — operational errors", () => {
     ).rejects.toThrow(/maxCostUsd/);
   });
 
-  it("names extractor formats, not extensions, for a bad --as", async () => {
+  it("errors on an unknown --as format, naming extractors not extensions", async () => {
     // `--as` takes "markdown", so listing ".md" would point at the wrong value.
-    await expect(
-      runFill({
-        ...base,
-        cwd: dir,
-        inputs: ["-"],
-        as: "nonsense",
-        inferenceProvider: propose({}),
-      }),
-    ).rejects.toThrow(/markdown/);
-  });
-
-  it("errors on an unknown --as format", async () => {
-    await expect(
-      runFill({
-        ...base,
-        cwd: dir,
-        inputs: ["-"],
-        as: "nonsense",
-        inferenceProvider: propose({}),
-      }),
-    ).rejects.toThrow(/Unknown format/);
+    const run = runFill({
+      ...base,
+      cwd: dir,
+      inputs: ["-"],
+      as: "nonsense",
+      inferenceProvider: propose({}),
+    });
+    await expect(run).rejects.toThrow(/Unknown format/);
+    await expect(run).rejects.toThrow(/markdown/);
+    await expect(run).rejects.not.toThrow(/\.md/);
   });
 
   it("errors when stdin is used without --as", async () => {

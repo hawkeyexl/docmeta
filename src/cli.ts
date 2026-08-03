@@ -256,9 +256,9 @@ export function buildProgram(): Command {
     .option("--model <model>", "model override")
     .option("--no-cache", "bypass the proposal cache")
     .option("--max-cost-usd <usd>", "proposal cost budget", parseFloat)
-    .option("--concurrency <n>", "files inferred in parallel", (v) =>
-      parseInt(v, 10),
-    )
+    // parseFloat, not parseInt: parseInt("3.5") silently yields 3, which would
+    // defeat runFill's integer check and hide the mistake from the user.
+    .option("--concurrency <n>", "files inferred in parallel", parseFloat)
     .option("-f, --format <format>", "output: pretty | json", "pretty")
     .option("-c, --config <path>", "path to a docmeta config file")
     .addHelpText(

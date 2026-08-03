@@ -46,7 +46,7 @@ export function renderFillPretty(
     lines.push(`${mark} ${result.file}`);
     for (const f of written) {
       lines.push(
-        `    ${c.cyan(f.field)}  ${format(f.value)}  ${c.dim(score(f.confidence))}`,
+        `    ${c.cyan(f.field)}  ${formatValue(f.value)}  ${c.dim(score(f.confidence))}`,
       );
     }
     if (low.length > 0) {
@@ -95,7 +95,8 @@ export function renderFillPretty(
   return lines.join("\n");
 }
 
-function format(value: unknown): string {
+/** Named to avoid shadowing `renderFill`'s `format` parameter. */
+function formatValue(value: unknown): string {
   if (typeof value === "string") return value;
   return JSON.stringify(value) ?? String(value);
 }
