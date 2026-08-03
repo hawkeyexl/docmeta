@@ -133,6 +133,18 @@ Exit code `1` reflects validation failures in the documents. Exit code `2`
 reflects a problem running docmeta itself, and means no validation verdict was
 produced.
 
+### Per-command meaning of exit 1
+
+| Command | Exits 1 when |
+|---|---|
+| `validate` | One or more files failed validation. |
+| `get` | Never — a requested field that is absent is reported as unset, not as a failure. |
+| [`fill`](/docmeta/reference/cli/#fill) | A property the schema lists as `required` could not be filled confidently, or a file errored. Skipped **optional** properties leave the exit code at `0`. |
+| `schemas` | Never. |
+
+The rule behind `fill`'s version is the same as `validate`'s: exit 1 means the
+documents still need work, not that docmeta malfunctioned.
+
 ## stdout vs stderr
 
 - **Primary output** — the rendered report in any format — goes to **stdout**.

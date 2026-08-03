@@ -244,6 +244,47 @@ before CI does.
   exactly, run it from the repo root.
 </Aside>
 
+## Let docmeta draft the fix
+
+When the failure is a *missing* field rather than a malformed one — and
+especially when several pages fail the same way —
+[`docmeta fill`](/docmeta/reference/cli/#fill) can propose the values for you. It
+reads the page, resolves the same schema the check used, and writes back the
+values it is confident about.
+
+Preview first:
+
+```sh
+docmeta fill docs/intro.md --dry-run
+```
+
+```
+✓ docs/intro.md
+    /description  A tour of the CLI and its three commands.  0.91
+    below 0.7: /resource 0.38
+
+Threshold 0.7 · 1 file · 1 field would be written · 1 skipped
+```
+
+Then apply it and check your work with the command that flagged the problem:
+
+```sh
+docmeta fill docs/intro.md && docmeta validate docs/intro.md
+```
+
+<Aside type="caution">
+`fill` edits the file in place — `--dry-run` is the preview. Review the diff
+before you commit; a proposed `description` is a draft, not a decision.
+</Aside>
+
+Anything below the confidence threshold is skipped and named, so you still get a
+short list of what needs you. `fill` never touches a field that is already
+present and valid, and it never writes its own confidence into your document.
+
+`fill` won't help with a **malformed** value it can't improve on, or with a
+[schema not found](#schema-not-found) error — those are the setup problems in the
+next section.
+
 ## What the exit code means
 
 docmeta's exit code is the contract CI gates on. If you're scripting the check

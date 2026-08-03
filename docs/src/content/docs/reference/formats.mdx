@@ -12,14 +12,37 @@ implemented and counts toward directory and glob walks.
 
 ## Formats
 
-| Format (`--as` name) | Extensions | Metadata source |
-|---|---|---|
-| `markdown` | `.md`, `.markdown` | Leading fenced frontmatter — YAML (`--- … ---`), TOML (`+++ … +++`), or JSON (`;;; … ;;;`). |
-| `mdx` | `.mdx` | Leading fenced frontmatter — YAML, TOML, or JSON. |
-| `asciidoc` | `.adoc`, `.asciidoc` | Fenced frontmatter, or the native header: `= Title` plus `:key: value` attributes. |
-| `rst` | `.rst` | Fenced frontmatter, or the native section title plus `:key: value` docinfo fields. |
-| `xml` | `.xml` | Attributes of the root element. |
-| `html` | `.html`, `.htm` | `<title>` plus `<meta name="…" content="…">` tags. |
+| Format (`--as` name) | Extensions | Metadata source | [`fill`](/docmeta/reference/cli/#fill) can write |
+|---|---|---|---|
+| `markdown` | `.md`, `.markdown` | Leading fenced frontmatter — YAML (`--- … ---`), TOML (`+++ … +++`), or JSON (`;;; … ;;;`). | Yes |
+| `mdx` | `.mdx` | Leading fenced frontmatter — YAML, TOML, or JSON. | Yes |
+| `asciidoc` | `.adoc`, `.asciidoc` | Fenced frontmatter, or the native header: `= Title` plus `:key: value` attributes. | Only into an existing fenced block |
+| `rst` | `.rst` | Fenced frontmatter, or the native section title plus `:key: value` docinfo fields. | Only into an existing fenced block |
+| `xml` | `.xml` | Attributes of the root element. | No |
+| `html` | `.html`, `.htm` | `<title>` plus `<meta name="…" content="…">` tags. | No |
+
+### Why some formats are read-only
+
+Reading metadata and writing it back are not symmetric. `fill` will only write a
+format it can round-trip without disturbing the rest of the document.
+
+Fenced frontmatter round-trips cleanly: docmeta replaces only the characters
+between the fences, so the body, the fence style, and — for YAML — comments and
+quoting survive untouched.
+
+The native syntaxes do not. AsciiDoc attributes and reStructuredText docinfo
+fields are read through a YAML scalar parse that loses the original spelling, and
+an rst `title` is *synthesized* from the section heading rather than stored as a
+field — writing it back would mean rewriting the underline adornment or adding a
+`:title:` field that shadows the heading. Nor can docmeta simply add a fenced
+block to those files: a bare `---` is a transition in reStructuredText and an
+open-block delimiter in AsciiDoc, so inventing one would change how the page
+renders. XML and HTML would have to be re-serialized wholesale, which reflows
+entities, attribute quoting, and void elements across the entire file.
+
+Run `docmeta schemas` to see the current writability of each format. Targeting a
+read-only file with `fill` is reported as a per-file error; the rest of the run
+continues.
 
 The `--as` name is the extractor name in the first column. The extension match
 is case-insensitive.

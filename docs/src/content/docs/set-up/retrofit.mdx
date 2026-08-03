@@ -130,9 +130,49 @@ The staged technique — validate a field's format first, drive coverage, then p
   description="The staged ratchet: add a field as optional-but-validated, measure coverage with get, then promote it to required."
 />
 
+## Step 6 — Close the backlog with `fill`
+
+Ratcheting works because new pages arrive already compliant. It does nothing for the pages that were already there — and on a mature repo that backlog is most of the docset. Typing `description:` into four hundred existing files by hand is the reason adoption stalls at step 5.
+
+[`docmeta fill`](/docmeta/reference/cli/#fill) works that backlog down. For each page it resolves the same schema set the gate uses, asks an LLM to infer the properties that are missing or invalid, and writes back only the values it is confident about. Because the schema drives the prompt, `fill` proposes exactly the fields you are about to require — and nothing else.
+
+Preview before you trust it:
+
+```sh
+docmeta fill docs/reference/ --dry-run
+```
+
+```
+✓ docs/reference/api.md
+    /description  Reference for the public HTTP API.  0.93
+    below 0.7: /resource 0.41
+
+Threshold 0.7 · 12 files · 9 fields would be written · 7 skipped
+```
+
+Then run it for real on **one folder at a time**, and review the diff like any other pull request:
+
+```sh
+docmeta fill docs/reference/ && git diff
+```
+
+<Aside type="caution">
+`fill` writes to your files by default — `--dry-run` is the preview, not the reverse. Run it on a clean working tree so `git diff` shows exactly what changed, and keep the blast radius to one folder per commit.
+</Aside>
+
+Values below the threshold are skipped and listed by name, never written with a caveat and never silently dropped. Those are the pages that genuinely need a human, and now you have a short list of them instead of the whole docset. Raise `--confidence` when you want only near-certain values:
+
+```sh
+docmeta fill docs/reference/ --confidence 0.9 --dry-run
+```
+
+Re-running at a different threshold re-scores the cached proposals, so tuning the gate costs nothing after the first pass.
+
+Once a folder is filled and reviewed, promote its field to `required` using the ratchet from step 5. `fill` is what makes that promotion cheap.
+
 ## What you have now
 
-A repo that went green on day one, a CI gate that has been catching regressions since before the standard was finished, and a folder-by-folder path to the stricter rules you actually want. You adopted docmeta without a flag day and without a backlog of red checks blocking everyone's work.
+A repo that went green on day one, a CI gate that has been catching regressions since before the standard was finished, a folder-by-folder path to the stricter rules you actually want, and a way to clear the existing backlog without a data-entry marathon. You adopted docmeta without a flag day and without a backlog of red checks blocking everyone's work.
 
 ## Where to go next
 

@@ -19,10 +19,34 @@ the command line.
 | `exclude` | `string[]` | none | Globs to exclude from directory and glob walks. Merged with `--exclude` and the [default ignores](/docmeta/reference/cli/#default-ignores). |
 | `schemas` | `string[]` | none | Default [schema set](/docmeta/reference/schema-resolution/) applied to every file that no higher-precedence rule matches. |
 | `overrides` | `Override[]` | none | Per-glob schema overrides. The first matching entry wins. See [Overrides](#overrides). |
+| `fill` | `Fill` | none | Defaults for [`docmeta fill`](/docmeta/reference/cli/#fill). See [Fill](#fill). |
 
 The top level must be a YAML mapping. Each of `paths`, `exclude`, and `schemas`
 must be a list of strings; a non-list or a list containing a non-string value is
 an error (exit 2).
+
+### Fill
+
+`fill` is a mapping of defaults for the [`fill`](/docmeta/reference/cli/#fill)
+command. Every key is optional, and every one is overridden by its CLI flag.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `provider` | `string` | `anthropic` | Inference provider: `anthropic`, `openai`, `claude-cli`, or `mock`. |
+| `model` | `string` | provider default | Model override. |
+| `confidenceThreshold` | `number` | `0.7` | Minimum self-reported confidence, from 0 to 1, needed to write a value. |
+| `maxCostUsd` | `number` | none | Stop scheduling new files once this much has been spent. |
+| `concurrency` | `number` | `4` | Files inferred in parallel. Between 1 and 64. |
+
+A numeric key outside its range — or one that is not a finite number, such as
+YAML's `1e999` — is an error (exit 2).
+
+```yaml title="docmeta.config.yaml"
+fill:
+  provider: anthropic
+  confidenceThreshold: 0.9
+  maxCostUsd: 5
+```
 
 ### Overrides
 
@@ -87,6 +111,7 @@ corresponding config value; others merge with it.
 | Inputs | `[paths...]` | `paths` | CLI positional paths **override** config `paths` entirely. Config `paths` is used only when no positional paths are given. |
 | Excludes | `--exclude` | `exclude` | **Merged.** The effective exclude set is config `exclude` plus every `--exclude` glob plus the [default ignores](/docmeta/reference/cli/#default-ignores). |
 | Schemas | `-s/--schema` | `schemas` / `overrides` | CLI `--schema` **overrides** both `schemas` and `overrides` for every file. See [precedence](/docmeta/reference/schema-resolution/#precedence). |
+| Fill settings | `--confidence`, `--provider`, `--model`, `--max-cost-usd`, `--concurrency` | `fill.*` | Each flag **overrides** its matching `fill` key. An unset flag falls back to config, then to the built-in default. |
 
 <Aside type="caution">
 `--schema` is all-or-nothing: passing it once makes that schema set apply to
