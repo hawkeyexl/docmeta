@@ -19,6 +19,7 @@ import {
   escapePointerSegment,
   lineForFactory,
 } from "./frontmatter.js";
+import { applyFencedOnly } from "./frontmatter-write.js";
 
 const TITLE = /^=\s+(.+?)\s*$/;
 // `:!name:` or `:name!:` — an unset attribute.
@@ -94,6 +95,8 @@ export const asciidocExtractor: MetadataExtractor = {
   name: "asciidoc",
   extensions: [".adoc", ".asciidoc"],
   implemented: true,
+  apply: (content, patch, options) =>
+    applyFencedOnly(content, patch, options, "asciidoc"),
   extract(content) {
     if (hasFrontmatterFence(content)) {
       // Delegate only when a complete frontmatter block is actually present;

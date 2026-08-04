@@ -17,9 +17,9 @@
  */
 import { parseDocument, LineCounter, isMap, isSeq, isScalar } from "yaml";
 import { parse as parseToml } from "smol-toml";
-import type { ExtractedMetadata } from "../types.js";
+import type { ExtractedMetadata, FrontmatterFlavor } from "../types.js";
 
-type Flavor = "yaml" | "toml" | "json";
+type Flavor = FrontmatterFlavor;
 
 /** Any recognized opening fence, for the adoc/rst delegation gate. */
 const OPEN_FENCE = /^(?:---|\+\+\+|;;;)\r?\n/;
@@ -36,11 +36,26 @@ const FENCES: Fence[] = [
   { open: /^;;;\r?\n/, flavor: "json", isClose: (l) => l === ";;;" },
 ];
 
-interface Block {
-  /** Raw content between the fences (no leading/trailing newline). */
-  raw: string;
+/**
+ * Character offsets bracketing the leading fenced block, measured against the
+ * *original* content — BOM included, CRLF intact. Writing metadata back is a
+ * surgical splice of `[innerStart, innerEnd)`, so everything outside that range
+ * (the BOM, both fences, the whole body, the file's final-newline state) is
+ * preserved byte for byte by construction rather than by careful reassembly.
+ */
+export interface FrontmatterLocation {
   /** Which flavor the opening fence selected. */
   flavor: Flavor;
+  /** Offset of the opening fence's first char (1 when a BOM precedes it). */
+  openStart: number;
+  /** Offset just past the opening fence's terminator == start of inner text. */
+  innerStart: number;
+  /** Offset of the closing fence line's first char == end of inner text. */
+  innerEnd: number;
+  /** Offset just past the closing fence's terminator (or EOF). */
+  closeEnd: number;
+  /** Line terminator of the opening fence line — the block's EOL on re-emission. */
+  eol: "\n" | "\r\n";
   /** 1-based file line of the first content line (always 2). */
   firstContentLine: number;
 }
@@ -55,27 +70,59 @@ export function hasFrontmatterFence(content: string): boolean {
   return OPEN_FENCE.test(stripBom(content));
 }
 
-/** Locate the leading fenced front matter block, if any. */
-function splitFrontmatter(content: string): Block | null {
-  const body = stripBom(content);
+/**
+ * Locate the leading fenced front matter block, if any. Returns null when there
+ * is no opening fence *or* no matching closing fence — an unterminated fence is
+ * not front matter (see the rst extractor, which relies on that distinction).
+ */
+export function locateFrontmatter(content: string): FrontmatterLocation | null {
+  const bom = content.charCodeAt(0) === 0xfeff ? 1 : 0;
+  const body = bom === 1 ? content.slice(1) : content;
   const fence = FENCES.find((f) => f.open.test(body));
   if (!fence) return null;
 
-  const lines = body.split(/\r?\n/);
-  let close = -1;
-  for (let i = 1; i < lines.length; i++) {
-    if (fence.isClose(lines[i] ?? "")) {
-      close = i;
-      break;
-    }
-  }
-  if (close === -1) return null;
+  // The open regexes all require a terminator, so this newline always exists.
+  const openNl = body.indexOf("\n");
+  const eol = openNl > 0 && body.charCodeAt(openNl - 1) === 13 ? "\r\n" : "\n";
+  const innerStart = openNl + 1;
 
-  return {
-    raw: lines.slice(1, close).join("\n"),
-    flavor: fence.flavor,
-    firstContentLine: 2,
-  };
+  let cursor = innerStart;
+  while (cursor <= body.length) {
+    const nl = body.indexOf("\n", cursor);
+    const hasNl = nl !== -1;
+    const lineEnd = hasNl ? nl : body.length;
+    const hadCr = lineEnd > cursor && body.charCodeAt(lineEnd - 1) === 13;
+    const line = body.slice(cursor, hadCr ? lineEnd - 1 : lineEnd);
+    if (fence.isClose(line)) {
+      return {
+        flavor: fence.flavor,
+        openStart: bom,
+        innerStart: innerStart + bom,
+        innerEnd: cursor + bom,
+        closeEnd: (hasNl ? lineEnd + 1 : lineEnd) + bom,
+        eol,
+        firstContentLine: 2,
+      };
+    }
+    if (!hasNl) break;
+    cursor = lineEnd + 1;
+  }
+  return null;
+}
+
+/**
+ * The block's inner text, LF-normalized with the final terminator removed —
+ * byte-identical to what the parsers have always received, which is what lets
+ * `extractFrontmatter` sit on top of the locator with no behavior change.
+ */
+export function frontmatterInnerText(
+  content: string,
+  loc: FrontmatterLocation,
+): string {
+  return content
+    .slice(loc.innerStart, loc.innerEnd)
+    .replace(/\r\n/g, "\n")
+    .replace(/\n$/, "");
 }
 
 export function escapePointerSegment(key: string): string {
@@ -277,18 +324,19 @@ export function extractFrontmatter(
   content: string,
   format: string,
 ): ExtractedMetadata {
-  const block = splitFrontmatter(content);
-  if (!block) {
+  const loc = locateFrontmatter(content);
+  if (!loc) {
     return { data: {}, present: false, format, lineFor: () => undefined };
   }
 
-  const prefixLines = block.firstContentLine - 1;
-  switch (block.flavor) {
+  const raw = frontmatterInnerText(content, loc);
+  const prefixLines = loc.firstContentLine - 1;
+  switch (loc.flavor) {
     case "yaml":
-      return parseYamlBlock(block.raw, prefixLines, format);
+      return parseYamlBlock(raw, prefixLines, format);
     case "json":
-      return parseJsonBlock(block.raw, prefixLines, format);
+      return parseJsonBlock(raw, prefixLines, format);
     case "toml":
-      return parseTomlBlock(block.raw, prefixLines, format);
+      return parseTomlBlock(raw, prefixLines, format);
   }
 }

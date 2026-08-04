@@ -3,7 +3,7 @@ title: docmeta
 description: Validate the presence and format of document metadata against JSON Schema, built for CI.
 template: splash
 hero:
-  tagline: Validate the presence and format of document metadata against JSON Schema — built for CI.
+  tagline: Validate the presence and format of document metadata against JSON Schema, built for CI.
   actions:
     - text: Get started
       link: /docmeta/get-started/
@@ -17,9 +17,9 @@ hero:
 
 import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-docmeta checks that your documents carry the metadata your tooling depends on —
+docmeta checks that your documents carry the metadata your tooling depends on,
 that every page declares a `type`, that timestamps are real dates, that required
-fields are actually present — and it fails your build when they aren't. It reads
+fields are actually present, and it fails your build when they aren't. It reads
 the frontmatter or headers from your files, validates them against a
 [JSON Schema](https://json-schema.org/), and reports what's missing or malformed.
 
@@ -89,7 +89,7 @@ which requires only `type`.
   />
 </CardGrid>
 
-## What docmeta checks — and what it doesn't
+## What docmeta checks, and what it doesn't
 
 <CardGrid>
   <Card title="It checks" icon="approve-check">

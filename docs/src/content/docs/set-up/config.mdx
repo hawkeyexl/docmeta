@@ -17,7 +17,7 @@ docmeta finds your config in one of two ways:
 - **Explicit path.** Pass `-c <path>` (or `--config <path>`) to point at a specific file. If that file does not exist, docmeta exits with an error rather than falling back to discovery.
 
 <Aside type="note">
-Discovery only checks the current directory — docmeta does not walk up parent folders. Run `docmeta validate` from your repo root, or pass `--config` with an explicit path.
+Discovery only checks the current directory; docmeta does not walk up parent folders. Run `docmeta validate` from your repo root, or pass `--config` with an explicit path.
 </Aside>
 
 ## The keys
@@ -32,15 +32,15 @@ paths:
   - "articles/**/*.md"
 ```
 
-With this in place, a bare `docmeta validate` checks everything under `docs/` and `articles/`. Pass paths explicitly and they take priority — `docmeta validate README.md` validates only `README.md`, ignoring `paths`.
+With this in place, a bare `docmeta validate` checks everything under `docs/` and `articles/`. Pass paths explicitly and they take priority, so `docmeta validate README.md` validates only `README.md`, ignoring `paths`.
 
 <Aside type="caution">
-If you provide no positional paths **and** `paths` is empty or absent (and no config is found), docmeta exits with code `2` and the message `No files to validate.` This is an operational error — docmeta will not silently do nothing.
+If you provide no positional paths **and** `paths` is empty or absent (and no config is found), docmeta exits with code `2` and the message `No files to validate.` This is an operational error; docmeta will not silently do nothing.
 </Aside>
 
 ### `exclude`
 
-A list of globs to skip. Your excludes are **merged with** docmeta's built-in defaults and any `--exclude` flags passed on the command line — they add to the exclusion set rather than replacing it.
+A list of globs to skip. Your excludes are **merged with** docmeta's built-in defaults and any `--exclude` flags passed on the command line, so they add to the exclusion set rather than replacing it.
 
 ```yaml title="docmeta.config.yaml"
 exclude:
@@ -55,7 +55,7 @@ The final exclusion set is: the built-in defaults (`**/node_modules/**`, `**/.gi
 
 ### `schemas`
 
-The default schema **set** applied to every matched file. Each file must satisfy **all** schemas in the list — they are validated against the set, not against the first match.
+The default schema **set** applied to every matched file. Each file must satisfy **all** schemas in the list: they are validated against the set, not against the first match.
 
 ```yaml title="docmeta.config.yaml"
 schemas:

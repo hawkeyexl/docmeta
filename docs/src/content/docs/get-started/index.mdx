@@ -7,7 +7,7 @@ import { Steps, Tabs, TabItem, Aside, LinkCard } from '@astrojs/starlight/compon
 
 This page takes you from nothing to a validated file. You'll install docmeta (or
 skip install entirely), validate one document, and learn to read both a passing
-and a failing result — including the summary line that CI watches.
+and a failing result, including the summary line that CI watches.
 
 ## Before you start
 
@@ -103,7 +103,7 @@ every problem it found:
 
 Each error line names **the field**, **what's wrong**, the **line** (when docmeta
 can locate it), and the **schema** that flagged it, in brackets. Here `(root)`
-means the problem is with the document as a whole rather than one field — the
+means the problem is with the document as a whole rather than one field. The
 required `type` is missing entirely, so there's no line to point at. When the
 fix isn't obvious, the [Fix a failing check](/docmeta/fix/) page decodes every part of
 this line.
@@ -131,15 +131,15 @@ N files checked, M passed, K failed, E errors
 A run is green only when `K failed` is `0`. The exit code follows: `0` when
 nothing failed, `1` when one or more files failed validation. (A third code,
 `2`, signals an operational problem such as a missing schema or no files to
-check — see [Fix a failing check](/docmeta/fix/) for those.)
+check; see [Fix a failing check](/docmeta/fix/) for those.)
 
-## What docmeta is — and isn't
+## What docmeta is, and isn't
 
 docmeta is a **metadata gate**. It confirms that the structured data attached to
 your documents is present and correctly formatted, according to a schema you
 control. It is not a linter for your writing, a link checker, or a renderer. If
 your schema requires a `type` and a valid `timestamp`, that's what docmeta
-enforces — no more, no less.
+enforces, no more and no less.
 
 ## Next steps
 

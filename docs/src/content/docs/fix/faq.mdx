@@ -1,13 +1,13 @@
 ---
 title: FAQ
-description: Short answers to the questions that come up most when a docmeta check fails — no frontmatter, which schema fired, validating one field, stdin, exit codes, and more.
+description: Short answers to the questions that come up most when a docmeta check fails: no frontmatter, which schema fired, validating one field, stdin, exit codes, and more.
 ---
 
 import { Aside, LinkCard } from '@astrojs/starlight/components';
 
 Quick answers to the questions contributors ask most when a docmeta check goes
 red. Each one links to the page that covers it in full. If you're staring at a
-failing check right now, start with [Fix a failing check](/docmeta/fix/) — this page is
+failing check right now, start with [Fix a failing check](/docmeta/fix/); this page is
 for the "wait, but what about…" follow-ups.
 
 ## What if a file has no frontmatter at all?
@@ -17,14 +17,14 @@ frontmatter block reads as empty metadata, so a schema that requires `type` (the
 built-in default does) reports the same "must have required property 'type'"
 error it would for a file that simply left `type` out.
 
-So an empty or frontmatter-less file is not a free pass — it's the maximally
+So an empty or frontmatter-less file is not a free pass. It's the maximally
 failing case. If you expected the file to have metadata, the usual cause is a
 missing opening `---` fence, or content sitting above the block. See
 [No frontmatter at all](/docmeta/fix/#no-frontmatter-at-all) for the fix.
 
 ## Which schema validated my file, and why did *this* rule fire?
 
-Every error line ends with the schema that produced it, in brackets — for
+Every error line ends with the schema that produced it, in brackets. For
 example `[google:okf:0.1]`. That's the schema whose rule you tripped. If you're
 surprised by *which* schema applied, docmeta picks it through a fixed precedence
 chain: a `--schema` flag wins over a `$schema` key in your file, which wins over
@@ -32,7 +32,7 @@ config `overrides`, then config `schemas`, then the built-in default.
 
 The first source that yields a schema wins, and lower sources are ignored for
 that file. So if your repo's config assigns a strict schema to `/api/**` and
-your file is under `/api`, that's the rule that fired — even if you never set
+your file is under `/api`, that's the rule that fired, even if you never set
 anything in the file itself.
 
 <LinkCard
@@ -43,7 +43,7 @@ anything in the file itself.
 
 ## Can I validate just one field?
 
-No — `validate` checks a file against whole schemas, not individual fields. There
+No. `validate` checks a file against whole schemas, not individual fields. There
 is no "validate only `type`" mode. What you *can* do is narrow which schema
 applies (via `$schema`, config `overrides`, or `--schema`) so that only the rules
 you care about run.
@@ -71,7 +71,7 @@ cat page.md | docmeta validate - --as markdown
 same pattern works for `get`. Without `--as`, stdin is an error.
 
 <LinkCard
-  title="CLI reference — shared input model"
+  title="CLI reference: shared input model"
   href="/docmeta/reference/cli/#shared-input-model"
   description="How paths, stdin, and --as work the same way across validate and get."
 />
@@ -85,7 +85,7 @@ docmeta validate docs/ --ext md
 ```
 
 This walks `docs/` but considers only `.md` files, leaving `.mdx`, `.adoc`, and
-the rest untouched. Pass a comma-separated list for more than one — `--ext md,mdx`.
+the rest untouched. Pass a comma-separated list for more than one, as in `--ext md,mdx`.
 
 <Aside type="note">
   `--ext` filters directory and glob expansion. An explicit file path you pass
@@ -113,8 +113,8 @@ gates on this code, so the distinction matters when you read a raw log.
 
 ## Does docmeta check my prose or page content?
 
-No. docmeta validates the **presence and format of metadata** — the fields in
-your frontmatter — and nothing about the body of the document. It won't flag
+No. docmeta validates the **presence and format of metadata**, the fields in
+your frontmatter, and nothing about the body of the document. It won't flag
 spelling, broken links, tone, or anything in the prose. A red check always points
 at a frontmatter field, never at your writing.
 
@@ -129,7 +129,7 @@ docmeta validate docs/ --exclude "**/drafts/**"
 `--exclude` is repeatable and merges with the default ignores (`node_modules`,
 `.git`) and anything in your config. To make the exclusion permanent for the
 whole repo, add it under `exclude:` in `docmeta.config.yaml` instead, so every
-run — local and CI — skips the same files.
+run, local and CI, skips the same files.
 
 <Aside type="tip">
   If you control the config, prefer the config `exclude:` key so local runs and
@@ -139,7 +139,7 @@ run — local and CI — skips the same files.
 <LinkCard
   title="Configuration reference"
   href="/docmeta/reference/configuration/"
-  description="The exclude key, paths, schemas, and overrides — with how config merges with CLI flags."
+  description="The exclude key, paths, schemas, and overrides, with how config merges with CLI flags."
 />
 
 ## Still stuck?

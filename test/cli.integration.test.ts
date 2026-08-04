@@ -110,3 +110,72 @@ describe("docmeta CLI (built bin)", () => {
     expect(r.stderr).toContain("No files");
   });
 });
+
+// `fill` reaches an LLM provider, so the integration tests cover only the
+// argument surface and the failure paths that never get that far. The gate
+// itself is exercised hermetically in test/fill.test.ts against a MockProvider.
+describe("cli fill", () => {
+  it("documents its flags in --help", () => {
+    const r = run(["fill", "--help"]);
+    expect(r.status).toBe(0);
+    for (const flag of [
+      "--confidence",
+      "--dry-run",
+      "--provider",
+      "--model",
+      "--no-cache",
+      "--max-cost-usd",
+      "--concurrency",
+      "--fields",
+    ]) {
+      expect(r.stdout).toContain(flag);
+    }
+  });
+
+  it("exits 2 when given no paths and no config", () => {
+    const r = run(["fill"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("No files");
+  });
+
+  it("exits 2 on a non-numeric --confidence", () => {
+    const r = run(["fill", "test/fixtures/valid.md", "--confidence", "abc"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("--confidence");
+  });
+
+  it("exits 2 on an out-of-range --confidence", () => {
+    const r = run(["fill", "test/fixtures/valid.md", "--confidence", "1.5"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("between 0 and 1");
+  });
+
+  it("exits 2 on an unknown --format", () => {
+    const r = run(["fill", "test/fixtures/valid.md", "-f", "github"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("Unknown --format");
+  });
+
+  it("exits 2 on an unknown provider before contacting anything", () => {
+    const r = run([
+      "fill",
+      "test/fixtures/missing-type.md",
+      "--provider",
+      "nonsense",
+      "--no-cache",
+    ]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/provider/i);
+  });
+
+  it("reports formats as writable or read-only", () => {
+    const r = run(["schemas", "-f", "json"]);
+    expect(r.status).toBe(0);
+    const formats = JSON.parse(r.stdout).formats as {
+      name: string;
+      writable: boolean;
+    }[];
+    expect(formats.find((f) => f.name === "markdown")?.writable).toBe(true);
+    expect(formats.find((f) => f.name === "html")?.writable).toBe(false);
+  });
+});

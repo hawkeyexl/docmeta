@@ -29,7 +29,7 @@ integration:
   `1` when one or more files fail validation, and `2` on an operational or usage
   error (for example, no inputs and no config). GitHub Actions treats any
   non-zero exit from a step as a failed step, so the metadata gate is enforced
-  for free — there is no separate "if failures, then fail" wiring to maintain.
+  for free; there is no separate "if failures, then fail" wiring to maintain.
 - **`--format github` produces inline annotations.** Instead of pretty console
   output, the `github` format emits one GitHub Actions workflow command per
   error (`::error file=...,line=...,col=...::...`). GitHub turns each line into
@@ -72,7 +72,7 @@ from [`examples/docmeta.yml`](https://github.com/hawkeyexl/docmeta/blob/main/exa
    ```
 
 2. **Adapt the targets.** Replace `"**/*.md"` with the paths, directories, or
-   globs you want to check — for example `"docs/**/*.md"`. Quote globs so the
+   globs you want to check, for example `"docs/**/*.md"`. Quote globs so the
    shell passes them to docmeta intact rather than expanding them itself.
 
 3. **Commit and push.** On the next push or pull request, the `docmeta` job runs.
@@ -83,7 +83,7 @@ from [`examples/docmeta.yml`](https://github.com/hawkeyexl/docmeta/blob/main/exa
 
 <Aside type="note" title="Pin the version for reproducible runs">
 `npx -y docmeta` resolves the latest published version each run. To keep CI
-reproducible, pin a version — `npx -y docmeta@0.1.0 validate ...` — and bump it
+reproducible, pin a version, as in `npx -y docmeta@0.1.0 validate ...`, and bump it
 deliberately.
 </Aside>
 
@@ -106,7 +106,7 @@ locally and in CI, and you change what gets validated in one place. See
 ## Add a step to an existing workflow
 
 You do not need a dedicated workflow. If you already run a docs or lint job, add
-docmeta as one more step. It needs a checkout and a Node.js 24+ toolchain — if
+docmeta as one more step. It needs a checkout and a Node.js 24+ toolchain. If
 the job already has those, the validation step is a single line.
 
 <Tabs>
@@ -158,8 +158,8 @@ all. To always run validation and still surface a build failure, add
 
 ## Verify it works
 
-To confirm the gate fires, open a pull request that introduces a metadata error —
-for example, a Markdown file missing a required `type` field — and check that:
+To confirm the gate fires, open a pull request that introduces a metadata error,
+for example, a Markdown file missing a required `type` field, then check that:
 
 - The `docmeta` job is red.
 - The failing file shows an inline annotation on the changed line.

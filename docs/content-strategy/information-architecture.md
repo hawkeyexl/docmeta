@@ -85,7 +85,7 @@ Home — "What do you want to do?" router + 30-second proof
 
 | Page | CUJ | ★ | Notes |
 |---|---|---|---|
-| Read & fix a validation failure | T1 | ★ | Error → field → line → fix → re-run. Common failures: missing `type`, bad `date-time`, schema not found, parse error. Uses `missing-type.md` and `bad-timestamp.md` fixtures. |
+| Read & fix a validation failure | T1 | ★ | Error → field → line → fix → re-run. Common failures: missing `type`, bad `date-time`, schema not found, parse error. Uses `missing-type.md` and `bad-timestamp.md` fixtures. Includes the `fill` shortcut for missing fields. |
 | FAQ | T1 cross | | "No frontmatter?", "Which schema fired?", "Validate one field?", etc. |
 
 ### Reference (lookup shelf — supports all journeys)
@@ -117,8 +117,9 @@ Reference pages must never contradict the source code. Before writing any Refere
 | CLI reference | `src/cli.ts` |
 | Configuration reference | `src/core/config.ts` |
 | Schema resolution reference | `src/core/resolve-schema.ts`, `src/core/schema-registry.ts`, `src/core/validator.ts` |
-| Supported formats reference | `src/extractors/index.ts`, individual extractors |
-| Output formats & exit codes | `src/reporters/index.ts` |
+| Supported formats reference | `src/extractors/index.ts`, individual extractors, `src/extractors/frontmatter-write.ts` (writability) |
+| Output formats & exit codes | `src/reporters/index.ts`, `src/reporters/fill.ts` |
+| `fill` command & confidence gate | `src/commands/fill.ts`, `src/commands/fill-prompt.ts`, `src/commands/fill-types.ts` |
 | Built-in OKF schema | `src/schemas/okf/0.1.json` |
 
 ---

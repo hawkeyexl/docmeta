@@ -32,10 +32,10 @@ With this config:
 
 - Files under `api/` are validated against `./schemas/api-reference.json`.
 - Files under `guides/` are validated against `./schemas/guide.json`.
-- Everything else falls back to the default `schemas` — here, `google:okf:0.1`.
+- Everything else falls back to the default `schemas`: here, `google:okf:0.1`.
 
 <Aside type="note">
-An override **replaces** the default `schemas` for matching files — it does not add to them. If you want an area to satisfy the baseline *and* an extra schema, list both in that override (see [Validate one file against multiple schemas](#validate-one-file-against-multiple-schemas) below).
+An override **replaces** the default `schemas` for matching files; it does not add to them. If you want an area to satisfy the baseline *and* an extra schema, list both in that override (see [Validate one file against multiple schemas](#validate-one-file-against-multiple-schemas) below).
 </Aside>
 
 ## First matching override wins
@@ -62,7 +62,7 @@ Globs match against POSIX-style paths (forward slashes), so write `api/**/*.md` 
 
 ## Validate one file against multiple schemas
 
-A `schemas` list — whether the default set or an override — applies as a **set**: the file must satisfy every schema in the list. List more than one to compose rules.
+A `schemas` list, whether the default set or an override, applies as a **set**: the file must satisfy every schema in the list. List more than one to compose rules.
 
 ```yaml title="docmeta.config.yaml"
 overrides:
@@ -80,15 +80,15 @@ Overrides are one link in docmeta's schema-resolution chain. For any single file
 
 <Steps>
 
-1. **CLI `--schema` flag** — if you pass `-s <ref>` (repeatable), it overrides everything below for the whole run.
+1. **CLI `--schema` flag**: if you pass `-s <ref>` (repeatable), it overrides everything below for the whole run.
 
-2. **File `$schema` field** — a `$schema` key in the file's own frontmatter names its schema set and overrides the config.
+2. **File `$schema` field**: a `$schema` key in the file's own frontmatter names its schema set and overrides the config.
 
-3. **Config `overrides`** — the first matching override's `schemas`, as described on this page.
+3. **Config `overrides`**: the first matching override's `schemas`, as described on this page.
 
-4. **Config `schemas`** — the default set, when no override matches.
+4. **Config `schemas`**: the default set, when no override matches.
 
-5. **Built-in default** — [`google:okf:0.1`](/docmeta/schemas/), when nothing else resolves.
+5. **Built-in default**: [`google:okf:0.1`](/docmeta/schemas/), when nothing else resolves.
 
 </Steps>
 
@@ -97,7 +97,7 @@ So an override governs a file only when no `--schema` flag is set and the file h
 <LinkCard
   title="Schema resolution reference"
   href="/docmeta/reference/schema-resolution/"
-  description="The full precedence chain and the three reference kinds — built-in id, file path, and URL — in detail."
+  description="The full precedence chain and the three reference kinds (built-in id, file path, and URL) in detail."
 />
 
 ## Verify your overrides
@@ -108,7 +108,7 @@ After editing your config, confirm each area resolves to the schema set you expe
 npx docmeta validate
 ```
 
-If a file matches the wrong override, check the order of your `overrides` entries — remember the first matching glob wins.
+If a file matches the wrong override, check the order of your `overrides` entries; remember that the first matching glob wins.
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
     against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`

@@ -75,6 +75,19 @@ function buildAjv(dialect: Dialect): InstanceType<AjvCtor> {
   return ajv;
 }
 
+/**
+ * Compile an ad-hoc 2020-12 schema with docmeta's format support.
+ *
+ * `fill` needs this for the proposal envelope it builds around a document
+ * schema's own property subschemas: those routinely carry `format: "date-time"`
+ * / `"uri"`, and an Ajv without `ajv-formats` refuses to compile them outright.
+ */
+export function compileWithFormats(
+  schema: Record<string, unknown>,
+): ValidateFunction {
+  return buildAjv("2020").compile(schema);
+}
+
 export class Validator {
   private ajvByDialect = new Map<Dialect, InstanceType<AjvCtor>>();
   private cache = new Map<string, ValidateFunction>();

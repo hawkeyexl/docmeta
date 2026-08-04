@@ -1,6 +1,6 @@
 ---
 title: CLI reference
-description: Every docmeta command, argument, and flag — validate, get, and schemas — with the shared input model and default ignores.
+description: Every docmeta command, argument, and flag (validate, get, fill, and schemas), with the shared input model and default ignores.
 ---
 
 import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
@@ -10,9 +10,10 @@ import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
     enforced in CI. Keep flags, arguments, and defaults in sync with the code;
     descriptions are free-form. */}
 
-docmeta exposes three subcommands: [`validate`](#validate) (the default),
-[`get`](#get), and [`schemas`](#schemas). `validate` and `get` share an
-[input model](#shared-input-model) and several flags with identical semantics.
+docmeta exposes four subcommands: [`validate`](#validate) (the default),
+[`get`](#get), [`fill`](#fill), and [`schemas`](#schemas). `validate`, `get`, and
+`fill` share an [input model](#shared-input-model) and several flags with
+identical semantics.
 
 ```sh
 docmeta [global options] [command] [command options] [arguments]
@@ -98,9 +99,9 @@ as an error.
 A field reference descends into nested objects and arrays. Two syntaxes are
 accepted:
 
-- **Dot-notation** — `author.name`, `tags.0`. Concise, but a key containing a
+- **Dot-notation**: `author.name`, `tags.0`. Concise, but a key containing a
   literal `.` cannot be addressed this way.
-- **JSON Pointer** ([RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901)) —
+- **JSON Pointer** ([RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901)):
   any reference beginning with `/`, e.g. `/author/name` or `/tags/0`. This is
   the same pointer `validate` prints in error locations, so a path copied from a
   validation failure works verbatim. Use it to address keys that contain dots
@@ -108,10 +109,10 @@ accepted:
 
 Requesting a parent key (`author`) returns the whole nested value. A path that
 descends into a scalar, or whose segment is missing, is reported as unset. Only
-a key's own properties resolve — inherited members such as `toString` or
+a key's own properties resolve; inherited members such as `toString` or
 `__proto__` are treated as missing.
 
-On Git Bash/MSYS2 (Windows), quote a leading-slash pointer — `'/author/name'` —
+On Git Bash/MSYS2 (Windows), quote a leading-slash pointer, `'/author/name'`,
 so the shell does not rewrite it as a filesystem path. Other shells are
 unaffected.
 
@@ -142,6 +143,112 @@ docmeta get type "**/*.md" -f json
 cat page.md | docmeta get title - --as markdown
 ```
 
+## `fill`
+
+Infer values for the metadata properties that are missing or invalid, and write
+back the ones the model is confident about. `fill` resolves the same
+[schema set](/docmeta/reference/schema-resolution/) as `validate`, so the schema
+you already maintain is what determines which properties get proposed.
+
+```sh
+docmeta fill [paths...] [options]
+```
+
+<Aside type="caution">
+`fill` **writes to your files by default**. Pass `--dry-run` to preview
+proposals without touching anything, and run it on a clean working tree so the
+changes are easy to review.
+</Aside>
+
+`fill` sends the page and its schema to an LLM provider, so it needs credentials
+for that provider (`ANTHROPIC_API_KEY` for `anthropic`, `OPENAI_API_KEY` for
+`openai`, or a signed-in `claude` CLI for `claude-cli`).
+
+### Arguments
+
+| Argument | Description |
+|---|---|
+| `[paths...]` | Files, directories, or globs to fill. Use `-` to read from stdin, which prints the filled document to stdout and writes nothing to disk. Optional — falls back to config `paths:`. See the [shared input model](#shared-input-model). |
+
+### Options
+
+| Option | Argument | Default | Description |
+|---|---|---|---|
+| `-s, --schema` | `<ref>` | — | Schema to fill against. Repeatable. When given, it overrides `$schema` and config for every file. |
+| `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
+| `--exclude` | `<glob>` | — | Glob to exclude from directory and glob walks. Repeatable. |
+| `--as` | `<format>` | — | Force an input [format](/docmeta/reference/formats/). Required when reading from stdin. |
+| `--fields` | `<list>` | all candidates | Comma-separated top-level fields to fill. Everything else is left alone. |
+| `--confidence` | `<n>` | `0.7` | Minimum self-reported confidence, from 0 to 1, needed to write a value. A non-numeric or out-of-range value is an error (exit 2). |
+| `--dry-run` | — | off | Report proposals without writing them. |
+| `--provider` | `<name>` | `anthropic` | Inference provider: `anthropic`, `openai`, `claude-cli`, or `mock`. |
+| `--model` | `<model>` | provider default | Model override. |
+| `--no-cache` | — | cache on | Bypass the proposal cache in `.docmeta/cache`. |
+| `--max-cost-usd` | `<usd>` | — | Stop scheduling new files once this much has been spent. |
+| `--concurrency` | `<n>` | `4` | Files inferred in parallel. |
+| `-f, --format` | `<pretty\|json>` | `pretty` | Output format. `fill` has no `github` format. An unknown value is an error (exit 2). |
+| `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). |
+
+### Which properties get filled
+
+A schema property is a candidate when it is **missing** from the file's
+metadata, or **present but invalid**. A property that is already present and
+valid is never touched, and neither is `$schema`, which is schema wiring, not
+metadata.
+
+### The confidence gate
+
+Every proposal carries a self-reported confidence between 0 and 1. That number is
+a weak signal on its own, so it is the **last** of four gates. Three mechanical
+checks run first, and a high confidence cannot override any of them:
+
+1. **The value must satisfy the property's own subschema.** `fill` builds the
+   response schema out of your schema's property definitions, so a `timestamp`
+   that is not a valid `date-time` is rejected before it is ever scored.
+2. **The property must be one docmeta asked about.** The model cannot introduce
+   keys your schema does not define.
+3. **The document must still validate afterwards.** Any value that would leave
+   the page failing its own schema is reverted and reported.
+
+Only then is `--confidence` applied. Values below the threshold are **skipped,
+and reported by name and score** so you know what still needs a human. The
+confidence and the model's reasoning stay in the report; they never reach your
+document.
+
+Because the cache stores the proposal *before* gating, re-running with a
+different `--confidence` re-scores the cached proposals and costs nothing. That
+is the intended way to tune the threshold on a real docset.
+
+The cache lives in `.docmeta/cache` relative to the working directory. It is
+machine-local and safe to delete at any time. Add `.docmeta/` to your
+`.gitignore`. Pass `--no-cache` to bypass it entirely.
+
+### Which formats can be written
+
+`fill` can only write formats it can round-trip without disturbing the rest of
+the document. `markdown` and `mdx` are always writable. `rst` and `asciidoc` are
+writable **only when the file already has a fenced front matter block**, because their
+native docinfo and header syntax is lossy to read back, and a bare `---` means
+something else in both languages. `xml` and `html` are read-only. Run
+`docmeta schemas` to see which is which. Targeting a read-only file is reported
+as a per-file error, not a failed run.
+
+### Exit codes
+
+`fill` exits **1** when a property your schema lists as `required` could not be
+filled confidently, or when any file errored, which is work still to do. Skipped
+*optional* properties are a normal outcome and leave the exit code at **0**. Usage
+and operational failures exit **2**, as elsewhere.
+
+### Examples
+
+```sh
+docmeta fill docs/ --dry-run                 # preview, write nothing
+docmeta fill docs/ --confidence 0.9          # only near-certain values
+docmeta fill page.md --fields description,tags
+cat page.md | docmeta fill - --as markdown   # filled document to stdout
+```
+
 ## `schemas`
 
 List the built-in schemas and the supported input formats. Takes no positional
@@ -158,10 +265,11 @@ docmeta schemas [options]
 | `-f, --format` | `<pretty\|json>` | `pretty` | Output format. |
 
 In `pretty` format, `schemas` lists each built-in schema by id and title, then
-each input format with its extensions and whether it is implemented. In `json`
-format it prints `{ builtins, formats }`, where `builtins` is an array of
+each input format with its extensions, whether it is implemented, and whether
+[`fill`](#fill) can write to it. In `json` format it prints
+`{ builtins, formats }`, where `builtins` is an array of
 `{ id, title, description }` and `formats` is an array of
-`{ name, extensions, implemented }`.
+`{ name, extensions, implemented, writable }`.
 
 ```sh
 docmeta schemas
@@ -170,7 +278,7 @@ docmeta schemas -f json
 
 ## Shared input model
 
-`validate` and `get` resolve their inputs the same way.
+`validate`, `get`, and `fill` resolve their inputs the same way.
 
 - **Positional paths** are files, directories, or globs. A named file is always
   read. A directory or glob is expanded and filtered to the extensions in
@@ -217,4 +325,10 @@ glob or is a dotfile.
 {/* step {"description":"Nested fields: dot-notation, JSON Pointer (/author/email), and array index all resolve in one comma-separated request.","runShell":{"command":"docmeta get author.name,/author/email,tags.0 test/fixtures/nested/doc.md -f json","exitCodes":[0],"stdio":"/\"Jane\"[\\s\\S]*\"jane@example.com\"[\\s\\S]*\"intro\"/"}} */}
 {/* step {"description":"Requesting a parent key returns the whole nested object.","runShell":{"command":"docmeta get author test/fixtures/nested/doc.md -f json","exitCodes":[0],"stdio":"/\"name\": \"Jane\"[\\s\\S]*\"email\": \"jane@example.com\"/"}} */}
 {/* step {"description":"schemas -f json prints { builtins, formats }.","runShell":{"command":"docmeta schemas -f json","exitCodes":[0],"stdio":"/\"builtins\"[\\s\\S]*\"formats\"/"}} */}
+{/* step {"description":"schemas reports per-format writability, which fill depends on.","runShell":{"command":"docmeta schemas -f json","exitCodes":[0],"stdio":"/\"name\": \"markdown\"[\\s\\S]*\"writable\": true/"}} */}
+{/* step {"description":"fill documents its confidence gate and provider flags in --help.","runShell":{"command":"docmeta fill --help","exitCodes":[0],"stdio":"--confidence"}} */}
+{/* step {"description":"fill follows the shared input model: no paths and no config is an operational error (exit 2).","runShell":{"command":"docmeta fill","exitCodes":[2],"stdio":"No files"}} */}
+{/* step {"description":"fill rejects a non-numeric --confidence before contacting a provider (exit 2).","runShell":{"command":"docmeta fill test/fixtures/valid.md --confidence abc","exitCodes":[2],"stdio":"--confidence"}} */}
+{/* step {"description":"fill rejects an out-of-range --confidence (exit 2).","runShell":{"command":"docmeta fill test/fixtures/valid.md --confidence 1.5","exitCodes":[2],"stdio":"between 0 and 1"}} */}
+{/* step {"description":"fill has no github output format (exit 2).","runShell":{"command":"docmeta fill test/fixtures/valid.md -f github","exitCodes":[2],"stdio":"Unknown --format"}} */}
 {/* test end */}

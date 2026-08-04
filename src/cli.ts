@@ -12,7 +12,9 @@ import { DocmetaError } from "./types.js";
 import { runValidate } from "./commands/validate.js";
 import { runGet } from "./commands/get.js";
 import { getSchemasInfo } from "./commands/schemas.js";
+import { runFill } from "./commands/fill.js";
 import { render, type ReportFormat } from "./reporters/index.js";
+import { renderFill } from "./reporters/fill.js";
 import { shouldColor, palette } from "./reporters/color.js";
 
 function collect(value: string, prev: string[]): string[] {
@@ -47,6 +49,32 @@ function stringifyValue(v: unknown): string {
 }
 
 const REPORT_FORMATS = new Set(["pretty", "json", "github"]);
+
+function splitList(value: string): string[] {
+  return value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Range-check a numeric flag. `parseFloat("abc")` is NaN and every comparison
+ * against NaN is false, so the finite check has to be explicit or garbage
+ * passes silently.
+ */
+function numeric(
+  name: string,
+  value: number | undefined,
+  min: number,
+  max: number,
+): void {
+  if (value === undefined) return;
+  if (!Number.isFinite(value) || value < min || value > max) {
+    throw new DocmetaError(
+      `${name} must be a number between ${min} and ${max}, got ${value}.`,
+    );
+  }
+}
 
 export function buildProgram(): Command {
   const program = new Command();
@@ -204,6 +232,106 @@ export function buildProgram(): Command {
     });
 
   program
+    .command("fill")
+    .description(
+      "Infer missing or invalid metadata and write values above the confidence threshold",
+    )
+    .argument(
+      "[paths...]",
+      "files, directories, or globs to fill (use - for stdin)",
+    )
+    .option(
+      "-s, --schema <ref>",
+      "schema to fill against; repeatable; overrides $schema/config",
+      collect,
+      [],
+    )
+    .option("--ext <list>", "comma-separated extensions for directory walks")
+    .option("--exclude <glob>", "glob to exclude; repeatable", collect, [])
+    .option("--as <format>", "force an input format (e.g. markdown, mdx)")
+    .option("--fields <list>", "comma-separated fields to fill")
+    .option("--confidence <n>", "minimum confidence to write (0-1)", parseFloat)
+    .option("--dry-run", "report proposals without writing them")
+    .option("--provider <name>", "provider: anthropic, openai, claude-cli, mock")
+    .option("--model <model>", "model override")
+    .option("--no-cache", "bypass the proposal cache")
+    .option("--max-cost-usd <usd>", "proposal cost budget", parseFloat)
+    // parseFloat, not parseInt: parseInt("3.5") silently yields 3, which would
+    // defeat runFill's integer check and hide the mistake from the user.
+    .option("--concurrency <n>", "files inferred in parallel", parseFloat)
+    .option("-f, --format <format>", "output: pretty | json", "pretty")
+    .option("-c, --config <path>", "path to a docmeta config file")
+    .addHelpText(
+      "after",
+      [
+        "",
+        "Examples:",
+        "  docmeta fill docs/ --dry-run                 # preview proposals",
+        "  docmeta fill docs/ --confidence 0.9          # only near-certain values",
+        "  docmeta fill page.md --fields description",
+        "  cat page.md | docmeta fill - --as markdown   # filled doc to stdout",
+      ].join("\n"),
+    )
+    .action(async (paths: string[], options, command: Command) => {
+      try {
+        const format = options.format as string;
+        if (format !== "pretty" && format !== "json") {
+          throw new DocmetaError(
+            `Unknown --format "${format}". Use pretty or json.`,
+          );
+        }
+        // parseFloat("abc") is NaN, and every comparison against NaN is false,
+        // so a bare range check would silently accept garbage.
+        numeric("--confidence", options.confidence, 0, 1);
+        numeric("--max-cost-usd", options.maxCostUsd, 0, Number.MAX_SAFE_INTEGER);
+        numeric("--concurrency", options.concurrency, 1, 64);
+
+        const exts: string[] | undefined = options.ext
+          ? splitList(String(options.ext))
+          : undefined;
+        const usingStdin = paths.includes("-");
+        const stdinContent = usingStdin ? await readStdin() : undefined;
+
+        const run = await runFill({
+          inputs: paths,
+          cliSchemas: options.schema,
+          exts,
+          exclude: options.exclude,
+          as: options.as,
+          configPath: options.config,
+          stdinContent,
+          fields: options.fields ? splitList(String(options.fields)) : undefined,
+          confidence: options.confidence,
+          dryRun: Boolean(options.dryRun),
+          provider: options.provider,
+          model: options.model,
+          cache: options.cache,
+          maxCostUsd: options.maxCostUsd,
+          concurrency: options.concurrency,
+          includeContent: usingStdin,
+        });
+
+        const color = resolveColor(command.parent ?? command);
+        const report = renderFill(format, run, { color });
+        if (usingStdin) {
+          // The filled document owns stdout here; the report is a diagnostic.
+          const filled = run.results[0]?.content;
+          if (filled != null) process.stdout.write(filled);
+          if (report.length > 0) process.stderr.write(`${report}\n`);
+        } else if (report.length > 0) {
+          process.stdout.write(`${report}\n`);
+        }
+
+        // A field the schema requires that could not be filled confidently is
+        // work left undone, so CI should see it. Optional fields are not.
+        process.exitCode =
+          run.summary.requiredSkipped > 0 || run.summary.errors > 0 ? 1 : 0;
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  program
     .command("schemas")
     .description("List built-in schemas and supported input formats")
     .option("-f, --format <format>", "output: pretty | json", "pretty")
@@ -220,8 +348,14 @@ export function buildProgram(): Command {
       }
       lines.push("", c.bold("Input formats:"));
       for (const f of info.formats) {
-        const tag = f.implemented ? c.green("implemented") : c.dim("planned");
-        lines.push(`  ${f.name} (${f.extensions.join(", ")})  [${tag}]`);
+        const tags = [f.implemented ? c.green("implemented") : c.dim("planned")];
+        // Only worth surfacing on formats that can actually be read.
+        if (f.implemented) {
+          tags.push(f.writable ? c.green("writable") : c.dim("read-only"));
+        }
+        lines.push(
+          `  ${f.name} (${f.extensions.join(", ")})  [${tags.join(", ")}]`,
+        );
       }
       process.stdout.write(`${lines.join("\n")}\n`);
     });

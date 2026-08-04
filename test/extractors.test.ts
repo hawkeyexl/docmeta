@@ -12,6 +12,7 @@ import {
   extractorForExtension,
   extractorByName,
   supportedExtensions,
+  listFormats,
 } from "../src/extractors/index.js";
 import { createStubExtractor } from "../src/extractors/stub.js";
 import { DocmetaError } from "../src/types.js";
@@ -649,5 +650,53 @@ describe("extractor registry", () => {
     const stub = createStubExtractor("planned", [".planned"], "future format");
     expect(stub.implemented).toBe(false);
     expect(() => stub.extract("x", "x.planned")).toThrow(DocmetaError);
+  });
+});
+
+describe("write capability", () => {
+  const fill = (name: string): string => readFixture(`fill/${name}`);
+
+  it("markdown and mdx can write", () => {
+    expect(typeof markdownExtractor.apply).toBe("function");
+    expect(typeof mdxExtractor.apply).toBe("function");
+    const out = markdownExtractor.apply?.(fill("missing-keys.md"), {
+      description: "A summary.",
+    });
+    expect(out).toContain("description: A summary.");
+  });
+
+  it("xml and html are read-only", () => {
+    expect(xmlExtractor.apply).toBeUndefined();
+    expect(htmlExtractor.apply).toBeUndefined();
+  });
+
+  it("rst and asciidoc write only into an existing fenced block", () => {
+    const out = asciidocExtractor.apply?.(fill("fenced.adoc"), {
+      title: "Hello",
+    });
+    expect(out).toContain("title: Hello");
+    expect(out).toContain("= Hello");
+
+    // Native docinfo is lossy on read, and a bare `---` is a transition in RST
+    // and an open-block delimiter in AsciiDoc — creating one would change how
+    // the document renders, so refuse rather than guess.
+    expect(() =>
+      rstExtractor.apply?.(fill("native-docinfo.rst"), { title: "Hello" }),
+    ).toThrow(DocmetaError);
+    expect(() =>
+      rstExtractor.apply?.(fill("native-docinfo.rst"), { title: "Hello" }),
+    ).toThrow(/fenced/i);
+  });
+
+  it("reports writability in the format list", () => {
+    const byName = Object.fromEntries(
+      listFormats().map((f) => [f.name, f.writable]),
+    );
+    expect(byName.markdown).toBe(true);
+    expect(byName.mdx).toBe(true);
+    expect(byName.rst).toBe(true);
+    expect(byName.asciidoc).toBe(true);
+    expect(byName.xml).toBe(false);
+    expect(byName.html).toBe(false);
   });
 });

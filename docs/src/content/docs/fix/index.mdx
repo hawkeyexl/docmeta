@@ -8,7 +8,7 @@ import { Steps, Aside, LinkCard } from '@astrojs/starlight/components';
 Your PR's docmeta check is red and you'd like it green again. You're in the right
 place. This page decodes the error, points you at the exact field and line to
 change, and shows you how to confirm the fix locally before you re-push. You
-don't need to know how docmeta was set up — just what its output is telling you.
+don't need to know how docmeta was set up, only what its output is telling you.
 
 <Aside type="tip" title="The fastest path">
   Find your error message in the [common failures](#common-failures) below, apply
@@ -60,7 +60,7 @@ a fix.
 ```
 
 The schema requires a field your frontmatter doesn't have. The field name is in
-the message — here, `type`. The location is `(root)` because the field is absent,
+the message: here, `type`. The location is `(root)` because the field is absent,
 so there's no line to point at.
 
 **Fix:** add the field to your frontmatter.
@@ -75,7 +75,7 @@ so there's no line to point at.
 
 <Aside type="tip">
   Not sure what value `type` should be? The built-in OKF schema accepts any
-  non-empty string — pick the kind of doc this is, such as `concept`, `guide`,
+  non-empty string. Pick the kind of doc this is, such as `concept`, `guide`,
   or `reference`. If your repo uses a custom schema, it may restrict `type` to a
   specific list; the error message will say so (for example, `must be equal to
   one of the allowed values`).
@@ -158,8 +158,8 @@ the very top of the file.
 ```
 
 The frontmatter block exists but isn't valid, so docmeta can't read it. The
-message names the flavor — `Invalid YAML frontmatter`, `Invalid TOML frontmatter`,
-or `Invalid JSON frontmatter` — and the schema in brackets is `[(parse)]` rather
+message names the flavor (`Invalid YAML frontmatter`, `Invalid TOML frontmatter`,
+or `Invalid JSON frontmatter`), and the schema in brackets is `[(parse)]` rather
 than a real schema id, so this is a syntax problem, not a rule violation.
 
 **Fix:** correct the block's syntax for its flavor. In YAML a frequent culprit is
@@ -181,7 +181,7 @@ flavor's fences and syntax.
 <Aside type="tip">
   The parser detail after the colon (truncated as `<parser detail>` above)
   usually points at the line and character where parsing broke. Read it closely
-  — it's the fastest clue.
+  It's the fastest clue.
 </Aside>
 
 ### Schema not found
@@ -199,13 +199,13 @@ or:
 docmeta: Schema file not found: "./schemas/my.schema.json".
 ```
 
-This isn't a problem with your document — it's a configuration problem. docmeta
+This isn't a problem with your document. It's a configuration problem. docmeta
 couldn't load the schema it was told to use, so it can't validate anything. This
 exits with code `2` (an operational error), not `1`.
 
 **Fix:** this usually isn't yours to fix in a content PR. Check that the schema
-reference — in `docmeta.config.yaml`, a `$schema` field in your file, or a
-`--schema` flag — points at a schema that exists. A misspelled built-in id, a
+reference (in `docmeta.config.yaml`, a `$schema` field in your file, or a
+`--schema` flag) points at a schema that exists. A misspelled built-in id, a
 wrong file path, or an unreachable URL all produce this. If you didn't change
 the schema setup, flag it to whoever maintains the repo's docmeta config.
 
@@ -244,6 +244,47 @@ before CI does.
   exactly, run it from the repo root.
 </Aside>
 
+## Let docmeta draft the fix
+
+When the failure is a *missing* field rather than a malformed one, and
+especially when several pages fail the same way,
+[`docmeta fill`](/docmeta/reference/cli/#fill) can propose the values for you. It
+reads the page, resolves the same schema the check used, and writes back the
+values it is confident about.
+
+Preview first:
+
+```sh
+docmeta fill docs/intro.md --dry-run
+```
+
+```
+✓ docs/intro.md
+    /description  A tour of the CLI and its four commands.  0.91
+    below 0.7: /resource 0.38
+
+Threshold 0.7 · 1 file · 1 field would be written · 1 skipped
+```
+
+Then apply it and check your work with the command that flagged the problem:
+
+```sh
+docmeta fill docs/intro.md && docmeta validate docs/intro.md
+```
+
+<Aside type="caution">
+`fill` edits the file in place. `--dry-run` is the preview. Review the diff
+before you commit; treat a proposed `description` as a first draft.
+</Aside>
+
+Anything below the confidence threshold is skipped and named, so you still get a
+short list of what needs you. `fill` leaves any field that is already present and
+valid exactly as it is, and its confidence scores stay in the report.
+
+`fill` won't help with a **malformed** value it can't improve on, or with a
+[schema not found](#schema-not-found) error. Those are the setup problems in the
+next section.
+
 ## What the exit code means
 
 docmeta's exit code is the contract CI gates on. If you're scripting the check
@@ -255,7 +296,7 @@ or reading raw CI logs, here's what each code means:
 | `1` | One or more files **failed validation** — a missing or malformed field. This is the red check you came here to fix. |
 | `2` | An **operational error** — docmeta couldn't run the check at all. A missing or unreadable schema, an unsupported file type, or no files to validate. The message goes to stderr, prefixed `docmeta:`. |
 
-A code `1` means fix your document. A code `2` means fix the setup — see
+A code `1` means fix your document. A code `2` means fix the setup. See
 [Schema not found](#schema-not-found) above, or escalate to whoever configured
 docmeta.
 

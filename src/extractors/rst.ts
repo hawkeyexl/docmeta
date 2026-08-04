@@ -20,6 +20,7 @@ import {
   escapePointerSegment,
   lineForFactory,
 } from "./frontmatter.js";
+import { applyFencedOnly } from "./frontmatter-write.js";
 
 // `:name:` or `:name: value` — a docinfo field (value optional). The name may
 // contain spaces but not a colon; the value (if any) may.
@@ -152,6 +153,8 @@ export const rstExtractor: MetadataExtractor = {
   name: "rst",
   extensions: [".rst"],
   implemented: true,
+  apply: (content, patch, options) =>
+    applyFencedOnly(content, patch, options, "rst"),
   extract(content) {
     if (hasFrontmatterFence(content)) {
       // Delegate only when a complete frontmatter block is actually present.
