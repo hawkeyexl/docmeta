@@ -1,10 +1,12 @@
 # docmeta
 
-Validate the **presence and format** of document metadata against **JSON Schema** — built for CI.
+Validate the **presence and format** of document metadata against **JSON Schema**, built for CI.
 
 <!-- badges: add npm version, build status, and license badges here -->
 
-`docmeta` checks the metadata in your documents — Markdown frontmatter and more — against one or more JSON Schemas. It verifies that required fields are present and correctly formatted (a `type`, an ISO 8601 `timestamp`, a URI `resource`); it does not judge prose quality. It ships with the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) schema built in, follows [clig.dev](https://clig.dev) conventions, and returns a nonzero exit code (plus optional GitHub annotations) when validation fails.
+`docmeta` checks the metadata in your documents (Markdown frontmatter and more) against one or more JSON Schemas. It verifies that required fields are present and correctly formatted (a `type`, an ISO 8601 `timestamp`, a URI `resource`); it does not judge prose quality. It ships with the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) schema built in, follows [clig.dev](https://clig.dev) conventions, and returns a nonzero exit code (plus optional GitHub annotations) when validation fails.
+
+It can also **fill in** the metadata that is missing, so adopting a standard on an existing docset is not a data-entry project.
 
 ## Install
 
@@ -34,9 +36,42 @@ docmeta validate docs/intro.md
 
 A clean run exits `0`; validation failures exit `1`; operational errors (no input, unknown schema, parse error) exit `2`.
 
+## Fill in what's missing
+
+`docmeta fill` infers the metadata properties your schema asks for but a page
+does not carry, and writes back the values it is confident about. It is the
+fast way to clear the backlog on a repo that has never enforced metadata.
+
+```bash
+docmeta fill docs/ --dry-run     # preview; writes nothing
+docmeta fill docs/               # apply
+```
+
+```text
+✓ docs/intro.md
+    /description  A tour of the CLI and its four commands.  0.91
+    below 0.7: /resource 0.38
+
+Threshold 0.7 · 1 file · 1 field written · 1 skipped
+```
+
+Confidence is the last gate, not the only one. A proposal must first satisfy the
+target property's own subschema, name a property your schema declares, and leave
+the document still valid after the merge. Only then does `--confidence`
+(default `0.7`) apply. Values below it are skipped and reported by name, never
+written with a caveat, and the score itself never reaches your document.
+
+`fill` writes in place by default, so run it on a clean tree and review the
+diff. It needs credentials for an LLM provider (`ANTHROPIC_API_KEY`,
+`OPENAI_API_KEY`, or a signed-in `claude` CLI). See the
+[`fill` reference](https://hawkeyexl.github.io/docmeta/reference/cli/#fill) for
+every flag.
+
 ## Supported formats
 
-Markdown, MDX, AsciiDoc, reStructuredText, XML, and HTML. Run `docmeta schemas` to list the built-in schemas and every supported format.
+Markdown, MDX, AsciiDoc, reStructuredText, XML, and HTML. Run `docmeta schemas`
+to list the built-in schemas, every supported format, and which formats `fill`
+can write back to.
 
 ## Documentation
 

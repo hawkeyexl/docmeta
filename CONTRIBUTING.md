@@ -15,7 +15,7 @@ cd docmeta
 npm install
 ```
 
-`npm install` runs the `prepare` script, which sets up the Husky git hooks (including the `commit-msg` hook that lints your commit messages — see [Commit messages](#commit-messages)).
+`npm install` runs the `prepare` script, which sets up the Husky git hooks (including the `commit-msg` hook that lints your commit messages; see [Commit messages](#commit-messages)).
 
 ## Development loop
 
@@ -29,7 +29,7 @@ npm run build       # tsup -> dist/
 
 A couple of things worth knowing:
 
-- **Command cores are unit-tested directly.** Tests in `test/*.test.ts` exercise the command cores (`validate`, `get`, `schemas`) and the shared core modules without going through the CLI.
+- **Command cores are unit-tested directly.** Tests in `test/*.test.ts` exercise the command cores (`validate`, `get`, `fill`, `schemas`) and the shared core modules without going through the CLI. `fill` reaches an LLM provider, so its tests inject a `MockProvider` and never touch the network.
 - **CLI integration tests run against the built `dist/`.** `test/cli.integration.test.ts` invokes the compiled binary, so run `npm run build` before `npm test` if you've changed anything the integration tests depend on. Otherwise those tests run against a stale (or missing) build.
 
 Before opening a pull request, make sure `npm run typecheck` and `npm test` both pass.
@@ -38,9 +38,9 @@ Before opening a pull request, make sure `npm run typecheck` and `npm test` both
 
 Please develop test-first:
 
-1. **Red** — write or adjust tests for the new behavior and run them. Confirm they fail for the right reason.
-2. **Green** — implement the minimum needed to make them pass.
-3. **Refactor** — clean up with the tests as a safety net.
+1. **Red**: write or adjust tests for the new behavior and run them. Confirm they fail for the right reason.
+2. **Green**: implement the minimum needed to make them pass.
+3. **Refactor**: clean up with the tests as a safety net.
 
 When a behavior change makes existing tests fail correctly (for example, you removed a flag), update those tests as part of the red step rather than working around them.
 
@@ -71,20 +71,21 @@ Scope work where it helps readers. New input formats use the `extractors` scope:
 feat(extractors): add TOML frontmatter support
 ```
 
-This is pre-1.0, so breaking CLI changes are acceptable when they improve the tool — call them out with `feat!:` or a `BREAKING CHANGE:` footer so the release tooling bumps the major version.
+This is pre-1.0, so breaking CLI changes are acceptable when they improve the tool. Call them out with `feat!:` or a `BREAKING CHANGE:` footer so the release tooling bumps the major version.
 
 ## Keeping commands consistent
 
-Every subcommand should expose a consistent surface. When one command gains an input affordance, the others should match it where it makes sense. The shared baseline for `validate` and `get`:
+Every subcommand should expose a consistent surface. When one command gains an input affordance, the others should match it where it makes sense. The shared baseline for `validate`, `get`, and `fill`:
 
-- Targets are positional `[paths...]` — files, directories, and globs.
-- `-` reads stdin (and requires `--as <format>` to pick an extractor).
+- Targets are positional `[paths...]`: files, directories, and globs.
+- `-` reads stdin (and requires `--as <format>` to pick an extractor). It is one more input, so it is processed *alongside* any named paths, never instead of them.
 - `paths:` from `docmeta.config.yaml` is the fallback when no positional paths are given.
+- No inputs and no config is an operational error (exit 2), not silent empty output.
 - Shared flags use the same names and semantics: `--as`, `--ext`, `--exclude`, `-c/--config`, `-f/--format`.
 
 Avoid introducing per-command input conventions (for example, an `--in` option on one command but positional paths on another).
 
-When you change the CLI surface — add, rename, or remove a command, argument, flag, or default — update the [CLI reference](docs/src/content/docs/reference/cli.mdx) to match. A drift check enforces this:
+When you change the CLI surface, whether adding, renaming, or removing a command, argument, flag, or default, update the [CLI reference](docs/src/content/docs/reference/cli.mdx) to match. A drift check enforces this:
 
 ```bash
 npm run build         # the check reads the built CLI
@@ -95,13 +96,33 @@ The script (`scripts/check-cli-reference.mjs`) introspects the real commander pr
 
 ## Adding a new input format
 
-Metadata extraction is a pluggable layer. A new format is an isolated change — it never touches validation, schema resolution, or reporting. To add one:
+Metadata extraction is a pluggable layer. A new format is an isolated change; it never touches validation, schema resolution, or reporting. To add one:
 
-1. **Implement the `MetadataExtractor` interface** (defined in [`src/types.ts`](src/types.ts)) in a new file under `src/extractors/`. Use an existing extractor — say `src/extractors/markdown.ts` — as a template.
+1. **Implement the `MetadataExtractor` interface** (defined in [`src/types.ts`](src/types.ts)) in a new file under `src/extractors/`. Use an existing extractor, say `src/extractors/markdown.ts`, as a template.
 2. **Register it** in [`src/extractors/index.ts`](src/extractors/index.ts) by adding it to the `EXTRACTORS` array.
 3. **Add a test and fixture.** Cover the new format in `test/extractors.test.ts` and add a minimal sample under `test/fixtures/`, following the red/green flow above.
 
 The `MetadataExtractor` interface returns an `ExtractedMetadata` object: the parsed `data`, whether a metadata block was `present`, the `format` name, and a `lineFor()` function that maps a field to its source line for precise error annotations. Set `implemented: true` once the extractor is wired up; roadmap stubs can register with `implemented: false` so the `schemas` command can report them as planned.
+
+### Write support is optional
+
+`MetadataExtractor` also has an optional `apply(content, patch)`, which
+[`docmeta fill`](https://hawkeyexl.github.io/docmeta/reference/cli/#fill) uses to
+write metadata back. Leaving it off is a valid choice, and the absence is the
+capability check: `typeof extractor.apply === "function"`. TypeScript then makes
+every call site handle the read-only case.
+
+Only implement it if the format can round-trip without disturbing the rest of
+the document. Fenced frontmatter can, because the write is a splice of the
+characters between the fences (see `src/extractors/frontmatter-write.ts`). A
+format whose read is lossy should stay read-only rather than guess: `rst` and
+`asciidoc` write only into a fenced block that already exists, because their
+native docinfo and header syntax does not survive a round trip, and `xml` and
+`html` do not implement `apply` at all.
+
+If you do add write support, cover it in `test/frontmatter-write.test.ts`, and
+make sure the merge is verified by re-parsing before it is returned. A
+serializer bug should become a refusal, not a corrupted file.
 
 ## License
 

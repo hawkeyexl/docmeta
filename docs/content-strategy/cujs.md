@@ -6,13 +6,15 @@ See `information-architecture.md` for the page-level content set and which pages
 
 ---
 
-## Maya — Docs Engineer
+## Maya, Docs Engineer
 
 ### M1 · Stand up metadata validation for my repo
 
 Maya needs to go from zero to a working CI gate: evaluate whether docmeta fits her use case, install it, validate one file and read the output, add a config file and a schema, and land a passing CI step.
 
 This is the anchor CUJ. It is the first thing the lead persona does, and it threads through install, config, schema, and CI in a single coherent journey.
+
+On an existing docset the journey does not end at a green gate: the pages that predate the standard still lack the fields. `fill` covers that last stretch, which is where adoption otherwise stalls. It belongs at the end of the retrofit journey, after the ratchet, never as the entry point.
 
 ### M2 · Tighten the standard without breaking the build
 
@@ -24,7 +26,7 @@ Maya's repo has heterogeneous content: `/api` docs need a `type: api-reference` 
 
 ---
 
-## Devin — Platform / CI Engineer
+## Devin, Platform / CI Engineer
 
 ### D1 · Add the gate to our CI platform
 
@@ -40,7 +42,7 @@ Devin needs programmatic access to validation output: `--format json` for machin
 
 ---
 
-## Sara — Schema Author
+## Sara, Schema Author
 
 ### S1 · Define our metadata standard as a schema
 
@@ -56,10 +58,12 @@ Sara needs to ship a stricter version of the schema without immediately breaking
 
 ---
 
-## Theo — Contributor
+## Theo, Contributor
 
 ### T1 · Fix a failing metadata check fast
 
 Theo lands on the docs via a red CI check or a search. He needs: a clear map from error message to the specific field or line in his file, remediation steps for the most common failures (missing `type`, bad `date-time` format, schema not found, parse error), a way to validate locally before re-pushing, and confirmation that the fix worked.
 
-This is the highest-traffic page in the docs. Every contributor who hits a failing check arrives here. It is cross-cutting — the same page serves regardless of which persona configured docmeta.
+This is the highest-traffic page in the docs. Every contributor who hits a failing check arrives here. It is cross-cutting: the same page serves regardless of which persona configured docmeta.
+
+Theo's failure is usually a *missing* field rather than a malformed one, so `fill` is a genuine shortcut for him. Lead with `--dry-run`; he is fixing someone else's repo and needs to see the proposal before it lands in his PR.

@@ -12,14 +12,14 @@ the generic `ExtractedMetadata` shape, so new input formats never touch
 validation, schema resolution, or reporting.
 
 Key layers:
-- `src/extractors/` — per-format metadata extraction behind the
+- `src/extractors/`: per-format metadata extraction behind the
   `MetadataExtractor` interface (`src/types.ts`). New formats are an isolated
   change to one file plus registration in `src/extractors/index.ts`.
-- `src/commands/` — command cores (`validate`, `get`, `schemas`), kept free of
+- `src/commands/`: command cores (`validate`, `get`, `fill`, `schemas`), kept free of
   CLI/IO plumbing so they can be unit-tested directly.
-- `src/cli.ts` — thin commander wrapper over the command cores.
-- `src/core/` — shared file resolution, config, schema resolution, validation.
-- `src/reporters/` — output formatting (pretty / json / github).
+- `src/cli.ts`: thin commander wrapper over the command cores.
+- `src/core/`: shared file resolution, config, schema resolution, validation.
+- `src/reporters/`: output formatting (pretty / json / github).
 
 ## Working agreements
 
@@ -29,10 +29,11 @@ These are project preferences. Follow them unless the user says otherwise.
 
 Every subcommand should expose a **consistent surface**. When one command gains
 an input affordance, the others should match it (where it makes sense). Concrete
-baseline shared by `validate` and `get`:
+baseline shared by `validate`, `get`, and `fill`:
 
-- Targets are **positional** `[paths...]` — files, directories, and globs.
-- `-` reads **stdin** (requires `--as <format>` to pick an extractor).
+- Targets are **positional** `[paths...]`: files, directories, and globs.
+- `-` reads **stdin** (requires `--as <format>` to pick an extractor). It is one
+  more input, processed *alongside* any named paths, never instead of them.
 - `paths:` from `docmeta.config.yaml` is the **fallback** when no positional
   paths are given.
 - No inputs and no config is an **operational error** (`DocmetaError`, exit 2),
@@ -43,17 +44,17 @@ baseline shared by `validate` and `get`:
 Do not introduce per-command input conventions (e.g. an `--in` option on one
 command but positional paths on another). If a parser limitation forces a
 difference, prefer changing how the *other* argument is supplied rather than
-breaking parity. (This is pre-1.0; breaking CLI changes are acceptable — do not
+breaking parity. (This is pre-1.0; breaking CLI changes are acceptable, so do not
 keep deprecated aliases unless asked.)
 
 ### Red/green TDD
 
 Develop test-first:
 
-1. **Red** — write or adjust tests for the new behavior and run them; confirm
+1. **Red**: write or adjust tests for the new behavior and run them; confirm
    they fail for the right reason.
-2. **Green** — implement the minimum to make them pass.
-3. **Refactor** — clean up with the tests as a safety net.
+2. **Green**: implement the minimum to make them pass.
+3. **Refactor**: clean up with the tests as a safety net.
 
 When a behavior change makes existing tests fail correctly (e.g. a removed flag),
 update those tests as part of the red step rather than working around them.
@@ -70,8 +71,8 @@ stdin/parse cases.
 
 Before any user-facing writing or docs task, consult `docs/content-strategy/`:
 
-1. Identify the **persona** the page serves — Maya (docs engineer), Devin (CI engineer), Sara (schema author), or Theo (contributor fixing a failure). See `personas.md`.
-2. Find the matching **CUJ** in `cujs.md` (M1–M3, D1–D3, S1–S3, T1). Structure the content around reaching that outcome — not by document type or Diátaxis category.
+1. Identify the **persona** the page serves: Maya (docs engineer), Devin (CI engineer), Sara (schema author), or Theo (contributor fixing a failure). See `personas.md`.
+2. Find the matching **CUJ** in `cujs.md` (M1–M3, D1–D3, S1–S3, T1). Structure the content around reaching that outcome, not by document type or Diátaxis category.
 3. Link into the **Reference shelf** (`reference/`) for exhaustive detail (flag tables, config keys, precedence chain). Journey pages explain the path; they don't duplicate reference.
 4. Check `information-architecture.md` for the page's place in the content set and its ★ launch status.
 5. Every page in `docs/src/content/docs/**` needs `title` and `description` frontmatter.
@@ -94,7 +95,18 @@ Before any user-facing writing or docs task, consult `docs/content-strategy/`:
 npm run typecheck   # tsc --noEmit (strict)
 npm test            # vitest run (unit + built-bin CLI integration)
 npm run build       # tsup -> dist/ (needed before CLI integration tests)
+npm run docs:check-cli  # CLI reference must match src/cli.ts
+
+# After editing anything under docs/, run the dogfood check too. docmeta
+# validates its own docs, and the Docs deploy is gated on it.
+node dist/cli.js validate "docs/src/content/docs/**/*.{md,mdx}" \
+  -s ./docs/doc-frontmatter.schema.json
 ```
 
 Command cores are tested directly in `test/*.test.ts`; the full CLI is exercised
 against the built `dist/cli.js` in `test/cli.integration.test.ts`.
+
+**Editing docs frontmatter is a validation change, not a prose change.** A
+`description:` containing `: ` is invalid YAML unless quoted, so a rephrase can
+break the parse. Run the dogfood command above before pushing; it is what the
+deploy gates on.
