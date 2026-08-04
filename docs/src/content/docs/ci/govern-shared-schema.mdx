@@ -1,6 +1,6 @@
 ---
 title: Govern a shared schema by URL
-description: Point many repositories at one central, versioned JSON Schema by http(s) URL — how docmeta classifies URL references, the 10-second fetch timeout, per-run caching, and a versioning pattern for safe rollout.
+description: Point many repositories at one central, versioned JSON Schema by http(s) URL: how docmeta classifies URL references, the 10-second fetch timeout, per-run caching, and a versioning pattern for safe rollout.
 ---
 
 import { Steps, Tabs, TabItem, Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
@@ -67,7 +67,7 @@ You can also scope a URL schema to a subtree with an `overrides` entry. See the
 <TabItem label="On the command line (--schema)">
 
 Pass a URL to `-s` / `--schema` to override `$schema` and config for the whole
-run — useful for a one-off check against a candidate schema version.
+run, which is useful for a one-off check against a candidate schema version.
 
 ```sh
 npx -y docmeta validate "docs/**/*.md" -s https://schemas.example.com/article/1.json
@@ -95,7 +95,7 @@ pipeline. The timeout is per request, not per run.
 
 **A per-run cache.** The first time a run fetches a given URL, docmeta stores the
 parsed schema in an in-memory cache keyed by the exact URL string. Every later
-reference to that same URL in the same run is served from the cache — it is
+reference to that same URL in the same run is served from the cache; it is
 fetched once, not once per file. Validating two thousand files against one URL
 schema makes a single network request.
 
@@ -143,7 +143,7 @@ consumers who have not migrated. A pattern that holds up:
 <Steps>
 
 1. **Host the schema at a stable, versioned URL.** Put the version in the path so
-   each release has its own immutable URL — for example
+   each release has its own immutable URL, for example
    `https://schemas.example.com/article/1.json`,
    `.../article/2.json`. Serve it from infrastructure your CI can always reach
    (an object store, a CDN, or a docs site). Avoid a single "latest" URL whose
@@ -159,7 +159,7 @@ consumers who have not migrated. A pattern that holds up:
    ```
 
    Because the URL is immutable, a repo's validation result depends only on its
-   own content and the version it pinned — not on when the run happened.
+   own content and the version it pinned, not on when the run happened.
 
 3. **Publish a new version under a new URL.** When the standard changes, publish
    `.../article/2.json` alongside the old one rather than editing the old file in
@@ -212,7 +212,7 @@ fetch-failure messages above.
   <LinkCard
     title="Exit codes & PR annotations"
     href="/docmeta/ci/exit-codes-and-annotations/"
-    description="The 0/1/2 contract — why a fetch failure is exit 2, not exit 1."
+    description="The 0/1/2 contract, and why a fetch failure is exit 2, not exit 1."
   />
 </CardGrid>
 

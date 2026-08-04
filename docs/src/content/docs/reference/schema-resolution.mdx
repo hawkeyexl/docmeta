@@ -1,12 +1,12 @@
 ---
 title: Schema resolution reference
-description: How docmeta picks the schema set for each file — the precedence chain, the three reference kinds, and the supported JSON Schema dialects.
+description: How docmeta picks the schema set for each file: the precedence chain, the three reference kinds, and the supported JSON Schema dialects.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-For each file, docmeta resolves a **schema set** — one or more schema references
-— then validates the file's metadata against every schema in that set. This page
+For each file, docmeta resolves a **schema set** of one or more schema references,
+then validates the file's metadata against every schema in that set. This page
 documents how the set is chosen, what a reference can be, and which JSON Schema
 dialects are supported.
 
@@ -60,7 +60,7 @@ neither a string nor a list of strings is an error for that file.
 
 ## Reference kinds
 
-A schema reference — wherever it comes from (CLI, `$schema`, or config) — is
+A schema reference, wherever it comes from (CLI, `$schema`, or config), is
 classified into one of three kinds by its shape:
 
 | Kind | Looks like | Resolved from |

@@ -1,6 +1,6 @@
 ---
 title: Built-in OKF schema
-description: The google:okf:0.1 schema shipped with docmeta — its required and recommended fields, value formats, and JSON Schema dialect.
+description: The google:okf:0.1 schema shipped with docmeta: its required and recommended fields, value formats, and JSON Schema dialect.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -44,8 +44,8 @@ explicitly tolerated, so a file may carry extra metadata without failing.
 
 <Aside type="note">
 Only `type` makes a file fail by default. The recommended fields are validated
-for **format** when present — a `resource` that is not a valid URI, or a
-`timestamp` that is not a valid date-time, fails — but their absence does not.
+for **format** when present. A `resource` that is not a valid URI, or a
+`timestamp` that is not a valid date-time, fails, but their absence does not.
 </Aside>
 
 ## Example

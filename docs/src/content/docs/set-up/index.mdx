@@ -1,6 +1,6 @@
 ---
 title: Stand up metadata validation for your repo
-description: Go from zero to a working CI gate — install docmeta, validate a folder, add a config file and schema, then enforce it on every pull request.
+description: Go from zero to a working CI gate: install docmeta, validate a folder, add a config file and schema, then enforce it on every pull request.
 ---
 
 import { Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
@@ -10,13 +10,13 @@ You own a docs repo, and you want every page to carry correct, complete frontmat
 By the end you will have a committed config file and a check that fails the build when a doc is missing required metadata.
 
 <Aside type="note" title="What docmeta checks">
-docmeta validates the **presence and format** of your frontmatter against [JSON Schema](https://json-schema.org/) — that `type` exists, that `timestamp` is a real date-time, that `resource` is a URI. It does not review your prose. If a field is required by your schema and missing, the run fails.
+docmeta validates the **presence and format** of your frontmatter against [JSON Schema](https://json-schema.org/): that `type` exists, that `timestamp` is a real date-time, that `resource` is a URI. It does not review your prose. If a field is required by your schema and missing, the run fails.
 </Aside>
 
 ## Before you start
 
 - **Node.js 24 or newer.** Check with `node --version`.
-- A docs repo with frontmatter you want to enforce. The examples below assume Markdown under a `docs/` folder, but docmeta handles other formats too — see the [supported formats reference](/docmeta/reference/).
+- A docs repo with frontmatter you want to enforce. The examples below assume Markdown under a `docs/` folder, but docmeta handles other formats too; see the [supported formats reference](/docmeta/reference/).
 
 ## Stand it up
 
@@ -24,7 +24,7 @@ docmeta validates the **presence and format** of your frontmatter against [JSON 
 
 1. **Validate a folder, no setup required.**
 
-   Run docmeta against a directory with `npx`. No install, no config — this tells you where you stand today.
+   Run docmeta against a directory with `npx`. No install, no config. This tells you where you stand today.
 
    ```bash
    npx docmeta validate docs/
@@ -38,7 +38,7 @@ docmeta validates the **presence and format** of your frontmatter against [JSON 
 
 2. **Add a `docmeta.config.yaml` at your repo root.**
 
-   The command above works, but you do not want to retype paths and schemas every run — and CI needs a stored definition of what "valid" means for your repo. Capture it in a config file so a bare `docmeta validate` knows what to do.
+   The command above works, but you do not want to retype paths and schemas every run, and CI needs a stored definition of what "valid" means for your repo. Capture it in a config file so a bare `docmeta validate` knows what to do.
 
    ```yaml title="docmeta.config.yaml"
    # Default targets when no paths are passed on the command line.
@@ -50,12 +50,12 @@ docmeta validates the **presence and format** of your frontmatter against [JSON 
      - google:okf:0.1
    ```
 
-   `paths` is the fallback docmeta uses when you do not name files on the command line. `schemas` is the set each file is validated against — every file must satisfy every schema you list.
+   `paths` is the fallback docmeta uses when you do not name files on the command line. `schemas` is the set each file is validated against; every file must satisfy every schema you list.
 
    <LinkCard
      title="Create your docmeta.config.yaml"
      href="/docmeta/set-up/config/"
-     description="Every config key explained — paths, exclude, schemas, and overrides — with a complete worked example."
+     description="Every config key explained: paths, exclude, schemas, and overrides, with a complete worked example."
    />
 
 3. **Run the stored configuration.**
@@ -69,7 +69,7 @@ docmeta validates the **presence and format** of your frontmatter against [JSON 
    This is the exact command CI will run. Confirm it reports what you expect locally before you wire it up.
 
    <Aside type="caution">
-   If you run a bare `docmeta validate` with no config file and no paths, docmeta exits with code `2` and the message `No files to validate.` That is an operational error, not a silent pass — it means docmeta had nothing to do.
+   If you run a bare `docmeta validate` with no config file and no paths, docmeta exits with code `2` and the message `No files to validate.` That is an operational error, not a silent pass; it means docmeta had nothing to do.
    </Aside>
 
 4. **Land the CI gate.**
@@ -80,7 +80,7 @@ docmeta validates the **presence and format** of your frontmatter against [JSON 
    npx -y docmeta validate --format github
    ```
 
-   The full recipe — workflow file, exit-code contract, and annotation behavior — lives in the CI track. Copy the ready-made recipe there rather than assembling your own.
+   The full recipe (workflow file, exit-code contract, and annotation behavior) lives in the CI track. Copy the ready-made recipe there instead of assembling your own.
 
    <LinkCard
      title="Run it in CI"

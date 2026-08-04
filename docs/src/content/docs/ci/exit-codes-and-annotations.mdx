@@ -109,25 +109,25 @@ $ docmeta validate bad-timestamp.md --format json
 The shape is stable:
 
 - **`summary`**: counts across the whole run.
-  - `files` — number of files checked.
-  - `passed` — files that satisfied every schema in their set.
-  - `failed` — files with at least one validation error.
-  - `errors` — total individual validation errors across all files.
+  - `files`: number of files checked.
+  - `passed`: files that satisfied every schema in their set.
+  - `failed`: files with at least one validation error.
+  - `errors`: total individual validation errors across all files.
 - **`results`**: one object per file.
-  - `file` — the file path as docmeta saw it.
-  - `format` — the extractor that read the file (for example `markdown`).
-  - `ok` — `true` when the file passed every schema in its set.
-  - `schemas` — the schema ids the file was validated against.
-  - `errors` — the individual violations for this file (empty when `ok`).
+  - `file`: the file path as docmeta saw it.
+  - `format`: the extractor that read the file (for example `markdown`).
+  - `ok`: `true` when the file passed every schema in its set.
+  - `schemas`: the schema ids the file was validated against.
+  - `errors`: the individual violations for this file (empty when `ok`).
 - **Each error**: one schema violation.
-  - `schema` — the schema id that produced the error.
-  - `instancePath` — a JSON Pointer to the offending field (`""` for the
+  - `schema`: the schema id that produced the error.
+  - `instancePath`: a JSON Pointer to the offending field (`""` for the
     document root, `"/tags/0"` for the first item of `tags`).
-  - `message` — the human-readable reason.
-  - `line` — 1-based source line, when docmeta can locate it. Omitted when
-    unknown — for example, errors at the document root often have no specific
+  - `message`: the human-readable reason.
+  - `line`: 1-based source line, when docmeta can locate it. Omitted when
+    unknown. For example, errors at the document root often have no specific
     line.
-  - `col` — 1-based column. This field is defined in the output contract and is
+  - `col`: 1-based column. This field is defined in the output contract and is
     emitted when present, but the current extractors resolve errors to a line
     only, so `col` is absent in practice today. Treat it as optional.
 
@@ -141,7 +141,7 @@ assuming every error carries them.
 
 One [GitHub Actions workflow command](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#setting-an-error-message)
 per error. GitHub renders each line as an annotation pinned to the file and line
-in the pull request diff. There is no summary line and no per-file heading — only
+in the pull request diff. There is no summary line and no per-file heading, only
 error lines, one per violation. A passing run prints nothing.
 
 The format of each line is:
@@ -159,7 +159,7 @@ The format of each line is:
   error is at the document root.
 - `<message>` is the human-readable reason.
 
-A concrete line — a malformed `timestamp` field that fails the `date-time`
+A concrete line, from a malformed `timestamp` field that fails the `date-time`
 format:
 
 ```text
@@ -175,7 +175,7 @@ required-property error at the document root reports the field as `(root)`:
 
 <Aside type="tip" title="github output outside GitHub">
 The `::error` lines are GitHub-specific. On other CI systems they print as plain
-text with no annotation behavior. Use `pretty` or `json` there — see
+text with no annotation behavior. Use `pretty` or `json` there; see
 [CI recipes](/docmeta/ci/recipes/).
 </Aside>
 
@@ -183,7 +183,7 @@ text with no annotation behavior. Use `pretty` or `json` there — see
 
 docmeta follows [clig.dev](https://clig.dev/) conventions: primary output goes to
 stdout, diagnostics go to stderr, and color is emitted only when it is safe to do
-so. Color affects only the `pretty` format — `json` and `github` are always plain
+so. Color affects only the `pretty` format; `json` and `github` are always plain
 text so they parse reliably.
 
 docmeta decides whether to emit ANSI color like this, in order:
@@ -196,12 +196,12 @@ docmeta decides whether to emit ANSI color like this, in order:
 
 In practice this means color turns off automatically in CI, because a piped or
 redirected stream is not a TTY. You rarely need `--no-color` in a pipeline, but
-it is available when you want to force plain output — for example, when capturing
+it is available when you want to force plain output, for example when capturing
 a log that a downstream tool will read.
 
 <Aside type="note" title="--no-color is a global flag">
-`--no-color` is a top-level option. Place it before the subcommand —
-`docmeta --no-color validate docs/` — or rely on `NO_COLOR` / TTY detection,
+`--no-color` is a top-level option. Place it before the subcommand,
+`docmeta --no-color validate docs/`, or rely on `NO_COLOR` / TTY detection,
 which need no flag.
 </Aside>
 
