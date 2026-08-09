@@ -16,10 +16,10 @@ import type { DocmetaConfig } from "./config.js";
  * Diataxis is deliberately absent: it constrains `type`, which documents *do*
  * carry, so defaulting it would fail every repo not already on Diataxis.
  */
-export const DEFAULT_SCHEMAS: readonly string[] = [
+export const DEFAULT_SCHEMAS: readonly string[] = Object.freeze([
   "google:okf:0.1",
   "passo-uno:seven-action:1.0",
-];
+]);
 export const FILE_SCHEMA_KEY = "$schema";
 
 export interface ResolveParams {
