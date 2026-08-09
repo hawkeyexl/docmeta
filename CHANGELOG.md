@@ -1,3 +1,40 @@
+# [2.0.0](https://github.com/hawkeyexl/docmeta/compare/v1.4.1...v2.0.0) (2026-08-09)
+
+
+* feat(schemas)!: add built-in Diataxis and Seven-Action vocabularies ([#56](https://github.com/hawkeyexl/docmeta/issues/56)) ([057f007](https://github.com/hawkeyexl/docmeta/commit/057f0078a466f7c381bd880f9bb3cde86aeeaa75))
+
+
+### BREAKING CHANGES
+
+* the `DEFAULT_SCHEMA` export is removed from the package
+entry point. Use `DEFAULT_SCHEMAS`, which is a `readonly string[]` holding
+the built-in default set rather than a single schema id.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+* fix(schemas): freeze the exported default set
+
+`DEFAULT_SCHEMAS` is part of the package entry point, and `readonly
+string[]` is a compile-time constraint only — a JS consumer, or a TS one
+casting it, could push onto the shared array and change the default for
+every later resolution in a long-lived process. Freeze it, and cover both
+halves: the export throws on mutation, and `resolveSchemaSet` keeps
+handing back a fresh array callers may edit freely.
+
+Also names the default *set* where docs/schemas/index.mdx still read as
+though the fallback were OKF alone.
+* `docmeta fill` now proposes an `action` value for every
+document by default. Seven-Action is in the built-in default set, and
+`fill` treats any schema property a document lacks as fillable regardless
+of whether it is required — so a bare `docmeta fill` makes an inference
+call per file. A document that already has an `action` meaning something
+else is worse off: an invalid value is a candidate for *replacement*, and
+fill writes to disk unless `--dry-run` is passed. To opt out, list the
+schemas you want under `schemas:` in docmeta.config.yaml; that replaces
+the default set entirely.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
 ## [1.4.1](https://github.com/hawkeyexl/docmeta/compare/v1.4.0...v1.4.1) (2026-08-04)
 
 
