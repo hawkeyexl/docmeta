@@ -1,0 +1,158 @@
+---
+title: Built-in taxonomy schemas
+description: The diataxis and seven-action schemas shipped with docmeta, their vocabularies, why they key off different fields, and how to compose them with OKF.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+docmeta ships two **taxonomy** schemas: closed vocabularies that constrain a
+classification field to a published set of values. They exist because
+[`google:okf:0.1`](/docmeta/reference/okf-schema/) requires a `type` but accepts
+any non-empty string for it, so it cannot stop a docs set from drifting into
+`how-to`, `howto`, and `guide` all meaning the same thing.
+
+| Id | Key | Framework |
+|---|---|---|
+| `diataxis:diataxis:1.0` | `type` | [Diátaxis](https://diataxis.fr/) |
+| `passo-uno:seven-action:1.0` | `action` | [Seven-Action Documentation Model](https://passo.uno/seven-action-model/) |
+
+Both use [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects), allow
+additional properties, and are [built-in
+references](/docmeta/reference/schema-resolution/#reference-kinds).
+
+## They are vocabularies, not presence checks
+
+Neither schema marks its key as required. A document with no `type` at all
+passes `diataxis:diataxis:1.0`, because the schema's job is to rule that a type,
+*if present*, is legitimate.
+
+That is deliberate: it makes the two safe to layer onto an existing setup, and
+it keeps "must have a type" as a separate decision from "which types exist."
+To get both, stack a taxonomy schema with one that requires the field:
+
+```bash
+docmeta validate docs/ -s google:okf:0.1 -s diataxis:diataxis:1.0
+```
+
+OKF supplies the requirement, Diátaxis supplies the vocabulary.
+
+## `diataxis:diataxis:1.0`
+
+Constrains `type` to the four Diátaxis forms.
+
+| Value | Orientation |
+|---|---|
+| `tutorial` | Learning-oriented |
+| `how-to` | Task-oriented |
+| `reference` | Information-oriented |
+| `explanation` | Understanding-oriented |
+
+```md
+---
+type: how-to
+title: Rotate an API key
+---
+```
+
+Diátaxis is **not** part of the [default
+set](/docmeta/reference/schema-resolution/#precedence). It constrains `type`,
+which documents already carry, so applying it by default would fail every repo
+not already using Diátaxis. Opt in with `-s` or a `schemas:` entry in config.
+
+## `passo-uno:seven-action:1.0`
+
+Constrains `action` to the seven reader actions. Derived from upstream model
+version `2025-01-09`.
+
+| Value | Alternate verb | What the reader is doing |
+|---|---|---|
+| `appraise` | Discern | Judging whether something fits their situation |
+| `understand` | Learn | Grasping a concept |
+| `explore` | Discover | Finding out what exists |
+| `practice` | Train | Building a skill by doing |
+| `remember` | Recall | Looking up a detail they once knew |
+| `develop` | Integrate | Building the thing into their own work |
+| `troubleshoot` | Solve | Getting past a problem |
+
+Only the left column validates. The alternate verbs are how the model names each
+action in prose; `action: learn` fails.
+
+```md
+---
+action: practice
+title: Work through the tutorial
+---
+```
+
+This schema **is** in the default set, alongside OKF. It can be, because it
+constrains a key that documents do not otherwise carry and does not require it —
+so it fails nothing that passed before.
+
+<Aside type="caution" title="If you already use an `action` key">
+`action` is a generic field name. If your frontmatter already uses it for
+something else (a workflow name, a button label), it will now fail against the
+default set. Any `schemas:` entry in `docmeta.config.yaml` replaces the default
+set entirely and opts you out.
+</Aside>
+
+## Why the two keys differ
+
+Diátaxis classifies what a page **is**. Seven-Action classifies what a reader is
+**doing**. Those are independent, so the schemas key off different fields and
+compose rather than compete:
+
+```md
+---
+type: how-to
+action: practice
+title: Rotate an API key
+---
+```
+
+Two schemas that both claimed `type` would be mutually exclusive — a file cannot
+be a `tutorial` and a `reference` at once. Keeping `action` separate is what
+makes the pairing above expressible.
+
+## Crosswalk
+
+The Seven-Action model publishes a mapping to Diátaxis. It is not one-to-one:
+`explore` lands on Tutorial, and Diátaxis's single how-to form splits across
+three actions.
+
+| `action` | Diátaxis `type` |
+|---|---|
+| `appraise` | no direct equivalent (closest: `explanation`) |
+| `understand` | `explanation` |
+| `explore` | `tutorial` |
+| `practice` | `how-to` |
+| `remember` | `reference` |
+| `develop` | `how-to` |
+| `troubleshoot` | `how-to` (problem-oriented) |
+
+Use it to sanity-check a pairing, not as a rule docmeta enforces. The two
+schemas validate independently; no combination of a valid `type` and a valid
+`action` is rejected.
+
+## If your vocabulary differs
+
+The enums are strict and carry no aliases, so `howto` and `How-To Guide` both
+fail. That is the point of a vocabulary check, but it means a docs set with its
+own conventions needs its own schema. Copy the shape into a local file and edit
+the `enum`:
+
+```json title="schemas/types.schema.json"
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["tutorial", "how-to", "howto", "reference", "explanation"]
+    }
+  }
+}
+```
+
+Then reference it by path instead of the built-in id. See [Author a
+schema](/docmeta/schemas/) for the full authoring guide.

@@ -14,7 +14,7 @@ export type {
   SkipReason,
 } from "./commands/fill.js";
 export { Validator } from "./core/validator.js";
-export { resolveSchemaSet, DEFAULT_SCHEMA } from "./core/resolve-schema.js";
+export { resolveSchemaSet, DEFAULT_SCHEMAS } from "./core/resolve-schema.js";
 export { loadConfig, parseConfig } from "./core/config.js";
 export type { DocmetaConfig, FillConfig } from "./core/config.js";
 export {

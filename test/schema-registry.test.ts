@@ -18,13 +18,36 @@ const URL_SCHEMA = {
 };
 
 describe("schema registry", () => {
-  it("lists the OKF built-in", () => {
+  it("lists every built-in", () => {
     const ids = listBuiltins().map((b) => b.id);
     expect(ids).toContain("google:okf:0.1");
+    expect(ids).toContain("diataxis:diataxis:1.0");
+    expect(ids).toContain("passo-uno:seven-action:1.0");
   });
 
   it("classifies a built-in id", () => {
     expect(classifyRef("google:okf:0.1").kind).toBe("builtin");
+    // A hyphenated vendor segment must still classify as a built-in, not a file.
+    expect(classifyRef("passo-uno:seven-action:1.0").kind).toBe("builtin");
+  });
+
+  it("loads the taxonomy built-ins, keyed on their own property", async () => {
+    const diataxis = await loadSchema("diataxis:diataxis:1.0");
+    expect(
+      (diataxis as { properties?: Record<string, unknown> }).properties,
+    ).toHaveProperty("type");
+
+    const sevenAction = await loadSchema("passo-uno:seven-action:1.0");
+    expect(
+      (sevenAction as { properties?: Record<string, unknown> }).properties,
+    ).toHaveProperty("action");
+  });
+
+  it("does not require a key on either taxonomy schema", async () => {
+    for (const id of ["diataxis:diataxis:1.0", "passo-uno:seven-action:1.0"]) {
+      const schema = await loadSchema(id);
+      expect((schema as { required?: string[] }).required, id).toBeUndefined();
+    }
   });
 
   it("classifies an http(s) url", () => {

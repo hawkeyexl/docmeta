@@ -135,7 +135,7 @@ Setting `"additionalProperties": false`? A document's own `$schema:` key won't t
 
 ## A fuller example: the built-in OKF schema
 
-docmeta's default built-in schema is [Open Knowledge Format (OKF) v0.1](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md), addressed as `google:okf:0.1`. (Run `docmeta schemas` for the full built-in list.) It's a useful reference because it combines every technique on this page in a realistic standard. Reading it is the fastest way to see how the pieces fit together, and it's the schema docmeta falls back to when no other schema applies.
+The schema anchoring docmeta's default set is [Open Knowledge Format (OKF) v0.1](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md), addressed as `google:okf:0.1`. (Run `docmeta schemas` for the full built-in list.) It's a useful reference because it combines every technique on this page in a realistic standard. Reading it is the fastest way to see how the pieces fit together, and it's what docmeta falls back to when no other schema applies.
 
 ```json title="src/schemas/okf/0.1.json"
 {
@@ -189,6 +189,29 @@ Notice the design choices OKF makes, each one a decision you'll face in your own
 <Aside type="tip" title="Start from OKF or start from scratch">
 If OKF's field set is close to what you need, copy it into a file and adjust: add your required fields, tighten `additionalProperties`, change the formats. If your standard is very different, start from the minimal one-field schema at the top of this page and grow it. Either way, keep the `$schema` dialect line; docmeta needs it to choose a validation engine.
 </Aside>
+
+## Borrow a vocabulary instead of writing one
+
+Everything above assumes you're defining the field set yourself. If what you
+need is a *closed list of document types*, docmeta ships two vocabularies you
+can adopt without authoring anything: `diataxis:diataxis:1.0` constrains `type`
+to the four [Diátaxis](https://diataxis.fr/) forms, and
+`passo-uno:seven-action:1.0` constrains `action` to the seven reader actions of
+the [Seven-Action model](https://passo.uno/seven-action-model/).
+
+Neither *requires* its key — each one rules that a value, if present, is
+legitimate. That makes them safe to layer onto what you already have, and it
+means you get presence-checking by stacking them with a schema that demands the
+field:
+
+```bash
+docmeta validate docs/ -s google:okf:0.1 -s diataxis:diataxis:1.0
+```
+
+OKF supplies the "must have a `type`" rule; Diátaxis supplies the list of types
+that count. Every field, value, and the crosswalk between the two vocabularies
+is in the [taxonomy schemas
+reference](/docmeta/reference/taxonomy-schemas/).
 
 ## Point a document at its schema
 
@@ -277,4 +300,7 @@ Naming the schema inside a document is the most self-contained option, but you c
 {/* step {"description":"A required field that is absent is a hard failure: a frontmatter-free doc fails the required `title`.","runShell":{"command":"npx docmeta validate test/fixtures/no-frontmatter.md -s ./test/fixtures/extra.schema.json","exitCodes":[1],"stdio":"must have required property 'title'"}} */}
 {/* step {"description":"The date-time format is enforced: a malformed timestamp fails against OKF.","runShell":{"command":"npx docmeta validate test/fixtures/bad-timestamp.md","exitCodes":[1],"stdio":"date-time"}} */}
 {/* step {"description":"`schemas` lists the built-in OKF schema the page documents as the fallback.","runShell":{"command":"npx docmeta schemas","exitCodes":[0],"stdio":"google:okf:0.1"}} */}
+{/* step {"description":"`schemas` also lists the Diataxis vocabulary this page points readers at.","runShell":{"command":"npx docmeta schemas","exitCodes":[0],"stdio":"diataxis:diataxis:1.0"}} */}
+{/* step {"description":"Stacking OKF with a taxonomy schema passes a document carrying a canonical Diataxis type.","runShell":{"command":"npx docmeta validate test/fixtures/taxonomy/diataxis-how-to.md -s google:okf:0.1 -s diataxis:diataxis:1.0","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"The vocabulary is closed: a near-miss spelling fails against the Diataxis schema.","runShell":{"command":"npx docmeta validate test/fixtures/taxonomy/diataxis-bad-type.md -s diataxis:diataxis:1.0","exitCodes":[1],"stdio":"allowed values"}} */}
 {/* test end */}

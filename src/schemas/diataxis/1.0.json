@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "diataxis:diataxis:1.0",
+  "title": "Diataxis documentation types v1.0",
+  "description": "Constrains `type` to the four Diataxis forms. Vocabulary only: `type` is not required, so this schema checks that a type is *legitimate*, not that one is present. Stack it with a schema that requires `type` (such as google:okf:0.1) to get both. See https://diataxis.fr/",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["tutorial", "how-to", "reference", "explanation"],
+      "description": "Which of the four Diataxis forms this page is. `tutorial` is learning-oriented, `how-to` is task-oriented, `reference` is information-oriented, and `explanation` is understanding-oriented."
+    }
+  }
+}

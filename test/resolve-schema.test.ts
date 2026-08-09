@@ -54,9 +54,9 @@ describe("resolveSchemaSet", () => {
     expect(set).toEqual(["google:okf:0.1"]);
   });
 
-  it("falls back to the built-in default", () => {
+  it("falls back to the built-in default set", () => {
     const set = resolveSchemaSet({ filePath: "x.md" });
-    expect(set).toEqual(["google:okf:0.1"]);
+    expect(set).toEqual(["google:okf:0.1", "passo-uno:seven-action:1.0"]);
   });
 
   it("throws on a malformed $schema value", () => {
