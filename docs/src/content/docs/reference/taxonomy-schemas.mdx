@@ -90,9 +90,17 @@ so it fails nothing that passed before.
 
 <Aside type="caution" title="If you already use an `action` key">
 `action` is a generic field name. If your frontmatter already uses it for
-something else (a workflow name, a button label), it will now fail against the
-default set. Any `schemas:` entry in `docmeta.config.yaml` replaces the default
-set entirely and opts you out.
+something else (a workflow name, a button label), two things change:
+
+- **`validate` fails.** Your value is not in the vocabulary, so it is reported
+  as an error against `passo-uno:seven-action:1.0`.
+- **`fill` overwrites it.** A key whose value is invalid is a candidate for
+  *replacement*, not just for filling a gap, and `docmeta fill` writes to disk
+  unless you pass `--dry-run`. Run `docmeta fill --dry-run` first on any repo
+  that uses `action` for something of its own.
+
+Set a `schemas:` list in `docmeta.config.yaml` before running either command.
+It replaces the default set entirely, which opts you out of both.
 </Aside>
 
 ## Why the two keys differ
