@@ -21,7 +21,7 @@ and using the **first** one that yields a non-empty set:
 | 2 | `$schema` in the file's own metadata | That file only. |
 | 3 | First matching config `overrides` entry (by glob) | Files matching the glob. |
 | 4 | Config `schemas` | All files not matched above. |
-| 5 | Built-in default `google:okf:0.1` | Every file, when nothing else applies. |
+| 5 | Built-in default set: `google:okf:0.1` + `passo-uno:seven-action:1.0` | Every file, when nothing else applies. |
 
 Once a level produces a set, lower levels are not consulted for that file.
 Within a resolved set, duplicate references are removed.

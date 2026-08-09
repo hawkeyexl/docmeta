@@ -26,7 +26,7 @@ For every file, docmeta builds a **schema set** (the list of schemas that file w
 
 4. **Config `schemas`**: the repo-wide default list in `docmeta.config.yaml`.
 
-5. **The built-in default**: if nothing above matched, docmeta uses `google:okf:0.1`.
+5. **The built-in default set**: if nothing above matched, docmeta uses `google:okf:0.1` and `passo-uno:seven-action:1.0` together.
 
 </Steps>
 
@@ -42,7 +42,7 @@ Here is the same chain as a quick-reference table:
 | 2 | File `$schema` key | That one file | String or list of strings. Reserved key — stripped before validation. |
 | 3 | Config `overrides` | Files matching a glob | First matching entry wins; later entries ignored. |
 | 4 | Config `schemas` | All files (repo default) | Used when no override matched. |
-| 5 | Built-in default | All files (last resort) | `google:okf:0.1`. |
+| 5 | Built-in default set | All files (last resort) | `google:okf:0.1` + `passo-uno:seven-action:1.0`. |
 
 Levels 3 and 4 come from your `docmeta.config.yaml`. Here is the config the worked example below assumes, with a repo-wide default plus one directory override:
 

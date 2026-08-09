@@ -276,7 +276,10 @@ describe("runFill — mechanical checks precede confidence", () => {
     expect(provider.requests).toHaveLength(0);
     // Schema resolution already succeeded, so the result must say so — "never
     // resolved" and "resolved, then writing refused" need different follow-up.
-    expect(results[0]?.schemas).toEqual(["google:okf:0.1"]);
+    expect(results[0]?.schemas).toEqual([
+      "google:okf:0.1",
+      "passo-uno:seven-action:1.0",
+    ]);
   });
 
   it("reports a read-only format as a per-file error, not a run abort", async () => {
@@ -349,9 +352,11 @@ describe("runFill — writing", () => {
   });
 
   it("makes no inference call when nothing needs filling", async () => {
+    // "Complete" is relative to the resolved schema set, which by default is
+    // OKF *and* Seven-Action — hence `action` alongside the OKF fields.
     await writeFile(
       join(dir, "complete.md"),
-      "---\ntype: concept\ntitle: T\ndescription: D\nresource: https://e.com/x\ntags: [a]\ntimestamp: 2026-06-25T10:00:00Z\n---\n\n# T\n",
+      "---\ntype: concept\naction: understand\ntitle: T\ndescription: D\nresource: https://e.com/x\ntags: [a]\ntimestamp: 2026-06-25T10:00:00Z\n---\n\n# T\n",
       "utf8",
     );
     const provider = propose({});

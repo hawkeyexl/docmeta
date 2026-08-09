@@ -65,6 +65,49 @@ describe("docmeta CLI (built bin)", () => {
     const r = run(["schemas"]);
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("google:okf:0.1");
+    expect(r.stdout).toContain("diataxis:diataxis:1.0");
+    expect(r.stdout).toContain("passo-uno:seven-action:1.0");
+  });
+
+  it("reports every built-in in --format json", () => {
+    const r = run(["schemas", "-f", "json"]);
+    expect(r.status).toBe(0);
+    const ids = JSON.parse(r.stdout).builtins.map((b: { id: string }) => b.id);
+    expect(ids).toEqual([
+      "google:okf:0.1",
+      "diataxis:diataxis:1.0",
+      "passo-uno:seven-action:1.0",
+    ]);
+  });
+
+  it("fails an out-of-vocabulary Diataxis type, naming the schema", () => {
+    const r = run([
+      "validate",
+      "test/fixtures/taxonomy/diataxis-bad-type.md",
+      "-s",
+      "diataxis:diataxis:1.0",
+    ]);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("diataxis:diataxis:1.0");
+  });
+
+  it("passes a document carrying both a type and an action", () => {
+    const r = run([
+      "validate",
+      "test/fixtures/taxonomy/composed-how-to-practice.md",
+      "-s",
+      "diataxis:diataxis:1.0",
+      "-s",
+      "passo-uno:seven-action:1.0",
+    ]);
+    expect(r.status).toBe(0);
+  });
+
+  it("leaves a pre-existing document passing on the bare default set", () => {
+    // schema-ref.md has `type: guide` and no `action`; adding Seven-Action to
+    // the default set must not fail it.
+    const r = run(["validate", "test/fixtures/schema-ref.md"]);
+    expect(r.status).toBe(0);
   });
 
   it("validates piped stdin with --as", () => {

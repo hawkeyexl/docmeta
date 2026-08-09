@@ -4,12 +4,22 @@
  *   2. $schema in the file's metadata (string or list)
  *   3. first matching config override (by glob)
  *   4. config default schemas
- *   5. built-in default (google:okf:0.1)
+ *   5. the built-in default set (DEFAULT_SCHEMAS)
  */
 import picomatch from "picomatch";
 import type { DocmetaConfig } from "./config.js";
 
-export const DEFAULT_SCHEMA = "google:okf:0.1";
+/**
+ * Applied when nothing else resolves. Seven-Action is safe to include here
+ * because it constrains `action` — a key documents don't otherwise carry — and
+ * does not require it, so adding it fails nothing that passed before.
+ * Diataxis is deliberately absent: it constrains `type`, which documents *do*
+ * carry, so defaulting it would fail every repo not already on Diataxis.
+ */
+export const DEFAULT_SCHEMAS: readonly string[] = Object.freeze([
+  "google:okf:0.1",
+  "passo-uno:seven-action:1.0",
+]);
 export const FILE_SCHEMA_KEY = "$schema";
 
 export interface ResolveParams {
@@ -67,5 +77,5 @@ export function resolveSchemaSet(params: ResolveParams): string[] {
 
   if (config?.schemas && config.schemas.length > 0) return dedupe(config.schemas);
 
-  return [DEFAULT_SCHEMA];
+  return [...DEFAULT_SCHEMAS];
 }
