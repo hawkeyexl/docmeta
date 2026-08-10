@@ -55,22 +55,35 @@ jobs:
       # That costs ~2.1 GB the first time — the node-llama-cpp binding (~716 MB,
       # auto-installed into the runtime prefix) plus the weights the docs name
       # (1.42 GB). Both live under one directory this library owns, so one cache
-      # entry covers them. Keyed on the model: changing which model the docs test
-      # must fetch the new weights rather than silently reuse the old ones.
+      # entry covers them.
+      #
+      # The key carries the blob name verbatim, so `Q2_K_XL` greps to both here
+      # and the `--model` in docs/src/content/docs/reference/cli.mdx. Change the
+      # model there and this key must change with it: an unchanged key restores
+      # a cache that lacks the new blob, and because the key still hits, the
+      # download is repeated on every run and never saved back.
       #
       # The docs pin a Granite build by `hf:` URI rather than taking a catalog
-      # alias. The catalog's smallest entry is a Q2 Gemma 4 E2B at 2.19 GB, and
-      # that build both ran away on long pages — six of twelve docs pages failed
-      # to terminate inside two minutes, one still unfinished at 400s — and
-      # proposed identifiers like `docmeta.config.yaml` as page titles at 0.95
-      # self-reported confidence. Granite is smaller, finishes every page in
-      # about five seconds, and is the reason these steps can run unattended.
+      # alias, because the catalog's smallest entry is a Q2 Gemma 4 E2B at
+      # 2.19 GB — larger, and much weaker on this task. Benchmarked over twelve
+      # docs pages with title/description stripped, that build failed to
+      # terminate on six of them inside two minutes (one still unfinished at
+      # 400s) and proposed identifiers like `docmeta.config.yaml` as page titles
+      # at 0.95 self-reported confidence. The steps below run against a small
+      # fixture that the old model did handle, so this swap buys a smaller
+      # download and headroom against that runaway behaviour; it is not
+      # repairing a step that was failing.
+      #
+      # Timings here are whatever the runner gives you. The local benchmark that
+      # chose this model had GPU offload, so its per-page seconds do not carry
+      # over to these CPU-only runners; what does carry over is that Granite
+      # terminates on inputs where the previous model did not.
       #
       # A warm run adds roughly ten seconds. A cold one adds a couple of minutes.
       - uses: actions/cache@v4
         with:
           path: ~/.hawkeyexl-inference
-          key: inference-local-granite-4-1-3b-q2-${{ runner.os }}
+          key: inference-local-granite-4.1-3b-UD-Q2_K_XL-${{ runner.os }}
       # Third-party action pinned to a full commit SHA (supply-chain hardening).
       - uses: doc-detective/github-action@a2a4f5ceb1abfa55d567e4f6766223082ece2c18 # v1
         with:
