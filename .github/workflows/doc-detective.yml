@@ -84,6 +84,21 @@ jobs:
         with:
           path: ~/.hawkeyexl-inference
           key: inference-local-granite-4.1-3b-UD-Q2_K_XL-${{ runner.os }}
+      # Fetch the weights and auto-install the binding HERE, not inside
+      # doc-detective. Doc Detective caps each step at 60s, and a cold fetch is
+      # ~2.1 GB, so leaving it to the first fill step means the first run after
+      # any model change times out — which is exactly what happened when this
+      # key last moved. Warm, this is a few seconds and changes nothing.
+      #
+      # This repeats the model reference deliberately: keeping it beside the
+      # cache key is what makes `Q2_K_XL` grep to every place that must move
+      # together. Keep it in step with the `--model` in cli.mdx.
+      - name: Prefetch the local model
+        run: >-
+          docmeta fill test/fixtures/fill/no-block.md
+          --provider llama-cpp
+          --model hf:unsloth/granite-4.1-3b-GGUF/granite-4.1-3b-UD-Q2_K_XL.gguf
+          --fields title --dry-run --no-cache
       # Third-party action pinned to a full commit SHA (supply-chain hardening).
       - uses: doc-detective/github-action@a2a4f5ceb1abfa55d567e4f6766223082ece2c18 # v1
         with:
