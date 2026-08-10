@@ -11,11 +11,11 @@ classification field to a published set of values. They exist because
 any non-empty string for it, so it cannot stop a docs set from drifting into
 `how-to`, `howto`, and `guide` all meaning the same thing.
 
-| Id | Key | Framework |
-|---|---|---|
-| `diataxis:diataxis:1.0` | `type` | [Diátaxis](https://diataxis.fr/) |
-| `tgdp:templates:1.0` | `type` | [The Good Docs Project](https://www.thegooddocsproject.dev/template) |
-| `passo-uno:seven-action:1.0` | `action` | [Seven-Action Documentation Model](https://passo.uno/seven-action-model/) |
+| Id | Key | Key required? | Framework |
+|---|---|---|---|
+| `diataxis:diataxis:1.0` | `type` | No | [Diátaxis](https://diataxis.fr/) |
+| `tgdp:templates:1.0` | `type` | **Yes** | [The Good Docs Project](https://www.thegooddocsproject.dev/template) |
+| `passo-uno:seven-action:1.0` | `action` | No | [Seven-Action Documentation Model](https://passo.uno/seven-action-model/) |
 
 All three use [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects),
 allow additional properties, and are [built-in
@@ -24,21 +24,27 @@ references](/docmeta/reference/schema-resolution/#reference-kinds).
 The two keyed on `type` are alternatives to each other — see [Which ones
 compose](#which-ones-compose).
 
-## They are vocabularies, not presence checks
+## Vocabulary checks vs. presence checks
 
-No taxonomy schema marks its key as required. A document with no `type` at all
-passes `diataxis:diataxis:1.0`, because the schema's job is to rule that a type,
-*if present*, is legitimate.
+Two of the three check a value only *if one is present*. A document with no
+`type` at all passes `diataxis:diataxis:1.0`, because that schema's job is to
+rule that a type, if given, is legitimate — not to insist on one.
 
 That is deliberate: it makes them safe to layer onto an existing setup, and it
 keeps "must have a type" as a separate decision from "which types exist."
-To get both, stack a taxonomy schema with one that requires the field:
+To get both, stack a vocabulary schema with one that requires the field:
 
 ```bash
 docmeta validate docs/ -s google:okf:0.1 -s diataxis:diataxis:1.0
 ```
 
 OKF supplies the requirement, Diátaxis supplies the vocabulary.
+
+`tgdp:templates:1.0` is the exception: it **requires** `type` as well as
+constraining it, so it needs no partner to get presence-checking. Adopting a
+named template set is a stronger claim than adopting a vocabulary — it says
+every page *is* one of the templates, which makes an untyped page a gap rather
+than an abstention. Pair it with OKF for the other OKF fields, not for `type`.
 
 ## `diataxis:diataxis:1.0`
 
@@ -65,11 +71,11 @@ not already using Diátaxis. Opt in with `-s` or a `schemas:` entry in config.
 
 ## `tgdp:templates:1.0`
 
-Constrains `type` to the template slugs published by [The Good Docs
-Project](https://www.thegooddocsproject.dev/template). Where Diátaxis names four
-abstract forms, TGDP names 25 concrete deliverables, so it fits a docs set that
-thinks in terms of "we owe this product an installation guide and a changelog"
-rather than in terms of the four quadrants.
+Requires `type` and constrains it to the template slugs published by [The Good
+Docs Project](https://www.thegooddocsproject.dev/template). Where Diátaxis names
+four abstract forms, TGDP names 25 concrete deliverables, so it fits a docs set
+that thinks in terms of "we owe this product an installation guide and a
+changelog" rather than in terms of the four quadrants.
 
 The values are the template directory slugs from the upstream
 [templates repo](https://gitlab.com/tgdp/templates), grouped here by the pack
@@ -89,18 +95,36 @@ title: Install the collector
 ---
 ```
 
+A document with no `type` fails against this schema:
+
+```text
+✗ docs/overview.md
+    (root)  must have required property 'type'  (line 1)  [tgdp:templates:1.0]
+```
+
 Like Diátaxis, TGDP is **not** in the [default
-set](/docmeta/reference/schema-resolution/#precedence), and for the same reason:
-it constrains `type`, which documents already carry.
+set](/docmeta/reference/schema-resolution/#precedence), and even more plainly:
+it both constrains and requires `type`, so defaulting it would fail every
+untyped document in every repo that had not opted in.
+
+<Aside type="caution" title="It requires `type`, so retrofit with `--dry-run` first">
+This is the only taxonomy schema that fails a document for *lacking* its key. On
+an existing docs set that never adopted TGDP, turning it on reports every
+untyped page at once. Run [`docmeta fill
+--dry-run`](/docmeta/reference/cli/#fill) to see what would be proposed before
+writing anything — the enum is lifted into the inference prompt, so the model is
+constrained to a real slug.
+</Aside>
 
 <Aside type="note" title="TGDP prescribes no frontmatter of its own">
 The upstream templates are body-structure templates — they open at a heading and
 carry no YAML block. The only metadata TGDP publishes is `index.json`, which
 describes the *templates* (`name`, `summary`, `last_updated`, `contributors`,
-`packs`), not documents written from them. So this schema is a vocabulary lifted
-from the template set, not an implementation of a TGDP metadata spec. Pair it
-with [`google:okf:0.1`](/docmeta/reference/okf-schema/) for the fields TGDP
-leaves unspecified.
+`packs`), not documents written from them. So the vocabulary here is lifted from
+the template set, not an implementation of a TGDP metadata spec, and requiring
+`type` is docmeta's choice rather than an upstream rule. Pair it with
+[`google:okf:0.1`](/docmeta/reference/okf-schema/) for the fields TGDP leaves
+unspecified.
 </Aside>
 
 ## `passo-uno:seven-action:1.0`
@@ -170,7 +194,9 @@ title: Rotate an API key
 Stacking the two `type` schemas is not an error, but it validates against the
 intersection of their vocabularies, which is narrower than either. `explanation`
 is Diátaxis-only and `installation-guide` is TGDP-only, so each rules out values
-the other exists to allow. Choose the vocabulary your docs set actually uses.
+the other exists to allow — leaving only `tutorial`, `how-to`, and `reference`.
+Because TGDP also requires the key, the stacked pair rejects an untyped document
+outright. Choose the vocabulary your docs set actually uses.
 
 ## Crosswalk
 

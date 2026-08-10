@@ -146,7 +146,10 @@ describe("tgdp:templates:1.0", () => {
     }
   });
 
-  it("does not require `type`", async () => {
+  it("requires `type`, unlike the other two taxonomy schemas", async () => {
+    // The deliberate exception to the vocabulary-only rule: opting into TGDP
+    // is a statement that every page is one of its templates, so a page with
+    // no `type` is a gap rather than an abstention.
     const { results } = await runValidate({
       inputs: ["-"],
       as: "markdown",
@@ -154,7 +157,9 @@ describe("tgdp:templates:1.0", () => {
       cliSchemas: [TGDP],
       cwd: root,
     });
-    expect(results[0]?.ok).toBe(true);
+    expect(results[0]?.ok).toBe(false);
+    expect(results[0]?.errors[0]?.schema).toBe(TGDP);
+    expect(results[0]?.errors[0]?.message).toContain("type");
   });
 
   it("composes with Seven-Action, which keys off a different field", async () => {
@@ -222,7 +227,8 @@ describe("tgdp:templates:1.0", () => {
   });
 });
 
-describe("no taxonomy schema requires its key", () => {
+describe("Diataxis and Seven-Action do not require their key", () => {
+  // TGDP is the exception and is covered in its own block above.
   it("passes a document with no type at all", async () => {
     const { results } = await runValidate({
       inputs: ["-"],
