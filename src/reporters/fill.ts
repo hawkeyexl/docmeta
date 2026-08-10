@@ -66,6 +66,10 @@ export function renderFillPretty(
   const { summary } = run;
   const verb = run.dryRun ? "would be written" : "written";
   const parts = [
+    // Which provider ran decides what the proposals and the cost mean, and
+    // under `auto` it is not something the user chose — so say it rather than
+    // making them pass -f json to find out.
+    `${run.provider}/${run.model}`,
     `Threshold ${run.threshold}`,
     `${summary.files} file${summary.files === 1 ? "" : "s"}`,
     `${summary.written} field${summary.written === 1 ? "" : "s"} ${verb}`,

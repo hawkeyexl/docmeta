@@ -32,8 +32,8 @@ command. Every key is optional, and every one is overridden by its CLI flag.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `provider` | `string` | `anthropic` | Inference provider: `anthropic`, `openai`, `claude-cli`, or `mock`. |
-| `model` | `string` | provider default | Model override. |
+| `provider` | `string` | `auto` | Inference provider: `auto`, `anthropic`, `openai`, `claude-cli`, `llama-cpp`, or `mock`. `auto` [detects one](/docmeta/reference/cli/#fill). An unknown name is an error (exit 2). |
+| `model` | `string` | provider default | Model override. Requires `provider` to be set to something other than `auto`, since a model name does not say which provider owns it (exit 2). |
 | `confidenceThreshold` | `number` | `0.7` | Minimum self-reported confidence, from 0 to 1, needed to write a value. |
 | `maxCostUsd` | `number` | none | Stop scheduling new files once this much has been spent. |
 | `concurrency` | `number` | `4` | Files inferred in parallel. Between 1 and 64. |
@@ -47,6 +47,10 @@ fill:
   confidenceThreshold: 0.9
   maxCostUsd: 5
 ```
+
+Pinning `provider` is worth doing in CI. Left on `auto`, a runner that loses its
+API key silently falls through to a local model and downloads gigabytes rather
+than failing the build.
 
 ### Overrides
 

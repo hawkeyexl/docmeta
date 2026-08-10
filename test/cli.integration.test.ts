@@ -1,12 +1,26 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { execFileSync, execSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
 const bin = resolve(root, "dist", "cli.js");
+
+/**
+ * An empty inference runtime prefix, for the tests that need the local binding
+ * to be UNAVAILABLE.
+ *
+ * `node-llama-cpp` is not a docmeta dependency, so it is missing from
+ * node_modules — but the library also looks in its own prefix under the home
+ * directory, and anything that has ever run a local model populates that.
+ * Running the doc-detective suite does, and it turned these assertions inside
+ * out: runs that should have failed started succeeding. Pointing the prefix
+ * somewhere empty makes absence a property of the test, not of the machine.
+ */
+const noRuntimeDir = mkdtempSync(join(tmpdir(), "docmeta-no-runtime-"));
 
 interface Run {
   stdout: string;
@@ -14,12 +28,17 @@ interface Run {
   status: number;
 }
 
-function run(args: string[], input?: string): Run {
+function run(
+  args: string[],
+  input?: string,
+  env?: Record<string, string>,
+): Run {
   try {
     const stdout = execFileSync("node", [bin, ...args], {
       cwd: root,
       encoding: "utf8",
       input,
+      ...(env ? { env: { ...process.env, ...env } } : {}),
     });
     return { stdout, stderr: "", status: 0 };
   } catch (e) {
@@ -205,6 +224,123 @@ describe("cli fill", () => {
     expect(r.status).toBe(2);
     expect(r.stderr).toContain("between 0 and 1");
   });
+
+  it("names auto as the default provider in --help", () => {
+    const r = run(["fill", "--help"]);
+    expect(r.stdout).toContain("auto");
+  });
+
+  it("exits 2 on an unknown provider, before reaching a provider", () => {
+    // Cheap, and it must not depend on inference happening: construction is
+    // lazy, so a typo on a fully cached run would otherwise exit 0.
+    const r = run(["fill", "test/fixtures/valid.md", "--provider", "antropic"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("antropic");
+    expect(r.stderr).toContain("auto");
+  });
+
+  it("exits 2 on --model without --provider", () => {
+    // A model name does not say which provider owns it. Carried into a detected
+    // provider it 404'd mid-run; this fails before any file is read.
+    const r = run([
+      "fill",
+      "test/fixtures/valid.md",
+      "--model",
+      "gpt-4o-mini",
+    ]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("--provider");
+  });
+
+  it("defaults to auto and detects a provider when none is named", () => {
+    // Proven by making detection pick something a hardcoded default would not:
+    // with only an OpenAI key present, `openai` can only be the result of
+    // actually detecting. Asserting "anthropic" instead would pass just as well
+    // against the old hardcoded default, and asserting on the library's
+    // "auto-selected" log text would stop meaning anything the moment it is
+    // rephrased upstream.
+    //
+    // A path matching no files resolves identity but never calls a provider, so
+    // this needs no network and no key that works.
+    const r = run(
+      ["fill", "test/fixtures/does-not-exist.md", "--dry-run", "--no-cache", "-f", "json"],
+      undefined,
+      { ANTHROPIC_API_KEY: "", OPENAI_API_KEY: "x" },
+    );
+    expect(r.status).toBe(0);
+    const report = JSON.parse(r.stdout);
+    expect(report.provider).toBe("openai");
+    expect(report.summary.files).toBe(0);
+  }, 60000);
+
+  it("runs llama-cpp when it is named, reporting the concrete model", () => {
+    // Naming a catalog model skips the hardware probe, so this resolves with no
+    // native binding installed. The opt-out is what keeps a test from turning
+    // into a multi-gigabyte install.
+    const r = run(
+      [
+        "fill",
+        "test/fixtures/valid.md",
+        "--provider",
+        "llama-cpp",
+        "--model",
+        "gemma-4-e4b",
+        "--dry-run",
+        "--no-cache",
+        "-f",
+        "json",
+      ],
+      undefined,
+      { INFERENCE_NO_AUTO_INSTALL: "1", INFERENCE_RUNTIME_DIR: noRuntimeDir },
+    );
+
+    const report = JSON.parse(r.stdout);
+    expect(report.provider).toBe("llama-cpp");
+    expect(report.model).toBe("gemma-4-e4b");
+    // Absent runtime is a per-file failure, not an operational one.
+    expect(r.status).toBe(1);
+    expect(report.results[0].error).toMatch(/node-llama-cpp/);
+  }, 60000);
+
+  it("exits 2 when llama-cpp needs a runtime probe it cannot make", () => {
+    // Without --model, llama-cpp uses the `auto` selector, and sizing a tier
+    // needs the binding. That is setup, not a per-file problem.
+    const r = run(
+      ["fill", "test/fixtures/valid.md", "--provider", "llama-cpp", "--dry-run"],
+      undefined,
+      { INFERENCE_NO_AUTO_INSTALL: "1", INFERENCE_RUNTIME_DIR: noRuntimeDir },
+    );
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("node-llama-cpp");
+  }, 60000);
+
+  it("constructs the provider detection resolved, not the selector", () => {
+    // Regression: `makeProvider` kept receiving the literal "auto" after
+    // detection had already resolved it, so every real run that needed
+    // inference died on the synchronous guard. Every unit test injects a
+    // provider, which skips construction entirely — only an end-to-end run
+    // reaches it.
+    //
+    // Hermetic despite naming a real provider: port 1 refuses immediately, so
+    // the call fails locally without leaving the machine.
+    const r = run(
+      ["fill", "test/fixtures/valid.md", "--dry-run", "--no-cache", "-f", "json"],
+      undefined,
+      { ANTHROPIC_API_KEY: "x", ANTHROPIC_BASE_URL: "http://127.0.0.1:1" },
+    );
+
+    // A per-file failure (exit 1), not an operational one (exit 2).
+    expect(r.status).toBe(1);
+    expect(r.stderr).not.toContain("No provider specified");
+    const report = JSON.parse(r.stdout);
+    expect(report.provider).toBe("anthropic");
+    // Deliberately not pinned to a model name: that is the library's default and
+    // will change when a newer Sonnet ships, breaking this with no change here.
+    // What the regression actually leaked was the literal selector.
+    expect(report.model).not.toBe("auto");
+    expect(typeof report.model).toBe("string");
+    expect(report.model.length).toBeGreaterThan(0);
+  }, 60000);
 
   it("exits 2 on an unknown --format", () => {
     const r = run(["fill", "test/fixtures/valid.md", "-f", "github"]);

@@ -263,7 +263,7 @@ docmeta fill docs/intro.md --dry-run
     /description  A tour of the CLI and its four commands.  0.91
     below 0.7: /resource 0.38
 
-Threshold 0.7 · 1 file · 1 field would be written · 1 skipped
+anthropic/claude-sonnet-4-5 · Threshold 0.7 · 1 file · 1 field would be written · 1 skipped
 ```
 
 Then apply it and check your work with the command that flagged the problem:
@@ -276,6 +276,13 @@ docmeta fill docs/intro.md && docmeta validate docs/intro.md
 `fill` edits the file in place. `--dry-run` is the preview. Review the diff
 before you commit; treat a proposed `description` as a first draft.
 </Aside>
+
+`fill` picks an LLM provider by detecting one, so it runs with whatever
+credentials you have — and, with none at all, falls back to a local model it
+downloads on first use. The report's first line names what it used. On a machine
+with no API key, pass `--provider` or see the
+[`fill` reference](/docmeta/reference/cli/#fill) before the first run, so the
+download is a choice rather than a surprise.
 
 Anything below the confidence threshold is skipped and named, so you still get a
 short list of what needs you. `fill` leaves any field that is already present and

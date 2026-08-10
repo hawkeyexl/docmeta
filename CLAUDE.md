@@ -77,6 +77,46 @@ Before any user-facing writing or docs task, consult `docs/content-strategy/`:
 4. Check `information-architecture.md` for the page's place in the content set and its ★ launch status.
 5. Every page in `docs/src/content/docs/**` needs `title` and `description` frontmatter.
 
+### Changing a dependency: splice the lockfile, never regenerate it
+
+`npm install <dep>` **on Windows** does not just add that dep. It re-resolves
+unrelated transitive packages and drops the top-level `@emnapi/core` /
+`@emnapi/runtime` entries that satisfy `@napi-rs/wasm-runtime`, nesting copies
+under `@rolldown/binding-wasm32-wasi` instead. npm prunes entries for optional
+packages it won't install on the current platform while keeping the dependency
+edges — an incomplete graph that `npm install` tolerates and `npm ci` rejects.
+On Linux CI, every workflow starts with `npm ci`, so build-test, lint, docs and
+doc-detective all go red at once with `Missing: @emnapi/core@<ver> from lock
+file`.
+
+**Do not trust any whole-tree regeneration on Windows.** All of these produce
+broken lockfiles:
+
+- `npm install <dep>` — drops the emnapi entries
+- `rm -rf node_modules package-lock.json && npm install` — breaks differently
+- `npm install --package-lock-only` — same pruning
+- **running `npm install` twice** — converges locally and passes `npm ci` *on
+  Windows*, then still fails on Linux. A local `npm ci` pass does **not** prove CI.
+- `npm link` / `npm unlink` — same pruning, and easy to miss because you ran it to
+  test something else entirely. Running the doc-detective suite locally needs
+  `npm link`, so **check `git status` afterwards and `git checkout --
+  package-lock.json` if it was touched.**
+
+The fix is to splice. Start from the committed lockfile
+(`git show origin/main:package-lock.json`), copy in **only** what the change
+genuinely introduces — the dep's own entry, `packages[""].dependencies`, and any
+`dev`/`peer` flags that legitimately flip when a package becomes reachable from a
+production dep — re-sort keys (root first, then lexicographic), and write it back.
+
+Then diff the result against `origin/main`'s lockfile and confirm:
+
+```
+added: [...only genuinely new packages...]   removed: []   changed: [...only the above...]
+```
+
+`removed` must be empty, and every entry in `changed` must be one you can name.
+That check is the real gate.
+
 ### Other conventions
 
 - **Strict TypeScript.** `tsconfig` enables strict settings including

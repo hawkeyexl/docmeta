@@ -11,7 +11,11 @@ import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MockProvider, type InferenceProvider } from "@hawkeyexl/inference";
+import {
+  DEFAULT_MODELS,
+  MockProvider,
+  type InferenceProvider,
+} from "@hawkeyexl/inference";
 import { runFill, collectCandidates } from "../src/commands/fill.js";
 import { loadSchema } from "../src/core/schema-registry.js";
 import { DocmetaError } from "../src/types.js";
@@ -657,6 +661,25 @@ describe("runFill — operational errors", () => {
     ).rejects.toThrow(/--as/);
   });
 
+  it("reports the detected provider, not the literal selector", async () => {
+    // `provider` and `model` are echoed for CI to assert against, so they must
+    // name what actually ran. "auto" in that field would be useless — and, if it
+    // ever reached a cache key, actively wrong.
+    const file = await stage("no-block.md");
+    const run = await runFill({
+      ...base,
+      cwd: dir,
+      inputs: [file],
+      fields: ["title"],
+      dryRun: true,
+      inferenceProvider: propose({
+        title: { value: "Hello", confidence: 0.9 },
+      }),
+    });
+    expect(run.provider).toBe("mock");
+    expect(run.model).toBe("mock-model");
+  });
+
   it("takes the threshold from config when no flag is given", async () => {
     await mkdir(join(dir, "docs"), { recursive: true });
     await writeFile(
@@ -679,4 +702,265 @@ describe("runFill — operational errors", () => {
     expect(threshold).toBe(0.95);
     expect(summary.written).toBe(0);
   });
+});
+
+describe("provider selection", () => {
+  /**
+   * Injects a provider throughout, so nothing here probes the environment,
+   * spawns the Claude CLI, or touches a GPU. Validating the NAME has to happen
+   * regardless of injection — it is cheap, and a typo must fail on a fully
+   * cached run too, where nothing is ever constructed to catch it.
+   */
+  const runWith = (over: Record<string, unknown>): Promise<unknown> =>
+    runFill({
+      ...base,
+      cwd: dir,
+      inputs: ["missing.md"],
+      dryRun: true,
+      inferenceProvider: propose({}),
+      ...over,
+    });
+
+  it("rejects an unknown provider", async () => {
+    await expect(runWith({ provider: "antropic" })).rejects.toThrow(DocmetaError);
+    await expect(runWith({ provider: "antropic" })).rejects.toThrow(/antropic/);
+  });
+
+  it("lists the real provider names in that error, including auto", async () => {
+    // Sourced from the library rather than a hardcoded copy, so a provider
+    // added upstream cannot leave this list silently stale.
+    await expect(runWith({ provider: "antropic" })).rejects.toThrow(/auto/);
+    await expect(runWith({ provider: "antropic" })).rejects.toThrow(/llama-cpp/);
+  });
+
+  it("accepts auto as an explicit value", async () => {
+    await expect(runWith({ provider: "auto" })).resolves.toBeDefined();
+  });
+
+  it("accepts every provider the library actually offers", async () => {
+    for (const name of Object.keys(DEFAULT_MODELS)) {
+      await expect(runWith({ provider: name })).resolves.toBeDefined();
+    }
+  });
+
+  it("still gets `mock` from the library, which docmeta's own tests rely on", async () => {
+    // The accepted names are derived from DEFAULT_MODELS rather than hardcoded,
+    // which is what stopped the list going stale — but it also means docmeta
+    // silently inherits whatever the library drops. `mock` is the one entry
+    // docmeta itself depends on, so assert it directly: if a future version
+    // removes it, this fails with a reason instead of an `Unknown provider
+    // "mock"` from an unrelated test.
+    //
+    // Re-adding "mock" to the local list would be worse — docmeta would accept a
+    // provider the library could no longer construct, moving the failure later
+    // and making it harder to read.
+    expect(Object.keys(DEFAULT_MODELS)).toContain("mock");
+  });
+
+  it("refuses a model without a provider, as an operational error", async () => {
+    // A model name belongs to one provider, so under detection it is ambiguous.
+    // Carried through, it reached the API and 404'd after the run had started.
+    await expect(runWith({ model: "gpt-4o-mini" })).rejects.toThrow(DocmetaError);
+    await expect(runWith({ model: "gpt-4o-mini" })).rejects.toThrow(/--provider/);
+  });
+
+  it("still refuses it when auto was named explicitly", async () => {
+    await expect(
+      runWith({ provider: "auto", model: "gpt-4o-mini" }),
+    ).rejects.toThrow(DocmetaError);
+  });
+
+  it("allows a model once the provider is named", async () => {
+    await expect(
+      runWith({ provider: "openai", model: "gpt-4o" }),
+    ).resolves.toBeDefined();
+  });
+
+  it("counts a config provider as naming one, not just the flag", async () => {
+    // The rule is about the EFFECTIVE provider. `fill.provider` in config
+    // satisfies it exactly as --provider does, so a bare --model alongside it is
+    // fine — the flag and the config key are not different rules.
+    await writeFile(
+      join(dir, "docmeta.config.yaml"),
+      "paths:\n  - '**/*.md'\nfill:\n  provider: openai\n",
+      "utf8",
+    );
+    await expect(
+      runFill({
+        ...base,
+        cwd: dir,
+        inputs: ["missing.md"],
+        dryRun: true,
+        inferenceProvider: propose({}),
+        model: "gpt-4o",
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it("constructs the resolved provider, not the selector it started from", async () => {
+    // No `inferenceProvider` here, deliberately: every other case injects one,
+    // which skips construction entirely. That blind spot let `makeProvider` keep
+    // receiving the literal "auto" long after detection had resolved it — the
+    // synchronous guard then threw on every real run that needed inference.
+    const file = await stage("no-block.md");
+    const run = await runFill({
+      ...base,
+      cwd: dir,
+      inputs: [file],
+      fields: ["title"],
+      dryRun: true,
+      provider: "mock",
+    });
+    expect(run.provider).toBe("mock");
+    expect(run.results[0]?.error).toBeUndefined();
+  });
+
+  it("defaults to auto when no provider is given anywhere", async () => {
+    // Pinned through the ambiguity rule rather than by running detection, which
+    // would depend on whatever credentials the machine happens to hold. Only
+    // `auto` makes a bare --model ambiguous: under a named default this would
+    // resolve happily, so the rejection IS the assertion that auto is the
+    // default.
+    await expect(
+      runFill({
+        ...base,
+        cwd: dir,
+        inputs: ["missing.md"],
+        dryRun: true,
+        inferenceProvider: propose({}),
+        model: "gpt-4o-mini",
+      }),
+    ).rejects.toThrow(/--provider/);
+  });
+
+  it("treats an omitted provider and an explicit auto identically", async () => {
+    const omitted = runFill({
+      ...base,
+      cwd: dir,
+      inputs: ["missing.md"],
+      dryRun: true,
+      inferenceProvider: propose({}),
+      model: "gpt-4o",
+    });
+    const explicit = runFill({
+      ...base,
+      cwd: dir,
+      inputs: ["missing.md"],
+      dryRun: true,
+      inferenceProvider: propose({}),
+      provider: "auto",
+      model: "gpt-4o",
+    });
+    await expect(omitted).rejects.toThrow(/--provider/);
+    await expect(explicit).rejects.toThrow(/--provider/);
+  });
+
+  it("reads the provider from config when no flag is given", async () => {
+    await writeFile(
+      join(dir, "docmeta.config.yaml"),
+      "paths:\n  - '**/*.md'\nfill:\n  provider: antropic\n",
+      "utf8",
+    );
+    // A typo in config is as operational as a typo on the command line.
+    await expect(
+      runFill({ ...base, cwd: dir, inputs: [], dryRun: true }),
+    ).rejects.toThrow(/antropic/);
+  });
+});
+
+describe("the llama-cpp provider", () => {
+  // No `inferenceProvider` anywhere in here: the point is to drive the real
+  // llama-cpp path.
+  //
+  // Both variables are load-bearing, and the second one is easy to miss.
+  // `node-llama-cpp` is not a docmeta dependency, so it is absent from
+  // node_modules — but the library also looks in its own runtime prefix, and
+  // anything that has ever run a local model on this machine populates that.
+  // Running the doc-detective suite does exactly that, and it broke these tests:
+  // the binding became available, so runs that should have failed succeeded, and
+  // "expected +0 to be 1" was the whole diagnosis.
+  //
+  // Pointing the prefix at the per-test scratch directory makes absence a
+  // property of the test rather than of the machine. The opt-out then keeps a
+  // miss from turning into a multi-gigabyte install partway through the suite.
+  const saved: Record<string, string | undefined> = {};
+  const VARS = ["INFERENCE_NO_AUTO_INSTALL", "INFERENCE_RUNTIME_DIR"] as const;
+
+  beforeEach(() => {
+    for (const v of VARS) saved[v] = process.env[v];
+    process.env["INFERENCE_NO_AUTO_INSTALL"] = "1";
+    process.env["INFERENCE_RUNTIME_DIR"] = dir;
+  });
+
+  afterEach(() => {
+    for (const v of VARS) {
+      if (saved[v] === undefined) delete process.env[v];
+      else process.env[v] = saved[v];
+    }
+  });
+
+  it("resolves a concrete catalog model without the native binding", async () => {
+    // Naming a model skips the hardware probe, so identity — and therefore the
+    // cache key and the cost lookup — resolves with nothing installed.
+    //
+    // This doubles as the check that `llama-cpp` is an accepted name at all: it
+    // was not, for a while, because the hardcoded provider list here never
+    // gained it and a valid provider was rejected as a typo.
+    const file = await stage("no-block.md");
+    const run = await runFill({
+      ...base,
+      cwd: dir,
+      inputs: [file],
+      fields: ["title"],
+      dryRun: true,
+      provider: "llama-cpp",
+      model: "gemma-4-e4b",
+    });
+
+    expect(run.provider).toBe("llama-cpp");
+    expect(run.model).toBe("gemma-4-e4b");
+  });
+
+  it("reports a missing runtime as a per-file error naming the opt-out", async () => {
+    // One run, both assertions: these were two tests issuing byte-identical
+    // calls, which doubled the work without doubling the coverage.
+    //
+    // Whoever set the opt-out needs to recognise their own decision in the
+    // message rather than reading it as "local models are broken", so the error
+    // has to name it — not merely mention the package.
+    const file = await stage("no-block.md");
+    const run = await runFill({
+      ...base,
+      cwd: dir,
+      inputs: [file],
+      fields: ["title"],
+      dryRun: true,
+      provider: "llama-cpp",
+      model: "gemma-4-e4b",
+    });
+
+    expect(run.results[0]?.error).toMatch(/node-llama-cpp/);
+    expect(run.results[0]?.error).toMatch(/INFERENCE_NO_AUTO_INSTALL/);
+    expect(run.summary.errors).toBe(1);
+    expect(run.summary.written).toBe(0);
+  });
+
+  it("fails operationally when the model selector needs an absent runtime", async () => {
+    // Without a model, `llama-cpp` defaults to the `auto` selector, and sizing a
+    // tier probes the machine — which needs the binding. That is a setup
+    // failure, not a per-file one, so it aborts the run rather than erroring
+    // once per document.
+    const file = await stage("no-block.md");
+    await expect(
+      runFill({
+        ...base,
+        cwd: dir,
+        inputs: [file],
+        fields: ["title"],
+        dryRun: true,
+        provider: "llama-cpp",
+      }),
+    ).rejects.toThrow(DocmetaError);
+  });
+
 });

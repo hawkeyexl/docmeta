@@ -252,8 +252,14 @@ export function buildProgram(): Command {
     .option("--fields <list>", "comma-separated fields to fill")
     .option("--confidence <n>", "minimum confidence to write (0-1)", parseFloat)
     .option("--dry-run", "report proposals without writing them")
-    .option("--provider <name>", "provider: anthropic, openai, claude-cli, mock")
-    .option("--model <model>", "model override")
+    .option(
+      "--provider <name>",
+      "provider: auto (default), anthropic, openai, claude-cli, llama-cpp, mock",
+    )
+    .option(
+      "--model <model>",
+      "model override; needs a named provider, from here or config",
+    )
     .option("--no-cache", "bypass the proposal cache")
     .option("--max-cost-usd <usd>", "proposal cost budget", parseFloat)
     // parseFloat, not parseInt: parseInt("3.5") silently yields 3, which would

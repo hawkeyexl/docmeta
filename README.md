@@ -52,7 +52,7 @@ docmeta fill docs/               # apply
     /description  A tour of the CLI and its four commands.  0.91
     below 0.7: /resource 0.38
 
-Threshold 0.7 · 1 file · 1 field written · 1 skipped
+anthropic/claude-sonnet-4-5 · Threshold 0.7 · 1 file · 1 field written · 1 skipped
 ```
 
 Confidence is the last gate, not the only one. A proposal must first satisfy the
@@ -62,10 +62,16 @@ the document still valid after the merge. Only then does `--confidence`
 written with a caveat, and the score itself never reaches your document.
 
 `fill` writes in place by default, so run it on a clean tree and review the
-diff. It needs credentials for an LLM provider (`ANTHROPIC_API_KEY`,
-`OPENAI_API_KEY`, or a signed-in `claude` CLI). See the
+diff.
+
+It picks an LLM provider by detecting one: `ANTHROPIC_API_KEY`, then
+`OPENAI_API_KEY`, then a signed-in `claude` CLI, then a local model that needs no
+credentials at all — so it works with whatever you have, and reports which it
+used. Pass `--provider` to pin one, which is worth doing in CI: left to detect, a
+runner that loses its key falls back to the local model and downloads it rather
+than failing the build. See the
 [`fill` reference](https://hawkeyexl.github.io/docmeta/reference/cli/#fill) for
-every flag.
+every flag and for what the local fallback costs.
 
 ## Supported formats
 
