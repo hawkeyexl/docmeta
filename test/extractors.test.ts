@@ -560,6 +560,21 @@ describe("xml extractor", () => {
     // the root <concept> tag opens on line 3, after the decl and the DOCTYPE
     expect(r.lineFor("/id")).toBe(3);
     expect(r.lineFor("/type")).toBe(4);
+    expect(r.lineFor("/xml:lang")).toBe(5);
+  });
+
+  it("reads a DITA map's root attributes", () => {
+    const r = xmlExtractor.extract(
+      `<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<map id="userguide" title="User guide" xml:lang="en-us">
+  <topicref href="topic.dita"/>
+</map>`,
+      "x.ditamap",
+    );
+    expect(r.present).toBe(true);
+    expect(r.data.id).toBe("userguide");
+    expect(r.data.title).toBe("User guide");
+    expect(r.data["xml:lang"]).toBe("en-us");
   });
 });
 
