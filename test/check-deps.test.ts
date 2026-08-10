@@ -162,8 +162,13 @@ describe("check-deps", () => {
       // "junction" is the Windows form that needs no elevation; ignored on
       // POSIX, where a plain directory symlink is used.
       await symlink(repoRoot, link, "junction");
-    } catch {
-      return; // no privilege to create links here; nothing to assert
+    } catch (e) {
+      // Only "this machine will not let me make links" is a reason to skip.
+      // A bare catch here would swallow a genuine bug in the setup above and
+      // report a green test that never ran.
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code === "EPERM" || code === "ENOTSUP" || code === "ENOSYS") return;
+      throw e;
     }
 
     await install(proj, "dep-b", "1.0.0"); // @scope/dep-a deliberately absent

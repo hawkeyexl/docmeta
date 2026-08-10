@@ -142,6 +142,13 @@ export class Validator {
       // concerned, so if two refs claim the same one, sharing a validator is
       // the only reading available — the alternative is the hard error this
       // replaces.
+      //
+      // The cost, stated plainly: if two refs share an `$id` but their CONTENTS
+      // differ, whichever compiled first wins and the second ref is checked
+      // against the wrong schema — a silent wrong answer, not an error. That
+      // setup is already broken (Ajv cannot hold two schemas under one id), but
+      // it now fails quietly, so a surprising pass on a mis-copied schema
+      // starts here.
       const id = typeof schema["$id"] === "string" ? schema["$id"] : undefined;
       const registered = id != null ? ajv.getSchema(id) : undefined;
       return registered ?? ajv.compile(schema);

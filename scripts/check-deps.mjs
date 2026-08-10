@@ -99,7 +99,7 @@ export function checkDeps(root) {
   return { ok: problems.length === 0, setupError: false, problems };
 }
 
-function describe(p) {
+function formatProblem(p) {
   switch (p.kind) {
     case "external":
       return `  ${p.name}: not installed here — Node resolves it from ${p.at} (version ${p.actual ?? "unknown"}, lockfile wants ${p.expected})`;
@@ -146,7 +146,7 @@ if (
     // list, and thirty identical lines bury the advice underneath them. The
     // first few carry the diagnosis; the count carries the scale.
     const SHOWN = 5;
-    const listed = problems.slice(0, SHOWN).map(describe).join("\n");
+    const listed = problems.slice(0, SHOWN).map(formatProblem).join("\n");
     const rest = problems.length - SHOWN;
     console.error(
       `check-deps: dependencies in ${root} do not match package-lock.json.\n` +

@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { Validator } from "../src/core/validator.js";
@@ -124,10 +126,36 @@ describe("Validator compile cache under concurrency", () => {
   it("does not cache a failed load, so a later attempt can still succeed", async () => {
     // Caching the in-flight promise must not turn a transient failure into a
     // permanent one for the life of the Validator.
-    const v = new Validator();
-    const missing = join(here, "fixtures", "does-not-exist.schema.json");
-    await expect(v.validate({}, [missing], lineFor)).rejects.toThrow(/not found/);
-    await expect(v.validate({}, [missing], lineFor)).rejects.toThrow(/not found/);
+    //
+    // Asserting that a second attempt *also* rejects would prove nothing — it
+    // rejects either way, cached or not. The load has to actually SUCCEED the
+    // second time, which it can only do if the rejected entry was evicted. So
+    // the schema appears on disk between the two calls, standing in for the
+    // transient fetch failure this guards.
+    const dir = await mkdtemp(join(tmpdir(), "docmeta-validator-"));
+    try {
+      const ref = join(dir, "late.schema.json");
+      const v = new Validator();
+
+      await expect(v.validate({}, [ref], lineFor)).rejects.toThrow(/not found/);
+
+      await writeFile(
+        ref,
+        JSON.stringify({
+          $schema: "https://json-schema.org/draft/2020-12/schema",
+          type: "object",
+          required: ["title"],
+          properties: { title: { type: "string" } },
+        }),
+        "utf8",
+      );
+
+      const errors = await v.validate({}, [ref], lineFor);
+      expect(errors).toHaveLength(1);
+      expect(errors[0]?.message).toMatch(/title/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
 
