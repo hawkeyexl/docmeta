@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "tgdp:templates:1.0",
   "title": "The Good Docs Project template types v1.0",
-  "description": "Constrains `type` to the 25 template slugs published by The Good Docs Project (upstream templates repo, main as of 2026-08-09). Like Diataxis it classifies what a page *is*, so the two claim the same key and cannot be stacked — pick one. It composes with a schema keyed on a different field, such as passo-uno:seven-action:1.0. Vocabulary only: `type` is not required, so this checks that a type is legitimate, not that one is present. See https://www.thegooddocsproject.dev/template",
+  "description": "Constrains `type` to the 25 template slugs published by The Good Docs Project (upstream templates repo, main as of 2026-08-09). Like Diataxis it classifies what a page *is*, so both claim the same key: stacking them is not an error, but it narrows `type` to the intersection of the two vocabularies, so pick one. It composes freely with a schema keyed on a different field, such as passo-uno:seven-action:1.0. Vocabulary only: `type` is not required, so this checks that a type is legitimate, not that one is present. See https://www.thegooddocsproject.dev/template",
   "type": "object",
   "additionalProperties": true,
   "properties": {

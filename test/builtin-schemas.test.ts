@@ -179,9 +179,10 @@ describe("tgdp:templates:1.0", () => {
     expect(new Set(published).size).toBe(published.length);
   });
 
-  it("is mutually exclusive with Diataxis, which claims the same key", async () => {
+  it("has values Diataxis rejects, and vice versa", async () => {
     // Both classify what a page *is*, so each vocabulary has a value the
-    // other rejects.
+    // other rejects. This is what makes stacking them a narrowing; the next
+    // test covers the stacked case itself.
     const explanation = await runValidate({
       inputs: ["-"],
       as: "markdown",
