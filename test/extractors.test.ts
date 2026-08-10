@@ -525,6 +525,57 @@ describe("xml extractor", () => {
   it("throws on malformed XML", () => {
     expect(() => xmlExtractor.extract("<a><b></a>", "x.xml")).toThrow();
   });
+
+  it("still extracts when a DTD-declared entity can't be resolved", () => {
+    // DITA content is full of `&nbsp;`/`&mdash;`, declared by the DITA DTD.
+    // The parser resolves only the five built-in XML entities and never fetches
+    // an external DTD, so those must not fail an otherwise well-formed file.
+    const r = xmlExtractor.extract(
+      `<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="a" type="concept">
+  <title>T</title>
+  <conbody><p>one&nbsp;two&mdash;three</p></conbody>
+</concept>`,
+      "x.dita",
+    );
+    expect(r.present).toBe(true);
+    expect(r.data.id).toBe("a");
+    expect(r.data.type).toBe("concept");
+  });
+
+  it("still throws on a malformed entity reference", () => {
+    expect(() =>
+      xmlExtractor.extract(`<c id="x"><p>a &unclosed</p></c>`, "x.xml"),
+    ).toThrow(/Invalid XML/);
+  });
+
+  it("reads a DITA topic's root attributes, DOCTYPE and all", () => {
+    const r = xmlExtractor.extract(readFixture("topic.dita"), "topic.dita");
+    expect(r.present).toBe(true);
+    expect(r.format).toBe("xml");
+    expect(r.data.id).toBe("metadata-overview");
+    expect(r.data.type).toBe("concept");
+    // a namespaced attribute is metadata; only xmlns declarations are dropped
+    expect(r.data["xml:lang"]).toBe("en-us");
+    // the root <concept> tag opens on line 3, after the decl and the DOCTYPE
+    expect(r.lineFor("/id")).toBe(3);
+    expect(r.lineFor("/type")).toBe(4);
+    expect(r.lineFor("/xml:lang")).toBe(5);
+  });
+
+  it("reads a DITA map's root attributes", () => {
+    const r = xmlExtractor.extract(
+      `<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<map id="userguide" title="User guide" xml:lang="en-us">
+  <topicref href="topic.dita"/>
+</map>`,
+      "x.ditamap",
+    );
+    expect(r.present).toBe(true);
+    expect(r.data.id).toBe("userguide");
+    expect(r.data.title).toBe("User guide");
+    expect(r.data["xml:lang"]).toBe("en-us");
+  });
 });
 
 const HTML_DOC = `<!DOCTYPE html>
@@ -623,6 +674,13 @@ describe("extractor registry", () => {
     expect(extractorForExtension(".XML")?.name).toBe("xml");
   });
 
+  it("resolves DITA topics and maps as xml", () => {
+    expect(extractorForExtension(".dita")?.name).toBe("xml");
+    expect(extractorForExtension(".ditamap")?.name).toBe("xml");
+    expect(extractorForExtension(".DITA")?.name).toBe("xml");
+    expect(extractorForExtension(".DITAMAP")?.name).toBe("xml");
+  });
+
   it("resolves html by extension", () => {
     expect(extractorForExtension(".html")?.name).toBe("html");
     expect(extractorForExtension(".htm")?.name).toBe("html");
@@ -638,6 +696,8 @@ describe("extractor registry", () => {
     expect(supportedExtensions()).toContain(".adoc");
     expect(supportedExtensions()).toContain(".rst");
     expect(supportedExtensions()).toContain(".xml");
+    expect(supportedExtensions()).toContain(".dita");
+    expect(supportedExtensions()).toContain(".ditamap");
     expect(supportedExtensions()).toContain(".html");
   });
 

@@ -1,6 +1,8 @@
 /**
  * XML metadata extractor.
  *
+ * Also handles DITA topics (`.dita`) and maps (`.ditamap`), which are XML.
+ *
  * Reads metadata from the document's root-element attributes, e.g.
  * `<document type="concept" version="2">` yields `{ type: "concept", version: 2 }`.
  * Attribute values are parsed as YAML scalars so `"2"` -> number and `"true"` ->
@@ -55,7 +57,9 @@ function lineForFactory(
 
 export const xmlExtractor: MetadataExtractor = {
   name: "xml",
-  extensions: [".xml"],
+  // DITA topics and maps are XML, and their metadata lives on the root element
+  // (`id`, `type`, `xml:lang`, …), so they need no extractor of their own.
+  extensions: [".xml", ".dita", ".ditamap"],
   implemented: true,
   extract(content): ExtractedMetadata {
     // A BOM stays part of line 1; it doesn't shift line numbers.
@@ -64,7 +68,17 @@ export const xmlExtractor: MetadataExtractor = {
     const errors: string[] = [];
     const doc = new DOMParser({
       onError: (level, msg) => {
-        if (level === "error" || level === "fatalError") errors.push(msg);
+        if (level !== "error" && level !== "fatalError") return;
+        // An entity the parser can't resolve is not structural damage. Only the
+        // five built-in XML entities are known, and no external DTD is ever
+        // fetched, so every DTD-declared entity (`&nbsp;`, `&mdash;` — the norm
+        // in DITA) lands here while the document itself is fine. The root
+        // element and its attributes still parse, so extraction continues; a
+        // reference that is genuinely malformed reports a different error.
+        // Matches the @xmldom/xmldom >=0.9 message; re-check on a major bump.
+        // The DITA entity test below fails loudly if the wording changes.
+        if (/entity not found/i.test(msg)) return;
+        errors.push(msg);
       },
     }).parseFromString(body, "text/xml");
 
