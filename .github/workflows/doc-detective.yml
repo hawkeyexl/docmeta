@@ -52,17 +52,25 @@ jobs:
       # Claude CLI, so detection ends at llama-cpp exactly as it would on a
       # contributor's machine with nothing configured.
       #
-      # That costs ~2.8 GB the first time — the node-llama-cpp binding (~716 MB,
-      # auto-installed into the runtime prefix) plus the smallest catalog model
-      # (2.19 GB). Both live under one directory this library owns, so one cache
-      # entry covers them. Keyed on the model alias: changing which model the docs
-      # test must fetch the new weights rather than silently reuse the old ones.
+      # That costs ~2.1 GB the first time — the node-llama-cpp binding (~716 MB,
+      # auto-installed into the runtime prefix) plus the weights the docs name
+      # (1.42 GB). Both live under one directory this library owns, so one cache
+      # entry covers them. Keyed on the model: changing which model the docs test
+      # must fetch the new weights rather than silently reuse the old ones.
+      #
+      # The docs pin a Granite build by `hf:` URI rather than taking a catalog
+      # alias. The catalog's smallest entry is a Q2 Gemma 4 E2B at 2.19 GB, and
+      # that build both ran away on long pages — six of twelve docs pages failed
+      # to terminate inside two minutes, one still unfinished at 400s — and
+      # proposed identifiers like `docmeta.config.yaml` as page titles at 0.95
+      # self-reported confidence. Granite is smaller, finishes every page in
+      # about five seconds, and is the reason these steps can run unattended.
       #
       # A warm run adds roughly ten seconds. A cold one adds a couple of minutes.
       - uses: actions/cache@v4
         with:
           path: ~/.hawkeyexl-inference
-          key: inference-local-gemma-4-e2b-q2-${{ runner.os }}
+          key: inference-local-granite-4-1-3b-q2-${{ runner.os }}
       # Third-party action pinned to a full commit SHA (supply-chain hardening).
       - uses: doc-detective/github-action@a2a4f5ceb1abfa55d567e4f6766223082ece2c18 # v1
         with:

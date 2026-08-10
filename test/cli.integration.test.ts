@@ -274,9 +274,12 @@ describe("cli fill", () => {
   }, 60000);
 
   it("runs llama-cpp when it is named, reporting the concrete model", () => {
-    // Naming a catalog model skips the hardware probe, so this resolves with no
-    // native binding installed. The opt-out is what keeps a test from turning
-    // into a multi-gigabyte install.
+    // Naming a concrete model — a catalog alias or a pinned `hf:` URI like this
+    // one — skips the hardware probe, so this resolves with no native binding
+    // installed. The opt-out is what keeps a test from turning into a
+    // multi-gigabyte install. An `hf:` URI is used here because it is what the
+    // docs and CI now name, so this covers the reference the project actually
+    // ships rather than a catalog alias nothing else points at.
     const r = run(
       [
         "fill",
@@ -284,7 +287,7 @@ describe("cli fill", () => {
         "--provider",
         "llama-cpp",
         "--model",
-        "gemma-4-e4b",
+        "hf:unsloth/granite-4.1-3b-GGUF/granite-4.1-3b-UD-Q2_K_XL.gguf",
         "--dry-run",
         "--no-cache",
         "-f",
@@ -296,7 +299,9 @@ describe("cli fill", () => {
 
     const report = JSON.parse(r.stdout);
     expect(report.provider).toBe("llama-cpp");
-    expect(report.model).toBe("gemma-4-e4b");
+    expect(report.model).toBe(
+      "hf:unsloth/granite-4.1-3b-GGUF/granite-4.1-3b-UD-Q2_K_XL.gguf",
+    );
     // Absent runtime is a per-file failure, not an operational one.
     expect(r.status).toBe(1);
     expect(report.results[0].error).toMatch(/node-llama-cpp/);
