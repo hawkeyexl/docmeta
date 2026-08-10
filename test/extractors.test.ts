@@ -526,6 +526,29 @@ describe("xml extractor", () => {
     expect(() => xmlExtractor.extract("<a><b></a>", "x.xml")).toThrow();
   });
 
+  it("still extracts when a DTD-declared entity can't be resolved", () => {
+    // DITA content is full of `&nbsp;`/`&mdash;`, declared by the DITA DTD.
+    // The parser resolves only the five built-in XML entities and never fetches
+    // an external DTD, so those must not fail an otherwise well-formed file.
+    const r = xmlExtractor.extract(
+      `<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="a" type="concept">
+  <title>T</title>
+  <conbody><p>one&nbsp;two&mdash;three</p></conbody>
+</concept>`,
+      "x.dita",
+    );
+    expect(r.present).toBe(true);
+    expect(r.data.id).toBe("a");
+    expect(r.data.type).toBe("concept");
+  });
+
+  it("still throws on a malformed entity reference", () => {
+    expect(() =>
+      xmlExtractor.extract(`<c id="x"><p>a &unclosed</p></c>`, "x.xml"),
+    ).toThrow(/Invalid XML/);
+  });
+
   it("reads a DITA topic's root attributes, DOCTYPE and all", () => {
     const r = xmlExtractor.extract(readFixture("topic.dita"), "topic.dita");
     expect(r.present).toBe(true);

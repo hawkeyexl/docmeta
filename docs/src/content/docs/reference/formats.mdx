@@ -163,7 +163,9 @@ declarations (`xmlns` and `xmlns:*`) are dropped as transport noise.
 ```
 
 This yields `type: "concept"` and `version: 2`. Malformed XML is reported as a
-per-file parse error.
+per-file parse error. An entity docmeta cannot resolve is not malformed XML: no
+external DTD is ever fetched, so a reference such as `&nbsp;` is left as written
+and the file is still read.
 
 DITA topics (`.dita`) and maps (`.ditamap`) are read by the same extractor, so
 their root-element attributes are the metadata:
@@ -172,8 +174,9 @@ their root-element attributes are the metadata:
 <concept id="metadata-overview" type="concept" xml:lang="en-us">
 ```
 
-This yields `id`, `type`, and `xml:lang` (a `DOCTYPE` declaration is skipped, and
-no external DTD is fetched). Metadata held in a `<prolog>` element is not read.
+This yields `id`, `type`, and `xml:lang`; the `DOCTYPE` declaration is skipped.
+The DTD-declared entities common in DITA content (`&nbsp;`, `&mdash;`) do not
+fail the file — see above. Metadata held in a `<prolog>` element is not read.
 
 ### HTML
 

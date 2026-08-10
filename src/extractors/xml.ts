@@ -68,7 +68,15 @@ export const xmlExtractor: MetadataExtractor = {
     const errors: string[] = [];
     const doc = new DOMParser({
       onError: (level, msg) => {
-        if (level === "error" || level === "fatalError") errors.push(msg);
+        if (level !== "error" && level !== "fatalError") return;
+        // An entity the parser can't resolve is not structural damage. Only the
+        // five built-in XML entities are known, and no external DTD is ever
+        // fetched, so every DTD-declared entity (`&nbsp;`, `&mdash;` — the norm
+        // in DITA) lands here while the document itself is fine. The root
+        // element and its attributes still parse, so extraction continues; a
+        // reference that is genuinely malformed reports a different error.
+        if (/entity not found/i.test(msg)) return;
+        errors.push(msg);
       },
     }).parseFromString(body, "text/xml");
 
