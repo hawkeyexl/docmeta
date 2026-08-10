@@ -8,12 +8,43 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { runValidate } from "../src/commands/validate.js";
 import { DEFAULT_SCHEMAS } from "../src/core/resolve-schema.js";
+import { loadSchema } from "../src/core/schema-registry.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
 
 const DIATAXIS = "diataxis:diataxis:1.0";
 const SEVEN_ACTION = "passo-uno:seven-action:1.0";
+const TGDP = "tgdp:templates:1.0";
+
+/** Every template slug published by The Good Docs Project. */
+const TGDP_SLUGS = [
+  "api-getting-started",
+  "api-reference",
+  "bug-report",
+  "changelog",
+  "code-of-conduct",
+  "code-of-conduct-incident-record",
+  "code-of-conduct-remediation-record",
+  "code-of-conduct-response-plan",
+  "concept",
+  "contact-support",
+  "contributing-guide",
+  "glossary",
+  "how-to",
+  "installation-guide",
+  "our-team",
+  "quickstart",
+  "readme",
+  "reference",
+  "release-notes",
+  "sdk-overview",
+  "style-guide",
+  "terminology-system",
+  "troubleshooting",
+  "tutorial",
+  "user-personas",
+];
 
 /** Validate one fixture against an explicit schema set. */
 async function check(fixture: string, cliSchemas: string[]) {
@@ -90,7 +121,114 @@ describe("passo-uno:seven-action:1.0", () => {
   });
 });
 
-describe("neither schema requires its key", () => {
+describe("tgdp:templates:1.0", () => {
+  it("accepts a template slug that Diataxis has no word for", async () => {
+    expect((await check("tgdp-installation-guide.md", [TGDP])).ok).toBe(true);
+  });
+
+  it("rejects a near-miss spelling, naming the schema", async () => {
+    const r = await check("tgdp-bad-type.md", [TGDP]);
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]?.schema).toBe(TGDP);
+    expect(r.errors[0]?.instancePath).toBe("/type");
+  });
+
+  it("accepts every value in the published vocabulary", async () => {
+    for (const type of TGDP_SLUGS) {
+      const { results } = await runValidate({
+        inputs: ["-"],
+        as: "markdown",
+        stdinContent: `---\ntype: ${type}\n---\n`,
+        cliSchemas: [TGDP],
+        cwd: root,
+      });
+      expect(results[0]?.ok, `type: ${type}`).toBe(true);
+    }
+  });
+
+  it("requires `type`, unlike the other two taxonomy schemas", async () => {
+    // The deliberate exception to the vocabulary-only rule: opting into TGDP
+    // is a statement that every page is one of its templates, so a page with
+    // no `type` is a gap rather than an abstention.
+    const { results } = await runValidate({
+      inputs: ["-"],
+      as: "markdown",
+      stdinContent: "---\ntitle: No type here\n---\n",
+      cliSchemas: [TGDP],
+      cwd: root,
+    });
+    expect(results[0]?.ok).toBe(false);
+    expect(results[0]?.errors[0]?.schema).toBe(TGDP);
+    expect(results[0]?.errors[0]?.message).toContain("type");
+  });
+
+  it("composes with Seven-Action, which keys off a different field", async () => {
+    const r = await check("tgdp-troubleshooting-composed.md", [
+      TGDP,
+      SEVEN_ACTION,
+    ]);
+    expect(r.ok).toBe(true);
+    expect(r.schemas).toEqual([TGDP, SEVEN_ACTION]);
+  });
+
+  it("carries exactly the published vocabulary and nothing more", async () => {
+    // TGDP_SLUGS is checked value-by-value above, which catches a slug the
+    // schema is *missing*. This catches the other direction: a stray or
+    // duplicated enum member would otherwise ship unnoticed, since no
+    // accept-each loop can fail on a value it never tries.
+    const schema = (await loadSchema(TGDP)) as {
+      properties: { type: { enum: string[] } };
+    };
+    const published = schema.properties.type.enum;
+    expect([...published].sort()).toEqual([...TGDP_SLUGS].sort());
+    expect(new Set(published).size).toBe(published.length);
+  });
+
+  it("has values Diataxis rejects, and vice versa", async () => {
+    // Both classify what a page *is*, so each vocabulary has a value the
+    // other rejects. This is what makes stacking them a narrowing; the next
+    // test covers the stacked case itself.
+    const explanation = await runValidate({
+      inputs: ["-"],
+      as: "markdown",
+      stdinContent: "---\ntype: explanation\n---\n",
+      cliSchemas: [TGDP],
+      cwd: root,
+    });
+    expect(explanation.results[0]?.ok).toBe(false);
+
+    const installGuide = await check("tgdp-installation-guide.md", [DIATAXIS]);
+    expect(installGuide.ok).toBe(false);
+  });
+
+  it("stacks with Diataxis without erroring, admitting only the intersection", async () => {
+    // Guards the documented claim that stacking the two `type` schemas is a
+    // narrowing, not an operational error: a shared value still passes, and a
+    // value unique to one vocabulary is rejected by the other by name.
+    const shared = await runValidate({
+      inputs: ["-"],
+      as: "markdown",
+      stdinContent: "---\ntype: how-to\n---\n",
+      cliSchemas: [DIATAXIS, TGDP],
+      cwd: root,
+    });
+    expect(shared.results[0]?.ok).toBe(true);
+    expect(shared.results[0]?.schemas).toEqual([DIATAXIS, TGDP]);
+
+    const tgdpOnly = await runValidate({
+      inputs: ["-"],
+      as: "markdown",
+      stdinContent: "---\ntype: concept\n---\n",
+      cliSchemas: [DIATAXIS, TGDP],
+      cwd: root,
+    });
+    expect(tgdpOnly.results[0]?.ok).toBe(false);
+    expect(tgdpOnly.results[0]?.errors[0]?.schema).toBe(DIATAXIS);
+  });
+});
+
+describe("Diataxis and Seven-Action do not require their key", () => {
+  // TGDP is the exception and is covered in its own block above.
   it("passes a document with no type at all", async () => {
     const { results } = await runValidate({
       inputs: ["-"],

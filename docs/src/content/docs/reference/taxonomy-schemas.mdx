@@ -1,40 +1,50 @@
 ---
 title: Built-in taxonomy schemas
-description: The diataxis and seven-action schemas shipped with docmeta, their vocabularies, why they key off different fields, and how to compose them with OKF.
+description: The diataxis, tgdp, and seven-action schemas shipped with docmeta, their vocabularies, which ones compete for a key, and how to compose them with OKF.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-docmeta ships two **taxonomy** schemas: closed vocabularies that constrain a
+docmeta ships three **taxonomy** schemas: closed vocabularies that constrain a
 classification field to a published set of values. They exist because
 [`google:okf:0.1`](/docmeta/reference/okf-schema/) requires a `type` but accepts
 any non-empty string for it, so it cannot stop a docs set from drifting into
 `how-to`, `howto`, and `guide` all meaning the same thing.
 
-| Id | Key | Framework |
-|---|---|---|
-| `diataxis:diataxis:1.0` | `type` | [Diátaxis](https://diataxis.fr/) |
-| `passo-uno:seven-action:1.0` | `action` | [Seven-Action Documentation Model](https://passo.uno/seven-action-model/) |
+| Id | Key | Key required? | Framework |
+|---|---|---|---|
+| `diataxis:diataxis:1.0` | `type` | No | [Diátaxis](https://diataxis.fr/) |
+| `tgdp:templates:1.0` | `type` | **Yes** | [The Good Docs Project](https://www.thegooddocsproject.dev/template) |
+| `passo-uno:seven-action:1.0` | `action` | No | [Seven-Action Documentation Model](https://passo.uno/seven-action-model/) |
 
-Both use [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects), allow
-additional properties, and are [built-in
+All three use [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects),
+allow additional properties, and are [built-in
 references](/docmeta/reference/schema-resolution/#reference-kinds).
 
-## They are vocabularies, not presence checks
+The two keyed on `type` are alternatives to each other — see [Which ones
+compose](#which-ones-compose).
 
-Neither schema marks its key as required. A document with no `type` at all
-passes `diataxis:diataxis:1.0`, because the schema's job is to rule that a type,
-*if present*, is legitimate.
+## Vocabulary checks vs. presence checks
 
-That is deliberate: it makes the two safe to layer onto an existing setup, and
-it keeps "must have a type" as a separate decision from "which types exist."
-To get both, stack a taxonomy schema with one that requires the field:
+Two of the three check a value only *if one is present*. A document with no
+`type` at all passes `diataxis:diataxis:1.0`, because that schema's job is to
+rule that a type, if given, is legitimate — not to insist on one.
+
+That is deliberate: it makes them safe to layer onto an existing setup, and it
+keeps "must have a type" as a separate decision from "which types exist."
+To get both, stack a vocabulary schema with one that requires the field:
 
 ```bash
 docmeta validate docs/ -s google:okf:0.1 -s diataxis:diataxis:1.0
 ```
 
 OKF supplies the requirement, Diátaxis supplies the vocabulary.
+
+`tgdp:templates:1.0` is the exception: it **requires** `type` as well as
+constraining it, so it needs no partner to get presence-checking. Adopting a
+named template set is a stronger claim than adopting a vocabulary — it says
+every page *is* one of the templates, which makes an untyped page a gap rather
+than an abstention. Pair it with OKF for the other OKF fields, not for `type`.
 
 ## `diataxis:diataxis:1.0`
 
@@ -58,6 +68,64 @@ Diátaxis is **not** part of the [default
 set](/docmeta/reference/schema-resolution/#precedence). It constrains `type`,
 which documents already carry, so applying it by default would fail every repo
 not already using Diátaxis. Opt in with `-s` or a `schemas:` entry in config.
+
+## `tgdp:templates:1.0`
+
+Requires `type` and constrains it to the template slugs published by [The Good
+Docs Project](https://www.thegooddocsproject.dev/template). Where Diátaxis names
+four abstract forms, TGDP names 25 concrete deliverables, so it fits a docs set
+that thinks in terms of "we owe this product an installation guide and a
+changelog" rather than in terms of the four quadrants.
+
+The values are the template directory slugs from the upstream
+[templates repo](https://gitlab.com/tgdp/templates), grouped here by the pack
+each belongs to. All 25 validate regardless of pack; the grouping is upstream's,
+and is reproduced only to show what you are opting into.
+
+| Pack | Values |
+|---|---|
+| Core | `concept`, `how-to`, `readme`, `reference`, `release-notes`, `troubleshooting`, `tutorial` |
+| Community | `bug-report`, `changelog`, `code-of-conduct`, `code-of-conduct-incident-record`, `code-of-conduct-remediation-record`, `code-of-conduct-response-plan`, `contributing-guide`, `our-team` |
+| Misc | `api-getting-started`, `api-reference`, `contact-support`, `glossary`, `installation-guide`, `quickstart`, `sdk-overview`, `style-guide`, `terminology-system`, `user-personas` |
+
+```md
+---
+type: installation-guide
+title: Install the collector
+---
+```
+
+A document with no `type` fails against this schema:
+
+```text
+✗ docs/overview.md
+    (root)  must have required property 'type'  (line 1)  [tgdp:templates:1.0]
+```
+
+Like Diátaxis, TGDP is **not** in the [default
+set](/docmeta/reference/schema-resolution/#precedence), and even more plainly:
+it both constrains and requires `type`, so defaulting it would fail every
+untyped document in every repo that had not opted in.
+
+<Aside type="caution" title="It requires `type`, so retrofit with `--dry-run` first">
+This is the only taxonomy schema that fails a document for *lacking* its key. On
+an existing docs set that never adopted TGDP, turning it on reports every
+untyped page at once. Run [`docmeta fill
+--dry-run`](/docmeta/reference/cli/#fill) to see what would be proposed before
+writing anything — the enum is lifted into the inference prompt, so the model is
+constrained to a real slug.
+</Aside>
+
+<Aside type="note" title="TGDP prescribes no frontmatter of its own">
+The upstream templates are body-structure templates — they open at a heading and
+carry no YAML block. The only metadata TGDP publishes is `index.json`, which
+describes the *templates* (`name`, `summary`, `last_updated`, `contributors`,
+`packs`), not documents written from them. So the vocabulary here is lifted from
+the template set, not an implementation of a TGDP metadata spec, and requiring
+`type` is docmeta's choice rather than an upstream rule. Pair it with
+[`google:okf:0.1`](/docmeta/reference/okf-schema/) for the fields TGDP leaves
+unspecified.
+</Aside>
 
 ## `passo-uno:seven-action:1.0`
 
@@ -103,11 +171,11 @@ Set a `schemas:` list in `docmeta.config.yaml` before running either command.
 It replaces the default set entirely, which opts you out of both.
 </Aside>
 
-## Why the two keys differ
+## Which ones compose
 
-Diátaxis classifies what a page **is**. Seven-Action classifies what a reader is
-**doing**. Those are independent, so the schemas key off different fields and
-compose rather than compete:
+Diátaxis and TGDP both classify what a page **is**, so both claim `type`.
+Seven-Action classifies what a reader is **doing**, which is independent, so it
+claims `action` and composes with either:
 
 ```md
 ---
@@ -117,9 +185,18 @@ title: Rotate an API key
 ---
 ```
 
-Two schemas that both claimed `type` would be mutually exclusive — a file cannot
-be a `tutorial` and a `reference` at once. Keeping `action` separate is what
-makes the pairing above expressible.
+| Combination | Result |
+|---|---|
+| Diátaxis + Seven-Action | Composes |
+| TGDP + Seven-Action | Composes |
+| Diátaxis + TGDP | **Pick one** |
+
+Stacking the two `type` schemas is not an error, but it validates against the
+intersection of their vocabularies, which is narrower than either. `explanation`
+is Diátaxis-only and `installation-guide` is TGDP-only, so each rules out values
+the other exists to allow — leaving only `tutorial`, `how-to`, and `reference`.
+Because TGDP also requires the key, the stacked pair rejects an untyped document
+outright. Choose the vocabulary your docs set actually uses.
 
 ## Crosswalk
 

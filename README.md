@@ -4,7 +4,7 @@ Validate the **presence and format** of document metadata against **JSON Schema*
 
 <!-- badges: add npm version, build status, and license badges here -->
 
-`docmeta` checks the metadata in your documents (Markdown frontmatter and more) against one or more JSON Schemas. It verifies that required fields are present and correctly formatted (a `type`, an ISO 8601 `timestamp`, a URI `resource`); it does not judge prose quality. It ships with the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) schema built in, alongside vocabularies for [Diátaxis](https://diataxis.fr/) and the [Seven-Action model](https://passo.uno/seven-action-model/). It follows [clig.dev](https://clig.dev) conventions and returns a nonzero exit code (plus optional GitHub annotations) when validation fails.
+`docmeta` checks the metadata in your documents (Markdown frontmatter and more) against one or more JSON Schemas. It verifies that required fields are present and correctly formatted (a `type`, an ISO 8601 `timestamp`, a URI `resource`); it does not judge prose quality. It ships with the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) schema built in, alongside vocabularies for [Diátaxis](https://diataxis.fr/), [The Good Docs Project](https://www.thegooddocsproject.dev/template), and the [Seven-Action model](https://passo.uno/seven-action-model/). It follows [clig.dev](https://clig.dev) conventions and returns a nonzero exit code (plus optional GitHub annotations) when validation fails.
 
 It can also **fill in** the metadata that is missing, so adopting a standard on an existing docset is not a data-entry project.
 
