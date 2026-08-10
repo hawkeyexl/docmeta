@@ -75,6 +75,8 @@ export const xmlExtractor: MetadataExtractor = {
         // in DITA) lands here while the document itself is fine. The root
         // element and its attributes still parse, so extraction continues; a
         // reference that is genuinely malformed reports a different error.
+        // Matches the @xmldom/xmldom >=0.9 message; re-check on a major bump.
+        // The DITA entity test below fails loudly if the wording changes.
         if (/entity not found/i.test(msg)) return;
         errors.push(msg);
       },

@@ -663,6 +663,7 @@ describe("extractor registry", () => {
     expect(extractorForExtension(".dita")?.name).toBe("xml");
     expect(extractorForExtension(".ditamap")?.name).toBe("xml");
     expect(extractorForExtension(".DITA")?.name).toBe("xml");
+    expect(extractorForExtension(".DITAMAP")?.name).toBe("xml");
   });
 
   it("resolves html by extension", () => {
