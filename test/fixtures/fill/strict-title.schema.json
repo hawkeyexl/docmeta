@@ -1,8 +1,0 @@
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Stricter title rule than OKF",
-  "type": "object",
-  "properties": {
-    "title": { "type": "string", "minLength": 20 }
-  }
-}

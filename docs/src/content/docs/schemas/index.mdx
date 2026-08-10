@@ -204,9 +204,7 @@ both claim `type`, so they are alternatives; either one pairs with the third.
 
 The two `type` vocabularies each demand the key as well as constraining it, so
 neither needs a partner for presence-checking — stack one with OKF for the
-*other* OKF fields, naming the vocabulary first so that
-[`fill`](/docmeta/reference/cli/#fill) infers `type` against the enum rather
-than against OKF's any-non-empty-string rule:
+*other* OKF fields. Both schemas apply in full, in either order:
 
 ```bash
 docmeta validate docs/ -s diataxis:diataxis:1.0 -s google:okf:0.1
