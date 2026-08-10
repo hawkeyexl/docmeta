@@ -14,12 +14,17 @@ interface Run {
   status: number;
 }
 
-function run(args: string[], input?: string): Run {
+function run(
+  args: string[],
+  input?: string,
+  env?: Record<string, string>,
+): Run {
   try {
     const stdout = execFileSync("node", [bin, ...args], {
       cwd: root,
       encoding: "utf8",
       input,
+      ...(env ? { env: { ...process.env, ...env } } : {}),
     });
     return { stdout, stderr: "", status: 0 };
   } catch (e) {
@@ -205,6 +210,110 @@ describe("cli fill", () => {
     expect(r.status).toBe(2);
     expect(r.stderr).toContain("between 0 and 1");
   });
+
+  it("names auto as the default provider in --help", () => {
+    const r = run(["fill", "--help"]);
+    expect(r.stdout).toContain("auto");
+  });
+
+  it("exits 2 on an unknown provider, before reaching a provider", () => {
+    // Cheap, and it must not depend on inference happening: construction is
+    // lazy, so a typo on a fully cached run would otherwise exit 0.
+    const r = run(["fill", "test/fixtures/valid.md", "--provider", "antropic"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("antropic");
+    expect(r.stderr).toContain("auto");
+  });
+
+  it("exits 2 on --model without --provider", () => {
+    // A model name does not say which provider owns it. Carried into a detected
+    // provider it 404'd mid-run; this fails before any file is read.
+    const r = run([
+      "fill",
+      "test/fixtures/valid.md",
+      "--model",
+      "gpt-4o-mini",
+    ]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("--provider");
+  });
+
+  it("defaults to auto and detects a provider when none is named", () => {
+    // No --provider and no fill.provider: the run must detect one rather than
+    // assuming a vendor. ANTHROPIC_API_KEY makes the choice deterministic;
+    // port 1 refuses instantly, so the call never leaves the machine.
+    const r = run(
+      ["fill", "test/fixtures/valid.md", "--dry-run", "--no-cache", "-f", "json"],
+      undefined,
+      { ANTHROPIC_API_KEY: "x", ANTHROPIC_BASE_URL: "http://127.0.0.1:1" },
+    );
+    expect(r.stderr).toContain("auto-selected");
+    expect(JSON.parse(r.stdout).provider).toBe("anthropic");
+  }, 60000);
+
+  it("runs llama-cpp when it is named, reporting the concrete model", () => {
+    // Naming a catalog model skips the hardware probe, so this resolves with no
+    // native binding installed. The opt-out is what keeps a test from turning
+    // into a multi-gigabyte install.
+    const r = run(
+      [
+        "fill",
+        "test/fixtures/valid.md",
+        "--provider",
+        "llama-cpp",
+        "--model",
+        "gemma-4-e4b",
+        "--dry-run",
+        "--no-cache",
+        "-f",
+        "json",
+      ],
+      undefined,
+      { INFERENCE_NO_AUTO_INSTALL: "1" },
+    );
+
+    const report = JSON.parse(r.stdout);
+    expect(report.provider).toBe("llama-cpp");
+    expect(report.model).toBe("gemma-4-e4b");
+    // Absent runtime is a per-file failure, not an operational one.
+    expect(r.status).toBe(1);
+    expect(report.results[0].error).toMatch(/node-llama-cpp/);
+  }, 60000);
+
+  it("exits 2 when llama-cpp needs a runtime probe it cannot make", () => {
+    // Without --model, llama-cpp uses the `auto` selector, and sizing a tier
+    // needs the binding. That is setup, not a per-file problem.
+    const r = run(
+      ["fill", "test/fixtures/valid.md", "--provider", "llama-cpp", "--dry-run"],
+      undefined,
+      { INFERENCE_NO_AUTO_INSTALL: "1" },
+    );
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("node-llama-cpp");
+  }, 60000);
+
+  it("constructs the provider detection resolved, not the selector", () => {
+    // Regression: `makeProvider` kept receiving the literal "auto" after
+    // detection had already resolved it, so every real run that needed
+    // inference died on the synchronous guard. Every unit test injects a
+    // provider, which skips construction entirely — only an end-to-end run
+    // reaches it.
+    //
+    // Hermetic despite naming a real provider: port 1 refuses immediately, so
+    // the call fails locally without leaving the machine.
+    const r = run(
+      ["fill", "test/fixtures/valid.md", "--dry-run", "--no-cache", "-f", "json"],
+      undefined,
+      { ANTHROPIC_API_KEY: "x", ANTHROPIC_BASE_URL: "http://127.0.0.1:1" },
+    );
+
+    // A per-file failure (exit 1), not an operational one (exit 2).
+    expect(r.status).toBe(1);
+    expect(r.stderr).not.toContain("No provider specified");
+    const report = JSON.parse(r.stdout);
+    expect(report.provider).toBe("anthropic");
+    expect(report.model).toBe("claude-sonnet-4-5");
+  }, 60000);
 
   it("exits 2 on an unknown --format", () => {
     const r = run(["fill", "test/fixtures/valid.md", "-f", "github"]);

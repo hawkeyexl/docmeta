@@ -22,7 +22,8 @@ import { resolve, extname, join } from "node:path";
 import {
   completeValidatedJSON,
   makeProvider,
-  resolveProviderIdentity,
+  resolveProviderIdentityAsync,
+  DEFAULT_MODELS,
   JsonCache,
   buildCacheKey,
   sha256,
@@ -31,6 +32,8 @@ import {
   InferenceError,
   type InferenceProvider,
   type ProviderName,
+  type ProviderSelector,
+  type ProviderSpec,
   type TokenUsage,
 } from "@hawkeyexl/inference";
 import { DocmetaError, type FieldError, type MetadataPatch } from "../types.js";
@@ -75,7 +78,14 @@ export type {
 
 const DEFAULT_THRESHOLD = 0.7;
 const DEFAULT_CONCURRENCY = 4;
-const DEFAULT_PROVIDER = "anthropic";
+/**
+ * `auto` detects the highest-priority provider this machine can actually use —
+ * an Anthropic key, then an OpenAI key, then the Claude CLI, then a local model
+ * that needs no credentials at all. Defaulting to a named provider instead meant
+ * `docmeta fill` failed outright for anyone who did not happen to hold that
+ * vendor's key.
+ */
+const DEFAULT_PROVIDER = "auto";
 const CACHE_DIR = ".docmeta/cache";
 
 /** What the cache stores: the raw, *pre-gating* proposal for one file. */
@@ -136,24 +146,52 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
 
   const providerName = (opts.provider ??
     config?.fill?.provider ??
-    DEFAULT_PROVIDER) as ProviderName;
+    DEFAULT_PROVIDER) as ProviderSelector;
   const model = opts.model ?? config?.fill?.model;
   const spec = { provider: providerName, model: model ?? null };
 
-  // Identity comes from the spec, not a constructed provider, so a fully cached
-  // run needs no API key at all.
-  const identity = opts.inferenceProvider
-    ? {
-        provider: opts.inferenceProvider.provider(),
-        model: opts.inferenceProvider.modelName(),
-      }
-    : resolveIdentity(spec);
+  // Check the name up front, and regardless of whether a provider was injected:
+  // it costs nothing, and construction is lazy, so a typo would otherwise exit 0
+  // on any run where no file happened to need inference.
+  assertKnownProvider(providerName);
+  assertModelHasProvider(providerName, model);
 
-  let provider: InferenceProvider | undefined = opts.inferenceProvider;
+  // Identity comes from the spec, not a constructed provider, so a fully cached
+  // run needs no API key at all. Under `auto` this is also where detection runs
+  // — it probes the environment, the Claude CLI and the local runtime, but never
+  // authenticates, so the no-key property survives.
+  //
+  // The two branches are kept apart rather than merged behind a cast: an
+  // injected provider's `provider()` is a free-form string, and only the
+  // resolved path yields a name `makeProvider` can be trusted with.
+  let identity: { provider: string; model: string };
+  let construct: () => InferenceProvider;
+
+  if (opts.inferenceProvider) {
+    const injected = opts.inferenceProvider;
+    identity = { provider: injected.provider(), model: injected.modelName() };
+    construct = () => injected;
+  } else {
+    const resolved = await resolveIdentity(spec);
+    identity = resolved;
+    // Build from the RESOLVED identity, never the spec we started with: under
+    // `auto` that spec still says "auto", and the synchronous `makeProvider`
+    // rightly refuses to guess. Detection has already run, so the concrete name
+    // is known — which keeps construction synchronous and lazy, and that is what
+    // lets a fully cached run finish without a key.
+    const concrete: ProviderSpec = {
+      ...spec,
+      provider: resolved.provider,
+      model: resolved.model,
+    };
+    construct = () => makeProvider(concrete);
+  }
+
+  let provider: InferenceProvider | undefined;
   const getProvider = (): InferenceProvider => {
     if (!provider) {
       try {
-        provider = makeProvider(spec);
+        provider = construct();
       } catch (err) {
         // Missing API key / unknown provider is operational, not per-file.
         throw new DocmetaError(
@@ -649,29 +687,55 @@ function requireNumber(
   return value;
 }
 
-/** Provider names the inference layer accepts. */
-const PROVIDERS = new Set<string>(["anthropic", "openai", "claude-cli", "mock"]);
+/**
+ * Provider names the inference layer accepts, taken from the library rather
+ * than copied. A hardcoded list here silently went stale when `llama-cpp` was
+ * added upstream; deriving it means a new provider works the day it ships.
+ */
+const PROVIDERS = new Set<string>([...Object.keys(DEFAULT_MODELS), "auto"]);
 
-function resolveIdentity(spec: {
-  provider: ProviderName;
+function assertKnownProvider(name: string): void {
+  if (PROVIDERS.has(name)) return;
+  throw new DocmetaError(
+    `Unknown provider "${name}". Available: ${[...PROVIDERS].join(", ")}.`,
+  );
+}
+
+/**
+ * A model name belongs to exactly one provider, so it cannot be handed to
+ * whichever provider detection picks: `--model gpt-4o-mini` on a machine with an
+ * Anthropic key selected anthropic and then 404'd mid-run, after file discovery
+ * had already been paid for.
+ *
+ * The library enforces this too. It is repeated here to name the flags rather
+ * than the API fields, since that is what the user typed.
+ */
+function assertModelHasProvider(
+  name: ProviderSelector,
+  model: string | undefined,
+): void {
+  if (name !== "auto" || model == null) return;
+  throw new DocmetaError(
+    `--model "${model}" needs --provider too: a model name does not say which ` +
+      `provider owns it. Name the provider (${Object.keys(DEFAULT_MODELS).join(
+        ", ",
+      )}), or drop --model to take the detected provider's default.`,
+  );
+}
+
+async function resolveIdentity(spec: {
+  provider: ProviderSelector;
   model: string | null;
-}): { provider: string; model: string } {
-  // `resolveProviderIdentity` does not reject an unknown name — it returns
-  // `{provider: "nonsense", model: "unknown"}` — and `makeProvider`, which
-  // does, is only constructed lazily. Without this check a typo'd provider
-  // would exit 0 whenever no file happened to need inference.
-  if (!PROVIDERS.has(spec.provider)) {
-    throw new DocmetaError(
-      `Unknown provider "${spec.provider}". Available: ${[...PROVIDERS].join(", ")}.`,
-    );
-  }
+}): Promise<{ provider: ProviderName; model: string }> {
   try {
-    return resolveProviderIdentity(spec);
+    return await resolveProviderIdentityAsync(spec);
   } catch (err) {
+    // Detection failing with nothing available is operational, not per-file:
+    // the aggregate message names every provider it tried and why each was out.
     throw new DocmetaError(
       err instanceof InferenceError
         ? err.message
-        : `Unknown provider "${spec.provider}".`,
+        : `Could not resolve provider "${spec.provider}": ${(err as Error).message}`,
     );
   }
 }

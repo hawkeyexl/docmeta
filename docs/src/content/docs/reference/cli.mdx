@@ -160,9 +160,27 @@ proposals without touching anything, and run it on a clean working tree so the
 changes are easy to review.
 </Aside>
 
-`fill` sends the page and its schema to an LLM provider, so it needs credentials
-for that provider (`ANTHROPIC_API_KEY` for `anthropic`, `OPENAI_API_KEY` for
-`openai`, or a signed-in `claude` CLI for `claude-cli`).
+`fill` sends the page and its schema to an LLM provider. By default it **detects
+one**, taking the first of these that your machine can actually use:
+
+1. `anthropic` — `ANTHROPIC_API_KEY` is set
+2. `openai` — `OPENAI_API_KEY` is set
+3. `claude-cli` — a signed-in `claude` CLI is on your `PATH`
+4. `llama-cpp` — a local model, needing no key and costing nothing
+
+Pass `--provider` to pin one instead. `fill` reports which provider and model it
+used, in both output formats.
+
+<Aside type="caution" title="The local fallback downloads">
+  If detection gets all the way to `llama-cpp`, the first run fetches model
+  weights — between 2.6 GB and 6.7 GB, sized to your machine — and, if the
+  `node-llama-cpp` binding is missing, installs that too. Both warn once before
+  starting, and both go into `~/.hawkeyexl-inference/`, never your project.
+
+  Set `INFERENCE_NO_AUTO_INSTALL=1` to refuse the binding install, or pass an
+  explicit `--provider` to avoid the local model entirely. In CI, pin
+  `--provider` (or set a key) so a build agent never pays for this.
+</Aside>
 
 ### Arguments
 
@@ -181,8 +199,8 @@ for that provider (`ANTHROPIC_API_KEY` for `anthropic`, `OPENAI_API_KEY` for
 | `--fields` | `<list>` | all candidates | Comma-separated top-level fields to fill. Everything else is left alone. |
 | `--confidence` | `<n>` | `0.7` | Minimum self-reported confidence, from 0 to 1, needed to write a value. A non-numeric or out-of-range value is an error (exit 2). |
 | `--dry-run` | — | off | Report proposals without writing them. |
-| `--provider` | `<name>` | `anthropic` | Inference provider: `anthropic`, `openai`, `claude-cli`, or `mock`. |
-| `--model` | `<model>` | provider default | Model override. |
+| `--provider` | `<name>` | `auto` | Inference provider: `auto`, `anthropic`, `openai`, `claude-cli`, `llama-cpp`, or `mock`. `auto` detects one — see [above](#fill). An unknown name is an error (exit 2). |
+| `--model` | `<model>` | provider default | Model override. **Requires `--provider`**: a model name does not say which provider owns it, so pairing it with `auto` is an error (exit 2). |
 | `--no-cache` | — | cache on | Bypass the proposal cache in `.docmeta/cache`. |
 | `--max-cost-usd` | `<usd>` | — | Stop scheduling new files once this much has been spent. |
 | `--concurrency` | `<n>` | `4` | Files inferred in parallel. |
