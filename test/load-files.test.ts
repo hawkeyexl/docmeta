@@ -20,6 +20,7 @@ describe("resolveTargets", () => {
     expect(files).toContain("valid.md");
     expect(files).toContain("sample.mdx");
     expect(files).toContain("valid.rst");
+    expect(files).toContain("topic.dita");
     // extra.schema.json is .json — not a supported document extension
     expect(files.some((f) => f.endsWith(".json"))).toBe(false);
   });

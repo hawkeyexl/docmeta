@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="metadata-overview"
+         type="concept"
+         xml:lang="en-us">
+  <title>Metadata overview</title>
+  <conbody>
+    <p>A DITA topic carries its metadata on the root element.</p>
+  </conbody>
+</concept>

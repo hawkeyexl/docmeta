@@ -525,6 +525,19 @@ describe("xml extractor", () => {
   it("throws on malformed XML", () => {
     expect(() => xmlExtractor.extract("<a><b></a>", "x.xml")).toThrow();
   });
+
+  it("reads a DITA topic's root attributes, DOCTYPE and all", () => {
+    const r = xmlExtractor.extract(readFixture("topic.dita"), "topic.dita");
+    expect(r.present).toBe(true);
+    expect(r.format).toBe("xml");
+    expect(r.data.id).toBe("metadata-overview");
+    expect(r.data.type).toBe("concept");
+    // a namespaced attribute is metadata; only xmlns declarations are dropped
+    expect(r.data["xml:lang"]).toBe("en-us");
+    // the root <concept> tag opens on line 3, after the decl and the DOCTYPE
+    expect(r.lineFor("/id")).toBe(3);
+    expect(r.lineFor("/type")).toBe(4);
+  });
 });
 
 const HTML_DOC = `<!DOCTYPE html>
@@ -623,6 +636,12 @@ describe("extractor registry", () => {
     expect(extractorForExtension(".XML")?.name).toBe("xml");
   });
 
+  it("resolves DITA topics and maps as xml", () => {
+    expect(extractorForExtension(".dita")?.name).toBe("xml");
+    expect(extractorForExtension(".ditamap")?.name).toBe("xml");
+    expect(extractorForExtension(".DITA")?.name).toBe("xml");
+  });
+
   it("resolves html by extension", () => {
     expect(extractorForExtension(".html")?.name).toBe("html");
     expect(extractorForExtension(".htm")?.name).toBe("html");
@@ -638,6 +657,8 @@ describe("extractor registry", () => {
     expect(supportedExtensions()).toContain(".adoc");
     expect(supportedExtensions()).toContain(".rst");
     expect(supportedExtensions()).toContain(".xml");
+    expect(supportedExtensions()).toContain(".dita");
+    expect(supportedExtensions()).toContain(".ditamap");
     expect(supportedExtensions()).toContain(".html");
   });
 

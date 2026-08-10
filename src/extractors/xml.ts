@@ -1,6 +1,8 @@
 /**
  * XML metadata extractor.
  *
+ * Also handles DITA topics (`.dita`) and maps (`.ditamap`), which are XML.
+ *
  * Reads metadata from the document's root-element attributes, e.g.
  * `<document type="concept" version="2">` yields `{ type: "concept", version: 2 }`.
  * Attribute values are parsed as YAML scalars so `"2"` -> number and `"true"` ->
@@ -55,7 +57,9 @@ function lineForFactory(
 
 export const xmlExtractor: MetadataExtractor = {
   name: "xml",
-  extensions: [".xml"],
+  // DITA topics and maps are XML, and their metadata lives on the root element
+  // (`id`, `type`, `xml:lang`, …), so they need no extractor of their own.
+  extensions: [".xml", ".dita", ".ditamap"],
   implemented: true,
   extract(content): ExtractedMetadata {
     // A BOM stays part of line 1; it doesn't shift line numbers.

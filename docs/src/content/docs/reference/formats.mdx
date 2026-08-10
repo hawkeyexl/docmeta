@@ -18,7 +18,7 @@ implemented and counts toward directory and glob walks.
 | `mdx` | `.mdx` | Leading fenced frontmatter — YAML, TOML, or JSON. | Yes |
 | `asciidoc` | `.adoc`, `.asciidoc` | Fenced frontmatter, or the native header: `= Title` plus `:key: value` attributes. | Only into an existing fenced block |
 | `rst` | `.rst` | Fenced frontmatter, or the native section title plus `:key: value` docinfo fields. | Only into an existing fenced block |
-| `xml` | `.xml` | Attributes of the root element. | No |
+| `xml` | `.xml`, `.dita`, `.ditamap` | Attributes of the root element. | No |
 | `html` | `.html`, `.htm` | `<title>` plus `<meta name="…" content="…">` tags. | No |
 
 ### Why some formats are read-only
@@ -164,6 +164,16 @@ declarations (`xmlns` and `xmlns:*`) are dropped as transport noise.
 
 This yields `type: "concept"` and `version: 2`. Malformed XML is reported as a
 per-file parse error.
+
+DITA topics (`.dita`) and maps (`.ditamap`) are read by the same extractor, so
+their root-element attributes are the metadata:
+
+```xml
+<concept id="metadata-overview" type="concept" xml:lang="en-us">
+```
+
+This yields `id`, `type`, and `xml:lang` (a `DOCTYPE` declaration is skipped, and
+no external DTD is fetched). Metadata held in a `<prolog>` element is not read.
 
 ### HTML
 
