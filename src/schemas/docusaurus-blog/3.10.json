@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "docusaurus:blog:3.10",
   "title": "Docusaurus blog front matter v3.10",
-  "description": "Front matter accepted by @docusaurus/plugin-content-blog as of Docusaurus 3.10. Docusaurus marks no field as required, so this is a format check, not a presence check. Unknown keys are tolerated, matching Docusaurus. `authors` is deliberately loose — a key, an inline author object, or a list of either — because Docusaurus resolves author entries against `authors.yml` rather than validating them strictly. The single-author `author*` keys are the deprecated spelling that `authors` replaces. See https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-blog#markdown-front-matter",
+  "description": "Front matter accepted by @docusaurus/plugin-content-blog as of Docusaurus 3.10. Docusaurus marks no field as required, so this is a format check, not a presence check. Unknown keys are tolerated, matching Docusaurus. `authors` is deliberately loose — a key, an inline author object, or a list of either — because Docusaurus resolves author entries against `authors.yml` rather than validating them strictly. The single-author `author*` keys are the deprecated spelling that `authors` replaces. It claims neither `type` nor `action`, so it composes with the taxonomy vocabularies; stacking it with google:okf:0.1 is the one exception, since both define `tags` and OKF allows string tags only. See https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-blog#markdown-front-matter",
   "type": "object",
   "additionalProperties": true,
   "properties": {

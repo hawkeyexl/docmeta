@@ -45,10 +45,14 @@ not a substitute for it. They earn their place three ways:
 - **Before a build, not during one.** Validation needs no site config, no
   install of Docusaurus, and no build step, so it runs in seconds on a pull
   request that touches ten files.
-- **Alongside your own standard.** The Docusaurus schemas claim only the keys
-  the plugins define, so they compose with an editorial schema. One command
-  holds a page to the generator's contract *and* your docs set's conventions,
-  attributing each failure to the schema that raised it.
+- **Alongside your own standard.** These schemas claim neither `type` nor
+  `action`, so they compose with any of the [taxonomy
+  vocabularies](/docmeta/reference/taxonomy-schemas/). One command holds a page
+  to the generator's contract *and* your docs set's conventions, attributing
+  each failure to the schema that raised it. (Stacking with
+  [`google:okf:0.1`](/docmeta/reference/okf-schema/) is the one exception —
+  both define `tags`, and [their definitions
+  disagree](/docmeta/reference/built-in-schemas/#two-kinds-of-built-in).)
 
 ## Fields
 
@@ -72,8 +76,8 @@ not a substitute for it. They earn their place three ways:
 | `pagination_prev` | string or null | — |
 | `hide_title` | boolean | — |
 | `hide_table_of_contents` | boolean | — |
-| `toc_min_heading_level` | integer | 2–6 |
-| `toc_max_heading_level` | integer | 2–6 |
+| `toc_min_heading_level` | number | 2–6 |
+| `toc_max_heading_level` | number | 2–6 |
 | `parse_number_prefixes` | boolean | — |
 | `custom_edit_url` | string or null | `uri-reference` |
 | `keywords` | array of string | — |
@@ -105,8 +109,8 @@ not a substitute for it. They earn their place three ways:
 | `draft` | boolean | not both with `unlisted` |
 | `unlisted` | boolean | not both with `draft` |
 | `hide_table_of_contents` | boolean | — |
-| `toc_min_heading_level` | integer | 2–6 |
-| `toc_max_heading_level` | integer | 2–6 |
+| `toc_min_heading_level` | number | 2–6 |
+| `toc_max_heading_level` | number | 2–6 |
 | `last_update` | object | `author` and/or `date`, at least one, nothing else |
 
 </TabItem>

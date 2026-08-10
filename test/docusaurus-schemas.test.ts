@@ -10,6 +10,7 @@
 import { describe, it, expect } from "vitest";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { readFile } from "node:fs/promises";
 import { runValidate } from "../src/commands/validate.js";
 import { DEFAULT_SCHEMAS } from "../src/core/resolve-schema.js";
 import { loadSchema } from "../src/core/schema-registry.js";
@@ -188,12 +189,13 @@ describe("docusaurus:docs:3.10", () => {
     expect(anchored?.line).toBe(4);
   });
 
-  it("accepts either visibility flag on its own", async () => {
-    expect((await checkInline("draft: true", [DOCS])).ok).toBe(true);
-    expect((await checkInline("unlisted: true", [DOCS])).ok).toBe(true);
-    expect(
-      (await checkInline("draft: true\nunlisted: false", [DOCS])).ok,
-    ).toBe(true);
+  it("accepts an explicit `unlisted: false` alongside a draft", async () => {
+    // The `then` clause pins `unlisted` to `false` rather than forbidding the
+    // key, so spelling out the default must still pass. Both flags on their
+    // own are covered for all three schemas further down.
+    expect((await checkInline("draft: true\nunlisted: false", [DOCS])).ok).toBe(
+      true,
+    );
   });
 
   it("tolerates front matter it does not recognize", async () => {
@@ -314,6 +316,27 @@ describe("docusaurus:pages:3.10", () => {
   });
 });
 
+describe("the visibility rule holds in all three", () => {
+  // All three carry the same if/then encoding, but only the docs schema was
+  // exercised through a fixture. The rule is duplicated per schema, so an edit
+  // that drops it from one would otherwise go unnoticed.
+  for (const id of [DOCS, BLOG, PAGES]) {
+    it(`${id} rejects draft and unlisted together`, async () => {
+      const r = await checkInline("draft: true\nunlisted: true", [id]);
+      expect(r.ok).toBe(false);
+      expect(r.errors.every((e) => e.schema === id)).toBe(true);
+      expect(
+        r.errors.find((e) => e.instancePath === "/unlisted"),
+      ).toBeDefined();
+    });
+
+    it(`${id} accepts either flag alone`, async () => {
+      expect((await checkInline("draft: true", [id])).ok).toBe(true);
+      expect((await checkInline("unlisted: true", [id])).ok).toBe(true);
+    });
+  }
+});
+
 describe("all three require nothing", () => {
   // Docusaurus marks no front matter field as required in any of the three
   // plugins, so these are format checks only. A document with a lone `title`
@@ -355,6 +378,75 @@ describe("the field sets match the Docusaurus 3.10 reference", () => {
       );
       // No Docusaurus front matter field is mandatory.
       expect(schema.required).toBeUndefined();
+    });
+  }
+});
+
+describe("the reference page matches the shipped schemas", () => {
+  // Source-of-truth guard in the spirit of `docs:check-cli`. The field tables
+  // in reference/docusaurus-schemas.mdx are hand-written, so a type changed in
+  // the JSON and not in the table ships a page that contradicts the tool —
+  // which is exactly what happened when these were retyped from `integer` to
+  // `number`.
+  const PRIMITIVES = new Set([
+    "string",
+    "number",
+    "integer",
+    "boolean",
+    "object",
+    "array",
+    "null",
+  ]);
+
+  /** Every primitive the schema permits for a field, `items` included. */
+  function allowedTypes(sub: Record<string, unknown>): Set<string> {
+    const out = new Set<string>();
+    const add = (t: unknown) => {
+      if (typeof t === "string") out.add(t);
+      else if (Array.isArray(t)) for (const x of t) if (typeof x === "string") out.add(x);
+    };
+    add(sub.type);
+    const items = sub.items;
+    if (items && typeof items === "object" && !Array.isArray(items)) {
+      add((items as Record<string, unknown>).type);
+    }
+    return out;
+  }
+
+  /** The Type cell of the `| \`field\` | type | constraint |` row. */
+  function docType(page: string, field: string): string | undefined {
+    const row = new RegExp(
+      `^\\|\\s*\`${field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\`\\s*\\|([^|]*)\\|`,
+      "m",
+    ).exec(page);
+    return row?.[1]?.trim();
+  }
+
+  for (const id of [DOCS, BLOG, PAGES]) {
+    it(`${id} field types agree with the reference page`, async () => {
+      const page = await readFile(
+        resolve(root, "docs/src/content/docs/reference/docusaurus-schemas.mdx"),
+        "utf8",
+      );
+      const schema = (await loadSchema(id)) as {
+        properties: Record<string, Record<string, unknown>>;
+      };
+
+      for (const [field, sub] of Object.entries(schema.properties)) {
+        const cell = docType(page, field);
+        expect(cell, `${field} is missing from the reference page`).toBeDefined();
+
+        const claimed = (cell ?? "")
+          .split(/[^a-z]+/i)
+          .filter((w) => PRIMITIVES.has(w));
+        const allowed = allowedTypes(sub);
+        for (const word of claimed) {
+          expect(
+            allowed.has(word),
+            `${id} documents \`${field}\` as "${cell}" but the schema allows ${[...allowed].join(", ")}`,
+          ).toBe(true);
+        }
+      }
     });
   }
 });
