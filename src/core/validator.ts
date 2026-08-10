@@ -90,7 +90,17 @@ export function compileWithFormats(
 
 export class Validator {
   private ajvByDialect = new Map<Dialect, InstanceType<AjvCtor>>();
-  private cache = new Map<string, ValidateFunction>();
+  /**
+   * Keyed on the in-flight *promise*, not the resolved validator. Caching the
+   * result made this a check-then-act race: `fill` walks files through a worker
+   * pool, so every worker missed the cache while the first `loadSchema` was
+   * still pending and they all then compiled the same schema into the one
+   * shared per-dialect Ajv. Ajv registers a schema's `$id` on the first compile
+   * and rejects the second with "schema with key or id ... already exists",
+   * which took down any multi-file run against an $id-bearing schema. Storing
+   * the promise before the first await lets the losers await the one compile.
+   */
+  private cache = new Map<string, Promise<ValidateFunction>>();
 
   private ajvFor(dialect: Dialect): InstanceType<AjvCtor> {
     let ajv = this.ajvByDialect.get(dialect);
@@ -101,20 +111,45 @@ export class Validator {
     return ajv;
   }
 
-  private async compile(ref: string): Promise<ValidateFunction> {
+  /**
+   * Synchronous by design: the `cache.set` has to happen in the same tick as
+   * the miss, or a second caller can slip in before the entry exists.
+   */
+  private compile(ref: string): Promise<ValidateFunction> {
     const cached = this.cache.get(ref);
     if (cached) return cached;
+    const pending = this.compileUncached(ref);
+    this.cache.set(ref, pending);
+    // A failed load or compile is not cached — a transient fetch failure must
+    // stay retryable rather than poisoning the ref for this Validator's life.
+    // The extra `catch` keeps the eviction off the returned promise's chain, so
+    // it does not convert the rejection into a handled one for the caller.
+    pending.catch(() => {
+      if (this.cache.get(ref) === pending) this.cache.delete(ref);
+    });
+    return pending;
+  }
+
+  private async compileUncached(ref: string): Promise<ValidateFunction> {
     const schema = await loadSchema(ref);
-    let fn: ValidateFunction;
     try {
-      fn = this.ajvFor(dialectOf(schema)).compile(schema);
+      const ajv = this.ajvFor(dialectOf(schema));
+      // This cache is keyed on the ref string, but Ajv's registry is keyed on
+      // `$id` — so one schema named two ways (a published URL in a document's
+      // `$schema`, a local path on the command line) misses the cache twice and
+      // Ajv rejects the second compile as a duplicate id. Reuse the existing
+      // registration instead. `$id` is the schema's identity as far as Ajv is
+      // concerned, so if two refs claim the same one, sharing a validator is
+      // the only reading available — the alternative is the hard error this
+      // replaces.
+      const id = typeof schema["$id"] === "string" ? schema["$id"] : undefined;
+      const registered = id != null ? ajv.getSchema(id) : undefined;
+      return registered ?? ajv.compile(schema);
     } catch (err) {
       throw new DocmetaError(
         `Schema "${ref}" failed to compile: ${(err as Error).message}`,
       );
     }
-    this.cache.set(ref, fn);
-    return fn;
   }
 
   /**
