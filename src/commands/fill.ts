@@ -540,6 +540,13 @@ function patchOf(fields: FilledField[]): MetadataPatch {
  * errors on purpose: Ajv reports a `required` violation with an empty
  * `instancePath` and names the property only inside the message text, so
  * recovering the key would mean parsing prose.
+ *
+ * When several schemas in the set define the same property, their subschemas
+ * are **merged**, not raced. Picking one — the first named, say — would make the
+ * proposal depend on flag order: stack a vocabulary that pins `type` to an enum
+ * with OKF, which accepts any non-empty string, and whichever came first would
+ * decide whether the model ever saw the enum. Since `validate` always runs every
+ * schema, a value that only satisfies one of them was never writable anyway.
  */
 export function collectCandidates(
   schemas: Record<string, unknown>[],
@@ -567,11 +574,19 @@ export function collectCandidates(
       // `$schema` is docmeta's schema wiring, not document metadata.
       if (key === FILE_SCHEMA_KEY) continue;
       if (only && !only.has(key)) continue;
-      if (seen.has(key)) continue;
       if (typeof sub !== "object" || sub === null || Array.isArray(sub)) continue;
 
       const present = Object.prototype.hasOwnProperty.call(data, key);
       if (present && !invalid.has(key)) continue; // already valid — leave it alone
+
+      const already = seen.get(key);
+      if (already) {
+        already.subschema = mergeSubschemas(
+          already.subschema,
+          sub as Record<string, unknown>,
+        );
+        continue;
+      }
       seen.set(key, {
         key,
         subschema: sub as Record<string, unknown>,
@@ -581,6 +596,76 @@ export function collectCandidates(
     }
   }
   return [...seen.values()];
+}
+
+/**
+ * Combine two subschemas for one property into a single schema that satisfies
+ * both, via `allOf`.
+ *
+ * `allOf` rather than a structural merge because it is the only combination that
+ * is correct for every keyword pair without knowing what the keywords mean: two
+ * `enum`s intersect, two `minLength`s take the maximum, two `pattern`s must both
+ * match. Ajv already resolves all of that, and the envelope schema built around
+ * the result is compiled by Ajv before any proposal is accepted.
+ *
+ * Two things are done on top of the bare wrapper. Identical branches are dropped,
+ * so the common "both schemas say `{type: "string"}`" case still lifts a plain
+ * subschema. And a `description` is hoisted to the wrapper, because that is where
+ * `fill-prompt` looks when it tells the model what the property is for — the
+ * first one found wins, since descriptions of the same property are prose about
+ * the same thing rather than constraints to intersect.
+ */
+function mergeSubschemas(
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+): Record<string, unknown> {
+  const branches: Record<string, unknown>[] = [];
+  for (const part of [...branchesOf(a), ...branchesOf(b)]) {
+    if (!branches.some((seen) => canonical(seen) === canonical(part))) {
+      branches.push(part);
+    }
+  }
+  const [first] = branches;
+  if (branches.length === 1 && first !== undefined) return first;
+
+  const description = branches.find(
+    (s) => typeof s.description === "string",
+  )?.description;
+  return {
+    ...(description !== undefined ? { description } : {}),
+    allOf: branches,
+  };
+}
+
+/**
+ * The branches a subschema contributes to a merge — its own `allOf` entries if
+ * it is a wrapper this function built, otherwise itself.
+ *
+ * The unwrapping is deliberately narrow: an author-written schema may carry
+ * `allOf` *alongside* other keywords, and flattening that would drop them.
+ */
+function branchesOf(schema: Record<string, unknown>): Record<string, unknown>[] {
+  const keys = Object.keys(schema);
+  const isWrapper =
+    Array.isArray(schema.allOf) &&
+    keys.every((k) => k === "allOf" || k === "description");
+  if (!isWrapper) return [schema];
+  return (schema.allOf as unknown[]).filter(
+    (s): s is Record<string, unknown> =>
+      typeof s === "object" && s !== null && !Array.isArray(s),
+  );
+}
+
+/** Key-order-independent serialization, so equal branches compare equal. */
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (typeof value === "object" && value !== null) {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))
+      .map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`);
+    return `{${entries.join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
 }
 
 /**

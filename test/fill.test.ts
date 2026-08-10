@@ -18,6 +18,7 @@ import {
 } from "@hawkeyexl/inference";
 import { runFill, collectCandidates } from "../src/commands/fill.js";
 import { loadSchema } from "../src/core/schema-registry.js";
+import { compileWithFormats } from "../src/core/validator.js";
 import { DocmetaError } from "../src/types.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -88,27 +89,92 @@ describe("collectCandidates", () => {
     expect(keys).toEqual(["title"]);
   });
 
-  it("lifts the first-named schema's subschema when two define a key", async () => {
-    // Pins the ordering advice in the taxonomy-schemas reference. Selection is
-    // first-wins per key, and OKF accepts any non-empty string for `type`, so
-    // naming OKF ahead of a vocabulary drops the enum from the inference
-    // prompt and lets the model propose a value `validate` will then reject.
+  it("lifts a vocabulary's enum whichever schema is named first", async () => {
+    // OKF accepts any non-empty string for `type`, so a first-wins selection
+    // would drop the enum from the inference prompt whenever OKF led — and let
+    // the model propose a value the next `validate` rejects. The lifted
+    // subschema has to accept exactly the same values in both orders.
     const okf = await loadSchema("google:okf:0.1");
     const diataxis = await loadSchema("diataxis:diataxis:1.0");
 
-    // `subschema` is a Record<string, unknown>, so `.enum` needs no cast; the
-    // optional chain has to stay unbroken, or a missing candidate would throw
-    // a TypeError here instead of failing the assertion below.
-    const liftedTypeEnum = (cs: ReturnType<typeof collectCandidates>) =>
-      cs.find((c) => c.key === "type")?.subschema.enum;
+    const accepts = (schemas: Record<string, unknown>[]) => {
+      const found = collectCandidates(schemas, { title: "x" }, []).find(
+        (c) => c.key === "type",
+      );
+      if (!found) throw new Error("expected a `type` candidate");
+      return compileWithFormats(found.subschema);
+    };
 
-    expect(
-      liftedTypeEnum(collectCandidates([diataxis, okf], { title: "x" }, [])),
-    ).toEqual(["tutorial", "how-to", "reference", "explanation"]);
+    for (const order of [
+      [diataxis, okf],
+      [okf, diataxis],
+    ]) {
+      const validate = accepts(order);
+      expect(validate("how-to")).toBe(true);
+      // In OKF's vocabulary-free world "guide" is a fine `type`; Diátaxis is
+      // what rules it out, and that ruling must survive the merge either way.
+      expect(validate("guide")).toBe(false);
+    }
+  });
 
-    expect(
-      liftedTypeEnum(collectCandidates([okf, diataxis], { title: "x" }, [])),
-    ).toBeUndefined();
+  it("keeps every schema's constraints on a shared key, in either order", async () => {
+    const long = {
+      type: "object",
+      properties: { title: { type: "string", minLength: 5 } },
+    };
+    const short = {
+      type: "object",
+      properties: { title: { type: "string", maxLength: 10 } },
+    };
+
+    for (const order of [
+      [long, short],
+      [short, long],
+    ]) {
+      const found = collectCandidates(order, {}, []).find(
+        (c) => c.key === "title",
+      );
+      if (!found) throw new Error("expected a `title` candidate");
+      const validate = compileWithFormats(found.subschema);
+      expect(validate("middling")).toBe(true);
+      expect(validate("tiny")).toBe(false); // minLength, from `long`
+      expect(validate("far too long to pass")).toBe(false); // maxLength, from `short`
+    }
+  });
+
+  it("keeps a description on a merged subschema so the prompt still has one", async () => {
+    // `fill` describes each candidate to the model from `subschema.description`.
+    // Merging must not bury it where the prompt builder cannot see it.
+    const described = {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Human-readable display name." },
+      },
+    };
+    const bare = { type: "object", properties: { title: { type: "string" } } };
+
+    for (const order of [
+      [described, bare],
+      [bare, described],
+    ]) {
+      const found = collectCandidates(order, {}, []).find(
+        (c) => c.key === "title",
+      );
+      expect(found?.subschema.description).toBe("Human-readable display name.");
+    }
+  });
+
+  it("leaves a subschema untouched when only one schema defines the key", async () => {
+    const okf = await loadSchema("google:okf:0.1");
+    const diataxis = await loadSchema("diataxis:diataxis:1.0");
+    const found = collectCandidates([diataxis, okf], {}, []).find(
+      (c) => c.key === "description",
+    );
+    // Only OKF has `description`, so there is nothing to merge and no `allOf`
+    // wrapper to make the prompt harder to read.
+    expect(found?.subschema).toEqual(
+      (okf.properties as Record<string, unknown>).description,
+    );
   });
 
   it("never proposes the $schema wiring key", async () => {
@@ -228,10 +294,11 @@ describe("runFill — mechanical checks precede confidence", () => {
   });
 
   it("reverts a high-confidence value that another schema in the set rejects", async () => {
-    // The envelope is built from the first schema's subschema, so a value can
-    // satisfy it and still break a second schema in the set. Re-validating
+    // The envelope carries every schema's rules *for that property*, but a rule
+    // stated elsewhere — here an `if`/`then` keyed on `type` — is not part of
+    // any `properties` entry and so cannot be lifted into it. Re-validating
     // after the merge is what catches that.
-    const file = await stage("no-block.md");
+    const file = await stage("missing-keys.md");
     const before = await readFile(join(dir, file), "utf8");
     const { results } = await runFill({
       ...base,
@@ -239,7 +306,7 @@ describe("runFill — mechanical checks precede confidence", () => {
       inputs: [file],
       cliSchemas: [
         "google:okf:0.1",
-        join(here, "fixtures", "fill", "strict-title.schema.json"),
+        join(here, "fixtures", "fill", "conditional-title.schema.json"),
       ],
       fields: ["title"],
       inferenceProvider: propose({
@@ -249,6 +316,24 @@ describe("runFill — mechanical checks precede confidence", () => {
     const field = results[0]?.fields.find((f) => f.field === "/title");
     expect(field?.written).toBe(false);
     expect(field?.skipReason).toBe("schema-mismatch");
+    expect(await readFile(join(dir, file), "utf8")).toBe(before);
+  });
+
+  it("constrains the proposal to a stacked vocabulary's enum with OKF named first", async () => {
+    // The order that used to lose the enum. `guide` satisfies OKF's `type`
+    // rule, so before the merge it sailed through the envelope, was written at
+    // confidence 1, and only then failed `validate`.
+    const file = await stage("no-block.md");
+    const before = await readFile(join(dir, file), "utf8");
+    const { results } = await runFill({
+      ...base,
+      cwd: dir,
+      inputs: [file],
+      cliSchemas: ["google:okf:0.1", "diataxis:diataxis:1.0"],
+      fields: ["type"],
+      inferenceProvider: propose({ type: { value: "guide", confidence: 1 } }),
+    });
+    expect(results[0]?.error).toMatch(/schema validation/i);
     expect(await readFile(join(dir, file), "utf8")).toBe(before);
   });
 

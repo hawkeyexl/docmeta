@@ -222,7 +222,9 @@ checks run first, and a high confidence cannot override any of them:
 
 1. **The value must satisfy the property's own subschema.** `fill` builds the
    response schema out of your schema's property definitions, so a `timestamp`
-   that is not a valid `date-time` is rejected before it is ever scored.
+   that is not a valid `date-time` is rejected before it is ever scored. When
+   several schemas in the set define the same property, every one of their rules
+   applies, so `-s` order does not change what the model may propose.
 2. **The property must be one docmeta asked about.** The model cannot introduce
    keys your schema does not define.
 3. **The document must still validate afterwards.** Any value that would leave
