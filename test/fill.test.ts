@@ -743,6 +743,20 @@ describe("provider selection", () => {
     }
   });
 
+  it("still gets `mock` from the library, which docmeta's own tests rely on", async () => {
+    // The accepted names are derived from DEFAULT_MODELS rather than hardcoded,
+    // which is what stopped the list going stale — but it also means docmeta
+    // silently inherits whatever the library drops. `mock` is the one entry
+    // docmeta itself depends on, so assert it directly: if a future version
+    // removes it, this fails with a reason instead of an `Unknown provider
+    // "mock"` from an unrelated test.
+    //
+    // Re-adding "mock" to the local list would be worse — docmeta would accept a
+    // provider the library could no longer construct, moving the failure later
+    // and making it harder to read.
+    expect(Object.keys(DEFAULT_MODELS)).toContain("mock");
+  });
+
   it("refuses a model without a provider, as an operational error", async () => {
     // A model name belongs to one provider, so under detection it is ambiguous.
     // Carried through, it reached the API and 404'd after the run had started.
@@ -874,6 +888,10 @@ describe("the llama-cpp provider", () => {
   it("resolves a concrete catalog model without the native binding", async () => {
     // Naming a model skips the hardware probe, so identity — and therefore the
     // cache key and the cost lookup — resolves with nothing installed.
+    //
+    // This doubles as the check that `llama-cpp` is an accepted name at all: it
+    // was not, for a while, because the hardcoded provider list here never
+    // gained it and a valid provider was rejected as a typo.
     const file = await stage("no-block.md");
     const run = await runFill({
       ...base,
@@ -889,7 +907,13 @@ describe("the llama-cpp provider", () => {
     expect(run.model).toBe("gemma-4-e4b");
   });
 
-  it("reports a missing runtime as a per-file error, not a crash", async () => {
+  it("reports a missing runtime as a per-file error naming the opt-out", async () => {
+    // One run, both assertions: these were two tests issuing byte-identical
+    // calls, which doubled the work without doubling the coverage.
+    //
+    // Whoever set the opt-out needs to recognise their own decision in the
+    // message rather than reading it as "local models are broken", so the error
+    // has to name it — not merely mention the package.
     const file = await stage("no-block.md");
     const run = await runFill({
       ...base,
@@ -902,25 +926,9 @@ describe("the llama-cpp provider", () => {
     });
 
     expect(run.results[0]?.error).toMatch(/node-llama-cpp/);
+    expect(run.results[0]?.error).toMatch(/INFERENCE_NO_AUTO_INSTALL/);
     expect(run.summary.errors).toBe(1);
     expect(run.summary.written).toBe(0);
-  });
-
-  it("names the opt-out that refused the install", async () => {
-    // Whoever set this needs to recognise their own decision in the message,
-    // rather than reading it as "local models are broken".
-    const file = await stage("no-block.md");
-    const run = await runFill({
-      ...base,
-      cwd: dir,
-      inputs: [file],
-      fields: ["title"],
-      dryRun: true,
-      provider: "llama-cpp",
-      model: "gemma-4-e4b",
-    });
-
-    expect(run.results[0]?.error).toMatch(/INFERENCE_NO_AUTO_INSTALL/);
   });
 
   it("fails operationally when the model selector needs an absent runtime", async () => {
@@ -941,19 +949,4 @@ describe("the llama-cpp provider", () => {
     ).rejects.toThrow(DocmetaError);
   });
 
-  it("is accepted as a provider name", async () => {
-    // It was not, for a while: the hardcoded list here never gained `llama-cpp`,
-    // so a valid provider was rejected as a typo.
-    const file = await stage("no-block.md");
-    const run = await runFill({
-      ...base,
-      cwd: dir,
-      inputs: [file],
-      fields: ["title"],
-      dryRun: true,
-      provider: "llama-cpp",
-      model: "gemma-4-e4b",
-    });
-    expect(run.provider).toBe("llama-cpp");
-  });
 });

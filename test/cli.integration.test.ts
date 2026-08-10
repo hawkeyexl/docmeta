@@ -239,16 +239,24 @@ describe("cli fill", () => {
   });
 
   it("defaults to auto and detects a provider when none is named", () => {
-    // No --provider and no fill.provider: the run must detect one rather than
-    // assuming a vendor. ANTHROPIC_API_KEY makes the choice deterministic;
-    // port 1 refuses instantly, so the call never leaves the machine.
+    // Proven by making detection pick something a hardcoded default would not:
+    // with only an OpenAI key present, `openai` can only be the result of
+    // actually detecting. Asserting "anthropic" instead would pass just as well
+    // against the old hardcoded default, and asserting on the library's
+    // "auto-selected" log text would stop meaning anything the moment it is
+    // rephrased upstream.
+    //
+    // A path matching no files resolves identity but never calls a provider, so
+    // this needs no network and no key that works.
     const r = run(
-      ["fill", "test/fixtures/valid.md", "--dry-run", "--no-cache", "-f", "json"],
+      ["fill", "test/fixtures/does-not-exist.md", "--dry-run", "--no-cache", "-f", "json"],
       undefined,
-      { ANTHROPIC_API_KEY: "x", ANTHROPIC_BASE_URL: "http://127.0.0.1:1" },
+      { ANTHROPIC_API_KEY: "", OPENAI_API_KEY: "x" },
     );
-    expect(r.stderr).toContain("auto-selected");
-    expect(JSON.parse(r.stdout).provider).toBe("anthropic");
+    expect(r.status).toBe(0);
+    const report = JSON.parse(r.stdout);
+    expect(report.provider).toBe("openai");
+    expect(report.summary.files).toBe(0);
   }, 60000);
 
   it("runs llama-cpp when it is named, reporting the concrete model", () => {
@@ -312,7 +320,12 @@ describe("cli fill", () => {
     expect(r.stderr).not.toContain("No provider specified");
     const report = JSON.parse(r.stdout);
     expect(report.provider).toBe("anthropic");
-    expect(report.model).toBe("claude-sonnet-4-5");
+    // Deliberately not pinned to a model name: that is the library's default and
+    // will change when a newer Sonnet ships, breaking this with no change here.
+    // What the regression actually leaked was the literal selector.
+    expect(report.model).not.toBe("auto");
+    expect(typeof report.model).toBe("string");
+    expect(report.model.length).toBeGreaterThan(0);
   }, 60000);
 
   it("exits 2 on an unknown --format", () => {
