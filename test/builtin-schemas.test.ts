@@ -238,6 +238,26 @@ describe("tgdp:templates:1.0", () => {
     expect(tgdpOnly.results[0]?.ok).toBe(false);
     expect(tgdpOnly.results[0]?.errors[0]?.schema).toBe(DIATAXIS);
   });
+
+  it("rejects an untyped document once per schema when stacked with Diataxis", async () => {
+    // Both now require the key, so an untyped document is not merely outside
+    // the intersection — each schema faults it on its own, and the report
+    // names both rather than attributing the gap to one arbitrarily.
+    const { results } = await runValidate({
+      inputs: ["-"],
+      as: "markdown",
+      stdinContent: "---\ntitle: No type here\n---\n",
+      cliSchemas: [DIATAXIS, TGDP],
+      cwd: root,
+    });
+    expect(results[0]?.ok).toBe(false);
+    expect(results[0]?.errors.map((e) => e.schema).sort()).toEqual(
+      [DIATAXIS, TGDP].sort(),
+    );
+    for (const err of results[0]?.errors ?? []) {
+      expect(err.message).toContain("type");
+    }
+  });
 });
 
 describe("Seven-Action does not require its key", () => {
