@@ -83,6 +83,19 @@ describe("diataxis:diataxis:1.0", () => {
       expect(results[0]?.ok, `type: ${type}`).toBe(true);
     }
   });
+
+  it("requires `type`, so an untyped document fails", async () => {
+    const { results } = await runValidate({
+      inputs: ["-"],
+      as: "markdown",
+      stdinContent: "---\ntitle: No type here\n---\n",
+      cliSchemas: [DIATAXIS],
+      cwd: root,
+    });
+    expect(results[0]?.ok).toBe(false);
+    expect(results[0]?.errors[0]?.schema).toBe(DIATAXIS);
+    expect(results[0]?.errors[0]?.message).toContain("type");
+  });
 });
 
 describe("passo-uno:seven-action:1.0", () => {
@@ -146,10 +159,10 @@ describe("tgdp:templates:1.0", () => {
     }
   });
 
-  it("requires `type`, unlike the other two taxonomy schemas", async () => {
-    // The deliberate exception to the vocabulary-only rule: opting into TGDP
-    // is a statement that every page is one of its templates, so a page with
-    // no `type` is a gap rather than an abstention.
+  it("requires `type`, as Diataxis does", async () => {
+    // Both content-type vocabularies demand the key: opting into either is a
+    // statement that every page is one of its forms, so a page with no `type`
+    // is a gap rather than an abstention.
     const { results } = await runValidate({
       inputs: ["-"],
       as: "markdown",
@@ -225,21 +238,31 @@ describe("tgdp:templates:1.0", () => {
     expect(tgdpOnly.results[0]?.ok).toBe(false);
     expect(tgdpOnly.results[0]?.errors[0]?.schema).toBe(DIATAXIS);
   });
-});
 
-describe("Diataxis and Seven-Action do not require their key", () => {
-  // TGDP is the exception and is covered in its own block above.
-  it("passes a document with no type at all", async () => {
+  it("rejects an untyped document once per schema when stacked with Diataxis", async () => {
+    // Both now require the key, so an untyped document is not merely outside
+    // the intersection — each schema faults it on its own, and the report
+    // names both rather than attributing the gap to one arbitrarily.
     const { results } = await runValidate({
       inputs: ["-"],
       as: "markdown",
       stdinContent: "---\ntitle: No type here\n---\n",
-      cliSchemas: [DIATAXIS],
+      cliSchemas: [DIATAXIS, TGDP],
       cwd: root,
     });
-    expect(results[0]?.ok).toBe(true);
+    expect(results[0]?.ok).toBe(false);
+    expect(results[0]?.errors.map((e) => e.schema).sort()).toEqual(
+      [DIATAXIS, TGDP].sort(),
+    );
+    for (const err of results[0]?.errors ?? []) {
+      expect(err.message).toContain("type");
+    }
   });
+});
 
+describe("Seven-Action does not require its key", () => {
+  // It is the only one of the three that checks a value without demanding it;
+  // that is what makes it safe to carry in the default set.
   it("passes a document with no action at all", async () => {
     expect((await check("diataxis-how-to.md", [SEVEN_ACTION])).ok).toBe(true);
   });

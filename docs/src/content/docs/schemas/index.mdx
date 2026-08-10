@@ -194,27 +194,28 @@ If OKF's field set is close to what you need, copy it into a file and adjust: ad
 
 Everything above assumes you're defining the field set yourself. If what you
 need is a *closed list of document types*, docmeta ships three vocabularies you
-can adopt without authoring anything: `diataxis:diataxis:1.0` constrains `type`
-to the four [Diátaxis](https://diataxis.fr/) forms, `tgdp:templates:1.0`
-requires `type` and constrains it to the 25 template slugs of [The Good Docs
-Project](https://www.thegooddocsproject.dev/template), and
+can adopt without authoring anything: `diataxis:diataxis:1.0` requires `type`
+and constrains it to the four [Diátaxis](https://diataxis.fr/) forms,
+`tgdp:templates:1.0` requires `type` and constrains it to the 25 template slugs
+of [The Good Docs Project](https://www.thegooddocsproject.dev/template), and
 `passo-uno:seven-action:1.0` constrains `action` to the seven reader actions of
 the [Seven-Action model](https://passo.uno/seven-action-model/). The first two
 both claim `type`, so they are alternatives; either one pairs with the third.
 
-Diátaxis and Seven-Action do not *require* their key — each rules that a value,
-if present, is legitimate. That makes them safe to layer onto what you already
-have, and it means you get presence-checking by stacking them with a schema that
-demands the field:
+The two `type` vocabularies each demand the key as well as constraining it, so
+neither needs a partner for presence-checking — stack one with OKF for the
+*other* OKF fields, naming the vocabulary first so that
+[`fill`](/docmeta/reference/cli/#fill) infers `type` against the enum rather
+than against OKF's any-non-empty-string rule:
 
 ```bash
-docmeta validate docs/ -s google:okf:0.1 -s diataxis:diataxis:1.0
+docmeta validate docs/ -s diataxis:diataxis:1.0 -s google:okf:0.1
 ```
 
-OKF supplies the "must have a `type`" rule; Diátaxis supplies the list of types
-that count. TGDP is the exception — it demands the key itself, so it needs no
-partner for that. Every value of all three, which combinations compose, and the
-crosswalk from Seven-Action to Diátaxis are in the [taxonomy schemas
+Seven-Action is the exception: it rules that an `action`, if present, is
+legitimate, without insisting on one. That is what makes it safe to layer onto
+what you already have. Every value of all three, which combinations compose, and
+the crosswalk from Seven-Action to Diátaxis are in the [taxonomy schemas
 reference](/docmeta/reference/taxonomy-schemas/).
 
 ## Point a document at its schema

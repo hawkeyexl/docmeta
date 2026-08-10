@@ -49,16 +49,16 @@ describe("schema registry", () => {
     ).toHaveProperty("type");
   });
 
-  it("does not require a key on the vocabulary-only taxonomy schemas", async () => {
-    for (const id of ["diataxis:diataxis:1.0", "passo-uno:seven-action:1.0"]) {
-      const schema = await loadSchema(id);
-      expect((schema as { required?: string[] }).required, id).toBeUndefined();
-    }
+  it("does not require a key on the vocabulary-only taxonomy schema", async () => {
+    const schema = await loadSchema("passo-uno:seven-action:1.0");
+    expect((schema as { required?: string[] }).required).toBeUndefined();
   });
 
-  it("requires `type` on the TGDP schema", async () => {
-    const schema = await loadSchema("tgdp:templates:1.0");
-    expect((schema as { required?: string[] }).required).toEqual(["type"]);
+  it("requires `type` on both content-type taxonomy schemas", async () => {
+    for (const id of ["diataxis:diataxis:1.0", "tgdp:templates:1.0"]) {
+      const schema = await loadSchema(id);
+      expect((schema as { required?: string[] }).required, id).toEqual(["type"]);
+    }
   });
 
   it("classifies an http(s) url", () => {
