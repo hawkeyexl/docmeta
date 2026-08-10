@@ -57,33 +57,29 @@ jobs:
       # (1.42 GB). Both live under one directory this library owns, so one cache
       # entry covers them.
       #
-      # The key carries the blob name verbatim, so `Q2_K_XL` greps to both here
-      # and the `--model` in docs/src/content/docs/reference/cli.mdx. Change the
-      # model there and this key must change with it: an unchanged key restores
-      # a cache that lacks the new blob, and because the key still hits, the
-      # download is repeated on every run and never saved back.
+      # The key carries the alias the docs name, so `granite-4.1-3b-q2` greps to
+      # both here and the `--model` in docs/src/content/docs/reference/cli.mdx.
+      # Change the model there and this key must change with it: an unchanged
+      # key restores a cache that lacks the new blob, and because the key still
+      # hits, the download is repeated on every run and never saved back.
       #
-      # The docs pin a Granite build by `hf:` URI rather than taking a catalog
-      # alias, because the catalog's smallest entry is a Q2 Gemma 4 E2B at
-      # 2.19 GB — larger, and much weaker on this task. Benchmarked over twelve
-      # docs pages with title/description stripped, that build failed to
-      # terminate on six of them inside two minutes (one still unfinished at
-      # 400s) and proposed identifiers like `docmeta.config.yaml` as page titles
-      # at 0.95 self-reported confidence. The steps below run against a small
-      # fixture that the old model did handle, so this swap buys a smaller
-      # download and headroom against that runaway behaviour; it is not
-      # repairing a step that was failing.
+      # The alias is `fast`, the smallest tier @hawkeyexl/inference ships. The
+      # docs name it outright rather than passing the `fast` selector, because a
+      # selector resolves against the runner's memory and would silently pick a
+      # different, larger tier on a bigger machine — and the cache key here
+      # cannot follow that.
       #
-      # Timings here are whatever the runner gives you. The local benchmark that
-      # chose this model had GPU offload, so its per-page seconds do not carry
-      # over to these CPU-only runners; what does carry over is that Granite
-      # terminates on inputs where the previous model did not.
+      # Timings are whatever the runner gives you. The benchmark behind this
+      # model had GPU offload, so its per-page seconds do not carry over to
+      # these CPU-only runners. What does carry over is that it terminates:
+      # the catalog's former smallest entry, `gemma-4-e2b-q2`, did not, and is
+      # marked AVOID upstream for that reason.
       #
       # A warm run adds roughly ten seconds. A cold one adds a couple of minutes.
       - uses: actions/cache@v4
         with:
           path: ~/.hawkeyexl-inference
-          key: inference-local-granite-4.1-3b-UD-Q2_K_XL-${{ runner.os }}
+          key: inference-local-granite-4.1-3b-q2-${{ runner.os }}
       # Fetch the weights and auto-install the binding HERE, not inside
       # doc-detective. Doc Detective caps each step at 60s, and a cold fetch is
       # ~2.1 GB, so leaving it to the first fill step means the first run after
@@ -91,13 +87,13 @@ jobs:
       # key last moved. Warm, this is a few seconds and changes nothing.
       #
       # This repeats the model reference deliberately: keeping it beside the
-      # cache key is what makes `Q2_K_XL` grep to every place that must move
+      # cache key is what makes the alias grep to every place that must move
       # together. Keep it in step with the `--model` in cli.mdx.
       - name: Prefetch the local model
         run: >-
           docmeta fill test/fixtures/fill/no-block.md
           --provider llama-cpp
-          --model hf:unsloth/granite-4.1-3b-GGUF/granite-4.1-3b-UD-Q2_K_XL.gguf
+          --model granite-4.1-3b-q2
           --fields title --dry-run --no-cache
       # Third-party action pinned to a full commit SHA (supply-chain hardening).
       - uses: doc-detective/github-action@a2a4f5ceb1abfa55d567e4f6766223082ece2c18 # v1
