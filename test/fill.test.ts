@@ -16,7 +16,12 @@ import {
   MockProvider,
   type InferenceProvider,
 } from "@hawkeyexl/inference";
-import { runFill, collectCandidates } from "../src/commands/fill.js";
+import {
+  runFill,
+  collectCandidates,
+  collectDefs,
+} from "../src/commands/fill.js";
+import { buildEnvelopeSchema } from "../src/commands/fill-prompt.js";
 import { loadSchema } from "../src/core/schema-registry.js";
 import { compileWithFormats } from "../src/core/validator.js";
 import { DocmetaError } from "../src/types.js";
@@ -162,6 +167,70 @@ describe("collectCandidates", () => {
       );
       expect(found?.subschema.description).toBe("Human-readable display name.");
     }
+  });
+
+  it("keeps a description that sits on an `allOf` wrapper", async () => {
+    // A subschema may already be `{description, allOf: [...]}`. Unwrapping it
+    // for the merge must not leave the description behind, or the prompt loses
+    // the only sentence saying what the property is for.
+    const wrapped = {
+      type: "object",
+      properties: {
+        title: {
+          description: "Human-readable display name.",
+          allOf: [{ type: "string" }],
+        },
+      },
+    };
+    const plain = { type: "object", properties: { title: { type: "string" } } };
+    const found = collectCandidates([wrapped, plain], {}, []).find(
+      (c) => c.key === "title",
+    );
+    expect(found?.subschema.description).toBe("Human-readable display name.");
+  });
+
+  it("keeps two schemas' same-named `$defs` apart", async () => {
+    // Both schemas point `type` at `#/$defs/Slug`, but at different `Slug`s.
+    // The envelope holds one `$defs` block, so without renaming both refs
+    // resolve to whichever schema was named first and the other's rule is lost
+    // — the same order dependence, arriving by a different route.
+    const patterned = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      $defs: { Slug: { type: "string", pattern: "^[a-z-]+$" } },
+      properties: { type: { $ref: "#/$defs/Slug" } },
+    };
+    const enumerated = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      $defs: { Slug: { type: "string", enum: ["tutorial", "how-to"] } },
+      properties: { type: { $ref: "#/$defs/Slug" } },
+    };
+
+    for (const order of [
+      [patterned, enumerated],
+      [enumerated, patterned],
+    ]) {
+      const candidates = collectCandidates(order, {}, []);
+      const validate = compileWithFormats(
+        buildEnvelopeSchema(candidates, collectDefs(order)),
+      );
+      const proposal = (value: string) => ({
+        type: { value, confidence: 1, reasoning: "x" },
+      });
+      expect(validate(proposal("how-to"))).toBe(true);
+      expect(validate(proposal("guide"))).toBe(false); // not in the enum
+      expect(validate(proposal("How To"))).toBe(false); // fails the pattern
+    }
+  });
+
+  it("leaves non-colliding `$defs` under their own names", async () => {
+    const one = { $defs: { Slug: { type: "string" } }, properties: {} };
+    const two = { $defs: { Tag: { type: "string" } }, properties: {} };
+    expect(Object.keys(collectDefs([one, two]).$defs).sort()).toEqual([
+      "Slug",
+      "Tag",
+    ]);
   });
 
   it("leaves a subschema untouched when only one schema defines the key", async () => {

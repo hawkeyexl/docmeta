@@ -564,32 +564,38 @@ export function collectCandidates(
     }
   }
 
+  // Two schemas may define `#/$defs/Slug` differently, and the envelope has room
+  // for only one of each name. Renaming the losers keeps each lifted subschema
+  // pointing at its own definition.
+  const { renames } = planDefs(schemas);
+
   const seen = new Map<string, Candidate>();
-  for (const schema of schemas) {
+  for (const [index, schema] of schemas.entries()) {
     const properties = schema.properties;
     if (typeof properties !== "object" || properties === null) continue;
-    for (const [key, sub] of Object.entries(
+    const renamed = renames.get(index);
+    for (const [key, raw] of Object.entries(
       properties as Record<string, unknown>,
     )) {
       // `$schema` is docmeta's schema wiring, not document metadata.
       if (key === FILE_SCHEMA_KEY) continue;
       if (only && !only.has(key)) continue;
-      if (typeof sub !== "object" || sub === null || Array.isArray(sub)) continue;
+      if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue;
 
       const present = Object.prototype.hasOwnProperty.call(data, key);
       if (present && !invalid.has(key)) continue; // already valid — leave it alone
 
+      const sub = renamed
+        ? withRenamedRefs(raw as Record<string, unknown>, renamed)
+        : (raw as Record<string, unknown>);
       const already = seen.get(key);
       if (already) {
-        already.subschema = mergeSubschemas(
-          already.subschema,
-          sub as Record<string, unknown>,
-        );
+        already.subschema = mergeSubschemas(already.subschema, sub);
         continue;
       }
       seen.set(key, {
         key,
-        subschema: sub as Record<string, unknown>,
+        subschema: sub,
         required: required.has(key),
         present,
       });
@@ -610,10 +616,12 @@ export function collectCandidates(
  *
  * Two things are done on top of the bare wrapper. Identical branches are dropped,
  * so the common "both schemas say `{type: "string"}`" case still lifts a plain
- * subschema. And a `description` is hoisted to the wrapper, because that is where
+ * subschema. And a `description` is carried to the outside, because that is where
  * `fill-prompt` looks when it tells the model what the property is for — the
  * first one found wins, since descriptions of the same property are prose about
- * the same thing rather than constraints to intersect.
+ * the same thing rather than constraints to intersect. The inputs are searched
+ * ahead of the branches, so a description sitting on an author's own `allOf`
+ * wrapper is not lost when that wrapper is unfolded.
  */
 function mergeSubschemas(
   a: Record<string, unknown>,
@@ -625,12 +633,16 @@ function mergeSubschemas(
       branches.push(part);
     }
   }
-  const [first] = branches;
-  if (branches.length === 1 && first !== undefined) return first;
-
-  const description = branches.find(
+  const description = [a, b, ...branches].find(
     (s) => typeof s.description === "string",
   )?.description;
+
+  const [first] = branches;
+  if (branches.length === 1 && first !== undefined) {
+    return description === undefined || first.description === description
+      ? first
+      : { ...first, description };
+  }
   return {
     ...(description !== undefined ? { description } : {}),
     allOf: branches,
@@ -668,34 +680,115 @@ function canonical(value: unknown): string {
   return JSON.stringify(value) ?? "null";
 }
 
+const DEF_BLOCKS = ["$defs", "definitions"] as const;
+type DefBlock = (typeof DEF_BLOCKS)[number];
+
+interface DefsPlan {
+  defs: Record<DefBlock, Record<string, unknown>>;
+  /** Schema index -> `"<block>/<name>"` -> the name that schema's defs got. */
+  renames: Map<number, Map<string, string>>;
+}
+
 /**
- * Carry `$defs`/`definitions` across so a lifted subschema's `$ref` resolves.
+ * Decide what the envelope's `$defs`/`definitions` blocks hold, and which
+ * schemas need their `$ref`s pointed somewhere else to get there.
  *
- * The two keys are kept **separate**: draft-07 schemas (which `dialectOf` in
+ * The envelope is one document, so the two blocks are flat namespaces that every
+ * schema in the set shares. Names collide: `Slug` in a house schema and `Slug` in
+ * a vocabulary are unrelated definitions, and letting the first one win would
+ * silently validate half the set against the wrong rule. A colliding definition
+ * therefore gets its own name, and the subschemas lifted from that schema are
+ * rewritten to match. Identical definitions do share a slot — that is not a
+ * collision, and renaming them would only make the envelope noisier.
+ *
+ * The two blocks are kept **separate**: draft-07 schemas (which `dialectOf` in
  * validator.ts explicitly supports) write `$ref: "#/definitions/X"`, and folding
  * those entries into `$defs` would leave the pointer dangling.
  */
+function planDefs(schemas: Record<string, unknown>[]): DefsPlan {
+  const defs: Record<DefBlock, Record<string, unknown>> = {
+    $defs: {},
+    definitions: {},
+  };
+  const renames = new Map<number, Map<string, string>>();
+
+  for (const [index, schema] of schemas.entries()) {
+    for (const block of DEF_BLOCKS) {
+      const entries = schema[block];
+      if (typeof entries !== "object" || entries === null) continue;
+      for (const [name, value] of Object.entries(
+        entries as Record<string, unknown>,
+      )) {
+        const taken = defs[block];
+        if (!(name in taken)) {
+          taken[name] = value;
+          continue;
+        }
+        if (canonical(taken[name]) === canonical(value)) continue;
+
+        let emitted = `${name}__${index}`;
+        while (emitted in taken) emitted += "_";
+        taken[emitted] = value;
+        let map = renames.get(index);
+        if (!map) {
+          map = new Map();
+          renames.set(index, map);
+        }
+        map.set(`${block}/${name}`, emitted);
+      }
+    }
+  }
+  return { defs, renames };
+}
+
+/** Carry `$defs`/`definitions` across so a lifted subschema's `$ref` resolves. */
 export function collectDefs(schemas: Record<string, unknown>[]): {
   $defs: Record<string, unknown>;
   definitions: Record<string, unknown>;
 } {
-  const out = {
-    $defs: {} as Record<string, unknown>,
-    definitions: {} as Record<string, unknown>,
-  };
-  for (const schema of schemas) {
-    for (const key of ["$defs", "definitions"] as const) {
-      const block = schema[key];
-      if (typeof block !== "object" || block === null) continue;
-      for (const [name, value] of Object.entries(
-        block as Record<string, unknown>,
-      )) {
-        if (!(name in out[key])) out[key][name] = value;
-      }
-    }
-  }
-  return out;
+  return planDefs(schemas).defs;
 }
+
+/**
+ * Deep-copy a subschema with its local `$ref`s repointed at the names its
+ * definitions were emitted under. Only called for schemas that actually lost a
+ * name collision, so the ordinary case keeps the original object.
+ */
+function withRenamedRefs<T>(node: T, renames: Map<string, string>): T {
+  if (Array.isArray(node)) {
+    return node.map((item) => withRenamedRefs(item, renames)) as T;
+  }
+  if (typeof node !== "object" || node === null) return node;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(node)) {
+    out[key] =
+      key === "$ref" && typeof value === "string"
+        ? renameRef(value, renames)
+        : withRenamedRefs(value, renames);
+  }
+  return out as T;
+}
+
+/**
+ * Repoint one local pointer: `#/$defs/Slug` and `#/$defs/Slug/properties/x` both
+ * follow the rename of `Slug`. Anything else — an absolute URI, a `$id`-relative
+ * ref, a pointer into some other part of the document — is left alone.
+ */
+function renameRef(ref: string, renames: Map<string, string>): string {
+  const match = /^#\/(\$defs|definitions)\/([^/]+)(\/.*)?$/.exec(ref);
+  const block = match?.[1];
+  const name = match?.[2];
+  if (block === undefined || name === undefined) return ref;
+  const emitted = renames.get(`${block}/${unescapePointer(name)}`);
+  if (emitted === undefined) return ref;
+  return `#/${block}/${escapePointer(emitted)}${match?.[3] ?? ""}`;
+}
+
+const unescapePointer = (segment: string): string =>
+  segment.replace(/~1/g, "/").replace(/~0/g, "~");
+
+const escapePointer = (name: string): string =>
+  name.replace(/~/g, "~0").replace(/\//g, "~1");
 
 // ---------------------------------------------------------------------------
 // The gate
