@@ -567,7 +567,7 @@ export function collectCandidates(
   // Two schemas may define `#/$defs/Slug` differently, and the envelope has room
   // for only one of each name. Renaming the losers keeps each lifted subschema
   // pointing at its own definition.
-  const { renames } = planDefs(schemas);
+  const { renames } = plannedFor(schemas);
 
   const seen = new Map<string, Candidate>();
   for (const [index, schema] of schemas.entries()) {
@@ -710,8 +710,10 @@ function canonical(value: unknown): string {
       .map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`);
     return `{${entries.join(",")}}`;
   }
-  // `undefined` is not JSON, so it has no serialization to fall back on — and it
-  // must not be conflated with `null`, which is a legitimate schema value.
+  // A schema parsed from JSON never holds `undefined`, but `collectCandidates`
+  // is public API and a hand-written JS schema object can. It has no
+  // serialization to fall back on, and must not be conflated with `null`, which
+  // is a legitimate schema value.
   const json = JSON.stringify(value);
   return json === undefined ? "undefined" : json;
 }
@@ -733,9 +735,17 @@ interface DefsPlan {
  * schema in the set shares. Names collide: `Slug` in a house schema and `Slug` in
  * a vocabulary are unrelated definitions, and letting the first one win would
  * silently validate half the set against the wrong rule. A colliding definition
- * therefore gets its own name, and the subschemas lifted from that schema are
- * rewritten to match. Identical definitions do share a slot — that is not a
- * collision, and renaming them would only make the envelope noisier.
+ * therefore gets its own name, and everything that pointed at it — the lifted
+ * subschemas *and* the other definitions of the same schema — is rewritten to
+ * match. That second part is why names are allocated for the whole set before
+ * anything is rewritten: a definition may point at one that is renamed later in
+ * the walk, and a pointer left behind resolves to another schema's rule.
+ *
+ * Definitions two schemas write identically share a slot, since there is nothing
+ * to tell apart and a copy would only make the envelope noisier. That is settled
+ * on the text alone, so it is offered only to definitions that resolve to
+ * nothing else: `{$ref: "#/$defs/Inner"}` reads the same in both schemas while
+ * meaning whatever each one's `Inner` says.
  *
  * The two blocks are kept **separate**: draft-07 schemas (which `dialectOf` in
  * validator.ts explicitly supports) write `$ref: "#/definitions/X"`, and folding
@@ -747,6 +757,7 @@ function planDefs(schemas: Record<string, unknown>[]): DefsPlan {
     definitions: {},
   };
   const renames = new Map<number, Map<string, string>>();
+  const placed: { index: number; block: DefBlock; emitted: string }[] = [];
 
   for (const [index, schema] of schemas.entries()) {
     for (const block of DEF_BLOCKS) {
@@ -758,13 +769,17 @@ function planDefs(schemas: Record<string, unknown>[]): DefsPlan {
         const taken = defs[block];
         if (!(name in taken)) {
           taken[name] = value;
+          placed.push({ index, block, emitted: name });
           continue;
         }
-        if (canonical(taken[name]) === canonical(value)) continue;
+        if (!pointsInward(value) && canonical(taken[name]) === canonical(value)) {
+          continue;
+        }
 
         let emitted = `${name}__${index}`;
         while (emitted in taken) emitted += "_";
         taken[emitted] = value;
+        placed.push({ index, block, emitted });
         let map = renames.get(index);
         if (!map) {
           map = new Map();
@@ -774,15 +789,50 @@ function planDefs(schemas: Record<string, unknown>[]): DefsPlan {
       }
     }
   }
+
+  // Now that every name is settled, point each definition at the ones belonging
+  // to the schema it came from.
+  for (const { index, block, emitted } of placed) {
+    const map = renames.get(index);
+    if (map) defs[block][emitted] = withRenamedRefs(defs[block][emitted], map);
+  }
   return { defs, renames };
 }
 
-/** Carry `$defs`/`definitions` across so a lifted subschema's `$ref` resolves. */
+/** Whether a definition depends on some other part of its own document. */
+function pointsInward(node: unknown): boolean {
+  if (Array.isArray(node)) return node.some(pointsInward);
+  if (typeof node !== "object" || node === null) return false;
+  return Object.entries(node).some(([key, value]) =>
+    key === "$ref" && typeof value === "string"
+      ? value.startsWith("#")
+      : pointsInward(value),
+  );
+}
+
+/**
+ * Carry `$defs`/`definitions` across so a lifted subschema's `$ref` resolves.
+ *
+ * Memoized on the array itself: `collectCandidates` needs the same plan to know
+ * which refs to rewrite, and both are handed the one array `processOne` built
+ * for the file.
+ */
 export function collectDefs(schemas: Record<string, unknown>[]): {
   $defs: Record<string, unknown>;
   definitions: Record<string, unknown>;
 } {
-  return planDefs(schemas).defs;
+  return plannedFor(schemas).defs;
+}
+
+const planCache = new WeakMap<Record<string, unknown>[], DefsPlan>();
+
+function plannedFor(schemas: Record<string, unknown>[]): DefsPlan {
+  let plan = planCache.get(schemas);
+  if (!plan) {
+    plan = planDefs(schemas);
+    planCache.set(schemas, plan);
+  }
+  return plan;
 }
 
 /**

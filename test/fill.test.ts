@@ -263,6 +263,44 @@ describe("collectCandidates", () => {
     }
   });
 
+  it("follows a renamed definition from inside another definition", async () => {
+    // `Outer` is written identically by both schemas, but it points at `Inner`,
+    // which is not. A definition is only interchangeable if what it resolves to
+    // is interchangeable too, so sharing it on the strength of matching text
+    // would route the second schema's property through the first's `Inner`.
+    const chain = (inner: string, property: string) => ({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      $defs: {
+        Outer: { $ref: "#/$defs/Inner" },
+        Inner: { type: "string", const: inner },
+      },
+      properties: { [property]: { $ref: "#/$defs/Outer" } },
+    });
+    const first = chain("alpha", "alpha");
+    const second = chain("beta", "beta");
+
+    const candidates = collectCandidates([first, second], {}, []);
+    const validate = compileWithFormats(
+      buildEnvelopeSchema(candidates, collectDefs([first, second])),
+    );
+    const proposal = (key: string, value: string) => ({
+      [key]: { value, confidence: 1, reasoning: "x" },
+    });
+    expect(validate(proposal("alpha", "alpha"))).toBe(true);
+    expect(validate(proposal("alpha", "beta"))).toBe(false);
+    expect(validate(proposal("beta", "beta"))).toBe(true);
+    expect(validate(proposal("beta", "alpha"))).toBe(false);
+  });
+
+  it("shares a definition two schemas write identically", async () => {
+    // Nothing to tell apart, so nothing to rename — the envelope stays small.
+    const tone = { type: "string", enum: ["formal", "plain"] };
+    const one = { $defs: { Tone: tone }, properties: { x: { $ref: "#/$defs/Tone" } } };
+    const two = { $defs: { Tone: tone }, properties: { y: { $ref: "#/$defs/Tone" } } };
+    expect(Object.keys(collectDefs([one, two]).$defs)).toEqual(["Tone"]);
+  });
+
   it("does not overwrite a definition whose name a rename wants", async () => {
     // The renamed slot for the second `Slug` is `Slug__1`, which the first
     // schema already uses for something else. Taking it would silently swap one
