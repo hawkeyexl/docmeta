@@ -84,6 +84,27 @@ describe("collectCandidates", () => {
     expect(keys).toEqual(["title"]);
   });
 
+  it("lifts the first-named schema's subschema when two define a key", async () => {
+    // Pins the ordering advice in the taxonomy-schemas reference. Selection is
+    // first-wins per key, and OKF accepts any non-empty string for `type`, so
+    // naming OKF ahead of a vocabulary drops the enum from the inference
+    // prompt and lets the model propose a value `validate` will then reject.
+    const okf = await loadSchema("google:okf:0.1");
+    const diataxis = await loadSchema("diataxis:diataxis:1.0");
+
+    const vocabFirst = collectCandidates([diataxis, okf], { title: "x" }, []);
+    expect(
+      (vocabFirst.find((c) => c.key === "type")?.subschema as { enum?: string[] })
+        .enum,
+    ).toEqual(["tutorial", "how-to", "reference", "explanation"]);
+
+    const okfFirst = collectCandidates([okf, diataxis], { title: "x" }, []);
+    expect(
+      (okfFirst.find((c) => c.key === "type")?.subschema as { enum?: string[] })
+        .enum,
+    ).toBeUndefined();
+  });
+
   it("never proposes the $schema wiring key", async () => {
     const schema = {
       type: "object",

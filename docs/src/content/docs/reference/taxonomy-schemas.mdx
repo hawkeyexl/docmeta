@@ -40,7 +40,7 @@ Pair either with [`google:okf:0.1`](/docmeta/reference/okf-schema/) for the
 other OKF fields, not for `type`:
 
 ```bash
-docmeta validate docs/ -s google:okf:0.1 -s diataxis:diataxis:1.0
+docmeta validate docs/ -s diataxis:diataxis:1.0 -s google:okf:0.1
 ```
 
 `passo-uno:seven-action:1.0` is the exception. It checks `action` only *if one
@@ -52,8 +52,14 @@ set](/docmeta/reference/schema-resolution/#precedence).
 On an existing docs set that never adopted either vocabulary, turning one on
 reports every untyped page at once. Run [`docmeta fill
 --dry-run`](/docmeta/reference/cli/#fill) to see what would be proposed before
-writing anything — the enum is lifted into the inference prompt, so the model is
-constrained to a real value.
+writing anything.
+
+**List the vocabulary schema first**, as above. When two schemas define the same
+property, [`fill`](/docmeta/reference/cli/#fill) builds its inference prompt from
+whichever one is named first, and OKF accepts any non-empty string for `type`.
+Put OKF ahead of the vocabulary and the enum never reaches the model, which is
+free to propose `guide` — written at high confidence, then rejected by the next
+`validate`. Order does not affect `validate`; both schemas always run.
 </Aside>
 
 ## `diataxis:diataxis:1.0`
