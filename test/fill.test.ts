@@ -293,6 +293,40 @@ describe("collectCandidates", () => {
     expect(validate(proposal("beta", "alpha"))).toBe(false);
   });
 
+  it("keeps a `false` branch of an `allOf`, which nothing satisfies", async () => {
+    // JSON Schema allows a boolean where a schema is expected. Dropping `false`
+    // on the way into the merge would turn a property nothing can satisfy into
+    // one `fill` happily proposes for.
+    const closed = {
+      type: "object",
+      properties: { title: { description: "Not for you.", allOf: [false] } },
+    };
+    const open = { type: "object", properties: { title: { type: "string" } } };
+    const found = collectCandidates([closed, open], {}, []).find(
+      (c) => c.key === "title",
+    );
+    if (!found) throw new Error("expected a `title` candidate");
+    const validate = compileWithFormats(found.subschema);
+    expect(validate("anything")).toBe(false);
+    expect(validate(null)).toBe(false);
+  });
+
+  it("does not share a definition that resolves through `$dynamicRef`", async () => {
+    // Same text, but what it resolves to depends on the schema it was written
+    // in, so the two are no more interchangeable than a plain `$ref` chain.
+    const dynamic = (values: string[]) => ({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      $defs: {
+        Tone: { $dynamicRef: "#tone" },
+        Anchor: { $dynamicAnchor: "tone", enum: values },
+      },
+      properties: { tone: { $ref: "#/$defs/Tone" } },
+    });
+    const defs = collectDefs([dynamic(["formal"]), dynamic(["plain"])]);
+    expect(Object.keys(defs.$defs)).toContain("Tone__1");
+  });
+
   it("shares a definition two schemas write identically", async () => {
     // Nothing to tell apart, so nothing to rename — the envelope stays small.
     const tone = { type: "string", enum: ["formal", "plain"] };

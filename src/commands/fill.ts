@@ -695,10 +695,16 @@ function branchesOf(schema: Record<string, unknown>): Record<string, unknown>[] 
     Array.isArray(schema.allOf) &&
     keys.every((k) => k === "allOf" || k === "description");
   if (!isWrapper) return [schema];
-  return (schema.allOf as unknown[]).filter(
-    (s): s is Record<string, unknown> =>
-      typeof s === "object" && s !== null && !Array.isArray(s),
-  );
+  return (schema.allOf as unknown[]).flatMap((branch) => {
+    if (typeof branch === "object" && branch !== null && !Array.isArray(branch)) {
+      return [branch as Record<string, unknown>];
+    }
+    // JSON Schema allows a boolean where a schema belongs. `true` constrains
+    // nothing and disappears into the merge; `false` accepts nothing, and
+    // dropping it would quietly turn a property nothing can satisfy into one
+    // `fill` proposes for. `{not: {}}` says "never valid" in object form.
+    return branch === false ? [{ not: {} }] : [];
+  });
 }
 
 /** Key-order-independent serialization, so equal branches compare equal. */
@@ -710,12 +716,11 @@ function canonical(value: unknown): string {
       .map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`);
     return `{${entries.join(",")}}`;
   }
-  // A schema parsed from JSON never holds `undefined`, but `collectCandidates`
-  // is public API and a hand-written JS schema object can. It has no
-  // serialization to fall back on, and must not be conflated with `null`, which
-  // is a legitimate schema value.
-  const json = JSON.stringify(value);
-  return json === undefined ? "undefined" : json;
+  // A schema parsed from JSON holds nothing `JSON.stringify` refuses, but
+  // `collectCandidates` is public API and a hand-written JS object can pass an
+  // `undefined`, a function, or a symbol. Tagging by type keeps those apart from
+  // each other and from `null`, which is a legitimate schema value.
+  return JSON.stringify(value) ?? `(${typeof value})`;
 }
 
 const DEF_BLOCKS = ["$defs", "definitions"] as const;
@@ -799,12 +804,20 @@ function planDefs(schemas: Record<string, unknown>[]): DefsPlan {
   return { defs, renames };
 }
 
+/**
+ * Every keyword that can send a definition back into its own document.
+ * `$dynamicRef` (2020-12) and `$recursiveRef` (2019-09) resolve against the
+ * schema they were written in just as `$ref` does, so a definition using one is
+ * no more interchangeable between schemas than a `$ref` chain is.
+ */
+const INWARD_REFS = new Set(["$ref", "$dynamicRef", "$recursiveRef"]);
+
 /** Whether a definition depends on some other part of its own document. */
 function pointsInward(node: unknown): boolean {
   if (Array.isArray(node)) return node.some(pointsInward);
   if (typeof node !== "object" || node === null) return false;
   return Object.entries(node).some(([key, value]) =>
-    key === "$ref" && typeof value === "string"
+    INWARD_REFS.has(key) && typeof value === "string"
       ? value.startsWith("#")
       : pointsInward(value),
   );
