@@ -46,6 +46,23 @@ jobs:
       - run: npm run build
       - run: npm link
       - run: npm link docmeta
+      # Some fill steps run a real local model, which is the only way to exercise
+      # `fill` in CI at all: every other provider needs a credential, and secrets
+      # are not available to this workflow. The runner has no API key and no
+      # Claude CLI, so detection ends at llama-cpp exactly as it would on a
+      # contributor's machine with nothing configured.
+      #
+      # That costs ~2.8 GB the first time — the node-llama-cpp binding (~716 MB,
+      # auto-installed into the runtime prefix) plus the smallest catalog model
+      # (2.19 GB). Both live under one directory this library owns, so one cache
+      # entry covers them. Keyed on the model alias: changing which model the docs
+      # test must fetch the new weights rather than silently reuse the old ones.
+      #
+      # A warm run adds roughly ten seconds. A cold one adds a couple of minutes.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.hawkeyexl-inference
+          key: inference-local-gemma-4-e2b-q2-${{ runner.os }}
       # Third-party action pinned to a full commit SHA (supply-chain hardening).
       - uses: doc-detective/github-action@a2a4f5ceb1abfa55d567e4f6766223082ece2c18 # v1
         with:

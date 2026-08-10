@@ -349,4 +349,18 @@ glob or is a dotfile.
 {/* step {"description":"fill rejects a non-numeric --confidence before contacting a provider (exit 2).","runShell":{"command":"docmeta fill test/fixtures/valid.md --confidence abc","exitCodes":[2],"stdio":"--confidence"}} */}
 {/* step {"description":"fill rejects an out-of-range --confidence (exit 2).","runShell":{"command":"docmeta fill test/fixtures/valid.md --confidence 1.5","exitCodes":[2],"stdio":"between 0 and 1"}} */}
 {/* step {"description":"fill has no github output format (exit 2).","runShell":{"command":"docmeta fill test/fixtures/valid.md -f github","exitCodes":[2],"stdio":"Unknown --format"}} */}
+{/* step {"description":"fill rejects an unknown provider before reading any file (exit 2).","runShell":{"command":"docmeta fill test/fixtures/valid.md --provider antropic","exitCodes":[2],"stdio":"antropic"}} */}
+{/* step {"description":"A model with no provider is ambiguous, and fails before the run starts (exit 2).","runShell":{"command":"docmeta fill test/fixtures/valid.md --model gpt-4o-mini","exitCodes":[2],"stdio":"provider"}} */}
+{/* Everything above stops before inference. The three below actually run it, using
+     the local model — the only provider that needs no credential, and so the only
+     one testable in CI at all. They are also the only steps here that need the
+     weights; see the cache in .github/workflows/doc-detective.yml.
+
+     No step clears ANTHROPIC_API_KEY/OPENAI_API_KEY to force the keyless path:
+     `VAR= cmd` is bash-only and fails on Windows, where these tests also run. The
+     keyless claim is carried by naming llama-cpp outright, which needs no key by
+     construction, rather than by manipulating the environment. */}
+{/* step {"description":"Detection always resolves a concrete provider, whatever credentials are present — never the literal selector.","runShell":{"command":"docmeta fill test/fixtures/fill/does-not-exist.md --dry-run --no-cache -f json","exitCodes":[0],"stdio":"/\"provider\": \"(anthropic|openai|claude-cli|llama-cpp)\"/"}} */}
+{/* step {"description":"fill completes end to end on a local model, needing no credential, and names the provider and model in its report.","runShell":{"command":"docmeta fill test/fixtures/fill/no-block.md --provider llama-cpp --model gemma-4-e2b-q2 --fields title --dry-run --no-cache","exitCodes":[0],"stdio":"llama-cpp/gemma-4-e2b-q2"}} */}
+{/* step {"description":"A local run costs nothing, so the report carries a zero cost rather than a billed figure.","runShell":{"command":"docmeta fill test/fixtures/fill/no-block.md --provider llama-cpp --model gemma-4-e2b-q2 --fields title --dry-run --no-cache -f json","exitCodes":[0],"stdio":"/\"costUsd\": 0/"}} */}
 {/* test end */}

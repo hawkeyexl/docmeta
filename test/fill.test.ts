@@ -870,19 +870,33 @@ describe("provider selection", () => {
 
 describe("the llama-cpp provider", () => {
   // No `inferenceProvider` anywhere in here: the point is to drive the real
-  // llama-cpp path. `node-llama-cpp` is not a dependency of docmeta, so the
-  // binding is genuinely absent — and the opt-out keeps that from turning into a
-  // multi-gigabyte install partway through the suite.
-  let savedOptOut: string | undefined;
+  // llama-cpp path.
+  //
+  // Both variables are load-bearing, and the second one is easy to miss.
+  // `node-llama-cpp` is not a docmeta dependency, so it is absent from
+  // node_modules — but the library also looks in its own runtime prefix, and
+  // anything that has ever run a local model on this machine populates that.
+  // Running the doc-detective suite does exactly that, and it broke these tests:
+  // the binding became available, so runs that should have failed succeeded, and
+  // "expected +0 to be 1" was the whole diagnosis.
+  //
+  // Pointing the prefix at the per-test scratch directory makes absence a
+  // property of the test rather than of the machine. The opt-out then keeps a
+  // miss from turning into a multi-gigabyte install partway through the suite.
+  const saved: Record<string, string | undefined> = {};
+  const VARS = ["INFERENCE_NO_AUTO_INSTALL", "INFERENCE_RUNTIME_DIR"] as const;
 
   beforeEach(() => {
-    savedOptOut = process.env["INFERENCE_NO_AUTO_INSTALL"];
+    for (const v of VARS) saved[v] = process.env[v];
     process.env["INFERENCE_NO_AUTO_INSTALL"] = "1";
+    process.env["INFERENCE_RUNTIME_DIR"] = dir;
   });
 
   afterEach(() => {
-    if (savedOptOut === undefined) delete process.env["INFERENCE_NO_AUTO_INSTALL"];
-    else process.env["INFERENCE_NO_AUTO_INSTALL"] = savedOptOut;
+    for (const v of VARS) {
+      if (saved[v] === undefined) delete process.env[v];
+      else process.env[v] = saved[v];
+    }
   });
 
   it("resolves a concrete catalog model without the native binding", async () => {
