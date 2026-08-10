@@ -13,8 +13,8 @@ import type { DocmetaConfig } from "./config.js";
  * Applied when nothing else resolves. Seven-Action is safe to include here
  * because it constrains `action` — a key documents don't otherwise carry — and
  * does not require it, so adding it fails nothing that passed before.
- * Diataxis is deliberately absent: it constrains `type`, which documents *do*
- * carry, so defaulting it would fail every repo not already on Diataxis.
+ * Diataxis is deliberately absent: it both requires and constrains `type`, so
+ * defaulting it would fail every repo not already on Diataxis.
  */
 export const DEFAULT_SCHEMAS: readonly string[] = Object.freeze([
   "google:okf:0.1",
