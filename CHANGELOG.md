@@ -1,3 +1,20 @@
+# [3.0.0](https://github.com/hawkeyexl/docmeta/compare/v2.0.0...v3.0.0) (2026-08-10)
+
+
+### Features
+
+* **schemas:** add a built-in Good Docs Project vocabulary ([#60](https://github.com/hawkeyexl/docmeta/issues/60)) ([4a3ea3b](https://github.com/hawkeyexl/docmeta/commit/4a3ea3b6b22c3706558268e66dc842a668817ede))
+
+
+### BREAKING CHANGES
+
+* **schemas:** `tgdp:templates:1.0` requires `type`. A document with no
+`type` now fails against it where an earlier build of this branch passed.
+Nothing released is affected, since the schema ships for the first time in
+this change.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
 # [2.0.0](https://github.com/hawkeyexl/docmeta/compare/v1.4.1...v2.0.0) (2026-08-09)
 
 
