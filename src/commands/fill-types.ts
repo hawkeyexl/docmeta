@@ -4,7 +4,11 @@ import type { InferenceProvider } from "@hawkeyexl/inference";
 /** A schema property `fill` may propose a value for. */
 export interface Candidate {
   key: string;
-  /** The property's own subschema, lifted verbatim from the document schema. */
+  /**
+   * The property's own subschema, lifted from the document schema. When more
+   * than one schema in the set defines the property, the subschemas are combined
+   * with `allOf` so none of their rules is lost.
+   */
   subschema: Record<string, unknown>;
   /** Whether any schema in the set lists this property as required. */
   required: boolean;

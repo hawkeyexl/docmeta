@@ -117,6 +117,26 @@ added: [...only genuinely new packages...]   removed: []   changed: [...only the
 `removed` must be empty, and every entry in `changed` must be one you can name.
 That check is the real gate.
 
+### Working in a worktree: run `npm ci` first
+
+Worktrees live at `.claude/worktrees/<name>/`, **inside** the main checkout. A
+worktree with no `node_modules` therefore does not fail — Node's resolution
+walks up and silently finds the outer checkout's `node_modules`, which belongs
+to whatever branch happens to be checked out there. `tsc` and `vitest` then run
+against another branch's dependency tree, and the type errors and test failures
+that come back read exactly like real code bugs. Diagnosing that once cost a
+detour through four "pre-existing failures" that were nothing of the kind.
+
+`npm ci` is the fix, and it is safe under the lockfile rule above: it installs
+*from* `package-lock.json` and never rewrites it. (`npm install` does rewrite
+it — see above.)
+
+`npm run check:deps` asserts direct dependencies are installed in this checkout
+at the locked versions, and names the outside directory when the walk happens.
+It runs automatically before `test`, `typecheck`, and `build`, so the walk now
+announces itself instead of being diagnosed. Before believing any failure that
+smells like a dependency, check that it passes.
+
 ### Other conventions
 
 - **Strict TypeScript.** `tsconfig` enables strict settings including
@@ -132,9 +152,11 @@ That check is the real gate.
 ## Commands
 
 ```bash
+npm ci              # first thing in a fresh worktree — see the worktree note above
 npm run typecheck   # tsc --noEmit (strict)
 npm test            # vitest run (unit + built-bin CLI integration)
 npm run build       # tsup -> dist/ (needed before CLI integration tests)
+npm run check:deps  # deps installed here, at locked versions (auto-runs before the three above)
 npm run docs:check-cli  # CLI reference must match src/cli.ts
 
 # After editing anything under docs/, run the dogfood check too. docmeta

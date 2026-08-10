@@ -16,7 +16,7 @@ import type { Candidate } from "./fill-types.js";
  * Part of the cache key: bump whenever the prompt wording or the envelope
  * schema construction changes, so stale proposals are not replayed.
  */
-export const FILL_PROMPT_VERSION = 1;
+export const FILL_PROMPT_VERSION = 2;
 
 /** Characters of document body sent to the model. */
 export const BODY_CHAR_LIMIT = 12000;

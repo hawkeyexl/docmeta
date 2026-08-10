@@ -54,12 +54,11 @@ reports every untyped page at once. Run [`docmeta fill
 --dry-run`](/docmeta/reference/cli/#fill) to see what would be proposed before
 writing anything.
 
-**List the vocabulary schema first**, as above. When two schemas define the same
-property, [`fill`](/docmeta/reference/cli/#fill) builds its inference prompt from
-whichever one is named first, and OKF accepts any non-empty string for `type`.
-Put OKF ahead of the vocabulary and the enum never reaches the model, which is
-free to propose `guide` — written at high confidence, then rejected by the next
-`validate`. Order does not affect `validate`; both schemas always run.
+Schema order does not matter, here or anywhere else. Both schemas define `type`,
+and [`fill`](/docmeta/reference/cli/#fill) infers against the two rules combined,
+so the vocabulary's enum reaches the model whichever `-s` comes first — the
+proposal can only be one of the four. `validate` likewise always runs every
+schema in the set.
 </Aside>
 
 ## `diataxis:diataxis:1.0`

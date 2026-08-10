@@ -16,8 +16,14 @@ import {
   MockProvider,
   type InferenceProvider,
 } from "@hawkeyexl/inference";
-import { runFill, collectCandidates } from "../src/commands/fill.js";
+import {
+  runFill,
+  collectCandidates,
+  collectDefs,
+} from "../src/commands/fill.js";
+import { buildEnvelopeSchema } from "../src/commands/fill-prompt.js";
 import { loadSchema } from "../src/core/schema-registry.js";
+import { compileWithFormats } from "../src/core/validator.js";
 import { DocmetaError } from "../src/types.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -88,27 +94,305 @@ describe("collectCandidates", () => {
     expect(keys).toEqual(["title"]);
   });
 
-  it("lifts the first-named schema's subschema when two define a key", async () => {
-    // Pins the ordering advice in the taxonomy-schemas reference. Selection is
-    // first-wins per key, and OKF accepts any non-empty string for `type`, so
-    // naming OKF ahead of a vocabulary drops the enum from the inference
-    // prompt and lets the model propose a value `validate` will then reject.
+  it("lifts a vocabulary's enum whichever schema is named first", async () => {
+    // OKF accepts any non-empty string for `type`, so a first-wins selection
+    // would drop the enum from the inference prompt whenever OKF led — and let
+    // the model propose a value the next `validate` rejects. The lifted
+    // subschema has to accept exactly the same values in both orders.
     const okf = await loadSchema("google:okf:0.1");
     const diataxis = await loadSchema("diataxis:diataxis:1.0");
 
-    // `subschema` is a Record<string, unknown>, so `.enum` needs no cast; the
-    // optional chain has to stay unbroken, or a missing candidate would throw
-    // a TypeError here instead of failing the assertion below.
-    const liftedTypeEnum = (cs: ReturnType<typeof collectCandidates>) =>
-      cs.find((c) => c.key === "type")?.subschema.enum;
+    const accepts = (schemas: Record<string, unknown>[]) => {
+      const found = collectCandidates(schemas, { title: "x" }, []).find(
+        (c) => c.key === "type",
+      );
+      if (!found) throw new Error("expected a `type` candidate");
+      return compileWithFormats(found.subschema);
+    };
 
-    expect(
-      liftedTypeEnum(collectCandidates([diataxis, okf], { title: "x" }, [])),
-    ).toEqual(["tutorial", "how-to", "reference", "explanation"]);
+    for (const order of [
+      [diataxis, okf],
+      [okf, diataxis],
+    ]) {
+      const validate = accepts(order);
+      expect(validate("how-to")).toBe(true);
+      // In OKF's vocabulary-free world "guide" is a fine `type`; Diátaxis is
+      // what rules it out, and that ruling must survive the merge either way.
+      expect(validate("guide")).toBe(false);
+    }
+  });
 
-    expect(
-      liftedTypeEnum(collectCandidates([okf, diataxis], { title: "x" }, [])),
-    ).toBeUndefined();
+  it("keeps every schema's constraints on a shared key, in either order", async () => {
+    const long = {
+      type: "object",
+      properties: { title: { type: "string", minLength: 5 } },
+    };
+    const short = {
+      type: "object",
+      properties: { title: { type: "string", maxLength: 10 } },
+    };
+
+    for (const order of [
+      [long, short],
+      [short, long],
+    ]) {
+      const found = collectCandidates(order, {}, []).find(
+        (c) => c.key === "title",
+      );
+      if (!found) throw new Error("expected a `title` candidate");
+      const validate = compileWithFormats(found.subschema);
+      expect(validate("middling")).toBe(true);
+      expect(validate("tiny")).toBe(false); // minLength, from `long`
+      expect(validate("far too long to pass")).toBe(false); // maxLength, from `short`
+    }
+  });
+
+  it("keeps a description on a merged subschema so the prompt still has one", async () => {
+    // `fill` describes each candidate to the model from `subschema.description`.
+    // Merging must not bury it where the prompt builder cannot see it.
+    const described = {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Human-readable display name." },
+      },
+    };
+    const bare = { type: "object", properties: { title: { type: "string" } } };
+
+    for (const order of [
+      [described, bare],
+      [bare, described],
+    ]) {
+      const found = collectCandidates(order, {}, []).find(
+        (c) => c.key === "title",
+      );
+      expect(found?.subschema.description).toBe("Human-readable display name.");
+    }
+  });
+
+  it("describes a shared key the same way in either order", async () => {
+    // Both schemas describe `type`, in different words. Keeping one of them
+    // would leave the prompt text — and so the proposal — dependent on `-s`
+    // order, which is exactly what this is supposed to remove.
+    const okf = await loadSchema("google:okf:0.1");
+    const diataxis = await loadSchema("diataxis:diataxis:1.0");
+    const describes = (schemas: Record<string, unknown>[]) =>
+      collectCandidates(schemas, { title: "x" }, []).find(
+        (c) => c.key === "type",
+      )?.subschema.description;
+
+    const merged = describes([okf, diataxis]);
+    expect(merged).toBe(describes([diataxis, okf]));
+    expect(merged).toContain("kind of concept"); // OKF's wording
+    expect(merged).toContain("Diataxis forms"); // and the vocabulary's
+  });
+
+  it("does not repeat itself when a third schema joins the merge", async () => {
+    // Each merge folds the previous result back in, so the combined description
+    // has to be built from distinct sentences rather than from whatever the last
+    // wrapper happened to be carrying.
+    const describing = (
+      description: string,
+      extra: Record<string, unknown>,
+    ) => ({
+      type: "object",
+      properties: { title: { type: "string", description, ...extra } },
+    });
+    const a = describing("Alpha.", { minLength: 1 });
+    const b = describing("Beta.", { maxLength: 40 });
+    const c = describing("Gamma.", { pattern: "^[A-Z]" });
+    const describes = (schemas: Record<string, unknown>[]) =>
+      collectCandidates(schemas, {}, []).find((x) => x.key === "title")
+        ?.subschema.description;
+
+    expect(describes([a, b, c])).toBe("Alpha. Beta. Gamma.");
+    expect(describes([c, b, a])).toBe("Alpha. Beta. Gamma.");
+  });
+
+  it("keeps a description that sits on an `allOf` wrapper", async () => {
+    // A subschema may already be `{description, allOf: [...]}`. Unwrapping it
+    // for the merge must not leave the description behind, or the prompt loses
+    // the only sentence saying what the property is for.
+    const wrapped = {
+      type: "object",
+      properties: {
+        title: {
+          description: "Human-readable display name.",
+          allOf: [{ type: "string" }],
+        },
+      },
+    };
+    const plain = { type: "object", properties: { title: { type: "string" } } };
+    const found = collectCandidates([wrapped, plain], {}, []).find(
+      (c) => c.key === "title",
+    );
+    expect(found?.subschema.description).toBe("Human-readable display name.");
+  });
+
+  it("keeps two schemas' same-named `$defs` apart", async () => {
+    // Both schemas point `type` at `#/$defs/Slug`, but at different `Slug`s.
+    // The envelope holds one `$defs` block, so without renaming both refs
+    // resolve to whichever schema was named first and the other's rule is lost
+    // — the same order dependence, arriving by a different route.
+    const patterned = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      $defs: { Slug: { type: "string", pattern: "^[a-z-]+$" } },
+      properties: { type: { $ref: "#/$defs/Slug" } },
+    };
+    const enumerated = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      $defs: { Slug: { type: "string", enum: ["tutorial", "how-to"] } },
+      properties: { type: { $ref: "#/$defs/Slug" } },
+    };
+
+    for (const order of [
+      [patterned, enumerated],
+      [enumerated, patterned],
+    ]) {
+      const candidates = collectCandidates(order, {}, []);
+      const validate = compileWithFormats(
+        buildEnvelopeSchema(candidates, collectDefs(order)),
+      );
+      const proposal = (value: string) => ({
+        type: { value, confidence: 1, reasoning: "x" },
+      });
+      expect(validate(proposal("how-to"))).toBe(true);
+      expect(validate(proposal("guide"))).toBe(false); // not in the enum
+      expect(validate(proposal("How To"))).toBe(false); // fails the pattern
+    }
+  });
+
+  it("follows a renamed definition from inside another definition", async () => {
+    // `Outer` is written identically by both schemas, but it points at `Inner`,
+    // which is not. A definition is only interchangeable if what it resolves to
+    // is interchangeable too, so sharing it on the strength of matching text
+    // would route the second schema's property through the first's `Inner`.
+    const chain = (inner: string, property: string) => ({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      $defs: {
+        Outer: { $ref: "#/$defs/Inner" },
+        Inner: { type: "string", const: inner },
+      },
+      properties: { [property]: { $ref: "#/$defs/Outer" } },
+    });
+    const first = chain("alpha", "alpha");
+    const second = chain("beta", "beta");
+
+    const candidates = collectCandidates([first, second], {}, []);
+    const validate = compileWithFormats(
+      buildEnvelopeSchema(candidates, collectDefs([first, second])),
+    );
+    const proposal = (key: string, value: string) => ({
+      [key]: { value, confidence: 1, reasoning: "x" },
+    });
+    expect(validate(proposal("alpha", "alpha"))).toBe(true);
+    expect(validate(proposal("alpha", "beta"))).toBe(false);
+    expect(validate(proposal("beta", "beta"))).toBe(true);
+    expect(validate(proposal("beta", "alpha"))).toBe(false);
+  });
+
+  it("keeps a `false` branch of an `allOf`, which nothing satisfies", async () => {
+    // JSON Schema allows a boolean where a schema is expected. Dropping `false`
+    // on the way into the merge would turn a property nothing can satisfy into
+    // one `fill` happily proposes for.
+    const closed = {
+      type: "object",
+      properties: { title: { description: "Not for you.", allOf: [false] } },
+    };
+    const open = { type: "object", properties: { title: { type: "string" } } };
+    const found = collectCandidates([closed, open], {}, []).find(
+      (c) => c.key === "title",
+    );
+    if (!found) throw new Error("expected a `title` candidate");
+    const validate = compileWithFormats(found.subschema);
+    expect(validate("anything")).toBe(false);
+    expect(validate(null)).toBe(false);
+  });
+
+  it("does not share a definition that resolves through `$dynamicRef`", async () => {
+    // Same text, but what it resolves to depends on the schema it was written
+    // in, so the two are no more interchangeable than a plain `$ref` chain.
+    const dynamic = (values: string[]) => ({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      $defs: {
+        Tone: { $dynamicRef: "#tone" },
+        Anchor: { $dynamicAnchor: "tone", enum: values },
+      },
+      properties: { tone: { $ref: "#/$defs/Tone" } },
+    });
+    const defs = collectDefs([dynamic(["formal"]), dynamic(["plain"])]);
+    expect(Object.keys(defs.$defs)).toContain("Tone__1");
+  });
+
+  it("shares a definition two schemas write identically", async () => {
+    // Nothing to tell apart, so nothing to rename — the envelope stays small.
+    const tone = { type: "string", enum: ["formal", "plain"] };
+    const one = { $defs: { Tone: tone }, properties: { x: { $ref: "#/$defs/Tone" } } };
+    const two = { $defs: { Tone: tone }, properties: { y: { $ref: "#/$defs/Tone" } } };
+    expect(Object.keys(collectDefs([one, two]).$defs)).toEqual(["Tone"]);
+  });
+
+  it("does not overwrite a definition whose name a rename wants", async () => {
+    // The renamed slot for the second `Slug` is `Slug__1`, which the first
+    // schema already uses for something else. Taking it would silently swap one
+    // schema's rule for another's — the very failure the rename exists to stop.
+    const first = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      $defs: {
+        Slug: { type: "string", const: "alpha" },
+        Slug__1: { type: "string", const: "already-here" },
+      },
+      properties: {
+        alpha: { $ref: "#/$defs/Slug" },
+        taken: { $ref: "#/$defs/Slug__1" },
+      },
+    };
+    const second = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      $defs: { Slug: { type: "string", const: "beta" } },
+      properties: { beta: { $ref: "#/$defs/Slug" } },
+    };
+
+    const defs = collectDefs([first, second]);
+    expect(defs.$defs.Slug__1).toEqual({ type: "string", const: "already-here" });
+
+    const candidates = collectCandidates([first, second], {}, []);
+    const validate = compileWithFormats(buildEnvelopeSchema(candidates, defs));
+    const proposal = (key: string, value: string) => ({
+      [key]: { value, confidence: 1, reasoning: "x" },
+    });
+    expect(validate(proposal("alpha", "alpha"))).toBe(true);
+    expect(validate(proposal("alpha", "beta"))).toBe(false);
+    expect(validate(proposal("beta", "beta"))).toBe(true);
+    expect(validate(proposal("beta", "alpha"))).toBe(false);
+    expect(validate(proposal("taken", "already-here"))).toBe(true);
+  });
+
+  it("leaves non-colliding `$defs` under their own names", async () => {
+    const one = { $defs: { Slug: { type: "string" } }, properties: {} };
+    const two = { $defs: { Tag: { type: "string" } }, properties: {} };
+    expect(Object.keys(collectDefs([one, two]).$defs).sort()).toEqual([
+      "Slug",
+      "Tag",
+    ]);
+  });
+
+  it("leaves a subschema untouched when only one schema defines the key", async () => {
+    const okf = await loadSchema("google:okf:0.1");
+    const diataxis = await loadSchema("diataxis:diataxis:1.0");
+    const found = collectCandidates([diataxis, okf], {}, []).find(
+      (c) => c.key === "description",
+    );
+    // Only OKF has `description`, so there is nothing to merge and no `allOf`
+    // wrapper to make the prompt harder to read.
+    expect(found?.subschema).toEqual(
+      (okf.properties as Record<string, unknown>).description,
+    );
   });
 
   it("never proposes the $schema wiring key", async () => {
@@ -228,10 +512,11 @@ describe("runFill — mechanical checks precede confidence", () => {
   });
 
   it("reverts a high-confidence value that another schema in the set rejects", async () => {
-    // The envelope is built from the first schema's subschema, so a value can
-    // satisfy it and still break a second schema in the set. Re-validating
+    // The envelope carries every schema's rules *for that property*, but a rule
+    // stated elsewhere — here an `if`/`then` keyed on `type` — is not part of
+    // any `properties` entry and so cannot be lifted into it. Re-validating
     // after the merge is what catches that.
-    const file = await stage("no-block.md");
+    const file = await stage("missing-keys.md");
     const before = await readFile(join(dir, file), "utf8");
     const { results } = await runFill({
       ...base,
@@ -239,7 +524,7 @@ describe("runFill — mechanical checks precede confidence", () => {
       inputs: [file],
       cliSchemas: [
         "google:okf:0.1",
-        join(here, "fixtures", "fill", "strict-title.schema.json"),
+        join(here, "fixtures", "fill", "conditional-title.schema.json"),
       ],
       fields: ["title"],
       inferenceProvider: propose({
@@ -249,6 +534,24 @@ describe("runFill — mechanical checks precede confidence", () => {
     const field = results[0]?.fields.find((f) => f.field === "/title");
     expect(field?.written).toBe(false);
     expect(field?.skipReason).toBe("schema-mismatch");
+    expect(await readFile(join(dir, file), "utf8")).toBe(before);
+  });
+
+  it("constrains the proposal to a stacked vocabulary's enum with OKF named first", async () => {
+    // The order that used to lose the enum. `guide` satisfies OKF's `type`
+    // rule, so before the merge it sailed through the envelope, was written at
+    // confidence 1, and only then failed `validate`.
+    const file = await stage("no-block.md");
+    const before = await readFile(join(dir, file), "utf8");
+    const { results } = await runFill({
+      ...base,
+      cwd: dir,
+      inputs: [file],
+      cliSchemas: ["google:okf:0.1", "diataxis:diataxis:1.0"],
+      fields: ["type"],
+      inferenceProvider: propose({ type: { value: "guide", confidence: 1 } }),
+    });
+    expect(results[0]?.error).toMatch(/schema validation/i);
     expect(await readFile(join(dir, file), "utf8")).toBe(before);
   });
 
@@ -435,6 +738,44 @@ describe("runFill — writing", () => {
     });
     expect(results[0]?.file).toBe("<stdin>");
     expect(results[0]?.content).toContain("description: A summary.");
+  });
+});
+
+describe("runFill — concurrency", () => {
+  it("fills several files against an $id-bearing schema in parallel", async () => {
+    // Every worker missed the compile cache while the first `loadSchema` was
+    // still pending, so they all compiled the same schema into the one shared
+    // Ajv — which registers the `$id` on the first compile and rejects the
+    // second. That made `fill` unusable on any multi-file run whose schema
+    // declared an `$id`, and it aborted the whole run rather than one file.
+    const schema = join(here, "fixtures", "with-id.schema.json");
+    for (const n of ["a", "b", "c", "d"]) {
+      await writeFile(join(dir, `${n}.md`), fixture("no-block.md"), "utf8");
+    }
+
+    const { results, summary } = await runFill({
+      ...base,
+      cwd: dir,
+      inputs: ["a.md", "b.md", "c.md", "d.md"],
+      cliSchemas: [schema],
+      fields: ["title"],
+      dryRun: true,
+      // The default, and the value the bug needed: > 1.
+      concurrency: 4,
+      inferenceProvider: new MockProvider(
+        Array.from({ length: 4 }, () => ({
+          json: { title: { value: "Hello", confidence: 0.9, reasoning: "r" } },
+        })),
+      ),
+    });
+
+    expect(results.map((r) => r.error)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+    expect(summary.written).toBe(4);
   });
 });
 

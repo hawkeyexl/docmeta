@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/docmeta/with-id.schema.json",
+  "title": "Schema carrying an $id",
+  "description": "Ajv registers a schema's $id on compile and rejects a second compile of the same id, so this fixture is what makes a duplicate compile observable.",
+  "type": "object",
+  "required": ["title"],
+  "properties": {
+    "title": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": true
+}
