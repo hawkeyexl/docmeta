@@ -67,6 +67,7 @@ describe("docmeta CLI (built bin)", () => {
     expect(r.stdout).toContain("google:okf:0.1");
     expect(r.stdout).toContain("diataxis:diataxis:1.0");
     expect(r.stdout).toContain("passo-uno:seven-action:1.0");
+    expect(r.stdout).toContain("tgdp:templates:1.0");
   });
 
   it("reports every built-in in --format json", () => {
@@ -77,7 +78,19 @@ describe("docmeta CLI (built bin)", () => {
       "google:okf:0.1",
       "diataxis:diataxis:1.0",
       "passo-uno:seven-action:1.0",
+      "tgdp:templates:1.0",
     ]);
+  });
+
+  it("fails an out-of-vocabulary TGDP type, naming the schema", () => {
+    const r = run([
+      "validate",
+      "test/fixtures/taxonomy/tgdp-bad-type.md",
+      "-s",
+      "tgdp:templates:1.0",
+    ]);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("tgdp:templates:1.0");
   });
 
   it("fails an out-of-vocabulary Diataxis type, naming the schema", () => {

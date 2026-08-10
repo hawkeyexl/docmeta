@@ -80,7 +80,7 @@ Home — "What do you want to do?" router + 30-second proof
 | How schema resolution works & how to wire it | S2 | ★ | The 5-level precedence chain; `$schema` in a file; ref kinds (builtin/file/url). |
 | Versioning & dialects | S3 | | 2020-12 through draft-04; evolve without breaking CI. |
 | Built-in OKF schema, explained | S1 | | `google:okf:0.1`: fields, dialect, spec link. |
-| Built-in taxonomy schemas | S1 | | `diataxis:diataxis:1.0` and `passo-uno:seven-action:1.0`: vocabularies, why `type` vs `action`, composing with OKF, crosswalk. |
+| Built-in taxonomy schemas | S1 | | `diataxis:diataxis:1.0`, `tgdp:templates:1.0`, and `passo-uno:seven-action:1.0`: vocabularies, why `type` vs `action`, which pair competes for `type`, composing with OKF, crosswalk. |
 
 ### Fix a failing check (Theo)
 
@@ -122,7 +122,7 @@ Reference pages must never contradict the source code. Before writing any Refere
 | Output formats & exit codes | `src/reporters/index.ts`, `src/reporters/fill.ts` |
 | `fill` command & confidence gate | `src/commands/fill.ts`, `src/commands/fill-prompt.ts`, `src/commands/fill-types.ts` |
 | Built-in OKF schema | `src/schemas/okf/0.1.json` |
-| Built-in taxonomy schemas | `src/schemas/diataxis/1.0.json`, `src/schemas/seven-action/1.0.json`, `src/core/resolve-schema.ts` (the default set) |
+| Built-in taxonomy schemas | `src/schemas/diataxis/1.0.json`, `src/schemas/tgdp/1.0.json`, `src/schemas/seven-action/1.0.json`, `src/core/resolve-schema.ts` (the default set) |
 
 ---
 

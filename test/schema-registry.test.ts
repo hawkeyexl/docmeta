@@ -23,6 +23,7 @@ describe("schema registry", () => {
     expect(ids).toContain("google:okf:0.1");
     expect(ids).toContain("diataxis:diataxis:1.0");
     expect(ids).toContain("passo-uno:seven-action:1.0");
+    expect(ids).toContain("tgdp:templates:1.0");
   });
 
   it("classifies a built-in id", () => {
@@ -41,10 +42,19 @@ describe("schema registry", () => {
     expect(
       (sevenAction as { properties?: Record<string, unknown> }).properties,
     ).toHaveProperty("action");
+
+    const tgdp = await loadSchema("tgdp:templates:1.0");
+    expect(
+      (tgdp as { properties?: Record<string, unknown> }).properties,
+    ).toHaveProperty("type");
   });
 
-  it("does not require a key on either taxonomy schema", async () => {
-    for (const id of ["diataxis:diataxis:1.0", "passo-uno:seven-action:1.0"]) {
+  it("does not require a key on any taxonomy schema", async () => {
+    for (const id of [
+      "diataxis:diataxis:1.0",
+      "passo-uno:seven-action:1.0",
+      "tgdp:templates:1.0",
+    ]) {
       const schema = await loadSchema(id);
       expect((schema as { required?: string[] }).required, id).toBeUndefined();
     }

@@ -9,6 +9,7 @@ import { DocmetaError } from "../types.js";
 import okf01 from "../schemas/okf/0.1.json" with { type: "json" };
 import diataxis10 from "../schemas/diataxis/1.0.json" with { type: "json" };
 import sevenAction10 from "../schemas/seven-action/1.0.json" with { type: "json" };
+import tgdp10 from "../schemas/tgdp/1.0.json" with { type: "json" };
 
 export interface BuiltinInfo {
   id: string;
@@ -21,6 +22,7 @@ const BUILTINS = new Map<string, Record<string, unknown>>([
   ["google:okf:0.1", okf01 as Record<string, unknown>],
   ["diataxis:diataxis:1.0", diataxis10 as Record<string, unknown>],
   ["passo-uno:seven-action:1.0", sevenAction10 as Record<string, unknown>],
+  ["tgdp:templates:1.0", tgdp10 as Record<string, unknown>],
 ]);
 
 export function listBuiltins(): BuiltinInfo[] {

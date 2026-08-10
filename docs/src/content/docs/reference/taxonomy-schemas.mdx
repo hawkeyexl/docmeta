@@ -1,11 +1,11 @@
 ---
 title: Built-in taxonomy schemas
-description: The diataxis and seven-action schemas shipped with docmeta, their vocabularies, why they key off different fields, and how to compose them with OKF.
+description: The diataxis, tgdp, and seven-action schemas shipped with docmeta, their vocabularies, which ones compete for a key, and how to compose them with OKF.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-docmeta ships two **taxonomy** schemas: closed vocabularies that constrain a
+docmeta ships three **taxonomy** schemas: closed vocabularies that constrain a
 classification field to a published set of values. They exist because
 [`google:okf:0.1`](/docmeta/reference/okf-schema/) requires a `type` but accepts
 any non-empty string for it, so it cannot stop a docs set from drifting into
@@ -14,20 +14,24 @@ any non-empty string for it, so it cannot stop a docs set from drifting into
 | Id | Key | Framework |
 |---|---|---|
 | `diataxis:diataxis:1.0` | `type` | [Diátaxis](https://diataxis.fr/) |
+| `tgdp:templates:1.0` | `type` | [The Good Docs Project](https://www.thegooddocsproject.dev/template) |
 | `passo-uno:seven-action:1.0` | `action` | [Seven-Action Documentation Model](https://passo.uno/seven-action-model/) |
 
-Both use [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects), allow
-additional properties, and are [built-in
+All three use [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects),
+allow additional properties, and are [built-in
 references](/docmeta/reference/schema-resolution/#reference-kinds).
+
+The two keyed on `type` are alternatives to each other — see [Which ones
+compose](#which-ones-compose).
 
 ## They are vocabularies, not presence checks
 
-Neither schema marks its key as required. A document with no `type` at all
+No taxonomy schema marks its key as required. A document with no `type` at all
 passes `diataxis:diataxis:1.0`, because the schema's job is to rule that a type,
 *if present*, is legitimate.
 
-That is deliberate: it makes the two safe to layer onto an existing setup, and
-it keeps "must have a type" as a separate decision from "which types exist."
+That is deliberate: it makes them safe to layer onto an existing setup, and it
+keeps "must have a type" as a separate decision from "which types exist."
 To get both, stack a taxonomy schema with one that requires the field:
 
 ```bash
@@ -58,6 +62,46 @@ Diátaxis is **not** part of the [default
 set](/docmeta/reference/schema-resolution/#precedence). It constrains `type`,
 which documents already carry, so applying it by default would fail every repo
 not already using Diátaxis. Opt in with `-s` or a `schemas:` entry in config.
+
+## `tgdp:templates:1.0`
+
+Constrains `type` to the template slugs published by [The Good Docs
+Project](https://www.thegooddocsproject.dev/template). Where Diátaxis names four
+abstract forms, TGDP names 25 concrete deliverables, so it fits a docs set that
+thinks in terms of "we owe this product an installation guide and a changelog"
+rather than in terms of the four quadrants.
+
+The values are the template directory slugs from the upstream
+[templates repo](https://gitlab.com/tgdp/templates), grouped here by the pack
+each belongs to. All 25 validate regardless of pack; the grouping is upstream's,
+and is reproduced only to show what you are opting into.
+
+| Pack | Values |
+|---|---|
+| Core | `concept`, `how-to`, `readme`, `reference`, `release-notes`, `troubleshooting`, `tutorial` |
+| Community | `bug-report`, `changelog`, `code-of-conduct`, `code-of-conduct-incident-record`, `code-of-conduct-remediation-record`, `code-of-conduct-response-plan`, `contributing-guide`, `our-team` |
+| Misc | `api-getting-started`, `api-reference`, `contact-support`, `glossary`, `installation-guide`, `quickstart`, `sdk-overview`, `style-guide`, `terminology-system`, `user-personas` |
+
+```md
+---
+type: installation-guide
+title: Install the collector
+---
+```
+
+Like Diátaxis, TGDP is **not** in the [default
+set](/docmeta/reference/schema-resolution/#precedence), and for the same reason:
+it constrains `type`, which documents already carry.
+
+<Aside type="note" title="TGDP prescribes no frontmatter of its own">
+The upstream templates are body-structure templates — they open at a heading and
+carry no YAML block. The only metadata TGDP publishes is `index.json`, which
+describes the *templates* (`name`, `summary`, `last_updated`, `contributors`,
+`packs`), not documents written from them. So this schema is a vocabulary lifted
+from the template set, not an implementation of a TGDP metadata spec. Pair it
+with [`google:okf:0.1`](/docmeta/reference/okf-schema/) for the fields TGDP
+leaves unspecified.
+</Aside>
 
 ## `passo-uno:seven-action:1.0`
 
@@ -103,11 +147,11 @@ Set a `schemas:` list in `docmeta.config.yaml` before running either command.
 It replaces the default set entirely, which opts you out of both.
 </Aside>
 
-## Why the two keys differ
+## Which ones compose
 
-Diátaxis classifies what a page **is**. Seven-Action classifies what a reader is
-**doing**. Those are independent, so the schemas key off different fields and
-compose rather than compete:
+Diátaxis and TGDP both classify what a page **is**, so both claim `type`.
+Seven-Action classifies what a reader is **doing**, which is independent, so it
+claims `action` and composes with either:
 
 ```md
 ---
@@ -117,9 +161,16 @@ title: Rotate an API key
 ---
 ```
 
-Two schemas that both claimed `type` would be mutually exclusive — a file cannot
-be a `tutorial` and a `reference` at once. Keeping `action` separate is what
-makes the pairing above expressible.
+| Combination | Result |
+|---|---|
+| Diátaxis + Seven-Action | Composes |
+| TGDP + Seven-Action | Composes |
+| Diátaxis + TGDP | **Pick one** |
+
+Stacking the two `type` schemas is not an error, but it validates against the
+intersection of their vocabularies, which is narrower than either. `explanation`
+is Diátaxis-only and `installation-guide` is TGDP-only, so each rules out values
+the other exists to allow. Choose the vocabulary your docs set actually uses.
 
 ## Crosswalk
 
