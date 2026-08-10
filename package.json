@@ -34,11 +34,15 @@
     "node": ">=24"
   },
   "scripts": {
+    "prebuild": "npm run check:deps",
     "build": "tsup",
     "dev": "tsup --watch",
+    "pretest": "npm run check:deps",
     "test": "vitest run",
     "test:watch": "vitest",
+    "pretypecheck": "npm run check:deps",
     "typecheck": "tsc --noEmit",
+    "check:deps": "node scripts/check-deps.mjs",
     "docs:check-cli": "node scripts/check-cli-reference.mjs",
     "commitlint": "commitlint --edit",
     "semantic-release": "semantic-release",

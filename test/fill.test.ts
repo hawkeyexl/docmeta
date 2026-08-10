@@ -741,6 +741,44 @@ describe("runFill — writing", () => {
   });
 });
 
+describe("runFill — concurrency", () => {
+  it("fills several files against an $id-bearing schema in parallel", async () => {
+    // Every worker missed the compile cache while the first `loadSchema` was
+    // still pending, so they all compiled the same schema into the one shared
+    // Ajv — which registers the `$id` on the first compile and rejects the
+    // second. That made `fill` unusable on any multi-file run whose schema
+    // declared an `$id`, and it aborted the whole run rather than one file.
+    const schema = join(here, "fixtures", "with-id.schema.json");
+    for (const n of ["a", "b", "c", "d"]) {
+      await writeFile(join(dir, `${n}.md`), fixture("no-block.md"), "utf8");
+    }
+
+    const { results, summary } = await runFill({
+      ...base,
+      cwd: dir,
+      inputs: ["a.md", "b.md", "c.md", "d.md"],
+      cliSchemas: [schema],
+      fields: ["title"],
+      dryRun: true,
+      // The default, and the value the bug needed: > 1.
+      concurrency: 4,
+      inferenceProvider: new MockProvider(
+        Array.from({ length: 4 }, () => ({
+          json: { title: { value: "Hello", confidence: 0.9, reasoning: "r" } },
+        })),
+      ),
+    });
+
+    expect(results.map((r) => r.error)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+    expect(summary.written).toBe(4);
+  });
+});
+
 describe("runFill — cost budget", () => {
   /**
    * MockProvider's default model has no entry in the price table, so its cost
