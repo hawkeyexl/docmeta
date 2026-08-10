@@ -92,16 +92,18 @@ describe("collectCandidates", () => {
     const okf = await loadSchema("google:okf:0.1");
     const diataxis = await loadSchema("diataxis:diataxis:1.0");
 
-    const vocabFirst = collectCandidates([diataxis, okf], { title: "x" }, []);
+    // `subschema` is a Record<string, unknown>, so `.enum` needs no cast; the
+    // optional chain has to stay unbroken, or a missing candidate would throw
+    // a TypeError here instead of failing the assertion below.
+    const liftedTypeEnum = (cs: ReturnType<typeof collectCandidates>) =>
+      cs.find((c) => c.key === "type")?.subschema.enum;
+
     expect(
-      (vocabFirst.find((c) => c.key === "type")?.subschema as { enum?: string[] })
-        .enum,
+      liftedTypeEnum(collectCandidates([diataxis, okf], { title: "x" }, [])),
     ).toEqual(["tutorial", "how-to", "reference", "explanation"]);
 
-    const okfFirst = collectCandidates([okf, diataxis], { title: "x" }, []);
     expect(
-      (okfFirst.find((c) => c.key === "type")?.subschema as { enum?: string[] })
-        .enum,
+      liftedTypeEnum(collectCandidates([okf, diataxis], { title: "x" }, [])),
     ).toBeUndefined();
   });
 
