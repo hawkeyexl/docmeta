@@ -762,6 +762,27 @@ describe("provider selection", () => {
     ).resolves.toBeDefined();
   });
 
+  it("counts a config provider as naming one, not just the flag", async () => {
+    // The rule is about the EFFECTIVE provider. `fill.provider` in config
+    // satisfies it exactly as --provider does, so a bare --model alongside it is
+    // fine — the flag and the config key are not different rules.
+    await writeFile(
+      join(dir, "docmeta.config.yaml"),
+      "paths:\n  - '**/*.md'\nfill:\n  provider: openai\n",
+      "utf8",
+    );
+    await expect(
+      runFill({
+        ...base,
+        cwd: dir,
+        inputs: ["missing.md"],
+        dryRun: true,
+        inferenceProvider: propose({}),
+        model: "gpt-4o",
+      }),
+    ).resolves.toBeDefined();
+  });
+
   it("constructs the resolved provider, not the selector it started from", async () => {
     // No `inferenceProvider` here, deliberately: every other case injects one,
     // which skips construction entirely. That blind spot let `makeProvider` keep

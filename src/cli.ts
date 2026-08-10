@@ -256,7 +256,10 @@ export function buildProgram(): Command {
       "--provider <name>",
       "provider: auto (default), anthropic, openai, claude-cli, llama-cpp, mock",
     )
-    .option("--model <model>", "model override; requires --provider")
+    .option(
+      "--model <model>",
+      "model override; needs a named provider, from here or config",
+    )
     .option("--no-cache", "bypass the proposal cache")
     .option("--max-cost-usd <usd>", "proposal cost budget", parseFloat)
     // parseFloat, not parseInt: parseInt("3.5") silently yields 3, which would

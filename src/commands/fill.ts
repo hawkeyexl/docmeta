@@ -709,6 +709,9 @@ function assertKnownProvider(name: string): void {
  *
  * The library enforces this too. It is repeated here to name the flags rather
  * than the API fields, since that is what the user typed.
+ *
+ * `name` is the EFFECTIVE provider, so a `fill.provider` in config satisfies
+ * this just as `--provider` does; only an unresolved `auto` is ambiguous.
  */
 function assertModelHasProvider(
   name: ProviderSelector,
@@ -716,10 +719,10 @@ function assertModelHasProvider(
 ): void {
   if (name !== "auto" || model == null) return;
   throw new DocmetaError(
-    `--model "${model}" needs --provider too: a model name does not say which ` +
-      `provider owns it. Name the provider (${Object.keys(DEFAULT_MODELS).join(
-        ", ",
-      )}), or drop --model to take the detected provider's default.`,
+    `Model "${model}" was given without a provider: a model name does not say ` +
+      `which provider owns it. Set --provider or fill.provider to one of ` +
+      `${Object.keys(DEFAULT_MODELS).join(", ")}, or drop the model to take the ` +
+      `detected provider's default.`,
   );
 }
 

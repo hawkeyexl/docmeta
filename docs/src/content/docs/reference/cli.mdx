@@ -200,7 +200,7 @@ used, in both output formats.
 | `--confidence` | `<n>` | `0.7` | Minimum self-reported confidence, from 0 to 1, needed to write a value. A non-numeric or out-of-range value is an error (exit 2). |
 | `--dry-run` | — | off | Report proposals without writing them. |
 | `--provider` | `<name>` | `auto` | Inference provider: `auto`, `anthropic`, `openai`, `claude-cli`, `llama-cpp`, or `mock`. `auto` detects one — see [above](#fill). An unknown name is an error (exit 2). |
-| `--model` | `<model>` | provider default | Model override. **Requires `--provider`**: a model name does not say which provider owns it, so pairing it with `auto` is an error (exit 2). |
+| `--model` | `<model>` | provider default | Model override. **Needs a named provider**, from either `--provider` or config `fill.provider` — a model name does not say which provider owns it, so pairing it with `auto` (including the default) is an error (exit 2). |
 | `--no-cache` | — | cache on | Bypass the proposal cache in `.docmeta/cache`. |
 | `--max-cost-usd` | `<usd>` | — | Stop scheduling new files once this much has been spent. |
 | `--concurrency` | `<n>` | `4` | Files inferred in parallel. |
