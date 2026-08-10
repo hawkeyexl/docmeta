@@ -190,11 +190,26 @@ Notice the design choices OKF makes, each one a decision you'll face in your own
 If OKF's field set is close to what you need, copy it into a file and adjust: add your required fields, tighten `additionalProperties`, change the formats. If your standard is very different, start from the minimal one-field schema at the top of this page and grow it. Either way, keep the `$schema` dialect line; docmeta needs it to choose a validation engine.
 </Aside>
 
-## Borrow a vocabulary instead of writing one
+## Borrow a schema instead of writing one
 
-Everything above assumes you're defining the field set yourself. If what you
-need is a *closed list of document types*, docmeta ships three vocabularies you
-can adopt without authoring anything: `diataxis:diataxis:1.0` requires `type`
+Everything above assumes you're defining the field set yourself. docmeta ships
+seven schemas you can adopt without authoring anything — the [built-in schema
+registry](/docmeta/reference/built-in-schemas/) lists all of them in one table,
+with what each constrains and which two are on by default.
+
+If your site is built with Docusaurus, start with
+[`docusaurus:docs:3.10`](/docmeta/reference/docusaurus-schemas/) and its blog
+and pages counterparts. They encode the front matter contract of Docusaurus 3.10
+and require nothing, so switching one on cannot fail a page that was already
+building — it only catches a `sidebar_position: "2"` that your site would have
+rejected later. They claim none of the `type` or `action` keys below, so they
+stack with any of the vocabularies. They do share `tags` with OKF, which allows
+only strings where Docusaurus also allows tag objects — see [the overlap
+note](/docmeta/reference/built-in-schemas/#two-kinds-of-built-in) before pairing
+those two.
+
+If what you need is a *closed list of document types*, three of the built-ins
+are vocabularies: `diataxis:diataxis:1.0` requires `type`
 and constrains it to the four [Diátaxis](https://diataxis.fr/) forms,
 `tgdp:templates:1.0` requires `type` and constrains it to the 25 template slugs
 of [The Good Docs Project](https://www.thegooddocsproject.dev/template), and
@@ -271,6 +286,11 @@ Naming the schema inside a document is the most self-contained option, but you c
 ## Where to go next
 
 <CardGrid>
+  <LinkCard
+    title="Built-in schemas"
+    href="/docmeta/reference/built-in-schemas/"
+    description="The registry: every schema docmeta ships, what it constrains, and which two are on by default."
+  />
   <LinkCard
     title="How schema resolution works"
     href="/docmeta/schemas/resolution/"

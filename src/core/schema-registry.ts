@@ -10,6 +10,9 @@ import okf01 from "../schemas/okf/0.1.json" with { type: "json" };
 import diataxis10 from "../schemas/diataxis/1.0.json" with { type: "json" };
 import sevenAction10 from "../schemas/seven-action/1.0.json" with { type: "json" };
 import tgdp10 from "../schemas/tgdp/1.0.json" with { type: "json" };
+import docusaurusDocs310 from "../schemas/docusaurus-docs/3.10.json" with { type: "json" };
+import docusaurusBlog310 from "../schemas/docusaurus-blog/3.10.json" with { type: "json" };
+import docusaurusPages310 from "../schemas/docusaurus-pages/3.10.json" with { type: "json" };
 
 export interface BuiltinInfo {
   id: string;
@@ -23,6 +26,9 @@ const BUILTINS = new Map<string, Record<string, unknown>>([
   ["diataxis:diataxis:1.0", diataxis10 as Record<string, unknown>],
   ["passo-uno:seven-action:1.0", sevenAction10 as Record<string, unknown>],
   ["tgdp:templates:1.0", tgdp10 as Record<string, unknown>],
+  ["docusaurus:docs:3.10", docusaurusDocs310 as Record<string, unknown>],
+  ["docusaurus:blog:3.10", docusaurusBlog310 as Record<string, unknown>],
+  ["docusaurus:pages:3.10", docusaurusPages310 as Record<string, unknown>],
 ]);
 
 export function listBuiltins(): BuiltinInfo[] {

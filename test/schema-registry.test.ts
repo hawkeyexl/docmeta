@@ -24,6 +24,15 @@ describe("schema registry", () => {
     expect(ids).toContain("diataxis:diataxis:1.0");
     expect(ids).toContain("passo-uno:seven-action:1.0");
     expect(ids).toContain("tgdp:templates:1.0");
+    expect(ids).toContain("docusaurus:docs:3.10");
+    expect(ids).toContain("docusaurus:blog:3.10");
+    expect(ids).toContain("docusaurus:pages:3.10");
+  });
+
+  it("classifies a built-in id whose version segment has two dots", () => {
+    // `3.10` is a legal segment: the id pattern allows dots, and the ref must
+    // not be mistaken for a file path just because it looks like a version.
+    expect(classifyRef("docusaurus:docs:3.10").kind).toBe("builtin");
   });
 
   it("classifies a built-in id", () => {

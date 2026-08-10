@@ -23,9 +23,10 @@ Home — "What do you want to do?" router + 30-second proof
 │
 ├─ Fix a failing check (Theo)      → T1   (highest-traffic; cross-cutting)
 │
-└─ Reference (lookup shelf)        → CLI · Config · Schema resolution ·
-                                      Formats · Output & exit codes ·
-                                      Built-in schemas
+└─ Reference (lookup shelf)        → Built-in schemas (registry) · CLI ·
+                                      Config · Schema resolution · Formats ·
+                                      Output & exit codes · OKF · Taxonomies ·
+                                      Docusaurus
 ```
 
 ### Directory mapping (Starlight content paths)
@@ -81,6 +82,7 @@ Home — "What do you want to do?" router + 30-second proof
 | Versioning & dialects | S3 | | 2020-12 through draft-04; evolve without breaking CI. |
 | Built-in OKF schema, explained | S1 | | `google:okf:0.1`: fields, dialect, spec link. |
 | Built-in taxonomy schemas | S1 | | `diataxis:diataxis:1.0`, `tgdp:templates:1.0`, and `passo-uno:seven-action:1.0`: vocabularies, why `type` vs `action`, which pair competes for `type`, why both `type` schemas require their key and Seven-Action does not, composing with OKF, crosswalk. |
+| Built-in Docusaurus schemas | S1, M3 | | `docusaurus:docs:3.10`, `docusaurus:blog:3.10`, `docusaurus:pages:3.10`: the three plugin front matter contracts, field by field. Platform rather than editorial — they require nothing, so they are format checks that compose with any vocabulary. Covers what they deliberately skip (cross-field TOC levels, unknown keys) and the per-directory override config a Docusaurus site needs. |
 
 ### Fix a failing check (Theo)
 
@@ -93,6 +95,7 @@ Home — "What do you want to do?" router + 30-second proof
 
 | Page | CUJ | ★ | Notes |
 |---|---|---|---|
+| Built-in schemas (registry) | S1, M1 | ★ | The hub for everything docmeta ships: one table of all seven ids with what each constrains, what it requires, and which two are on by default; the editorial-vs-platform distinction; the three ways to turn one on. The OKF, taxonomy, and Docusaurus pages are its detail pages. Source of truth: `src/core/schema-registry.ts`, `src/core/resolve-schema.ts`. |
 | CLI reference | All | ★ | `validate`/`get`/`schemas`; every flag. Source of truth: `src/cli.ts`. |
 | Configuration reference | M1, D1 | ★ | Full `docmeta.config.yaml` keys, types, defaults, CLI-merge precedence. Source of truth: `src/core/config.ts`. |
 | Schema resolution reference | S2, D2 | ★ | Precedence chain + ref kinds + dialects. Source of truth: `resolve-schema.ts`, `schema-registry.ts`, `validator.ts`. |
@@ -123,6 +126,8 @@ Reference pages must never contradict the source code. Before writing any Refere
 | `fill` command & confidence gate | `src/commands/fill.ts`, `src/commands/fill-prompt.ts`, `src/commands/fill-types.ts` |
 | Built-in OKF schema | `src/schemas/okf/0.1.json` |
 | Built-in taxonomy schemas | `src/schemas/diataxis/1.0.json`, `src/schemas/tgdp/1.0.json`, `src/schemas/seven-action/1.0.json`, `src/core/resolve-schema.ts` (the default set) |
+| Built-in schemas (registry) | `src/core/schema-registry.ts` (the id list), `src/core/resolve-schema.ts` (the default set) |
+| Built-in Docusaurus schemas | `src/schemas/docusaurus-docs/3.10.json`, `src/schemas/docusaurus-blog/3.10.json`, `src/schemas/docusaurus-pages/3.10.json`; upstream: `@docusaurus/plugin-content-*` front matter reference |
 
 ---
 
