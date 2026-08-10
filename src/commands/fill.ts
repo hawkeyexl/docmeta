@@ -616,12 +616,11 @@ export function collectCandidates(
  *
  * Two things are done on top of the bare wrapper. Identical branches are dropped,
  * so the common "both schemas say `{type: "string"}`" case still lifts a plain
- * subschema. And a `description` is carried to the outside, because that is where
- * `fill-prompt` looks when it tells the model what the property is for — the
- * first one found wins, since descriptions of the same property are prose about
- * the same thing rather than constraints to intersect. The inputs are searched
- * ahead of the branches, so a description sitting on an author's own `allOf`
- * wrapper is not lost when that wrapper is unfolded.
+ * subschema. And the `description`s are combined and carried to the outside,
+ * because that is where `fill-prompt` looks when it tells the model what the
+ * property is for. Keeping only one of them would leave the prompt — and so the
+ * proposal — dependent on schema order, which is the whole point of merging; the
+ * combined text is deduplicated and sorted so it reads the same either way.
  */
 function mergeSubschemas(
   a: Record<string, unknown>,
@@ -633,9 +632,8 @@ function mergeSubschemas(
       branches.push(part);
     }
   }
-  const description = [a, b, ...branches].find(
-    (s) => typeof s.description === "string",
-  )?.description;
+  const joined = joinDescriptions([...describedBy(a), ...describedBy(b)]);
+  const description = joined === "" ? undefined : joined;
 
   const [first] = branches;
   if (branches.length === 1 && first !== undefined) {
@@ -649,9 +647,44 @@ function mergeSubschemas(
   };
 }
 
+/** How descriptions from different schemas are strung together for the prompt. */
+const DESCRIPTION_JOIN = " ";
+
+/** Deduplicate, drop blanks, and order by text so the result is order-free. */
+function joinDescriptions(parts: string[]): string {
+  return [...new Set(parts.map((p) => p.trim()))]
+    .filter((p) => p !== "")
+    .sort()
+    .join(DESCRIPTION_JOIN);
+}
+
+/**
+ * Every distinct sentence describing a subschema, including the ones on the
+ * branches of an `allOf`.
+ *
+ * A wrapper this module built already carries exactly the join of its branches'
+ * descriptions, so re-collecting it would fold the joined text back in as a
+ * phrase of its own and make a third merge repeat itself. An author's wrapper
+ * carries prose that is nowhere else, which is why the two are told apart by
+ * comparison rather than by assuming the wrapper is ours.
+ */
+function describedBy(schema: Record<string, unknown>): string[] {
+  const own =
+    typeof schema.description === "string" ? schema.description : undefined;
+  const branches = branchesOf(schema);
+  if (branches.length === 1 && branches[0] === schema) {
+    return own === undefined ? [] : [own];
+  }
+  const nested = branches.flatMap(describedBy);
+  if (own !== undefined && own !== joinDescriptions(nested)) nested.push(own);
+  return nested;
+}
+
 /**
  * The branches a subschema contributes to a merge — its own `allOf` entries if
- * it is a wrapper this function built, otherwise itself.
+ * it is a wrapper, otherwise itself. An author-written `{description, allOf}` is
+ * unfolded on the same terms as one of ours; `describedBy` is what keeps its
+ * description from being lost in the process.
  *
  * The unwrapping is deliberately narrow: an author-written schema may carry
  * `allOf` *alongside* other keywords, and flattening that would drop them.
@@ -677,7 +710,10 @@ function canonical(value: unknown): string {
       .map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`);
     return `{${entries.join(",")}}`;
   }
-  return JSON.stringify(value) ?? "null";
+  // `undefined` is not JSON, so it has no serialization to fall back on — and it
+  // must not be conflated with `null`, which is a legitimate schema value.
+  const json = JSON.stringify(value);
+  return json === undefined ? "undefined" : json;
 }
 
 const DEF_BLOCKS = ["$defs", "definitions"] as const;

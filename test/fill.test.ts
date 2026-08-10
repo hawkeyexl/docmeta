@@ -169,6 +169,45 @@ describe("collectCandidates", () => {
     }
   });
 
+  it("describes a shared key the same way in either order", async () => {
+    // Both schemas describe `type`, in different words. Keeping one of them
+    // would leave the prompt text — and so the proposal — dependent on `-s`
+    // order, which is exactly what this is supposed to remove.
+    const okf = await loadSchema("google:okf:0.1");
+    const diataxis = await loadSchema("diataxis:diataxis:1.0");
+    const describes = (schemas: Record<string, unknown>[]) =>
+      collectCandidates(schemas, { title: "x" }, []).find(
+        (c) => c.key === "type",
+      )?.subschema.description;
+
+    const merged = describes([okf, diataxis]);
+    expect(merged).toBe(describes([diataxis, okf]));
+    expect(merged).toContain("kind of concept"); // OKF's wording
+    expect(merged).toContain("Diataxis forms"); // and the vocabulary's
+  });
+
+  it("does not repeat itself when a third schema joins the merge", async () => {
+    // Each merge folds the previous result back in, so the combined description
+    // has to be built from distinct sentences rather than from whatever the last
+    // wrapper happened to be carrying.
+    const describing = (
+      description: string,
+      extra: Record<string, unknown>,
+    ) => ({
+      type: "object",
+      properties: { title: { type: "string", description, ...extra } },
+    });
+    const a = describing("Alpha.", { minLength: 1 });
+    const b = describing("Beta.", { maxLength: 40 });
+    const c = describing("Gamma.", { pattern: "^[A-Z]" });
+    const describes = (schemas: Record<string, unknown>[]) =>
+      collectCandidates(schemas, {}, []).find((x) => x.key === "title")
+        ?.subschema.description;
+
+    expect(describes([a, b, c])).toBe("Alpha. Beta. Gamma.");
+    expect(describes([c, b, a])).toBe("Alpha. Beta. Gamma.");
+  });
+
   it("keeps a description that sits on an `allOf` wrapper", async () => {
     // A subschema may already be `{description, allOf: [...]}`. Unwrapping it
     // for the merge must not leave the description behind, or the prompt loses
@@ -222,6 +261,44 @@ describe("collectCandidates", () => {
       expect(validate(proposal("guide"))).toBe(false); // not in the enum
       expect(validate(proposal("How To"))).toBe(false); // fails the pattern
     }
+  });
+
+  it("does not overwrite a definition whose name a rename wants", async () => {
+    // The renamed slot for the second `Slug` is `Slug__1`, which the first
+    // schema already uses for something else. Taking it would silently swap one
+    // schema's rule for another's — the very failure the rename exists to stop.
+    const first = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      $defs: {
+        Slug: { type: "string", const: "alpha" },
+        Slug__1: { type: "string", const: "already-here" },
+      },
+      properties: {
+        alpha: { $ref: "#/$defs/Slug" },
+        taken: { $ref: "#/$defs/Slug__1" },
+      },
+    };
+    const second = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      $defs: { Slug: { type: "string", const: "beta" } },
+      properties: { beta: { $ref: "#/$defs/Slug" } },
+    };
+
+    const defs = collectDefs([first, second]);
+    expect(defs.$defs.Slug__1).toEqual({ type: "string", const: "already-here" });
+
+    const candidates = collectCandidates([first, second], {}, []);
+    const validate = compileWithFormats(buildEnvelopeSchema(candidates, defs));
+    const proposal = (key: string, value: string) => ({
+      [key]: { value, confidence: 1, reasoning: "x" },
+    });
+    expect(validate(proposal("alpha", "alpha"))).toBe(true);
+    expect(validate(proposal("alpha", "beta"))).toBe(false);
+    expect(validate(proposal("beta", "beta"))).toBe(true);
+    expect(validate(proposal("beta", "alpha"))).toBe(false);
+    expect(validate(proposal("taken", "already-here"))).toBe(true);
   });
 
   it("leaves non-colliding `$defs` under their own names", async () => {
