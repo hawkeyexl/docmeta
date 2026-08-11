@@ -10,6 +10,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const extra = join(here, "fixtures", "extra.schema.json");
 const withId = join(here, "fixtures", "with-id.schema.json");
 const withIdAlias = join(here, "fixtures", "with-id-alias.schema.json");
+const withIdDivergent = join(here, "fixtures", "with-id-divergent.schema.json");
 
 const lineFor = (ptr: string) => (ptr === "/timestamp" ? 9 : 1);
 
@@ -121,6 +122,33 @@ describe("Validator compile cache under concurrency", () => {
     // Both refs report, and each violation stays tagged with the ref that the
     // caller actually named — reuse must not relabel errors onto the first one.
     expect(errors.map((e) => e.schema)).toEqual([withId, withIdAlias]);
+  });
+
+  it("silently checks a divergent schema against the first one under the same $id", async () => {
+    // The cost the reuse above buys, pinned rather than left to a comment.
+    // Ajv can hold only one schema per `$id`, so when two refs disagree about
+    // the rules, the first compile wins and the second ref is answered from it.
+    // Nothing errors — the run just gives the wrong answer.
+    //
+    // This is why the schema-authoring guide tells readers to change the `$id`
+    // when they copy a built-in: a local copy that keeps `google:okf:0.1` is
+    // this case exactly, and the symptom is a check that passes when it should
+    // have failed.
+    const data = { title: "Hi", stray: 1 };
+
+    // Alone, the divergent schema rejects the stray key.
+    expect(
+      await new Validator().validate(data, [withIdDivergent], lineFor),
+    ).toHaveLength(1);
+
+    // Behind a permissive schema wearing the same `$id`, it does not — the
+    // second ref reports clean because it never got its own compile.
+    const shadowed = await new Validator().validate(
+      data,
+      [withId, withIdDivergent],
+      lineFor,
+    );
+    expect(shadowed).toEqual([]);
   });
 
   it("does not cache a failed load, so a later attempt can still succeed", async () => {

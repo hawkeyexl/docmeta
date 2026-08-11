@@ -1,16 +1,25 @@
 ---
 title: Reference
-description: Complete lookup reference for the docmeta CLI, configuration file, schema resolution, supported formats, output modes, and built-in schema.
+description: Complete lookup reference for the docmeta CLI, configuration file, schema resolution, supported formats, output modes, and every built-in schema.
 ---
 
 import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 Precise, lookup-oriented pages that the task-based guides link into. Each page
 is a flat reference for one part of docmeta: commands, config keys, resolution
-rules, formats, output, and the built-in schema. Use the table of contents on
+rules, formats, output, and the built-in schemas. Use the table of contents on
 each page to jump to the exact entry you need.
 
+Looking for what ships in the box? [**Built-in
+schemas**](/docmeta/reference/built-in-schemas/) is the registry: all seven in
+one table, with what each constrains and which two are on by default.
+
 <CardGrid>
+  <LinkCard
+    title="Built-in schemas"
+    href="/docmeta/reference/built-in-schemas/"
+    description="The registry: every schema docmeta ships, what it constrains, what it requires, and how to turn one on."
+  />
   <LinkCard
     title="CLI reference"
     href="/docmeta/reference/cli/"
@@ -45,5 +54,10 @@ each page to jump to the exact entry you need.
     title="Built-in taxonomy schemas"
     href="/docmeta/reference/taxonomy-schemas/"
     description="The diataxis, tgdp, and seven-action vocabularies, their values, and which ones compose."
+  />
+  <LinkCard
+    title="Built-in Docusaurus schemas"
+    href="/docmeta/reference/docusaurus-schemas/"
+    description="The docs, blog, and pages front matter contracts of Docusaurus 3.10, field by field."
   />
 </CardGrid>

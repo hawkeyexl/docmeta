@@ -87,6 +87,9 @@ describe("docmeta CLI (built bin)", () => {
     expect(r.stdout).toContain("diataxis:diataxis:1.0");
     expect(r.stdout).toContain("passo-uno:seven-action:1.0");
     expect(r.stdout).toContain("tgdp:templates:1.0");
+    expect(r.stdout).toContain("docusaurus:docs:3.10");
+    expect(r.stdout).toContain("docusaurus:blog:3.10");
+    expect(r.stdout).toContain("docusaurus:pages:3.10");
   });
 
   it("reports every built-in in --format json", () => {
@@ -98,6 +101,9 @@ describe("docmeta CLI (built bin)", () => {
       "diataxis:diataxis:1.0",
       "passo-uno:seven-action:1.0",
       "tgdp:templates:1.0",
+      "docusaurus:docs:3.10",
+      "docusaurus:blog:3.10",
+      "docusaurus:pages:3.10",
     ]);
   });
 

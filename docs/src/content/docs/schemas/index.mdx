@@ -184,17 +184,42 @@ Notice the design choices OKF makes, each one a decision you'll face in your own
 - **Exactly one required field** (`type`). OKF demands the bare minimum, so adopting it rarely breaks existing files.
 - **`additionalProperties: true`**, stated explicitly. Unknown keys are welcome by design, because OKF is meant to be extended.
 - **Recommended fields with real constraints.** `title`, `description`, and `tags` are optional, but if present they're checked. `resource` and `timestamp` carry `uri` and `date-time` formats.
-- **A `$id` and human-readable `title`/`description`.** These aren't required for validation, but they document the schema for the humans who read it, and `$id` is what gives the *built-in* its `google:okf:0.1` address. Setting a `$id` in a schema *file* of your own is documentation only; it does not register a new built-in id (built-ins are bundled into docmeta). You'd reference your own schema by its file path or URL, not by its `$id`.
+- **A `$id` and human-readable `title`/`description`.** These aren't required for validation, but they document the schema for the humans who read it, and `$id` is what gives the *built-in* its `google:okf:0.1` address. Setting a `$id` in a schema file of your own does not register a new built-in id — built-ins are bundled into docmeta — so you reference your own schema by its file path or URL, never by its `$id`. Give it an id of your own, or leave it out; see the warning below before reusing one.
 
-<Aside type="tip" title="Start from OKF or start from scratch">
-If OKF's field set is close to what you need, copy it into a file and adjust: add your required fields, tighten `additionalProperties`, change the formats. If your standard is very different, start from the minimal one-field schema at the top of this page and grow it. Either way, keep the `$schema` dialect line; docmeta needs it to choose a validation engine.
+<Aside type="caution" title="Change the `$id` when you copy a built-in">
+The block above is the shipped `google:okf:0.1`, so copying it verbatim leaves you with a *local* file claiming a *built-in's* `$id`. The validator identifies a compiled schema by `$id`, so if both are used in one run, whichever compiles first wins and the other ref is silently checked against it — your edits are ignored and the run can pass when it should fail. Nothing errors, so there is no signal to notice.
+
+Change `$id` to something of your own (`acme:docs:1.0`), or delete the line. Then reference the file by path:
+
+```bash
+docmeta validate docs/ -s ./schemas/metadata.schema.json
+```
 </Aside>
 
-## Borrow a vocabulary instead of writing one
+<Aside type="tip" title="Start from OKF or start from scratch">
+If OKF's field set is close to what you need, copy it into a file and adjust: add your required fields, tighten `additionalProperties`, change the formats, and give it your own `$id`. If your standard is very different, start from the minimal one-field schema at the top of this page and grow it. Either way, keep the `$schema` dialect line; docmeta needs it to choose a validation engine.
+</Aside>
 
-Everything above assumes you're defining the field set yourself. If what you
-need is a *closed list of document types*, docmeta ships three vocabularies you
-can adopt without authoring anything: `diataxis:diataxis:1.0` requires `type`
+## Borrow a schema instead of writing one
+
+Everything above assumes you're defining the field set yourself. docmeta ships
+seven schemas you can adopt without authoring anything — the [built-in schema
+registry](/docmeta/reference/built-in-schemas/) lists all of them in one table,
+with what each constrains and which two are on by default.
+
+If your site is built with Docusaurus, start with
+[`docusaurus:docs:3.10`](/docmeta/reference/docusaurus-schemas/) and its blog
+and pages counterparts. They encode the front matter contract of Docusaurus 3.10
+and require nothing, so switching one on cannot fail a page that was already
+building — it only catches a `sidebar_position: "2"` that your site would have
+rejected later. They claim none of the `type` or `action` keys below, so they
+stack with any of the vocabularies. They do share `tags` with OKF, which allows
+only strings where Docusaurus also allows tag objects — see [the overlap
+note](/docmeta/reference/built-in-schemas/#two-kinds-of-built-in) before pairing
+those two.
+
+If what you need is a *closed list of document types*, three of the built-ins
+are vocabularies: `diataxis:diataxis:1.0` requires `type`
 and constrains it to the four [Diátaxis](https://diataxis.fr/) forms,
 `tgdp:templates:1.0` requires `type` and constrains it to the 25 template slugs
 of [The Good Docs Project](https://www.thegooddocsproject.dev/template), and
@@ -271,6 +296,11 @@ Naming the schema inside a document is the most self-contained option, but you c
 ## Where to go next
 
 <CardGrid>
+  <LinkCard
+    title="Built-in schemas"
+    href="/docmeta/reference/built-in-schemas/"
+    description="The registry: every schema docmeta ships, what it constrains, and which two are on by default."
+  />
   <LinkCard
     title="How schema resolution works"
     href="/docmeta/schemas/resolution/"
