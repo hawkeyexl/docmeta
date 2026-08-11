@@ -184,10 +184,20 @@ Notice the design choices OKF makes, each one a decision you'll face in your own
 - **Exactly one required field** (`type`). OKF demands the bare minimum, so adopting it rarely breaks existing files.
 - **`additionalProperties: true`**, stated explicitly. Unknown keys are welcome by design, because OKF is meant to be extended.
 - **Recommended fields with real constraints.** `title`, `description`, and `tags` are optional, but if present they're checked. `resource` and `timestamp` carry `uri` and `date-time` formats.
-- **A `$id` and human-readable `title`/`description`.** These aren't required for validation, but they document the schema for the humans who read it, and `$id` is what gives the *built-in* its `google:okf:0.1` address. Setting a `$id` in a schema *file* of your own is documentation only; it does not register a new built-in id (built-ins are bundled into docmeta). You'd reference your own schema by its file path or URL, not by its `$id`.
+- **A `$id` and human-readable `title`/`description`.** These aren't required for validation, but they document the schema for the humans who read it, and `$id` is what gives the *built-in* its `google:okf:0.1` address. Setting a `$id` in a schema file of your own does not register a new built-in id — built-ins are bundled into docmeta — so you reference your own schema by its file path or URL, never by its `$id`. Give it an id of your own, or leave it out; see the warning below before reusing one.
+
+<Aside type="caution" title="Change the `$id` when you copy a built-in">
+The block above is the shipped `google:okf:0.1`, so copying it verbatim leaves you with a *local* file claiming a *built-in's* `$id`. The validator identifies a compiled schema by `$id`, so if both are used in one run, whichever compiles first wins and the other ref is silently checked against it — your edits are ignored and the run can pass when it should fail. Nothing errors, so there is no signal to notice.
+
+Change `$id` to something of your own (`acme:docs:1.0`), or delete the line. Then reference the file by path:
+
+```bash
+docmeta validate docs/ -s ./schemas/metadata.schema.json
+```
+</Aside>
 
 <Aside type="tip" title="Start from OKF or start from scratch">
-If OKF's field set is close to what you need, copy it into a file and adjust: add your required fields, tighten `additionalProperties`, change the formats. If your standard is very different, start from the minimal one-field schema at the top of this page and grow it. Either way, keep the `$schema` dialect line; docmeta needs it to choose a validation engine.
+If OKF's field set is close to what you need, copy it into a file and adjust: add your required fields, tighten `additionalProperties`, change the formats, and give it your own `$id`. If your standard is very different, start from the minimal one-field schema at the top of this page and grow it. Either way, keep the `$schema` dialect line; docmeta needs it to choose a validation engine.
 </Aside>
 
 ## Borrow a schema instead of writing one
