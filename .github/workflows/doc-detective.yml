@@ -63,11 +63,12 @@ jobs:
       # key restores a cache that lacks the new blob, and because the key still
       # hits, the download is repeated on every run and never saved back.
       #
-      # The alias is `fast`, the smallest tier @hawkeyexl/inference ships. The
-      # docs name it outright rather than passing the `fast` selector, because a
-      # selector resolves against the runner's memory and would silently pick a
-      # different, larger tier on a bigger machine — and the cache key here
-      # cannot follow that.
+      # `granite-4.1-3b-q2` is a concrete catalog alias — one fixed model. It is
+      # currently the alias backing @hawkeyexl/inference's `fast` tier, but do
+      # NOT substitute `fast` here: a tier is a selector, resolved against the
+      # runner's memory, so it would pick a different and larger model on a
+      # bigger machine, and would re-point on its own if upstream retiers. The
+      # cache key below names one blob and cannot follow either.
       #
       # Timings are whatever the runner gives you. The benchmark behind this
       # model had GPU offload, so its per-page seconds do not carry over to
