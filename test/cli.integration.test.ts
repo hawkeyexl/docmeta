@@ -274,12 +274,12 @@ describe("cli fill", () => {
   }, 60000);
 
   it("runs llama-cpp when it is named, reporting the concrete model", () => {
-    // Naming a concrete model — a catalog alias or a pinned `hf:` URI like this
-    // one — skips the hardware probe, so this resolves with no native binding
+    // Naming a concrete model — a catalog alias like this one, or an `hf:` URI —
+    // skips the hardware probe, so this resolves with no native binding
     // installed. The opt-out is what keeps a test from turning into a
-    // multi-gigabyte install. An `hf:` URI is used here because it is what the
-    // docs and CI now name, so this covers the reference the project actually
-    // ships rather than a catalog alias nothing else points at.
+    // multi-gigabyte install. The alias is the one the docs and CI name, so this
+    // covers the reference the project actually ships. Note a tier *selector*
+    // (`fast`) would not work here: resolving one probes the machine.
     const r = run(
       [
         "fill",
@@ -287,7 +287,7 @@ describe("cli fill", () => {
         "--provider",
         "llama-cpp",
         "--model",
-        "hf:unsloth/granite-4.1-3b-GGUF/granite-4.1-3b-UD-Q2_K_XL.gguf",
+        "granite-4.1-3b-q2",
         "--dry-run",
         "--no-cache",
         "-f",
@@ -300,7 +300,7 @@ describe("cli fill", () => {
     const report = JSON.parse(r.stdout);
     expect(report.provider).toBe("llama-cpp");
     expect(report.model).toBe(
-      "hf:unsloth/granite-4.1-3b-GGUF/granite-4.1-3b-UD-Q2_K_XL.gguf",
+      "granite-4.1-3b-q2",
     );
     // Absent runtime is a per-file failure, not an operational one.
     expect(r.status).toBe(1);
