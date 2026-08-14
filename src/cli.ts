@@ -369,7 +369,49 @@ export function buildProgram(): Command {
   return program;
 }
 
+/**
+ * Tell users the package moved. This is the last docmeta release; everything
+ * after it ships as `moose-meta`.
+ *
+ * Written here, at the top of `main()`, rather than as a commander
+ * `preAction` hook, for three reasons:
+ *
+ *  - `preAction` never fires for `--version`, `--help`, or a usage error —
+ *    commander exits inside `parseAsync` before any action handler. Those are
+ *    exactly the invocations where "what am I running?" matters most.
+ *  - `buildProgram()` is imported by scripts/check-cli-reference.mjs, so a
+ *    write inside it would print the notice on every CI docs check.
+ *  - `main()` is the CLI-only choke point. Library consumers who import the
+ *    package never reach it, so the programmatic API stays silent; they get
+ *    the signal from the npm deprecation notice at install time instead.
+ *
+ * stderr, always: stdout carries the report (`-f json`) and, for `fill -`, the
+ * filled document itself. A diagnostic must never land there.
+ */
+function renameNotice(argv: string[]): void {
+  if (process.env.DOCMETA_NO_RENAME_NOTICE) return;
+
+  // Parsing has not happened yet, so --no-color is read straight off argv.
+  // NO_COLOR is handled inside shouldColor. Keyed off stderr's TTY, not
+  // stdout's: this message only ever goes to stderr, so stdout's redirection
+  // state is the wrong thing to ask about.
+  const c = palette(
+    shouldColor({
+      noColor: argv.includes("--no-color"),
+      isTTY: Boolean(process.stderr.isTTY),
+    }),
+  );
+
+  const lines = [
+    `docmeta: this package is now ${c.bold("moose-meta")}. docmeta ${pkg.version} is its final release.`,
+    `docmeta:   npm i -D moose-meta   then replace \`docmeta\` with \`moose-meta\` in your scripts`,
+    `docmeta: ${c.dim("https://hawkeyexl.github.io/moose-meta/  ·  silence: DOCMETA_NO_RENAME_NOTICE=1")}`,
+  ];
+  process.stderr.write(`${lines.join("\n")}\n`);
+}
+
 export async function main(argv: string[] = process.argv): Promise<void> {
+  renameNotice(argv);
   const program = buildProgram();
   await program.parseAsync(argv);
 }

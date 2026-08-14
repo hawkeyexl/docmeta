@@ -3,9 +3,20 @@
 # (when warranted) updates CHANGELOG/package.json, tags, creates a GitHub
 # Release, and publishes to npm.
 #
-#   main      -> @latest
-#   next      -> @next prerelease
-#   feat/**   -> per-branch prerelease channel
+#   legacy/docmeta -> @latest
+#
+# This branch exists to cut ONE final `docmeta` release: the rename notice, and
+# nothing else. It is snapshotted at v3.4.0, before the moose-meta rename, so
+# package.json here still says `docmeta` and that is deliberate.
+#
+# `branches` in .releaserc.json is a single entry, which makes this the sole
+# release branch and lands the publish on npm's default dist-tag (latest). A
+# semantic-release *maintenance* branch would need a `range` plus at least one
+# real release branch in the same config -- and that branch is `main`, which is
+# `moose-meta` now. Wrong tool for a one-shot final release of a renamed package.
+#
+# For push events GitHub reads the workflow file at the pushed ref, so narrowing
+# the trigger above is contained to this branch and cannot affect main.
 #
 # Publishes to npm via OIDC trusted publishing (https://docs.npmjs.com/trusted-publishers):
 # no NPM_TOKEN secret. npm exchanges the workflow's OIDC token for a short-lived,
@@ -30,9 +41,7 @@ name: Release
 on:
   push:
     branches:
-      - main
-      - next
-      - "feat/**"
+      - legacy/docmeta
   workflow_dispatch:
 
 concurrency:

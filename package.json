@@ -21,11 +21,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hawkeyexl/docmeta.git"
+    "url": "git+https://github.com/hawkeyexl/moose-meta.git"
   },
-  "homepage": "https://hawkeyexl.github.io/docmeta/",
+  "homepage": "https://hawkeyexl.github.io/moose-meta/",
   "bugs": {
-    "url": "https://github.com/hawkeyexl/docmeta/issues"
+    "url": "https://github.com/hawkeyexl/moose-meta/issues"
   },
   "publishConfig": {
     "access": "public"

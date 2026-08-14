@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { execFileSync, execSync } from "node:child_process";
+import { spawnSync, execSync } from "node:child_process";
 import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -28,27 +28,28 @@ interface Run {
   status: number;
 }
 
+/**
+ * Runs the built bin and captures BOTH streams, on success as well as failure.
+ * `execFileSync` returns only stdout and lets stderr through to the parent, so
+ * a diagnostic emitted on a successful run was invisible to assertions - which
+ * is exactly what the rename-notice tests below need to see.
+ */
 function run(
   args: string[],
   input?: string,
   env?: Record<string, string>,
 ): Run {
-  try {
-    const stdout = execFileSync("node", [bin, ...args], {
-      cwd: root,
-      encoding: "utf8",
-      input,
-      ...(env ? { env: { ...process.env, ...env } } : {}),
-    });
-    return { stdout, stderr: "", status: 0 };
-  } catch (e) {
-    const err = e as { stdout?: string; stderr?: string; status?: number };
-    return {
-      stdout: err.stdout ?? "",
-      stderr: err.stderr ?? "",
-      status: err.status ?? 1,
-    };
-  }
+  const r = spawnSync("node", [bin, ...args], {
+    cwd: root,
+    encoding: "utf8",
+    input,
+    ...(env ? { env: { ...process.env, ...env } } : {}),
+  });
+  return {
+    stdout: r.stdout ?? "",
+    stderr: r.stderr ?? "",
+    status: r.status ?? 1,
+  };
 }
 
 describe("docmeta CLI (built bin)", () => {
@@ -380,5 +381,50 @@ describe("cli fill", () => {
     }[];
     expect(formats.find((f) => f.name === "markdown")?.writable).toBe(true);
     expect(formats.find((f) => f.name === "html")?.writable).toBe(false);
+  });
+});
+
+describe("rename notice", () => {
+  const page = "test/fixtures/valid.md";
+
+  it("names the new package on stderr without disturbing the exit code", () => {
+    const r = run(["validate", page]);
+    expect(r.status).toBe(0);
+    expect(r.stderr).toContain("moose-meta");
+    expect(r.stderr).toContain("npm i -D moose-meta");
+  });
+
+  it("never reaches stdout", () => {
+    const r = run(["validate", page]);
+    expect(r.stdout).not.toContain("moose-meta");
+  });
+
+  it("leaves -f json stdout parseable", () => {
+    const r = run(["validate", page, "-f", "json"]);
+    expect(r.stderr).toContain("moose-meta");
+    expect(() => JSON.parse(r.stdout) as unknown).not.toThrow();
+  });
+
+  it("is silenced by DOCMETA_NO_RENAME_NOTICE", () => {
+    const r = run(["validate", page], undefined, {
+      DOCMETA_NO_RENAME_NOTICE: "1",
+    });
+    expect(r.stderr).not.toContain("moose-meta");
+    expect(r.status).toBe(0);
+  });
+
+  it("prints for --version and --help, which no preAction hook would reach", () => {
+    for (const flag of ["--version", "--help"]) {
+      const r = run([flag]);
+      expect(r.stderr).toContain("moose-meta");
+      expect(r.stdout.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("emits no ANSI when stderr is not a TTY", () => {
+    // execFileSync/spawnSync are never a TTY, so this pins the shouldColor path
+    // that CI actually takes.
+    const r = run(["validate", page]);
+    expect(r.stderr).not.toMatch(/\x1b\[/);
   });
 });
