@@ -151,6 +151,11 @@ documents still need work, not that docmeta malfunctioned.
 - **Diagnostics**: operational errors that cause exit 2, go to **stderr**,
   prefixed with `docmeta: `.
 
+Every `docmeta` run also prints a three-line notice to **stderr** saying the
+package has been renamed to `moose-meta`. It never changes the exit code and
+never reaches stdout, so piping `-f json` is unaffected. Set
+`DOCMETA_NO_RENAME_NOTICE=1` to silence it.
+
 This separation lets you capture machine-readable output cleanly:
 
 ```sh

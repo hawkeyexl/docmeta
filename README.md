@@ -2,6 +2,25 @@
 
 Validate the **presence and format** of document metadata against **JSON Schema**, built for CI.
 
+> # ⚠️ docmeta is now `moose-meta`
+>
+> **This is the final `docmeta` release.** All further development ships as
+> [`moose-meta`](https://www.npmjs.com/package/moose-meta).
+>
+> ```bash
+> npm i -D moose-meta
+> ```
+>
+> Then replace `docmeta` with `moose-meta` in your scripts and CI. Your
+> `docmeta.config.yaml` is still read by moose-meta (with a deprecation
+> warning) — rename it to `moose-meta.config.yaml`, or move its keys under a
+> `meta:` block in a shared `moose.config.yaml`.
+>
+> The CLI prints this notice on every run. Set `DOCMETA_NO_RENAME_NOTICE=1` to
+> silence it.
+>
+> Docs: <https://hawkeyexl.github.io/moose-meta/>
+
 <!-- badges: add npm version, build status, and license badges here -->
 
 `docmeta` checks the metadata in your documents (Markdown frontmatter and more) against one or more JSON Schemas. It verifies that required fields are present and correctly formatted (a `type`, an ISO 8601 `timestamp`, a URI `resource`); it does not judge prose quality. It ships with seven [built-in schemas](https://hawkeyexl.github.io/docmeta/reference/built-in-schemas/): the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md), vocabularies for [Diátaxis](https://diataxis.fr/), [The Good Docs Project](https://www.thegooddocsproject.dev/template), and the [Seven-Action model](https://passo.uno/seven-action-model/), and the docs, blog, and pages front matter contracts of [Docusaurus](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-docs#markdown-front-matter) 3.10. It follows [clig.dev](https://clig.dev) conventions and returns a nonzero exit code (plus optional GitHub annotations) when validation fails.
