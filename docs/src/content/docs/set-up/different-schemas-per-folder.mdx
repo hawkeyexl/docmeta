@@ -5,15 +5,15 @@ description: Use config overrides to require different metadata for /api than fo
 
 import { Steps, Aside, LinkCard } from '@astrojs/starlight/components';
 
-Real docs repos are not uniform. Your `/api` reference pages might need a `type: api-reference` field and an extra schema, while your `/guides` only need the baseline. docmeta handles this with **overrides** in your `docmeta.config.yaml`: each override maps a glob of files to its own schema set, so you can tighten the rules for one area without touching the rest.
+Real docs repos are not uniform. Your `/api` reference pages might need a `type: api-reference` field and an extra schema, while your `/guides` only need the baseline. moose-meta handles this with **overrides** in your `moose-meta.config.yaml`: each override maps a glob of files to its own schema set, so you can tighten the rules for one area without touching the rest.
 
-This guide assumes you already have a working config. If not, start with [Create your docmeta.config.yaml](/docmeta/set-up/config/).
+This guide assumes you already have a working config. If not, start with [Create your moose-meta.config.yaml](/moose-meta/set-up/config/).
 
 ## Assign a schema set per area
 
 An `overrides` entry pairs a `files` glob with a `schemas` list. Any file matching the glob is validated against that override's schemas instead of the default `schemas`.
 
-```yaml title="docmeta.config.yaml"
+```yaml title="moose-meta.config.yaml"
 # The baseline every doc must satisfy.
 schemas:
   - google:okf:0.1
@@ -40,9 +40,9 @@ An override **replaces** the default `schemas` for matching files; it does not a
 
 ## First matching override wins
 
-docmeta evaluates overrides **in order** and stops at the first glob that matches a given file. Order your overrides from most specific to least specific, so a narrow rule is not shadowed by a broader one above it.
+moose-meta evaluates overrides **in order** and stops at the first glob that matches a given file. Order your overrides from most specific to least specific, so a narrow rule is not shadowed by a broader one above it.
 
-```yaml title="docmeta.config.yaml"
+```yaml title="moose-meta.config.yaml"
 overrides:
   # Specific first: deprecated API pages need their own schema.
   - files: "api/deprecated/**/*.md"
@@ -57,14 +57,14 @@ overrides:
 Here, `api/deprecated/v1.md` matches the first override and is validated against `deprecated.json`. A file like `api/auth.md` falls through to the second override. If you reversed the two entries, the broad `api/**/*.md` glob would match the deprecated pages first and they would never reach their specific rule.
 
 <Aside type="tip">
-Globs match against POSIX-style paths (forward slashes), so write `api/**/*.md` even on Windows. docmeta normalizes path separators before matching.
+Globs match against POSIX-style paths (forward slashes), so write `api/**/*.md` even on Windows. moose-meta normalizes path separators before matching.
 </Aside>
 
 ## Validate one file against multiple schemas
 
 A `schemas` list, whether the default set or an override, applies as a **set**: the file must satisfy every schema in the list. List more than one to compose rules.
 
-```yaml title="docmeta.config.yaml"
+```yaml title="moose-meta.config.yaml"
 overrides:
   - files: "api/**/*.md"
     schemas:
@@ -76,7 +76,7 @@ A file under `api/` must now pass both schemas. This lets you keep the shared ba
 
 ## Where overrides sit in schema resolution
 
-Overrides are one link in docmeta's schema-resolution chain. For any single file, docmeta picks the first source that applies, in this order:
+Overrides are one link in moose-meta's schema-resolution chain. For any single file, moose-meta picks the first source that applies, in this order:
 
 <Steps>
 
@@ -88,7 +88,7 @@ Overrides are one link in docmeta's schema-resolution chain. For any single file
 
 4. **Config `schemas`**: the default set, when no override matches.
 
-5. **Built-in default set**: [`google:okf:0.1`](/docmeta/schemas/) plus [`passo-uno:seven-action:1.0`](/docmeta/reference/taxonomy-schemas/), when nothing else resolves.
+5. **Built-in default set**: [`google:okf:0.1`](/moose-meta/schemas/) plus [`passo-uno:seven-action:1.0`](/moose-meta/reference/taxonomy-schemas/), when nothing else resolves.
 
 </Steps>
 
@@ -96,26 +96,26 @@ So an override governs a file only when no `--schema` flag is set and the file h
 
 <LinkCard
   title="Schema resolution reference"
-  href="/docmeta/reference/schema-resolution/"
+  href="/moose-meta/reference/schema-resolution/"
   description="The full precedence chain and the three reference kinds (built-in id, file path, and URL) in detail."
 />
 
 ## Verify your overrides
 
-After editing your config, confirm each area resolves to the schema set you expect. Run docmeta and read the per-file output, which reports the schemas applied to each file.
+After editing your config, confirm each area resolves to the schema set you expect. Run moose-meta and read the per-file output, which reports the schemas applied to each file.
 
 ```bash
-npx docmeta validate
+npx moose-meta validate
 ```
 
 If a file matches the wrong override, check the order of your `overrides` entries; remember that the first matching glob wins.
 
-{/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+{/* Doc Detective inline tests: verify this page's documented moose-meta behavior
+    against the local build, exposed as `moose-meta` / `npx moose-meta` via `npm link`
     (see .github/workflows/doc-detective.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"schemas-per-folder","description":"Multi-schema-set and precedence claims, demonstrated with repeated --schema flags."} */}
-{/* step {"description":"Validate one file against a set of two schemas; a file satisfying both passes.","runShell":{"command":"npx docmeta validate test/fixtures/schema-ref.md -s google:okf:0.1 -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
-{/* step {"description":"The file must satisfy EVERY schema in the set: missing `type` fails the set even though it has a title.","runShell":{"command":"npx docmeta validate test/fixtures/missing-type.md -s google:okf:0.1 -s ./test/fixtures/extra.schema.json","exitCodes":[1],"stdio":"must have required property 'type'"}} */}
-{/* step {"description":"CLI --schema sits at the top of the resolution chain: forcing a schema the file satisfies makes it pass, overriding the default OKF set it would otherwise fail.","runShell":{"command":"npx docmeta validate test/fixtures/missing-type.md -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"Validate one file against a set of two schemas; a file satisfying both passes.","runShell":{"command":"npx moose-meta validate test/fixtures/schema-ref.md -s google:okf:0.1 -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"The file must satisfy EVERY schema in the set: missing `type` fails the set even though it has a title.","runShell":{"command":"npx moose-meta validate test/fixtures/missing-type.md -s google:okf:0.1 -s ./test/fixtures/extra.schema.json","exitCodes":[1],"stdio":"must have required property 'type'"}} */}
+{/* step {"description":"CLI --schema sits at the top of the resolution chain: forcing a schema the file satisfies makes it pass, overriding the default OKF set it would otherwise fail.","runShell":{"command":"npx moose-meta validate test/fixtures/missing-type.md -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
 {/* test end */}

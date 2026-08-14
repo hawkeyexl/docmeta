@@ -1,6 +1,6 @@
 ---
 title: Version & evolve a schema safely
-description: Encode a schema version consumers can pin, roll out tightening changes as a staged ratchet, and let docmeta auto-detect the JSON Schema dialect, without breaking CI everywhere at once.
+description: Encode a schema version consumers can pin, roll out tightening changes as a staged ratchet, and let moose-meta auto-detect the JSON Schema dialect, without breaking CI everywhere at once.
 sidebar:
   label: Versioning & dialects
   order: 3
@@ -18,26 +18,26 @@ So the first move in evolving a schema safely is making sure your schema *has* a
 
 ## Encode a version consumers can pin
 
-How you express the version depends on which of the three reference kinds your consumers use to name the schema. (For how docmeta classifies a reference as built-in, file, or URL, see [the three reference kinds](/docmeta/schemas/resolution/#the-three-reference-kinds).)
+How you express the version depends on which of the three reference kinds your consumers use to name the schema. (For how moose-meta classifies a reference as built-in, file, or URL, see [the three reference kinds](/moose-meta/schemas/resolution/#the-three-reference-kinds).)
 
 <Tabs>
 <TabItem label="Built-in">
 
 A built-in id already carries its version in the third segment of `vendor:name:version`. The bundled OKF schema is `google:okf:0.1`, and the `0.1` *is* the pin. A future revision ships as a new id (`google:okf:0.2`), and a consumer naming `google:okf:0.1` keeps validating against exactly the schema they chose until they edit that reference themselves.
 
-```yaml title="docmeta.config.yaml"
+```yaml title="moose-meta.config.yaml"
 schemas:
   - google:okf:0.1   # pinned; a new built-in version is a new id
 ```
 
-Built-in versions are decided by docmeta, not by you: you adopt them, you don't author them. If you're defining your own standard, you'll version a file or URL schema instead.
+Built-in versions are decided by moose-meta, not by you: you adopt them, you don't author them. If you're defining your own standard, you'll version a file or URL schema instead.
 
 </TabItem>
 <TabItem label="File">
 
 A schema you keep in the repo has no built-in version field, so encode the version in the **path or filename**. Both of these read as a pin at a glance:
 
-```yaml title="docmeta.config.yaml"
+```yaml title="moose-meta.config.yaml"
 schemas:
   # version in the filename
   - ./schemas/metadata-1.2.schema.json
@@ -52,12 +52,12 @@ When you ship a breaking change, add `metadata-1.3.schema.json` (or `v2/metadata
 
 A URL schema (the foundation for governing one schema across many repos) versions the same way, in the path. Publish each version at a distinct, stable URL:
 
-```yaml title="docmeta.config.yaml"
+```yaml title="moose-meta.config.yaml"
 schemas:
   - https://schemas.example.com/metadata/1.2/schema.json
 ```
 
-Consumers pin by referencing a versioned URL, never a "latest" one. Keep old versions reachable so pinned repos don't break, and announce a new version rather than mutating an existing URL in place. The fetch timeout and per-run caching that make URL schemas practical at scale are covered in [Govern a shared schema by URL](/docmeta/ci/govern-shared-schema/).
+Consumers pin by referencing a versioned URL, never a "latest" one. Keep old versions reachable so pinned repos don't break, and announce a new version rather than mutating an existing URL in place. The fetch timeout and per-run caching that make URL schemas practical at scale are covered in [Govern a shared schema by URL](/moose-meta/ci/govern-shared-schema/).
 
 </TabItem>
 </Tabs>
@@ -103,19 +103,19 @@ Demanding a field that documents don't yet carry fails every one of them at once
 
 1. **Add the field as optional.** Describe it in `properties` but leave it out of `required`. It's validated when present and ignored when absent, so nothing fails yet.
 
-2. **Backfill the field across existing documents.** With the field optional, docmeta won't block the repo while you work through it. Land the values incrementally.
+2. **Backfill the field across existing documents.** With the field optional, moose-meta won't block the repo while you work through it. Land the values incrementally.
 
 3. **Promote the field to `required`.** Once coverage is complete, move it into `required` and ship that as a new schema version. Consumers adopt the stricter version when they pin to it.
 
 </Steps>
 
-This add-then-ratchet pattern is the heart of tightening a standard without a flag day. The full walkthrough, including staging the rollout across a large repo and using config to apply the stricter schema gradually, lives in [Roll out a new required field without breaking the build](/docmeta/set-up/new-required-field/).
+This add-then-ratchet pattern is the heart of tightening a standard without a flag day. The full walkthrough, including staging the rollout across a large repo and using config to apply the stricter schema gradually, lives in [Roll out a new required field without breaking the build](/moose-meta/set-up/new-required-field/).
 
 ## Dialects are detected, not configured
 
-The second thing that can break a schema isn't a field you changed; it's the JSON Schema *dialect* you wrote it in. JSON Schema has evolved through several versions (draft-04, draft-06, draft-07, 2019-09, 2020-12), and they aren't fully compatible: a schema written for one dialect can fail to compile under another. docmeta handles this for you. It reads each schema's own `$schema` line, the URI at the top that names the dialect's *meta-schema*, and compiles that schema with the matching validation engine.
+The second thing that can break a schema isn't a field you changed; it's the JSON Schema *dialect* you wrote it in. JSON Schema has evolved through several versions (draft-04, draft-06, draft-07, 2019-09, 2020-12), and they aren't fully compatible: a schema written for one dialect can fail to compile under another. moose-meta handles this for you. It reads each schema's own `$schema` line, the URI at the top that names the dialect's *meta-schema*, and compiles that schema with the matching validation engine.
 
-docmeta supports these dialects:
+moose-meta supports these dialects:
 
 | Dialect | Detected from a `$schema` URI containing |
 |---------|------------------------------------------|
@@ -125,11 +125,11 @@ docmeta supports these dialects:
 | draft-06 | `draft-06` or `draft/6` (shares the draft-07 engine) |
 | draft-04 | `draft-04` or `draft/4` |
 
-If a schema omits its `$schema` line, or uses one docmeta doesn't recognize, validation falls back to **2020-12**, the dialect of the built-in schemas.
+If a schema omits its `$schema` line, or uses one moose-meta doesn't recognize, validation falls back to **2020-12**, the dialect of the built-in schemas.
 
 ### Declare your dialect explicitly
 
-Relying on the fallback works, but stating the dialect removes ambiguity for docmeta and for anyone reading the schema. Keep a `$schema` line at the top of every schema file, pointing at the meta-schema for the dialect you wrote in:
+Relying on the fallback works, but stating the dialect removes ambiguity for moose-meta and for anyone reading the schema. Keep a `$schema` line at the top of every schema file, pointing at the meta-schema for the dialect you wrote in:
 
 <Tabs>
 <TabItem label="2020-12">
@@ -162,13 +162,13 @@ Relying on the fallback works, but stating the dialect removes ambiguity for doc
 </TabItem>
 </Tabs>
 
-Both schemas validate the same documents here; the only difference is which engine docmeta compiles them with. Declaring the dialect is what lets you write to a specific version's features without guessing how docmeta will read the file.
+Both schemas validate the same documents here; the only difference is which engine moose-meta compiles them with. Declaring the dialect is what lets you write to a specific version's features without guessing how moose-meta will read the file.
 
 ### Mixing dialects across a schema set is fine
 
-When a file is validated against more than one schema (a list-valued `$schema`, several config entries, or layered `--schema` flags), the schemas don't all have to share a dialect. docmeta detects the dialect of **each schema independently** and compiles each one in its own engine. A 2020-12 house-style schema and a draft-07 schema you fetched from a partner can validate the same file in the same run, each held to its own dialect's rules.
+When a file is validated against more than one schema (a list-valued `$schema`, several config entries, or layered `--schema` flags), the schemas don't all have to share a dialect. moose-meta detects the dialect of **each schema independently** and compiles each one in its own engine. A 2020-12 house-style schema and a draft-07 schema you fetched from a partner can validate the same file in the same run, each held to its own dialect's rules.
 
-This is why adopting a schema from elsewhere, such as an older internal standard or a third-party schema that still targets draft-07, never forces you to rewrite it to match your other schemas. Drop it into the set as-is; its `$schema` line tells docmeta how to read it.
+This is why adopting a schema from elsewhere, such as an older internal standard or a third-party schema that still targets draft-07, never forces you to rewrite it to match your other schemas. Drop it into the set as-is; its `$schema` line tells moose-meta how to read it.
 
 <Aside type="tip" title="Dialect choice and evolution">
 A schema's dialect is itself a property worth pinning. If you write a new version of your standard, keep its `$schema` dialect line consistent with the previous version unless you have a reason to move. Switching dialects mid-evolution is a change in how rules are interpreted, layered on top of whatever fields you changed. When you do move dialects, treat it as a versioned change like any other.
@@ -178,7 +178,7 @@ A schema's dialect is itself a property worth pinning. If you write a new versio
 The word `$schema` names two unrelated things, and keeping them straight prevents a common mix-up:
 
 - **A *schema's* own `$schema`** is the line *inside a schema file* that names the JSON Schema dialect it's written in (e.g. `https://json-schema.org/draft/2020-12/schema`). It selects the **validation engine**. That's the one this section is about.
-- **A *document's* `$schema`** is a key in a *document's frontmatter* that names which schema validates that document (e.g. `google:okf:0.1`). It selects **which schema applies**, and docmeta strips it before validating. See [Point a document at its schema](/docmeta/schemas/#point-a-document-at-its-schema).
+- **A *document's* `$schema`** is a key in a *document's frontmatter* that names which schema validates that document (e.g. `google:okf:0.1`). It selects **which schema applies**, and moose-meta strips it before validating. See [Point a document at its schema](/moose-meta/schemas/#point-a-document-at-its-schema).
 
 Same key name, different files, different jobs: one points at a meta-schema, the other points at your schema.
 </Aside>
@@ -188,22 +188,22 @@ Same key name, different files, different jobs: one points at a meta-schema, the
 <CardGrid>
   <LinkCard
     title="Roll out a new required field without breaking the build"
-    href="/docmeta/set-up/new-required-field/"
+    href="/moose-meta/set-up/new-required-field/"
     description="The staged ratchet in full: add, backfill, and tighten across a large repo without a flag day."
   />
   <LinkCard
     title="Govern a shared schema by URL"
-    href="/docmeta/ci/govern-shared-schema/"
+    href="/moose-meta/ci/govern-shared-schema/"
     description="Centralize one versioned schema, reference it by URL, and pin it across many repos."
   />
   <LinkCard
     title="How schema resolution works"
-    href="/docmeta/schemas/resolution/"
+    href="/moose-meta/schemas/resolution/"
     description="The precedence chain and the three reference kinds you version a schema through."
   />
   <LinkCard
     title="Schema resolution reference"
-    href="/docmeta/reference/schema-resolution/"
+    href="/moose-meta/reference/schema-resolution/"
     description="The precedence, reference-kind, and supported-dialect tables as a flat lookup."
   />
 </CardGrid>

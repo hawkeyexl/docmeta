@@ -1,18 +1,18 @@
 ---
 title: Schema resolution reference
-description: How docmeta picks the schema set for each file, covering the precedence chain, the three reference kinds, and the supported JSON Schema dialects.
+description: How moose-meta picks the schema set for each file, covering the precedence chain, the three reference kinds, and the supported JSON Schema dialects.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-For each file, docmeta resolves a **schema set** of one or more schema references,
+For each file, moose-meta resolves a **schema set** of one or more schema references,
 then validates the file's metadata against every schema in that set. This page
 documents how the set is chosen, what a reference can be, and which JSON Schema
 dialects are supported.
 
 ## Precedence
 
-docmeta determines the schema set for a file by checking these sources in order
+moose-meta determines the schema set for a file by checking these sources in order
 and using the **first** one that yields a non-empty set:
 
 | Level | Source | Scope |
@@ -29,7 +29,7 @@ Within a resolved set, duplicate references are removed.
 <Aside type="note">
 `--schema` is the only level that applies to the whole run. When present, it
 replaces every per-file `$schema` and all config rules. See the [precedence note
-in the configuration reference](/docmeta/reference/configuration/#how-config-merges-with-cli-flags).
+in the configuration reference](/moose-meta/reference/configuration/#how-config-merges-with-cli-flags).
 </Aside>
 
 ### The `$schema` key in a file
@@ -53,7 +53,7 @@ type: concept
 ---
 ```
 
-`$schema` is a docmeta directive, not part of the document's metadata. It is
+`$schema` is a moose-meta directive, not part of the document's metadata. It is
 **reserved and stripped** before validation, so a schema with
 `additionalProperties: false` will not flag it. A `$schema` value that is
 neither a string nor a list of strings is an error for that file.
@@ -65,7 +65,7 @@ classified into one of three kinds by its shape:
 
 | Kind | Looks like | Resolved from |
 |---|---|---|
-| **builtin** | `vendor:name:version`, e.g. `google:okf:0.1` | A schema shipped with docmeta. |
+| **builtin** | `vendor:name:version`, e.g. `google:okf:0.1` | A schema shipped with moose-meta. |
 | **file** | A `.json` path or any path containing a separator, e.g. `./my.schema.json` | The local filesystem. |
 | **url** | An `http://` or `https://` URL | Fetched over the network. |
 
@@ -90,13 +90,13 @@ status, or a response that is not valid JSON is an error (exit 2).
 
 <Aside type="caution">
 The URL cache lives only for the duration of one run. Each invocation re-fetches
-remote schemas; docmeta does not persist a cross-run cache.
+remote schemas; moose-meta does not persist a cross-run cache.
 </Aside>
 
 ## Dialects
 
 Every schema declares its dialect through its own `$schema` meta-schema URI.
-docmeta auto-detects the dialect from that URI and compiles the schema with the
+moose-meta auto-detects the dialect from that URI and compiles the schema with the
 matching validator. Schemas of different dialects can coexist in one run.
 
 | Dialect | Detected from meta-schema URI containing | Notes |
@@ -120,7 +120,7 @@ meta-schema URI) selects the dialect, as described here. A **document's**
 
 ## Validating against the whole set
 
-When a file's resolved set contains more than one schema, docmeta validates the
+When a file's resolved set contains more than one schema, moose-meta validates the
 file's metadata against **every** schema in the set and reports the union of all
 violations. A file passes only when it satisfies all schemas in its set. Each
 reported error is tagged with the schema that produced it.

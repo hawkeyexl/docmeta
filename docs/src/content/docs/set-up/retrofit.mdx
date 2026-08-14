@@ -1,6 +1,6 @@
 ---
-title: Retrofit docmeta into an existing docs repo
-description: Adopt docmeta on a repo that has never had metadata validation. Start with a permissive schema so the build goes green on day one, wire the CI gate, then ratchet strictness over time.
+title: Retrofit moose-meta into an existing docs repo
+description: Adopt moose-meta on a repo that has never had metadata validation. Start with a permissive schema so the build goes green on day one, wire the CI gate, then ratchet strictness over time.
 ---
 
 import { Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
@@ -15,7 +15,7 @@ A green build with a working gate beats a red build with a perfect standard. Onc
 
 ## Step 1: Start with a permissive schema
 
-The built-in [`google:okf:0.1`](/docmeta/schemas/) schema requires a single field, `type`. That is lenient, but on a repo that has never enforced metadata, even one required field may fail a lot of pages. For a true day-one-green adoption, start from a schema that **requires nothing** and tighten from there.
+The built-in [`google:okf:0.1`](/moose-meta/schemas/) schema requires a single field, `type`. That is lenient, but on a repo that has never enforced metadata, even one required field may fail a lot of pages. For a true day-one-green adoption, start from a schema that **requires nothing** and tighten from there.
 
 ```json title="schemas/permissive.json"
 {
@@ -33,7 +33,7 @@ This schema requires no field. It only checks format **when a field is present**
 
 Point your config at it:
 
-```yaml title="docmeta.config.yaml"
+```yaml title="moose-meta.config.yaml"
 paths:
   - "docs/**/*.md"
 
@@ -44,7 +44,7 @@ schemas:
 Run a full pass to confirm the repo is green as it stands:
 
 ```bash
-npx docmeta validate
+npx moose-meta validate
 ```
 
 If something still fails here, it is a genuine format problem (a malformed `timestamp`, an empty required-by-you field), not a missing-field avalanche. Fix those few, and your baseline is clean.
@@ -55,17 +55,17 @@ A file with no frontmatter block at all still gets validated. With a require-not
 
 ## Step 2: Wire the CI gate
 
-With a green baseline committed, add the gate now, before the standard is perfect. docmeta exits `0` when everything passes and `1` when a file fails, so any CI system can use a bare `docmeta validate` as a pass/fail step. Wiring it early means the gate starts catching regressions immediately, even while the schema is still permissive.
+With a green baseline committed, add the gate now, before the standard is perfect. moose-meta exits `0` when everything passes and `1` when a file fails, so any CI system can use a bare `moose-meta validate` as a pass/fail step. Wiring it early means the gate starts catching regressions immediately, even while the schema is still permissive.
 
 ```bash
-npx -y docmeta validate --format github
+npx -y moose-meta validate --format github
 ```
 
 The `--format github` flag turns failures into inline annotations on the pull-request diff. The full recipe (workflow file, the exit-code contract, and annotation behavior) lives in the CI track; copy it instead of assembling your own.
 
 <LinkCard
   title="Run it in CI"
-  href="/docmeta/ci/"
+  href="/moose-meta/ci/"
   description="Ready-made recipes for GitHub Actions, GitLab CI, Jenkins, and pre-commit, plus the exit-code and annotation contract."
 />
 
@@ -77,14 +77,14 @@ A real repo has files you do not want to validate yet: archived content, generat
 
 1. **Limit `paths` to the areas you have reviewed.** The `paths` key is the fallback target set when no paths are passed on the command line. Point it at the subtree you have confirmed is green rather than the whole repo.
 
-   ```yaml title="docmeta.config.yaml"
+   ```yaml title="moose-meta.config.yaml"
    paths:
      - "docs/guides/**/*.md"
    ```
 
-2. **Exclude the corners you are not ready for.** Your `exclude` globs merge with docmeta's built-in ignores (`**/node_modules/**` and `**/.git/**` are always skipped) and add to them.
+2. **Exclude the corners you are not ready for.** Your `exclude` globs merge with moose-meta's built-in ignores (`**/node_modules/**` and `**/.git/**` are always skipped) and add to them.
 
-   ```yaml title="docmeta.config.yaml"
+   ```yaml title="moose-meta.config.yaml"
    exclude:
      - "**/drafts/**"
      - "docs/archive/**"
@@ -98,7 +98,7 @@ Exclusions are how you sequence the rollout. You bring each subtree under the ga
 
 You rarely tighten the whole repo at once. Use per-folder **overrides** to hold a stricter schema where the metadata is already clean, while the rest of the repo stays on the permissive default. New and well-maintained areas adopt the real standard first; legacy areas catch up on their own timeline.
 
-```yaml title="docmeta.config.yaml"
+```yaml title="moose-meta.config.yaml"
 # Permissive default for the long tail.
 schemas:
   - ./schemas/permissive.json
@@ -114,7 +114,7 @@ Files under `docs/guides/` are held to `guide.json` (which can require `type`, `
 
 <LinkCard
   title="Apply different schemas to different folders"
-  href="/docmeta/set-up/different-schemas-per-folder/"
+  href="/moose-meta/set-up/different-schemas-per-folder/"
   description="The full mechanics of overrides: glob precedence, first-match-wins, and validating one file against multiple schemas."
 />
 
@@ -126,7 +126,7 @@ The staged technique has its own guide: validate a field's format first, drive c
 
 <LinkCard
   title="Roll out a new required field without breaking the build"
-  href="/docmeta/set-up/new-required-field/"
+  href="/moose-meta/set-up/new-required-field/"
   description="The staged ratchet: add a field as optional-but-validated, measure coverage with get, then promote it to required."
 />
 
@@ -134,12 +134,12 @@ The staged technique has its own guide: validate a field's format first, drive c
 
 Ratcheting works because new pages arrive already compliant. It does nothing for the pages that were already there, and on a mature repo that backlog is most of the docset. Typing `description:` into four hundred existing files by hand is the reason adoption stalls at step 5.
 
-[`docmeta fill`](/docmeta/reference/cli/#fill) works that backlog down. For each page it resolves the same schema set the gate uses, asks an LLM to infer the properties that are missing or invalid, and writes back only the values it is confident about. Because the schema drives the prompt, the fields it proposes are exactly the ones you are about to require.
+[`moose-meta fill`](/moose-meta/reference/cli/#fill) works that backlog down. For each page it resolves the same schema set the gate uses, asks an LLM to infer the properties that are missing or invalid, and writes back only the values it is confident about. Because the schema drives the prompt, the fields it proposes are exactly the ones you are about to require.
 
 Preview before you trust it:
 
 ```sh
-docmeta fill docs/reference/ --dry-run
+moose-meta fill docs/reference/ --dry-run
 ```
 
 ```
@@ -153,7 +153,7 @@ anthropic/claude-sonnet-4-5 · Threshold 0.7 · 12 files · 9 fields would be wr
 Then run it for real on **one folder at a time**, and review the diff like any other pull request:
 
 ```sh
-docmeta fill docs/reference/ && git diff
+moose-meta fill docs/reference/ && git diff
 ```
 
 <Aside type="caution">
@@ -163,7 +163,7 @@ docmeta fill docs/reference/ && git diff
 Values below the threshold are skipped, and the report lists each one by name and score. Those pages genuinely need a human, and now you have a short list of them to work through. Raise `--confidence` when you want only near-certain values:
 
 ```sh
-docmeta fill docs/reference/ --confidence 0.9 --dry-run
+moose-meta fill docs/reference/ --confidence 0.9 --dry-run
 ```
 
 Re-running at a different threshold re-scores the cached proposals, so tuning the gate costs nothing after the first pass.
@@ -172,28 +172,28 @@ Once a folder is filled and reviewed, promote its field to `required` using the 
 
 ## What you have now
 
-A repo that went green on day one, a CI gate that has been catching regressions since before the standard was finished, a folder-by-folder path to the stricter rules you actually want, and a way to clear the existing backlog without a data-entry marathon. You adopted docmeta without a flag day and without a backlog of red checks blocking everyone's work.
+A repo that went green on day one, a CI gate that has been catching regressions since before the standard was finished, a folder-by-folder path to the stricter rules you actually want, and a way to clear the existing backlog without a data-entry marathon. You adopted moose-meta without a flag day and without a backlog of red checks blocking everyone's work.
 
 ## Where to go next
 
 <CardGrid>
   <LinkCard
-    title="Create your docmeta.config.yaml"
-    href="/docmeta/set-up/config/"
+    title="Create your moose-meta.config.yaml"
+    href="/moose-meta/set-up/config/"
     description="Every config key explained: paths, exclude, schemas, and overrides, with a complete worked example."
   />
   <LinkCard
     title="Author a schema for your standard"
-    href="/docmeta/schemas/"
+    href="/moose-meta/schemas/"
     description="Encode your metadata standard as a JSON Schema, starting permissive and adding required fields deliberately."
   />
 </CardGrid>
 
-{/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+{/* Doc Detective inline tests: verify this page's documented moose-meta behavior
+    against the local build, exposed as `moose-meta` / `npx moose-meta` via `npm link`
     (see .github/workflows/doc-detective.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"set-up-retrofit","description":"Start-permissive claim, demonstrated with a require-nothing schema fixture vs. OKF."} */}
-{/* step {"description":"A frontmatter-free file passes the permissive schema (nothing is required).","runShell":{"command":"npx docmeta validate test/fixtures/no-frontmatter.md -s ./test/fixtures/dd/permissive.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
-{/* step {"description":"The same file fails OKF, which requires `type` — the avalanche the permissive start avoids.","runShell":{"command":"npx docmeta validate test/fixtures/no-frontmatter.md -s google:okf:0.1","exitCodes":[1],"stdio":"must have required property 'type'"}} */}
+{/* step {"description":"A frontmatter-free file passes the permissive schema (nothing is required).","runShell":{"command":"npx moose-meta validate test/fixtures/no-frontmatter.md -s ./test/fixtures/dd/permissive.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"The same file fails OKF, which requires `type` — the avalanche the permissive start avoids.","runShell":{"command":"npx moose-meta validate test/fixtures/no-frontmatter.md -s google:okf:0.1","exitCodes":[1],"stdio":"must have required property 'type'"}} */}
 {/* test end */}

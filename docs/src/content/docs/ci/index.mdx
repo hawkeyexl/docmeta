@@ -1,31 +1,31 @@
 ---
-title: Add docmeta to CI (GitHub Actions)
+title: Add moose-meta to CI (GitHub Actions)
 description: Add a document-metadata gate to GitHub Actions, with inline pull request annotations from the github output format.
 ---
 
 import { Steps, Tabs, TabItem, Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-This page wires docmeta into GitHub Actions so that every push and pull request
+This page wires moose-meta into GitHub Actions so that every push and pull request
 validates your document metadata, fails the job when a file is non-conformant,
 and reports each failure as an inline annotation on the pull request diff.
 
-You do not need to install docmeta into your repository. The recipes here run it
-with `npx`, which fetches the published `docmeta` package on demand. The only
+You do not need to install moose-meta into your repository. The recipes here run it
+with `npx`, which fetches the published `moose-meta` package on demand. The only
 requirement on the runner is Node.js 24 or newer.
 
 <Aside type="tip" title="Just want the workflow?">
 The repository ships a ready-made workflow at
-[`examples/docmeta.yml`](https://github.com/hawkeyexl/docmeta/blob/main/examples/docmeta.yml).
+[`examples/moose-meta.yml`](https://github.com/hawkeyexl/moose-meta/blob/main/examples/moose-meta.yml).
 Copy it into `.github/workflows/` and you have a working gate. The sections
 below walk through that file and adapt it.
 </Aside>
 
 ## How the gate works
 
-docmeta is built to behave well in CI. Two properties carry the whole
+moose-meta is built to behave well in CI. Two properties carry the whole
 integration:
 
-- **Exit codes drive the gate.** docmeta exits `0` when every file is valid,
+- **Exit codes drive the gate.** moose-meta exits `0` when every file is valid,
   `1` when one or more files fail validation, and `2` on an operational or usage
   error (for example, no inputs and no config). GitHub Actions treats any
   non-zero exit from a step as a failed step, so the metadata gate is enforced
@@ -37,18 +37,18 @@ integration:
   reviewers see exactly what failed without opening the job log.
 
 For the full contract, see
-[Exit codes & PR annotations](/docmeta/ci/exit-codes-and-annotations/).
+[Exit codes & PR annotations](/moose-meta/ci/exit-codes-and-annotations/).
 
 ## Standalone workflow
 
 Use this when metadata validation is its own job. This is the canonical recipe
-from [`examples/docmeta.yml`](https://github.com/hawkeyexl/docmeta/blob/main/examples/docmeta.yml).
+from [`examples/moose-meta.yml`](https://github.com/hawkeyexl/moose-meta/blob/main/examples/moose-meta.yml).
 
 <Steps>
 
-1. **Create the workflow file.** Add `.github/workflows/docmeta.yml`:
+1. **Create the workflow file.** Add `.github/workflows/moose-meta.yml`:
 
-   ```yaml title=".github/workflows/docmeta.yml"
+   ```yaml title=".github/workflows/moose-meta.yml"
    # Validate document metadata on every push and pull request.
    name: Validate metadata
 
@@ -57,7 +57,7 @@ from [`examples/docmeta.yml`](https://github.com/hawkeyexl/docmeta/blob/main/exa
      pull_request:
 
    jobs:
-     docmeta:
+     moose-meta:
        runs-on: ubuntu-latest
        steps:
          - uses: actions/checkout@v4
@@ -68,45 +68,45 @@ from [`examples/docmeta.yml`](https://github.com/hawkeyexl/docmeta/blob/main/exa
          # Validate all Markdown. `--format github` turns failures into inline
          # PR annotations; the nonzero exit code fails the job.
          - name: Validate frontmatter
-           run: npx -y docmeta validate "**/*.md" --format github
+           run: npx -y moose-meta validate "**/*.md" --format github
    ```
 
 2. **Adapt the targets.** Replace `"**/*.md"` with the paths, directories, or
    globs you want to check, for example `"docs/**/*.md"`. Quote globs so the
-   shell passes them to docmeta intact rather than expanding them itself.
+   shell passes them to moose-meta intact rather than expanding them itself.
 
-3. **Commit and push.** On the next push or pull request, the `docmeta` job runs.
+3. **Commit and push.** On the next push or pull request, the `moose-meta` job runs.
    A clean run passes; any validation failure fails the job and annotates the
    diff.
 
 </Steps>
 
 <Aside type="note" title="Pin the version for reproducible runs">
-`npx -y docmeta` resolves the latest published version each run. To keep CI
-reproducible, pin a version, as in `npx -y docmeta@0.1.0 validate ...`, and bump it
+`npx -y moose-meta` resolves the latest published version each run. To keep CI
+reproducible, pin a version, as in `npx -y moose-meta@0.1.0 validate ...`, and bump it
 deliberately.
 </Aside>
 
 ### Let the config file supply the paths
 
-If your repository has a `docmeta.config.yaml` at its root, its `paths:` key is
+If your repository has a `moose-meta.config.yaml` at its root, its `paths:` key is
 the fallback when you pass no positional targets. That lets the workflow step
 drop the glob entirely:
 
-```yaml title=".github/workflows/docmeta.yml" {3}
+```yaml title=".github/workflows/moose-meta.yml" {3}
 - name: Validate frontmatter
-  # Targets come from paths: in docmeta.config.yaml at the repo root.
-  run: npx -y docmeta validate --format github
+  # Targets come from paths: in moose-meta.config.yaml at the repo root.
+  run: npx -y moose-meta validate --format github
 ```
 
-Keeping the target list in `docmeta.config.yaml` means the same command works
+Keeping the target list in `moose-meta.config.yaml` means the same command works
 locally and in CI, and you change what gets validated in one place. See
-[Create your docmeta.config.yaml](/docmeta/set-up/) for the config keys.
+[Create your moose-meta.config.yaml](/moose-meta/set-up/) for the config keys.
 
 ## Add a step to an existing workflow
 
 You do not need a dedicated workflow. If you already run a docs or lint job, add
-docmeta as one more step. It needs a checkout and a Node.js 24+ toolchain. If
+moose-meta as one more step. It needs a checkout and a Node.js 24+ toolchain. If
 the job already has those, the validation step is a single line.
 
 <Tabs>
@@ -124,7 +124,7 @@ jobs:
         with:
           node-version: 24
       - name: Validate frontmatter
-        run: npx -y docmeta validate "docs/**/*.md" --format github
+        run: npx -y moose-meta validate "docs/**/*.md" --format github
 ```
 
 </TabItem>
@@ -143,7 +143,7 @@ jobs:
       # ... your existing build/lint steps ...
 
       - name: Validate frontmatter
-        run: npx -y docmeta validate "docs/**/*.md" --format github
+        run: npx -y moose-meta validate "docs/**/*.md" --format github
 ```
 
 </TabItem>
@@ -161,7 +161,7 @@ all. To always run validation and still surface a build failure, add
 To confirm the gate fires, open a pull request that introduces a metadata error,
 for example, a Markdown file missing a required `type` field, then check that:
 
-- The `docmeta` job is red.
+- The `moose-meta` job is red.
 - The failing file shows an inline annotation on the changed line.
 - A passing change leaves the job green.
 
@@ -170,7 +170,7 @@ your shell. Locally, `--format github` prints the raw `::error` lines; drop the
 flag to get the readable pretty report:
 
 ```sh
-npx -y docmeta validate "docs/**/*.md"
+npx -y moose-meta validate "docs/**/*.md"
 ```
 
 ## Next steps
@@ -178,22 +178,22 @@ npx -y docmeta validate "docs/**/*.md"
 <CardGrid>
   <LinkCard
     title="Exit codes & PR annotations"
-    href="/docmeta/ci/exit-codes-and-annotations/"
+    href="/moose-meta/ci/exit-codes-and-annotations/"
     description="The exact 0/1/2 contract and the github, json, and pretty output shapes."
   />
   <LinkCard
     title="CI recipes for other platforms"
-    href="/docmeta/ci/recipes/"
+    href="/moose-meta/ci/recipes/"
     description="Copy-paste jobs for GitLab CI, Jenkins, and pre-commit."
   />
 </CardGrid>
 
-{/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+{/* Doc Detective inline tests: verify this page's documented moose-meta behavior
+    against the local build, exposed as `moose-meta` / `npx moose-meta` via `npm link`
     (see .github/workflows/doc-detective.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"ci-github","description":"The two properties the GitHub integration rests on, run against the local CLI build."} */}
-{/* step {"description":"Clean run exits 0 so the job stays green.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md --format github","exitCodes":[0]}} */}
-{/* step {"description":"A failure exits 1 (fails the job) and emits a ::error workflow command pinned to file and line.","runShell":{"command":"npx docmeta validate test/fixtures/missing-type.md --format github","exitCodes":[1],"stdio":"/::error file=.*line=/"}} */}
-{/* step {"description":"An operational error (no inputs, no config) exits 2, distinct from a validation failure.","runShell":{"command":"npx docmeta validate","exitCodes":[2],"stdio":"No files to validate"}} */}
+{/* step {"description":"Clean run exits 0 so the job stays green.","runShell":{"command":"npx moose-meta validate test/fixtures/valid.md --format github","exitCodes":[0]}} */}
+{/* step {"description":"A failure exits 1 (fails the job) and emits a ::error workflow command pinned to file and line.","runShell":{"command":"npx moose-meta validate test/fixtures/missing-type.md --format github","exitCodes":[1],"stdio":"/::error file=.*line=/"}} */}
+{/* step {"description":"An operational error (no inputs, no config) exits 2, distinct from a validation failure.","runShell":{"command":"npx moose-meta validate","exitCodes":[2],"stdio":"No files to validate"}} */}
 {/* test end */}

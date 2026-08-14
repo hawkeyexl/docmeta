@@ -1,18 +1,18 @@
 ---
 title: Supported formats reference
-description: Every docmeta input format (Markdown, MDX, AsciiDoc, reStructuredText, XML, and HTML), with extensions and how metadata is read from each.
+description: Every moose-meta input format (Markdown, MDX, AsciiDoc, reStructuredText, XML, and HTML), with extensions and how metadata is read from each.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-docmeta reads metadata from a document using a per-format **extractor**. The
+moose-meta reads metadata from a document using a per-format **extractor**. The
 extractor is chosen from the file extension, or forced with
-[`--as <format>`](/docmeta/reference/cli/#shared-input-model). Every extractor below is
+[`--as <format>`](/moose-meta/reference/cli/#shared-input-model). Every extractor below is
 implemented and counts toward directory and glob walks.
 
 ## Formats
 
-| Format (`--as` name) | Extensions | Metadata source | [`fill`](/docmeta/reference/cli/#fill) can write |
+| Format (`--as` name) | Extensions | Metadata source | [`fill`](/moose-meta/reference/cli/#fill) can write |
 |---|---|---|---|
 | `markdown` | `.md`, `.markdown` | Leading fenced frontmatter — YAML (`--- … ---`), TOML (`+++ … +++`), or JSON (`;;; … ;;;`). | Yes |
 | `mdx` | `.mdx` | Leading fenced frontmatter — YAML, TOML, or JSON. | Yes |
@@ -26,7 +26,7 @@ implemented and counts toward directory and glob walks.
 Writing metadata back is a harder problem than reading it. `fill` will only write
 a format it can round-trip without disturbing the rest of the document.
 
-Fenced frontmatter round-trips cleanly: docmeta replaces only the characters
+Fenced frontmatter round-trips cleanly: moose-meta replaces only the characters
 between the fences, so the body, the fence style, and (for YAML) comments and
 quoting survive untouched.
 
@@ -34,13 +34,13 @@ The native syntaxes do not. AsciiDoc attributes and reStructuredText docinfo
 fields are read through a YAML scalar parse that loses the original spelling, and
 an rst `title` is *synthesized* from the section heading rather than stored as a
 field. Writing it back would mean rewriting the underline adornment or adding a
-`:title:` field that shadows the heading. Nor can docmeta simply add a fenced
+`:title:` field that shadows the heading. Nor can moose-meta simply add a fenced
 block to those files: a bare `---` is a transition in reStructuredText and an
 open-block delimiter in AsciiDoc, so inventing one would change how the page
 renders. XML and HTML would have to be re-serialized wholesale, which reflows
 entities, attribute quoting, and void elements across the entire file.
 
-Run `docmeta schemas` to see the current writability of each format. Targeting a
+Run `moose-meta schemas` to see the current writability of each format. Targeting a
 read-only file with `fill` is reported as a per-file error; the rest of the run
 continues.
 
@@ -49,7 +49,7 @@ is case-insensitive.
 
 ## Frontmatter flavors
 
-Wherever docmeta reads frontmatter (Markdown, MDX, and the fenced-block path of
+Wherever moose-meta reads frontmatter (Markdown, MDX, and the fenced-block path of
 AsciiDoc and reStructuredText), it accepts three interchangeable flavors (a
 convention also used by [Vale](https://docs.vale.sh/formats/front-matter)). The
 flavor is auto-detected from the opening fence, so no flag or `--as` name is
@@ -70,7 +70,7 @@ closes is **not** treated as frontmatter. For AsciiDoc and rst the native header
 is read instead, and for Markdown and MDX (which have no native fallback) the
 metadata is reported as absent, not as an error. A malformed block (invalid
 YAML, TOML, or JSON) is a per-file parse failure (exit code `1`; see
-[Output & exit codes](/docmeta/reference/output-and-exit-codes/)), and the rest
+[Output & exit codes](/moose-meta/reference/output-and-exit-codes/)), and the rest
 of the run continues.
 
 Error annotations point at the offending field's own source line. For TOML this
@@ -118,7 +118,7 @@ tags = ["setup", "onboarding"]
 ### AsciiDoc
 
 AsciiDoc accepts two metadata styles. If the file opens with a complete fenced
-frontmatter block (YAML, TOML, or JSON), that block is used. Otherwise docmeta
+frontmatter block (YAML, TOML, or JSON), that block is used. Otherwise moose-meta
 reads the native document header: the lines from the top of the file down to
 the first blank line:
 
@@ -137,7 +137,7 @@ the first blank line:
 
 reStructuredText also accepts two styles. A complete leading fenced frontmatter
 block (YAML, TOML, or JSON) is used when present (as some MyST setups produce
-it). Otherwise docmeta reads the native page metadata:
+it). Otherwise moose-meta reads the native page metadata:
 
 - A leading section title (a line underlined, and optionally overlined, with
   punctuation) becomes `title`.
@@ -163,7 +163,7 @@ declarations (`xmlns` and `xmlns:*`) are dropped as transport noise.
 ```
 
 This yields `type: "concept"` and `version: 2`. Malformed XML is reported as a
-per-file parse error. An entity docmeta cannot resolve is not malformed XML: no
+per-file parse error. An entity moose-meta cannot resolve is not malformed XML: no
 external DTD is ever fetched, so a reference such as `&nbsp;` is left as written
 and the file is still read.
 

@@ -1,63 +1,63 @@
 ---
 title: Reference
-description: Complete lookup reference for the docmeta CLI, configuration file, schema resolution, supported formats, output modes, and every built-in schema.
+description: Complete lookup reference for the moose-meta CLI, configuration file, schema resolution, supported formats, output modes, and every built-in schema.
 ---
 
 import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 Precise, lookup-oriented pages that the task-based guides link into. Each page
-is a flat reference for one part of docmeta: commands, config keys, resolution
+is a flat reference for one part of moose-meta: commands, config keys, resolution
 rules, formats, output, and the built-in schemas. Use the table of contents on
 each page to jump to the exact entry you need.
 
 Looking for what ships in the box? [**Built-in
-schemas**](/docmeta/reference/built-in-schemas/) is the registry: all seven in
+schemas**](/moose-meta/reference/built-in-schemas/) is the registry: all seven in
 one table, with what each constrains and which two are on by default.
 
 <CardGrid>
   <LinkCard
     title="Built-in schemas"
-    href="/docmeta/reference/built-in-schemas/"
-    description="The registry: every schema docmeta ships, what it constrains, what it requires, and how to turn one on."
+    href="/moose-meta/reference/built-in-schemas/"
+    description="The registry: every schema moose-meta ships, what it constrains, what it requires, and how to turn one on."
   />
   <LinkCard
     title="CLI reference"
-    href="/docmeta/reference/cli/"
+    href="/moose-meta/reference/cli/"
     description="Every command, argument, and flag: validate, get, and schemas, plus the shared input model."
   />
   <LinkCard
     title="Configuration reference"
-    href="/docmeta/reference/configuration/"
-    description="docmeta.config.yaml keys, types, defaults, discovery rules, and how config merges with CLI flags."
+    href="/moose-meta/reference/configuration/"
+    description="moose-meta.config.yaml keys, types, defaults, discovery rules, and how config merges with CLI flags."
   />
   <LinkCard
     title="Schema resolution"
-    href="/docmeta/reference/schema-resolution/"
+    href="/moose-meta/reference/schema-resolution/"
     description="The precedence chain, the three reference kinds, and the supported JSON Schema dialects."
   />
   <LinkCard
     title="Supported formats"
-    href="/docmeta/reference/formats/"
+    href="/moose-meta/reference/formats/"
     description="Extractors, file extensions, and how metadata is read from each input format."
   />
   <LinkCard
     title="Output & exit codes"
-    href="/docmeta/reference/output-and-exit-codes/"
+    href="/moose-meta/reference/output-and-exit-codes/"
     description="The pretty, json, and github output formats; exit codes; and color behavior."
   />
   <LinkCard
     title="Built-in OKF schema"
-    href="/docmeta/reference/okf-schema/"
-    description="The google:okf:0.1 schema shipped with docmeta: fields, formats, and dialect."
+    href="/moose-meta/reference/okf-schema/"
+    description="The google:okf:0.1 schema shipped with moose-meta: fields, formats, and dialect."
   />
   <LinkCard
     title="Built-in taxonomy schemas"
-    href="/docmeta/reference/taxonomy-schemas/"
+    href="/moose-meta/reference/taxonomy-schemas/"
     description="The diataxis, tgdp, and seven-action vocabularies, their values, and which ones compose."
   />
   <LinkCard
     title="Built-in Docusaurus schemas"
-    href="/docmeta/reference/docusaurus-schemas/"
+    href="/moose-meta/reference/docusaurus-schemas/"
     description="The docs, blog, and pages front matter contracts of Docusaurus 3.10, field by field."
   />
 </CardGrid>

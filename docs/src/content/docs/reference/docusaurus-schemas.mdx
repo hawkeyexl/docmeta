@@ -1,11 +1,11 @@
 ---
 title: Built-in Docusaurus schemas
-description: The docusaurus docs, blog, and pages front matter schemas shipped with docmeta, covering every field, the rules they enforce, and the ones they deliberately skip.
+description: The docusaurus docs, blog, and pages front matter schemas shipped with moose-meta, covering every field, the rules they enforce, and the ones they deliberately skip.
 ---
 
 import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-docmeta ships the front matter contract of **Docusaurus 3.10** as three built-in
+moose-meta ships the front matter contract of **Docusaurus 3.10** as three built-in
 schemas, one per content plugin:
 
 | Id | Plugin | Fields | Upstream reference |
@@ -16,10 +16,10 @@ schemas, one per content plugin:
 
 | Property | Value |
 |---|---|
-| Dialect | [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects) |
+| Dialect | [Draft 2020-12](/moose-meta/reference/schema-resolution/#dialects) |
 | Additional properties | Allowed (`additionalProperties: true`) |
 | Required fields | None, in any of the three |
-| Reference kind | [builtin](/docmeta/reference/schema-resolution/#reference-kinds) |
+| Reference kind | [builtin](/moose-meta/reference/schema-resolution/#reference-kinds) |
 | On by default | No — see [turning one on](#wire-them-up) |
 
 ## Format checks, not presence checks
@@ -30,7 +30,7 @@ that: they constrain the shape of every field the plugins document, and demand
 none of them.
 
 That makes them the opposite of the [taxonomy
-schemas](/docmeta/reference/taxonomy-schemas/), which require their key. Turning
+schemas](/moose-meta/reference/taxonomy-schemas/), which require their key. Turning
 a Docusaurus schema on cannot fail a page that was already building — it can
 only catch a value your site would have rejected, or silently mishandled, later.
 
@@ -40,19 +40,19 @@ Docusaurus validates its own front matter at build time, so these schemas are
 not a substitute for it. They earn their place three ways:
 
 - **One report instead of one failure.** A Docusaurus build stops at the first
-  bad file. `docmeta validate` reports every offending page in the docs set in
+  bad file. `moose-meta validate` reports every offending page in the docs set in
   one run, with a line number for each.
 - **Before a build, not during one.** Validation needs no site config, no
   install of Docusaurus, and no build step, so it runs in seconds on a pull
   request that touches ten files.
 - **Alongside your own standard.** These schemas claim neither `type` nor
   `action`, so they compose with any of the [taxonomy
-  vocabularies](/docmeta/reference/taxonomy-schemas/). One command holds a page
+  vocabularies](/moose-meta/reference/taxonomy-schemas/). One command holds a page
   to the generator's contract *and* your docs set's conventions, attributing
   each failure to the schema that raised it. (Stacking with
-  [`google:okf:0.1`](/docmeta/reference/okf-schema/) is the one exception —
+  [`google:okf:0.1`](/moose-meta/reference/okf-schema/) is the one exception —
   both define `tags`, and [their definitions
-  disagree](/docmeta/reference/built-in-schemas/#two-kinds-of-built-in).)
+  disagree](/moose-meta/reference/built-in-schemas/#two-kinds-of-built-in).)
 
 ## Fields
 
@@ -183,7 +183,7 @@ carrying `label` *and* `permalink`. Half an object fails.
 
 <Aside type="tip" title="Catching front matter typos">
 Since unknown keys are allowed, a misspelled `sidebar_positon` passes both
-docmeta and Docusaurus — it is simply ignored, and the page lands wherever the
+moose-meta and Docusaurus — it is simply ignored, and the page lands wherever the
 default ordering puts it. If your docs set has no plugin-specific front matter,
 stack a strict local schema alongside the built-in to close that gap:
 
@@ -210,7 +210,7 @@ file only polices the key names.
 
 Because it closes the door on everything unlisted, it also closes it on the
 *editorial* keys you stack alongside. Adding
-[`diataxis:diataxis:1.0`](/docmeta/reference/taxonomy-schemas/) to the same run
+[`diataxis:diataxis:1.0`](/moose-meta/reference/taxonomy-schemas/) to the same run
 makes every page fail with `must NOT have additional property 'type'`, since
 each schema in a set applies in full. Add `type`, `action`, or whatever your
 standard uses to `properties` before turning this on.
@@ -219,9 +219,9 @@ standard uses to `properties` before turning this on.
 ## Wire them up
 
 A Docusaurus site has three content roots with three different contracts, so
-config [overrides](/docmeta/reference/configuration/) are the natural fit:
+config [overrides](/moose-meta/reference/configuration/) are the natural fit:
 
-```yaml title="docmeta.config.yaml"
+```yaml title="moose-meta.config.yaml"
 paths:
   - docs
   - blog
@@ -243,7 +243,7 @@ The first matching override wins, so order them from most to least specific. For
 a one-off run, pass the id directly:
 
 ```bash
-docmeta validate docs/ -s docusaurus:docs:3.10
+moose-meta validate docs/ -s docusaurus:docs:3.10
 ```
 
 <Aside type="note" title="Versioned docs and i18n">
@@ -253,7 +253,7 @@ widen the glob to `**/docs/**`.
 </Aside>
 
 <Aside type="danger" title="Always pass `--fields` when you run `fill` against these">
-[`docmeta fill`](/docmeta/reference/cli/#fill) offers every *absent* property to
+[`moose-meta fill`](/moose-meta/reference/cli/#fill) offers every *absent* property to
 the model, not only the required ones. That suits a descriptive schema, but most
 Docusaurus fields are **structural**: a model reading page content cannot know
 the right `sidebar_position`, `pagination_next`, `displayed_sidebar`, `slug`, or
@@ -264,7 +264,7 @@ reordering your sidebar, rewiring next/previous links, or changing a page's URL.
 Restrict it to the fields that actually follow from the prose:
 
 ```bash
-docmeta fill docs/ -s docusaurus:docs:3.10 --fields description,keywords --dry-run
+moose-meta fill docs/ -s docusaurus:docs:3.10 --fields description,keywords --dry-run
 ```
 
 None of these fields are required, so `fill` exits `0` either way; a bad
@@ -276,7 +276,7 @@ proposal will not be caught by a later `validate` run.
 The version segment is the Docusaurus **minor** release the contract was
 transcribed from, because that is where fields are added — `sidebar_key` is a
 recent arrival. A new minor arrives as a new id rather than a change to
-`docusaurus:docs:3.10`, so upgrading docmeta never retightens a check you
+`docusaurus:docs:3.10`, so upgrading moose-meta never retightens a check you
 already passed. Pin the id matching the Docusaurus you run, and move it when you
 upgrade.
 
@@ -287,20 +287,20 @@ date into a native date value instead, which fails the string check. Quote it,
 or use YAML. This applies equally to OKF's `timestamp`.
 </Aside>
 
-{/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+{/* Doc Detective inline tests: verify this page's documented moose-meta behavior
+    against the local build, exposed as `moose-meta` / `npx moose-meta` via `npm link`
     (see .github/workflows/doc-detective.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"docusaurus-schemas","description":"The three Docusaurus built-ins, demonstrated with the committed fixtures this page describes."} */}
-{/* step {"description":"A docs page carrying every documented field passes.","runShell":{"command":"npx docmeta validate test/fixtures/docusaurus/docs-valid.md -s docusaurus:docs:3.10","exitCodes":[0],"stdio":"1 passed"}} */}
-{/* step {"description":"A quoted sidebar_position is a string, and fails naming the field.","runShell":{"command":"npx docmeta validate test/fixtures/docusaurus/docs-bad-sidebar-position.md -s docusaurus:docs:3.10","exitCodes":[1],"stdio":"sidebar_position"}} */}
-{/* step {"description":"A heading level past 6 is out of range.","runShell":{"command":"npx docmeta validate test/fixtures/docusaurus/docs-bad-toc-level.md -s docusaurus:docs:3.10","exitCodes":[1],"stdio":"toc_max_heading_level"}} */}
-{/* step {"description":"draft and unlisted are mutually exclusive.","runShell":{"command":"npx docmeta validate test/fixtures/docusaurus/docs-draft-and-unlisted.md -s docusaurus:docs:3.10","exitCodes":[1],"stdio":"docusaurus:docs:3.10"}} */}
-{/* step {"description":"last_update forbids unknown keys, so a misspelled author fails.","runShell":{"command":"npx docmeta validate test/fixtures/docusaurus/docs-bad-last-update.md -s docusaurus:docs:3.10","exitCodes":[1],"stdio":"last_update"}} */}
-{/* step {"description":"Front matter the plugin does not define is tolerated, as Docusaurus tolerates it.","runShell":{"command":"npx docmeta validate test/fixtures/docusaurus/docs-unknown-key.md -s docusaurus:docs:3.10","exitCodes":[0],"stdio":"1 passed"}} */}
-{/* step {"description":"The blog schema accepts a post carrying every documented field.","runShell":{"command":"npx docmeta validate test/fixtures/docusaurus/blog-valid.md -s docusaurus:blog:3.10","exitCodes":[0],"stdio":"1 passed"}} */}
-{/* step {"description":"The blog schema rejects a numeric authors value.","runShell":{"command":"npx docmeta validate test/fixtures/docusaurus/blog-bad-authors.md -s docusaurus:blog:3.10","exitCodes":[1],"stdio":"authors"}} */}
-{/* step {"description":"The pages schema accepts a page carrying every documented field.","runShell":{"command":"npx docmeta validate test/fixtures/docusaurus/pages-valid.md -s docusaurus:pages:3.10","exitCodes":[0],"stdio":"1 passed"}} */}
-{/* step {"description":"The pages schema rejects a non-string wrapperClassName.","runShell":{"command":"npx docmeta validate test/fixtures/docusaurus/pages-bad-wrapper-class.md -s docusaurus:pages:3.10","exitCodes":[1],"stdio":"wrapperClassName"}} */}
-{/* step {"description":"`--fields` narrows fill to the fields that follow from prose, rather than the structural ones a model cannot infer.","runShell":{"command":"npx docmeta fill test/fixtures/docusaurus/docs-unknown-key.md -s docusaurus:docs:3.10 --provider mock --fields description --dry-run -f json","exitCodes":[0],"stdio":"/\"field\": \"/description\"/"}} */}
+{/* step {"description":"A docs page carrying every documented field passes.","runShell":{"command":"npx moose-meta validate test/fixtures/docusaurus/docs-valid.md -s docusaurus:docs:3.10","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"A quoted sidebar_position is a string, and fails naming the field.","runShell":{"command":"npx moose-meta validate test/fixtures/docusaurus/docs-bad-sidebar-position.md -s docusaurus:docs:3.10","exitCodes":[1],"stdio":"sidebar_position"}} */}
+{/* step {"description":"A heading level past 6 is out of range.","runShell":{"command":"npx moose-meta validate test/fixtures/docusaurus/docs-bad-toc-level.md -s docusaurus:docs:3.10","exitCodes":[1],"stdio":"toc_max_heading_level"}} */}
+{/* step {"description":"draft and unlisted are mutually exclusive.","runShell":{"command":"npx moose-meta validate test/fixtures/docusaurus/docs-draft-and-unlisted.md -s docusaurus:docs:3.10","exitCodes":[1],"stdio":"docusaurus:docs:3.10"}} */}
+{/* step {"description":"last_update forbids unknown keys, so a misspelled author fails.","runShell":{"command":"npx moose-meta validate test/fixtures/docusaurus/docs-bad-last-update.md -s docusaurus:docs:3.10","exitCodes":[1],"stdio":"last_update"}} */}
+{/* step {"description":"Front matter the plugin does not define is tolerated, as Docusaurus tolerates it.","runShell":{"command":"npx moose-meta validate test/fixtures/docusaurus/docs-unknown-key.md -s docusaurus:docs:3.10","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"The blog schema accepts a post carrying every documented field.","runShell":{"command":"npx moose-meta validate test/fixtures/docusaurus/blog-valid.md -s docusaurus:blog:3.10","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"The blog schema rejects a numeric authors value.","runShell":{"command":"npx moose-meta validate test/fixtures/docusaurus/blog-bad-authors.md -s docusaurus:blog:3.10","exitCodes":[1],"stdio":"authors"}} */}
+{/* step {"description":"The pages schema accepts a page carrying every documented field.","runShell":{"command":"npx moose-meta validate test/fixtures/docusaurus/pages-valid.md -s docusaurus:pages:3.10","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"The pages schema rejects a non-string wrapperClassName.","runShell":{"command":"npx moose-meta validate test/fixtures/docusaurus/pages-bad-wrapper-class.md -s docusaurus:pages:3.10","exitCodes":[1],"stdio":"wrapperClassName"}} */}
+{/* step {"description":"`--fields` narrows fill to the fields that follow from prose, rather than the structural ones a model cannot infer.","runShell":{"command":"npx moose-meta fill test/fixtures/docusaurus/docs-unknown-key.md -s docusaurus:docs:3.10 --provider mock --fields description --dry-run -f json","exitCodes":[0],"stdio":"/\"field\": \"/description\"/"}} */}
 {/* test end */}

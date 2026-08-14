@@ -1,33 +1,33 @@
 ---
 title: 'CI recipes: GitLab CI, Jenkins, pre-commit'
-description: Copy-paste recipes that add a docmeta metadata gate to GitLab CI, Jenkins, and pre-commit, each wired to the exit-code contract.
+description: Copy-paste recipes that add a moose-meta metadata gate to GitLab CI, Jenkins, and pre-commit, each wired to the exit-code contract.
 ---
 
 import { Tabs, TabItem, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-docmeta is a plain CLI with a stable exit-code contract, so it drops into any CI
+moose-meta is a plain CLI with a stable exit-code contract, so it drops into any CI
 system that can run a Node.js command and read its exit code. This page gives
 complete, runnable recipes for three common setups beyond GitHub Actions.
 
-Every recipe relies on the same contract: docmeta exits `0` when all files are
+Every recipe relies on the same contract: moose-meta exits `0` when all files are
 valid, `1` when one or more files fail validation, and `2` on an operational or
 usage error. Each platform fails the job on a non-zero exit, so the gate is
 enforced without extra scripting. For the full definition, see
-[Exit codes & PR annotations](/docmeta/ci/exit-codes-and-annotations/).
+[Exit codes & PR annotations](/moose-meta/ci/exit-codes-and-annotations/).
 
 <Aside type="note" title="The github format is GitHub-specific">
 `--format github` emits GitHub Actions workflow commands (`::error ...`). On
 GitLab, Jenkins, and pre-commit it has no special effect; the lines print as
 plain text. Use the default `pretty` output (or `--format json` to feed another
 tool) on these platforms. The annotation format is documented in
-[Exit codes & PR annotations](/docmeta/ci/exit-codes-and-annotations/).
+[Exit codes & PR annotations](/moose-meta/ci/exit-codes-and-annotations/).
 </Aside>
 
 ## GitLab CI
 
 Add a job to `.gitlab-ci.yml`. The official `node:20` image already has Node.js
 and `npx`, so the job is a single script line. GitLab marks the job failed on
-any non-zero exit, which is exactly docmeta's contract.
+any non-zero exit, which is exactly moose-meta's contract.
 
 <Tabs>
 <TabItem label="Explicit targets">
@@ -37,27 +37,27 @@ validate-metadata:
   stage: test
   image: node:20
   script:
-    - npx -y docmeta validate "docs/**/*.md"
+    - npx -y moose-meta validate "docs/**/*.md"
 ```
 
 </TabItem>
-<TabItem label="Targets from docmeta.config.yaml">
+<TabItem label="Targets from moose-meta.config.yaml">
 
 ```yaml title=".gitlab-ci.yml"
 validate-metadata:
   stage: test
   image: node:20
-  # Targets come from paths: in docmeta.config.yaml at the repo root.
+  # Targets come from paths: in moose-meta.config.yaml at the repo root.
   script:
-    - npx -y docmeta validate
+    - npx -y moose-meta validate
 ```
 
 </TabItem>
 </Tabs>
 
 <Aside type="tip" title="Pin the version">
-`npx -y docmeta` resolves the latest published version on each run. Pin a
-specific version for reproducible pipelines: `npx -y docmeta@0.1.0 validate ...`.
+`npx -y moose-meta` resolves the latest published version on each run. Pin a
+specific version for reproducible pipelines: `npx -y moose-meta@0.1.0 validate ...`.
 </Aside>
 
 If you collect machine-readable reports, capture the JSON output as an artifact:
@@ -67,14 +67,14 @@ validate-metadata:
   stage: test
   image: node:20
   script:
-    - npx -y docmeta validate "docs/**/*.md" --format json | tee docmeta-report.json
+    - npx -y moose-meta validate "docs/**/*.md" --format json | tee moose-meta-report.json
   artifacts:
     when: always
     paths:
-      - docmeta-report.json
+      - moose-meta-report.json
 ```
 
-`tee` writes the report to a file while passing docmeta's exit code through, so
+`tee` writes the report to a file while passing moose-meta's exit code through, so
 the job still fails on validation errors. `when: always` keeps the artifact even
 when the job fails.
 
@@ -91,7 +91,7 @@ pipeline {
     stage('Validate metadata') {
       steps {
         // Requires Node.js 24+ on the agent (npx ships with npm).
-        sh 'npx -y docmeta validate "docs/**/*.md"'
+        sh 'npx -y moose-meta validate "docs/**/*.md"'
       }
     }
   }
@@ -111,7 +111,7 @@ pipeline {
   stages {
     stage('Validate metadata') {
       steps {
-        sh 'npx -y docmeta validate "docs/**/*.md"'
+        sh 'npx -y moose-meta validate "docs/**/*.md"'
       }
     }
   }
@@ -119,16 +119,16 @@ pipeline {
 ```
 
 To archive a machine-readable report, write JSON to a file and archive it. Run
-docmeta in a way that preserves its exit code:
+moose-meta in a way that preserves its exit code:
 
 ```groovy title="Jenkinsfile"
 stage('Validate metadata') {
   steps {
-    sh 'npx -y docmeta validate "docs/**/*.md" --format json | tee docmeta-report.json'
+    sh 'npx -y moose-meta validate "docs/**/*.md" --format json | tee moose-meta-report.json'
   }
   post {
     always {
-      archiveArtifacts artifacts: 'docmeta-report.json', allowEmptyArchive: true
+      archiveArtifacts artifacts: 'moose-meta-report.json', allowEmptyArchive: true
     }
   }
 }
@@ -137,15 +137,15 @@ stage('Validate metadata') {
 ## pre-commit
 
 <Aside type="caution" title="No official pre-commit hook repository">
-docmeta does **not** publish a [pre-commit](https://pre-commit.com/) hook
+moose-meta does **not** publish a [pre-commit](https://pre-commit.com/) hook
 repository, so you cannot reference it as a remote hook (`repo: https://...`).
-The supported approach is a **local** hook that calls the docmeta CLI directly.
+The supported approach is a **local** hook that calls the moose-meta CLI directly.
 The recipes below use that approach.
 </Aside>
 
 A pre-commit hook catches metadata errors before they reach CI. Because there is
 no published hook repo, define a `local` hook in `.pre-commit-config.yaml` that
-runs docmeta through `npx`. The hook fails the commit when docmeta returns a
+runs moose-meta through `npx`. The hook fails the commit when moose-meta returns a
 non-zero exit code.
 
 <Tabs>
@@ -155,15 +155,15 @@ non-zero exit code.
 repos:
   - repo: local
     hooks:
-      - id: docmeta
-        name: docmeta validate
-        entry: npx -y docmeta validate
+      - id: moose-meta
+        name: moose-meta validate
+        entry: npx -y moose-meta validate
         language: system
         # Run only on Markdown; pre-commit appends the staged file paths.
         files: \.md$
 ```
 
-With `entry: npx -y docmeta validate` and no positional paths in the entry,
+With `entry: npx -y moose-meta validate` and no positional paths in the entry,
 pre-commit appends the list of staged, matched files as arguments, so each
 commit validates exactly what changed. `language: system` tells pre-commit to
 use the `npx` already on your `PATH` rather than managing its own environment;
@@ -176,16 +176,16 @@ Node.js 24+ must be installed locally.
 repos:
   - repo: local
     hooks:
-      - id: docmeta
-        name: docmeta validate
-        entry: npx -y docmeta validate "docs/**/*.md"
+      - id: moose-meta
+        name: moose-meta validate
+        entry: npx -y moose-meta validate "docs/**/*.md"
         language: system
         pass_filenames: false
         always_run: true
 ```
 
 Set `pass_filenames: false` so pre-commit does not append staged paths, and
-docmeta validates the fixed glob in the entry instead. `always_run: true` makes
+moose-meta validates the fixed glob in the entry instead. `always_run: true` makes
 the hook run even when no matching files are staged.
 
 </TabItem>
@@ -195,14 +195,14 @@ Install and test the hook:
 
 ```sh
 pre-commit install              # wire the hook into git
-pre-commit run docmeta --all-files   # run it across the repo once
+pre-commit run moose-meta --all-files   # run it across the repo once
 ```
 
 <Aside type="tip" title="Prefer a documented one-liner?">
 If you do not use the pre-commit framework, a plain Git `pre-commit` hook script
-works too. Add `npx -y docmeta validate "docs/**/*.md"` to
+works too. Add `npx -y moose-meta validate "docs/**/*.md"` to
 `.git/hooks/pre-commit` (and `exit` on its status). The commit aborts when
-docmeta exits non-zero. This is a per-clone hook and is not shared through the
+moose-meta exits non-zero. This is a per-clone hook and is not shared through the
 repository, which is why the pre-commit framework above is usually preferable.
 </Aside>
 
@@ -211,23 +211,23 @@ repository, which is why the pre-commit framework above is usually preferable.
 <CardGrid>
   <LinkCard
     title="Exit codes & PR annotations"
-    href="/docmeta/ci/exit-codes-and-annotations/"
+    href="/moose-meta/ci/exit-codes-and-annotations/"
     description="The exact 0/1/2 contract and the pretty, json, and github output shapes."
   />
   <LinkCard
     title="GitHub Actions recipe"
-    href="/docmeta/ci/"
+    href="/moose-meta/ci/"
     description="The ready-made GitHub Actions workflow with inline PR annotations."
   />
 </CardGrid>
 
-{/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+{/* Doc Detective inline tests: verify this page's documented moose-meta behavior
+    against the local build, exposed as `moose-meta` / `npx moose-meta` via `npm link`
     (see .github/workflows/doc-detective.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"ci-recipes","description":"The stable contract every recipe depends on, run against the local CLI build."} */}
-{/* step {"description":"Exit 0 when all files are valid.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md","exitCodes":[0]}} */}
-{/* step {"description":"Exit 1 when one or more files fail validation.","runShell":{"command":"npx docmeta validate test/fixtures/missing-type.md","exitCodes":[1]}} */}
-{/* step {"description":"Exit 2 on an operational or usage error.","runShell":{"command":"npx docmeta validate","exitCodes":[2],"stdio":"No files to validate"}} */}
-{/* step {"description":"`--format json` emits a machine-readable report for capture as a CI artifact.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md --format json","exitCodes":[0],"stdio":"/\"summary\"/"}} */}
+{/* step {"description":"Exit 0 when all files are valid.","runShell":{"command":"npx moose-meta validate test/fixtures/valid.md","exitCodes":[0]}} */}
+{/* step {"description":"Exit 1 when one or more files fail validation.","runShell":{"command":"npx moose-meta validate test/fixtures/missing-type.md","exitCodes":[1]}} */}
+{/* step {"description":"Exit 2 on an operational or usage error.","runShell":{"command":"npx moose-meta validate","exitCodes":[2],"stdio":"No files to validate"}} */}
+{/* step {"description":"`--format json` emits a machine-readable report for capture as a CI artifact.","runShell":{"command":"npx moose-meta validate test/fixtures/valid.md --format json","exitCodes":[0],"stdio":"/\"summary\"/"}} */}
 {/* test end */}

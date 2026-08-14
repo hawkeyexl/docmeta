@@ -3,10 +3,10 @@ import starlight from "@astrojs/starlight";
 
 export default defineConfig({
   site: "https://hawkeyexl.github.io",
-  base: "/docmeta",
+  base: "/moose-meta",
   integrations: [
     starlight({
-      title: "docmeta",
+      title: "moose-meta",
       sidebar: [
         {
           label: "Get started",

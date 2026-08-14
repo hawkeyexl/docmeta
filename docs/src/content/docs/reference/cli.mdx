@@ -1,6 +1,6 @@
 ---
 title: CLI reference
-description: Every docmeta command, argument, and flag (validate, get, fill, and schemas), with the shared input model and default ignores.
+description: Every moose-meta command, argument, and flag (validate, get, fill, and schemas), with the shared input model and default ignores.
 ---
 
 import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
@@ -10,13 +10,13 @@ import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
     enforced in CI. Keep flags, arguments, and defaults in sync with the code;
     descriptions are free-form. */}
 
-docmeta exposes four subcommands: [`validate`](#validate) (the default),
+moose-meta exposes four subcommands: [`validate`](#validate) (the default),
 [`get`](#get), [`fill`](#fill), and [`schemas`](#schemas). `validate`, `get`, and
 `fill` share an [input model](#shared-input-model) and several flags with
 identical semantics.
 
 ```sh
-docmeta [global options] [command] [command options] [arguments]
+moose-meta [global options] [command] [command options] [arguments]
 ```
 
 ## Global options
@@ -25,22 +25,22 @@ Global options are accepted before the subcommand.
 
 | Option | Description |
 |---|---|
-| `-V, --version` | Print the docmeta version and exit. |
-| `--no-color` | Disable colored output. See [color behavior](/docmeta/reference/output-and-exit-codes/#color-behavior). |
+| `-V, --version` | Print the moose-meta version and exit. |
+| `--no-color` | Disable colored output. See [color behavior](/moose-meta/reference/output-and-exit-codes/#color-behavior). |
 | `-h, --help` | Print help for the program or a subcommand. |
 
-`validate` is the default command, so `docmeta <paths...>` runs validation
+`validate` is the default command, so `moose-meta <paths...>` runs validation
 without naming the subcommand.
 
 ## `validate`
 
 Validate the metadata in the given files, directories, or globs against the
-resolved [schema set](/docmeta/reference/schema-resolution/) for each file. This is the
+resolved [schema set](/moose-meta/reference/schema-resolution/) for each file. This is the
 default command.
 
 ```sh
-docmeta validate [paths...] [options]
-docmeta [paths...] [options]
+moose-meta validate [paths...] [options]
+moose-meta [paths...] [options]
 ```
 
 ### Arguments
@@ -53,12 +53,12 @@ docmeta [paths...] [options]
 
 | Option | Argument | Default | Description |
 |---|---|---|---|
-| `-s, --schema` | `<ref>` | — | Schema to validate against. Repeatable. When given, it overrides `$schema` and config for every file. See [reference kinds](/docmeta/reference/schema-resolution/#reference-kinds). |
+| `-s, --schema` | `<ref>` | — | Schema to validate against. Repeatable. When given, it overrides `$schema` and config for every file. See [reference kinds](/moose-meta/reference/schema-resolution/#reference-kinds). |
 | `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
 | `--exclude` | `<glob>` | — | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
-| `--as` | `<format>` | — | Force an input [format](/docmeta/reference/formats/) (extractor name, e.g. `markdown`). Required when reading from stdin. |
-| `-f, --format` | `<pretty\|json\|github>` | `pretty` | [Output format](/docmeta/reference/output-and-exit-codes/). An unknown value is an error (exit 2). |
-| `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). When set, the file must exist or docmeta exits 2. |
+| `--as` | `<format>` | — | Force an input [format](/moose-meta/reference/formats/) (extractor name, e.g. `markdown`). Required when reading from stdin. |
+| `-f, --format` | `<pretty\|json\|github>` | `pretty` | [Output format](/moose-meta/reference/output-and-exit-codes/). An unknown value is an error (exit 2). |
+| `-c, --config` | `<path>` | discovered | Path to a [config file](/moose-meta/reference/configuration/). When set, the file must exist or moose-meta exits 2. |
 | `-q, --quiet` | — | off | In `pretty` output, hide passing files. Has no effect on `json` or `github`. |
 
 <Aside type="note">
@@ -69,10 +69,10 @@ value, for example `-s a -s b`.
 ### Examples
 
 ```sh
-docmeta validate docs/                          # walk a directory
-docmeta validate "**/*.md" -f github            # CI annotations
-docmeta validate page.md -s google:okf:0.1 -s ./my.schema.json
-cat page.md | docmeta validate - --as markdown  # read from stdin
+moose-meta validate docs/                          # walk a directory
+moose-meta validate "**/*.md" -f github            # CI annotations
+moose-meta validate page.md -s google:okf:0.1 -s ./my.schema.json
+cat page.md | moose-meta validate - --as markdown  # read from stdin
 ```
 
 ## `get`
@@ -81,7 +81,7 @@ Print the values of one or more metadata fields from each file. Useful for
 scripted extraction. `get` reads and reports values; it does not validate.
 
 ```sh
-docmeta get <fields> [paths...] [options]
+moose-meta get <fields> [paths...] [options]
 ```
 
 ### Arguments
@@ -122,9 +122,9 @@ unaffected.
 |---|---|---|---|
 | `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
 | `--exclude` | `<glob>` | — | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
-| `--as` | `<format>` | — | Force an input [format](/docmeta/reference/formats/) (extractor name). Required when reading from stdin. |
+| `--as` | `<format>` | — | Force an input [format](/moose-meta/reference/formats/) (extractor name). Required when reading from stdin. |
 | `-f, --format` | `<pretty\|json>` | `pretty` | Output format. `get` has no `github` format. An unknown value is an error (exit 2). |
-| `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). When set, the file must exist or docmeta exits 2. |
+| `-c, --config` | `<path>` | discovered | Path to a [config file](/moose-meta/reference/configuration/). When set, the file must exist or moose-meta exits 2. |
 
 ### Output
 
@@ -137,21 +137,21 @@ requested field to its value; a requested field that is unset is omitted from
 ### Examples
 
 ```sh
-docmeta get title,type docs/intro.md
-docmeta get author.name,/author/email docs/intro.md
-docmeta get type "**/*.md" -f json
-cat page.md | docmeta get title - --as markdown
+moose-meta get title,type docs/intro.md
+moose-meta get author.name,/author/email docs/intro.md
+moose-meta get type "**/*.md" -f json
+cat page.md | moose-meta get title - --as markdown
 ```
 
 ## `fill`
 
 Infer values for the metadata properties that are missing or invalid, and write
 back the ones the model is confident about. `fill` resolves the same
-[schema set](/docmeta/reference/schema-resolution/) as `validate`, so the schema
+[schema set](/moose-meta/reference/schema-resolution/) as `validate`, so the schema
 you already maintain is what determines which properties get proposed.
 
 ```sh
-docmeta fill [paths...] [options]
+moose-meta fill [paths...] [options]
 ```
 
 <Aside type="caution">
@@ -195,17 +195,17 @@ used, in both output formats.
 | `-s, --schema` | `<ref>` | — | Schema to fill against. Repeatable. When given, it overrides `$schema` and config for every file. |
 | `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
 | `--exclude` | `<glob>` | — | Glob to exclude from directory and glob walks. Repeatable. |
-| `--as` | `<format>` | — | Force an input [format](/docmeta/reference/formats/). Required when reading from stdin. |
+| `--as` | `<format>` | — | Force an input [format](/moose-meta/reference/formats/). Required when reading from stdin. |
 | `--fields` | `<list>` | all candidates | Comma-separated top-level fields to fill. Everything else is left alone. |
 | `--confidence` | `<n>` | `0.7` | Minimum self-reported confidence, from 0 to 1, needed to write a value. A non-numeric or out-of-range value is an error (exit 2). |
 | `--dry-run` | — | off | Report proposals without writing them. |
 | `--provider` | `<name>` | `auto` | Inference provider: `auto`, `anthropic`, `openai`, `claude-cli`, `llama-cpp`, or `mock`. `auto` detects one — see [above](#fill). An unknown name is an error (exit 2). |
 | `--model` | `<model>` | provider default | Model override. **Needs a named provider**, from either `--provider` or config `fill.provider` — a model name does not say which provider owns it, so pairing it with `auto` (including the default) is an error (exit 2). |
-| `--no-cache` | — | cache on | Bypass the proposal cache in `.docmeta/cache`. |
+| `--no-cache` | — | cache on | Bypass the proposal cache in `.moose/meta/cache`. |
 | `--max-cost-usd` | `<usd>` | — | Stop scheduling new files once this much has been spent. |
 | `--concurrency` | `<n>` | `4` | Files inferred in parallel. |
 | `-f, --format` | `<pretty\|json>` | `pretty` | Output format. `fill` has no `github` format. An unknown value is an error (exit 2). |
-| `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). |
+| `-c, --config` | `<path>` | discovered | Path to a [config file](/moose-meta/reference/configuration/). |
 
 ### Which properties get filled
 
@@ -225,7 +225,7 @@ checks run first, and a high confidence cannot override any of them:
    that is not a valid `date-time` is rejected before it is ever scored. When
    several schemas in the set define the same property, every one of their rules
    applies, so `-s` order does not change what the model may propose.
-2. **The property must be one docmeta asked about.** The model cannot introduce
+2. **The property must be one moose-meta asked about.** The model cannot introduce
    keys your schema does not define.
 3. **The document must still validate afterwards.** Any value that would leave
    the page failing its own schema is reverted and reported.
@@ -239,8 +239,8 @@ Because the cache stores the proposal *before* gating, re-running with a
 different `--confidence` re-scores the cached proposals and costs nothing. That
 is the intended way to tune the threshold on a real docset.
 
-The cache lives in `.docmeta/cache` relative to the working directory. It is
-machine-local and safe to delete at any time. Add `.docmeta/` to your
+The cache lives in `.moose/meta/cache` relative to the working directory. It is
+machine-local and safe to delete at any time. Add `.moose/` to your
 `.gitignore`. Pass `--no-cache` to bypass it entirely.
 
 ### Which formats can be written
@@ -250,7 +250,7 @@ the document. `markdown` and `mdx` are always writable. `rst` and `asciidoc` are
 writable **only when the file already has a fenced front matter block**, because their
 native docinfo and header syntax is lossy to read back, and a bare `---` means
 something else in both languages. `xml` and `html` are read-only. Run
-`docmeta schemas` to see which is which. Targeting a read-only file is reported
+`moose-meta schemas` to see which is which. Targeting a read-only file is reported
 as a per-file error, not a failed run.
 
 ### Exit codes
@@ -263,10 +263,10 @@ and operational failures exit **2**, as elsewhere.
 ### Examples
 
 ```sh
-docmeta fill docs/ --dry-run                 # preview, write nothing
-docmeta fill docs/ --confidence 0.9          # only near-certain values
-docmeta fill page.md --fields description,tags
-cat page.md | docmeta fill - --as markdown   # filled document to stdout
+moose-meta fill docs/ --dry-run                 # preview, write nothing
+moose-meta fill docs/ --confidence 0.9          # only near-certain values
+moose-meta fill page.md --fields description,tags
+cat page.md | moose-meta fill - --as markdown   # filled document to stdout
 ```
 
 ## `schemas`
@@ -275,7 +275,7 @@ List the built-in schemas and the supported input formats. Takes no positional
 arguments and reads no files.
 
 ```sh
-docmeta schemas [options]
+moose-meta schemas [options]
 ```
 
 ### Options
@@ -292,8 +292,8 @@ each input format with its extensions, whether it is implemented, and whether
 `{ name, extensions, implemented, writable }`.
 
 ```sh
-docmeta schemas
-docmeta schemas -f json
+moose-meta schemas
+moose-meta schemas -f json
 ```
 
 ## Shared input model
@@ -303,20 +303,20 @@ docmeta schemas -f json
 - **Positional paths** are files, directories, or globs. A named file is always
   read. A directory or glob is expanded and filtered to the extensions in
   `--ext` (or, by default, the extensions of the [implemented
-  formats](/docmeta/reference/formats/)).
+  formats](/moose-meta/reference/formats/)).
 - **`-` reads stdin.** Stdin requires `--as <format>` to choose an extractor,
-  because there is no filename extension to detect from. Without `--as`, docmeta
+  because there is no filename extension to detect from. Without `--as`, moose-meta
   exits 2.
 - **Config `paths:` is the fallback.** When no positional paths are given,
-  docmeta uses `paths:` from the [config file](/docmeta/reference/configuration/).
+  moose-meta uses `paths:` from the [config file](/moose-meta/reference/configuration/).
   Positional paths, when present, override config `paths:` entirely.
 - **No input and no config is an error.** If you pass no paths and no config
-  supplies `paths:`, docmeta reports an operational error and exits 2. It does
+  supplies `paths:`, moose-meta reports an operational error and exits 2. It does
   not silently produce empty output.
 
 <Aside type="caution">
 `--as` forces one extractor for every input in the run. Use it for stdin, or to
-read a file whose extension docmeta would not otherwise recognize.
+read a file whose extension moose-meta would not otherwise recognize.
 </Aside>
 
 ### Default ignores
@@ -333,26 +333,26 @@ Dotfiles and dot-directories are also excluded from directory and glob walks by
 default. An explicitly named file is always read, even if it matches an ignore
 glob or is a dotfile.
 
-{/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+{/* Doc Detective inline tests: verify this page's documented moose-meta behavior
+    against the local build, exposed as `moose-meta` / `npx moose-meta` via `npm link`
     (see .github/workflows/doc-detective.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"cli-reference","description":"The documented command and flag surface, exercised against the local build."} */}
-{/* step {"description":"validate accepts multiple --schema refs (a set) and a passing file exits 0.","runShell":{"command":"docmeta validate test/fixtures/valid.md -s google:okf:0.1 -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
-{/* step {"description":"Shared input model: - reads stdin, with --as choosing the extractor.","runShell":{"command":"docmeta validate - --as markdown < test/fixtures/valid.md","exitCodes":[0],"stdio":"<stdin>"}} */}
-{/* step {"description":"get -f json prints an array of { file, present, values }.","runShell":{"command":"docmeta get title,type test/fixtures/valid.md -f json","exitCodes":[0],"stdio":"/\"present\": true[\\s\\S]*\"type\": \"concept\"/"}} */}
-{/* step {"description":"get reports an absent field as unset (pretty) and present:false for a file with no metadata block.","runShell":{"command":"docmeta get title test/fixtures/no-frontmatter.md","exitCodes":[0],"stdio":"title=(unset)"}} */}
-{/* step {"description":"Nested fields: dot-notation, JSON Pointer (/author/email), and array index all resolve in one comma-separated request.","runShell":{"command":"docmeta get author.name,/author/email,tags.0 test/fixtures/nested/doc.md -f json","exitCodes":[0],"stdio":"/\"Jane\"[\\s\\S]*\"jane@example.com\"[\\s\\S]*\"intro\"/"}} */}
-{/* step {"description":"Requesting a parent key returns the whole nested object.","runShell":{"command":"docmeta get author test/fixtures/nested/doc.md -f json","exitCodes":[0],"stdio":"/\"name\": \"Jane\"[\\s\\S]*\"email\": \"jane@example.com\"/"}} */}
-{/* step {"description":"schemas -f json prints { builtins, formats }.","runShell":{"command":"docmeta schemas -f json","exitCodes":[0],"stdio":"/\"builtins\"[\\s\\S]*\"formats\"/"}} */}
-{/* step {"description":"schemas reports per-format writability, which fill depends on.","runShell":{"command":"docmeta schemas -f json","exitCodes":[0],"stdio":"/\"name\": \"markdown\"[\\s\\S]*\"writable\": true/"}} */}
-{/* step {"description":"fill documents its confidence gate and provider flags in --help.","runShell":{"command":"docmeta fill --help","exitCodes":[0],"stdio":"--confidence"}} */}
-{/* step {"description":"fill follows the shared input model: no paths and no config is an operational error (exit 2).","runShell":{"command":"docmeta fill","exitCodes":[2],"stdio":"No files"}} */}
-{/* step {"description":"fill rejects a non-numeric --confidence before contacting a provider (exit 2).","runShell":{"command":"docmeta fill test/fixtures/valid.md --confidence abc","exitCodes":[2],"stdio":"--confidence"}} */}
-{/* step {"description":"fill rejects an out-of-range --confidence (exit 2).","runShell":{"command":"docmeta fill test/fixtures/valid.md --confidence 1.5","exitCodes":[2],"stdio":"between 0 and 1"}} */}
-{/* step {"description":"fill has no github output format (exit 2).","runShell":{"command":"docmeta fill test/fixtures/valid.md -f github","exitCodes":[2],"stdio":"Unknown --format"}} */}
-{/* step {"description":"fill rejects an unknown provider before reading any file (exit 2).","runShell":{"command":"docmeta fill test/fixtures/valid.md --provider antropic","exitCodes":[2],"stdio":"antropic"}} */}
-{/* step {"description":"A model with no provider is ambiguous, and fails before the run starts (exit 2).","runShell":{"command":"docmeta fill test/fixtures/valid.md --model gpt-4o-mini","exitCodes":[2],"stdio":"provider"}} */}
+{/* step {"description":"validate accepts multiple --schema refs (a set) and a passing file exits 0.","runShell":{"command":"moose-meta validate test/fixtures/valid.md -s google:okf:0.1 -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"Shared input model: - reads stdin, with --as choosing the extractor.","runShell":{"command":"moose-meta validate - --as markdown < test/fixtures/valid.md","exitCodes":[0],"stdio":"<stdin>"}} */}
+{/* step {"description":"get -f json prints an array of { file, present, values }.","runShell":{"command":"moose-meta get title,type test/fixtures/valid.md -f json","exitCodes":[0],"stdio":"/\"present\": true[\\s\\S]*\"type\": \"concept\"/"}} */}
+{/* step {"description":"get reports an absent field as unset (pretty) and present:false for a file with no metadata block.","runShell":{"command":"moose-meta get title test/fixtures/no-frontmatter.md","exitCodes":[0],"stdio":"title=(unset)"}} */}
+{/* step {"description":"Nested fields: dot-notation, JSON Pointer (/author/email), and array index all resolve in one comma-separated request.","runShell":{"command":"moose-meta get author.name,/author/email,tags.0 test/fixtures/nested/doc.md -f json","exitCodes":[0],"stdio":"/\"Jane\"[\\s\\S]*\"jane@example.com\"[\\s\\S]*\"intro\"/"}} */}
+{/* step {"description":"Requesting a parent key returns the whole nested object.","runShell":{"command":"moose-meta get author test/fixtures/nested/doc.md -f json","exitCodes":[0],"stdio":"/\"name\": \"Jane\"[\\s\\S]*\"email\": \"jane@example.com\"/"}} */}
+{/* step {"description":"schemas -f json prints { builtins, formats }.","runShell":{"command":"moose-meta schemas -f json","exitCodes":[0],"stdio":"/\"builtins\"[\\s\\S]*\"formats\"/"}} */}
+{/* step {"description":"schemas reports per-format writability, which fill depends on.","runShell":{"command":"moose-meta schemas -f json","exitCodes":[0],"stdio":"/\"name\": \"markdown\"[\\s\\S]*\"writable\": true/"}} */}
+{/* step {"description":"fill documents its confidence gate and provider flags in --help.","runShell":{"command":"moose-meta fill --help","exitCodes":[0],"stdio":"--confidence"}} */}
+{/* step {"description":"fill follows the shared input model: no paths and no config is an operational error (exit 2).","runShell":{"command":"moose-meta fill","exitCodes":[2],"stdio":"No files"}} */}
+{/* step {"description":"fill rejects a non-numeric --confidence before contacting a provider (exit 2).","runShell":{"command":"moose-meta fill test/fixtures/valid.md --confidence abc","exitCodes":[2],"stdio":"--confidence"}} */}
+{/* step {"description":"fill rejects an out-of-range --confidence (exit 2).","runShell":{"command":"moose-meta fill test/fixtures/valid.md --confidence 1.5","exitCodes":[2],"stdio":"between 0 and 1"}} */}
+{/* step {"description":"fill has no github output format (exit 2).","runShell":{"command":"moose-meta fill test/fixtures/valid.md -f github","exitCodes":[2],"stdio":"Unknown --format"}} */}
+{/* step {"description":"fill rejects an unknown provider before reading any file (exit 2).","runShell":{"command":"moose-meta fill test/fixtures/valid.md --provider antropic","exitCodes":[2],"stdio":"antropic"}} */}
+{/* step {"description":"A model with no provider is ambiguous, and fails before the run starts (exit 2).","runShell":{"command":"moose-meta fill test/fixtures/valid.md --model gpt-4o-mini","exitCodes":[2],"stdio":"provider"}} */}
 {/* Everything above stops before inference. The three below actually run it, using
      the local model — the only provider that needs no credential, and so the only
      one testable in CI at all. They are also the only steps here that need the
@@ -362,7 +362,7 @@ glob or is a dotfile.
      `VAR= cmd` is bash-only and fails on Windows, where these tests also run. The
      keyless claim is carried by naming llama-cpp outright, which needs no key by
      construction, rather than by manipulating the environment. */}
-{/* step {"description":"Detection always resolves a concrete provider, whatever credentials are present — never the literal selector.","runShell":{"command":"docmeta fill test/fixtures/fill/does-not-exist.md --dry-run --no-cache -f json","exitCodes":[0],"stdio":"/\"provider\": \"(anthropic|openai|claude-cli|llama-cpp)\"/"}} */}
-{/* step {"description":"fill completes end to end on a local model, needing no credential, and names the provider and model in its report.","runShell":{"command":"docmeta fill test/fixtures/fill/no-block.md --provider llama-cpp --model granite-4.1-3b-q2 --fields title --dry-run --no-cache","exitCodes":[0],"stdio":"llama-cpp/granite-4.1-3b-q2"}} */}
-{/* step {"description":"A local run costs nothing, so the report carries a zero cost rather than a billed figure.","runShell":{"command":"docmeta fill test/fixtures/fill/no-block.md --provider llama-cpp --model granite-4.1-3b-q2 --fields title --dry-run --no-cache -f json","exitCodes":[0],"stdio":"/\"costUsd\": 0/"}} */}
+{/* step {"description":"Detection always resolves a concrete provider, whatever credentials are present — never the literal selector.","runShell":{"command":"moose-meta fill test/fixtures/fill/does-not-exist.md --dry-run --no-cache -f json","exitCodes":[0],"stdio":"/\"provider\": \"(anthropic|openai|claude-cli|llama-cpp)\"/"}} */}
+{/* step {"description":"fill completes end to end on a local model, needing no credential, and names the provider and model in its report.","runShell":{"command":"moose-meta fill test/fixtures/fill/no-block.md --provider llama-cpp --model granite-4.1-3b-q2 --fields title --dry-run --no-cache","exitCodes":[0],"stdio":"llama-cpp/granite-4.1-3b-q2"}} */}
+{/* step {"description":"A local run costs nothing, so the report carries a zero cost rather than a billed figure.","runShell":{"command":"moose-meta fill test/fixtures/fill/no-block.md --provider llama-cpp --model granite-4.1-3b-q2 --fields title --dry-run --no-cache -f json","exitCodes":[0],"stdio":"/\"costUsd\": 0/"}} */}
 {/* test end */}

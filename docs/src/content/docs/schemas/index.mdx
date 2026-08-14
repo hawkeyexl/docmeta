@@ -1,6 +1,6 @@
 ---
 title: Author a schema for your metadata standard
-description: Write a JSON Schema that docmeta validates against, covering required vs. recommended fields, value formats, and how a document names its own schema.
+description: Write a JSON Schema that moose-meta validates against, covering required vs. recommended fields, value formats, and how a document names its own schema.
 sidebar:
   label: Author a schema
   order: 1
@@ -8,15 +8,15 @@ sidebar:
 
 import { Steps, Tabs, TabItem, CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
 
-Your metadata standard already exists, even if it only lives in a style guide or in people's heads: "every page needs a `type`," "`timestamp` should be an ISO date," "API pages must declare a `version`." A JSON Schema turns those agreements into a file that docmeta can enforce on every commit. This page walks through writing that schema, from a minimal one-field example up to the fuller built-in OKF schema, and shows how a document points itself at the schema you wrote.
+Your metadata standard already exists, even if it only lives in a style guide or in people's heads: "every page needs a `type`," "`timestamp` should be an ISO date," "API pages must declare a `version`." A JSON Schema turns those agreements into a file that moose-meta can enforce on every commit. This page walks through writing that schema, from a minimal one-field example up to the fuller built-in OKF schema, and shows how a document points itself at the schema you wrote.
 
-<Aside type="note" title="What docmeta checks, and what it doesn't">
-docmeta validates the **presence and format** of metadata: that required fields exist, that values match the types and formats your schema declares, and that no disallowed fields slipped in. It does **not** judge prose quality, check that a `description` is *well written*, or follow links to confirm a `resource` URI resolves. Your schema is a contract about the *shape* of the frontmatter, not its meaning.
+<Aside type="note" title="What moose-meta checks, and what it doesn't">
+moose-meta validates the **presence and format** of metadata: that required fields exist, that values match the types and formats your schema declares, and that no disallowed fields slipped in. It does **not** judge prose quality, check that a `description` is *well written*, or follow links to confirm a `resource` URI resolves. Your schema is a contract about the *shape* of the frontmatter, not its meaning.
 </Aside>
 
 ## A schema is just a JSON file
 
-docmeta validates against standard [JSON Schema](https://json-schema.org/). If you can write JSON, you can write a docmeta schema; there is no docmeta-specific schema format to learn. A schema describes the frontmatter object: which keys are required, what type each value should be, and whether unexpected keys are allowed.
+moose-meta validates against standard [JSON Schema](https://json-schema.org/). If you can write JSON, you can write a moose-meta schema; there is no moose-meta-specific schema format to learn. A schema describes the frontmatter object: which keys are required, what type each value should be, and whether unexpected keys are allowed.
 
 Here is the smallest schema worth shipping. It says: the metadata must be an object, it must have a `title`, and that `title` must be a non-empty string.
 
@@ -31,9 +31,9 @@ Here is the smallest schema worth shipping. It says: the metadata must be an obj
 }
 ```
 
-This is the [`extra.schema.json`](https://github.com/hawkeyexl/docmeta/blob/main/test/fixtures/extra.schema.json) fixture that docmeta's own test suite runs, so you can trust it compiles and validates exactly as shown. Four things are doing the work:
+This is the [`extra.schema.json`](https://github.com/hawkeyexl/moose-meta/blob/main/test/fixtures/extra.schema.json) fixture that moose-meta's own test suite runs, so you can trust it compiles and validates exactly as shown. Four things are doing the work:
 
-- **`"$schema"`** at the top names the JSON Schema *dialect* this file is written in: here, draft 2020-12. docmeta reads this line to pick the right validation engine. (This is the schema's own dialect declaration. It is different from the `$schema` key you put in a *document* to choose a schema, covered [below](#point-a-document-at-its-schema).)
+- **`"$schema"`** at the top names the JSON Schema *dialect* this file is written in: here, draft 2020-12. moose-meta reads this line to pick the right validation engine. (This is the schema's own dialect declaration. It is different from the `$schema` key you put in a *document* to choose a schema, covered [below](#point-a-document-at-its-schema).)
 - **`"type": "object"`** says the metadata is a set of key/value pairs, which frontmatter always is.
 - **`"required": ["title"]`** is the list of fields that *must* be present. A document missing `title` fails validation.
 - **`"properties"`** describes individual fields. `title` must be a string, and `minLength: 1` rejects an empty `title:` that a contributor left blank.
@@ -46,14 +46,14 @@ title: Getting started
 ---
 ```
 
-A document with empty or missing `title` fails. That is the whole loop: declare the shape, and docmeta holds every file to it.
+A document with empty or missing `title` fails. That is the whole loop: declare the shape, and moose-meta holds every file to it.
 
 ## Required vs. recommended fields
 
 The single most important decision in a metadata schema is which fields are *required* and which are merely *recommended*. JSON Schema models this with one list:
 
 - **Required**: list the field in `"required"`. Its absence is a hard failure.
-- **Recommended (optional)**: describe the field in `"properties"` but leave it out of `"required"`. If the field is present, docmeta checks its type and format; if it's absent, that's fine.
+- **Recommended (optional)**: describe the field in `"properties"` but leave it out of `"required"`. If the field is present, moose-meta checks its type and format; if it's absent, that's fine.
 
 This distinction is what lets you encode a standard that has a strict core and a softer edge. In the example below, `type` is mandatory, while `title` and `tags` are validated *when present* but never demanded:
 
@@ -74,12 +74,12 @@ This distinction is what lets you encode a standard that has a strict core and a
 ```
 
 <Aside type="tip" title="Start small, ratchet up">
-A common pattern is to require almost nothing at first, so existing docs pass, then promote fields from recommended to required over time as the repo catches up. The usual move is to add a new field to `"properties"` first (validated when present, but not yet demanded), land it across your docs, then move it into `"required"` once coverage is high. Moving a field into `"required"` is the lever for tightening the standard. The [Versioning &amp; dialects](/docmeta/schemas/versioning/) guide covers staging that rollout across a large repo.
+A common pattern is to require almost nothing at first, so existing docs pass, then promote fields from recommended to required over time as the repo catches up. The usual move is to add a new field to `"properties"` first (validated when present, but not yet demanded), land it across your docs, then move it into `"required"` once coverage is high. Moving a field into `"required"` is the lever for tightening the standard. The [Versioning &amp; dialects](/moose-meta/schemas/versioning/) guide covers staging that rollout across a large repo.
 </Aside>
 
 ## Constrain values with types and formats
 
-Requiring a field guarantees it exists; constraining it guarantees it's *usable*. JSON Schema gives you the building blocks, and docmeta supports the standard `format` checks through [ajv-formats](https://github.com/ajv-validator/ajv-formats). Two formats come up constantly in document metadata:
+Requiring a field guarantees it exists; constraining it guarantees it's *usable*. JSON Schema gives you the building blocks, and moose-meta supports the standard `format` checks through [ajv-formats](https://github.com/ajv-validator/ajv-formats). Two formats come up constantly in document metadata:
 
 <Tabs>
 <TabItem label="date-time">
@@ -130,12 +130,12 @@ By default, JSON Schema lets a document carry fields your schema never mentions.
 - **`"additionalProperties": false`**: every key must be declared in `"properties"`. An unexpected key is a failure. Use this to catch typos like `titel:` or to keep frontmatter tightly governed.
 
 <Aside type="caution" title="Strict schemas and the $schema directive">
-Setting `"additionalProperties": false`? A document's own `$schema:` key won't trip it, because docmeta strips `$schema` before validating, so you never need to add it to your schema's `properties`. See [The `$schema` key is reserved](/docmeta/schemas/resolution/#the-schema-key-is-reserved) for the full mechanism.
+Setting `"additionalProperties": false`? A document's own `$schema:` key won't trip it, because moose-meta strips `$schema` before validating, so you never need to add it to your schema's `properties`. See [The `$schema` key is reserved](/moose-meta/schemas/resolution/#the-schema-key-is-reserved) for the full mechanism.
 </Aside>
 
 ## A fuller example: the built-in OKF schema
 
-The schema anchoring docmeta's default set is [Open Knowledge Format (OKF) v0.1](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md), addressed as `google:okf:0.1`. (Run `docmeta schemas` for the full built-in list.) It's a useful reference because it combines every technique on this page in a realistic standard, so reading it is the fastest way to see how the pieces fit together. When no other schema applies, docmeta falls back to a *set* rather than to OKF alone: `google:okf:0.1` together with [`passo-uno:seven-action:1.0`](/docmeta/reference/taxonomy-schemas/), which constrains an optional `action` field and requires nothing of its own.
+The schema anchoring moose-meta's default set is [Open Knowledge Format (OKF) v0.1](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md), addressed as `google:okf:0.1`. (Run `moose-meta schemas` for the full built-in list.) It's a useful reference because it combines every technique on this page in a realistic standard, so reading it is the fastest way to see how the pieces fit together. When no other schema applies, moose-meta falls back to a *set* rather than to OKF alone: `google:okf:0.1` together with [`passo-uno:seven-action:1.0`](/moose-meta/reference/taxonomy-schemas/), which constrains an optional `action` field and requires nothing of its own.
 
 ```json title="src/schemas/okf/0.1.json"
 {
@@ -184,7 +184,7 @@ Notice the design choices OKF makes, each one a decision you'll face in your own
 - **Exactly one required field** (`type`). OKF demands the bare minimum, so adopting it rarely breaks existing files.
 - **`additionalProperties: true`**, stated explicitly. Unknown keys are welcome by design, because OKF is meant to be extended.
 - **Recommended fields with real constraints.** `title`, `description`, and `tags` are optional, but if present they're checked. `resource` and `timestamp` carry `uri` and `date-time` formats.
-- **A `$id` and human-readable `title`/`description`.** These aren't required for validation, but they document the schema for the humans who read it, and `$id` is what gives the *built-in* its `google:okf:0.1` address. Setting a `$id` in a schema file of your own does not register a new built-in id — built-ins are bundled into docmeta — so you reference your own schema by its file path or URL, never by its `$id`. Give it an id of your own, or leave it out; see the warning below before reusing one.
+- **A `$id` and human-readable `title`/`description`.** These aren't required for validation, but they document the schema for the humans who read it, and `$id` is what gives the *built-in* its `google:okf:0.1` address. Setting a `$id` in a schema file of your own does not register a new built-in id — built-ins are bundled into moose-meta — so you reference your own schema by its file path or URL, never by its `$id`. Give it an id of your own, or leave it out; see the warning below before reusing one.
 
 <Aside type="caution" title="Change the `$id` when you copy a built-in">
 The block above is the shipped `google:okf:0.1`, so copying it verbatim leaves you with a *local* file claiming a *built-in's* `$id`. The validator identifies a compiled schema by `$id`, so if both are used in one run, whichever compiles first wins and the other ref is silently checked against it — your edits are ignored and the run can pass when it should fail. Nothing errors, so there is no signal to notice.
@@ -192,30 +192,30 @@ The block above is the shipped `google:okf:0.1`, so copying it verbatim leaves y
 Change `$id` to something of your own (`acme:docs:1.0`), or delete the line. Then reference the file by path:
 
 ```bash
-docmeta validate docs/ -s ./schemas/metadata.schema.json
+moose-meta validate docs/ -s ./schemas/metadata.schema.json
 ```
 </Aside>
 
 <Aside type="tip" title="Start from OKF or start from scratch">
-If OKF's field set is close to what you need, copy it into a file and adjust: add your required fields, tighten `additionalProperties`, change the formats, and give it your own `$id`. If your standard is very different, start from the minimal one-field schema at the top of this page and grow it. Either way, keep the `$schema` dialect line; docmeta needs it to choose a validation engine.
+If OKF's field set is close to what you need, copy it into a file and adjust: add your required fields, tighten `additionalProperties`, change the formats, and give it your own `$id`. If your standard is very different, start from the minimal one-field schema at the top of this page and grow it. Either way, keep the `$schema` dialect line; moose-meta needs it to choose a validation engine.
 </Aside>
 
 ## Borrow a schema instead of writing one
 
-Everything above assumes you're defining the field set yourself. docmeta ships
+Everything above assumes you're defining the field set yourself. moose-meta ships
 seven schemas you can adopt without authoring anything — the [built-in schema
-registry](/docmeta/reference/built-in-schemas/) lists all of them in one table,
+registry](/moose-meta/reference/built-in-schemas/) lists all of them in one table,
 with what each constrains and which two are on by default.
 
 If your site is built with Docusaurus, start with
-[`docusaurus:docs:3.10`](/docmeta/reference/docusaurus-schemas/) and its blog
+[`docusaurus:docs:3.10`](/moose-meta/reference/docusaurus-schemas/) and its blog
 and pages counterparts. They encode the front matter contract of Docusaurus 3.10
 and require nothing, so switching one on cannot fail a page that was already
 building — it only catches a `sidebar_position: "2"` that your site would have
 rejected later. They claim none of the `type` or `action` keys below, so they
 stack with any of the vocabularies. They do share `tags` with OKF, which allows
 only strings where Docusaurus also allows tag objects — see [the overlap
-note](/docmeta/reference/built-in-schemas/#two-kinds-of-built-in) before pairing
+note](/moose-meta/reference/built-in-schemas/#two-kinds-of-built-in) before pairing
 those two.
 
 If what you need is a *closed list of document types*, three of the built-ins
@@ -232,20 +232,20 @@ neither needs a partner for presence-checking — stack one with OKF for the
 *other* OKF fields. Both schemas apply in full, in either order:
 
 ```bash
-docmeta validate docs/ -s diataxis:diataxis:1.0 -s google:okf:0.1
+moose-meta validate docs/ -s diataxis:diataxis:1.0 -s google:okf:0.1
 ```
 
 Seven-Action is the exception: it rules that an `action`, if present, is
 legitimate, without insisting on one. That is what makes it safe to layer onto
 what you already have. Every value of all three, which combinations compose, and
 the crosswalk from Seven-Action to Diátaxis are in the [taxonomy schemas
-reference](/docmeta/reference/taxonomy-schemas/).
+reference](/moose-meta/reference/taxonomy-schemas/).
 
 ## Point a document at its schema
 
-A schema only matters once documents are validated against it. The most direct way to connect the two is to let a document name its own schema with a `$schema` key in its frontmatter. docmeta reads that key and validates the file against whatever it points to.
+A schema only matters once documents are validated against it. The most direct way to connect the two is to let a document name its own schema with a `$schema` key in its frontmatter. moose-meta reads that key and validates the file against whatever it points to.
 
-Here is a document naming the built-in OKF schema, the [`schema-ref.md`](https://github.com/hawkeyexl/docmeta/blob/main/test/fixtures/schema-ref.md) fixture:
+Here is a document naming the built-in OKF schema, the [`schema-ref.md`](https://github.com/hawkeyexl/moose-meta/blob/main/test/fixtures/schema-ref.md) fixture:
 
 ```markdown title="schema-ref.md"
 ---
@@ -270,7 +270,7 @@ title: My page
 ```
 
 <Aside type="caution" title="Where a relative path resolves from">
-A relative file path like `./schemas/metadata.schema.json` resolves from the **working directory where you run docmeta**, not from the document. In CI, that's usually the repo root, so prefer a path from the repo root over one that looks relative to the file. See [the three reference kinds](/docmeta/schemas/resolution/#the-three-reference-kinds) for how docmeta classifies file, built-in, and URL references.
+A relative file path like `./schemas/metadata.schema.json` resolves from the **working directory where you run moose-meta**, not from the document. In CI, that's usually the repo root, so prefer a path from the repo root over one that looks relative to the file. See [the three reference kinds](/moose-meta/schemas/resolution/#the-three-reference-kinds) for how moose-meta classifies file, built-in, and URL references.
 </Aside>
 
 <Steps>
@@ -282,15 +282,15 @@ A relative file path like `./schemas/metadata.schema.json` resolves from the **w
 3. **Validate it:**
 
    ```sh
-   npx docmeta validate path/to/document.md
+   npx moose-meta validate path/to/document.md
    ```
 
-   docmeta resolves the document's `$schema`, validates the frontmatter, and reports any missing or malformed fields.
+   moose-meta resolves the document's `$schema`, validates the frontmatter, and reports any missing or malformed fields.
 
 </Steps>
 
 <Aside type="note" title="$schema is one of several ways to wire a schema">
-Naming the schema inside a document is the most self-contained option, but you can also apply a schema to a whole directory from config, or set one from the command line. When several could apply to one file, a fixed precedence order decides which wins. The next guide, [How schema resolution works](/docmeta/schemas/resolution/), lays out that order and the three kinds of schema reference (built-in, file, and URL).
+Naming the schema inside a document is the most self-contained option, but you can also apply a schema to a whole directory from config, or set one from the command line. When several could apply to one file, a fixed precedence order decides which wins. The next guide, [How schema resolution works](/moose-meta/schemas/resolution/), lays out that order and the three kinds of schema reference (built-in, file, and URL).
 </Aside>
 
 ## Where to go next
@@ -298,44 +298,44 @@ Naming the schema inside a document is the most self-contained option, but you c
 <CardGrid>
   <LinkCard
     title="Built-in schemas"
-    href="/docmeta/reference/built-in-schemas/"
-    description="The registry: every schema docmeta ships, what it constrains, and which two are on by default."
+    href="/moose-meta/reference/built-in-schemas/"
+    description="The registry: every schema moose-meta ships, what it constrains, and which two are on by default."
   />
   <LinkCard
     title="How schema resolution works"
-    href="/docmeta/schemas/resolution/"
+    href="/moose-meta/schemas/resolution/"
     description="The precedence order that decides which schema applies to a file, and the three reference kinds."
   />
   <LinkCard
     title="Versioning & dialects"
-    href="/docmeta/schemas/versioning/"
+    href="/moose-meta/schemas/versioning/"
     description="Evolve a schema, and tighten required fields, without breaking CI in every consuming repo."
   />
   <LinkCard
     title="Schema resolution reference"
-    href="/docmeta/reference/schema-resolution/"
+    href="/moose-meta/reference/schema-resolution/"
     description="The lookup table for precedence, reference kinds, and supported JSON Schema dialects."
   />
   <LinkCard
     title="Built-in OKF schema, explained"
-    href="/docmeta/reference/okf-schema/"
+    href="/moose-meta/reference/okf-schema/"
     description="Every field in google:okf:0.1, its dialect, and the upstream spec."
   />
 </CardGrid>
 
-{/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+{/* Doc Detective inline tests: verify this page's documented moose-meta behavior
+    against the local build, exposed as `moose-meta` / `npx moose-meta` via `npm link`
     (see .github/workflows/doc-detective.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"author-a-schema","description":"Schema-authoring claims, demonstrated with the committed fixtures the page itself cites."} */}
-{/* step {"description":"A document points itself at a schema via $schema (schema-ref.md names google:okf:0.1) and validates against it.","runShell":{"command":"npx docmeta validate test/fixtures/schema-ref.md","exitCodes":[0],"stdio":"1 passed"}} */}
-{/* step {"description":"The minimal title.schema.json shape (the extra.schema.json fixture) passes a doc that has a title.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
-{/* step {"description":"A required field that is absent is a hard failure: a frontmatter-free doc fails the required `title`.","runShell":{"command":"npx docmeta validate test/fixtures/no-frontmatter.md -s ./test/fixtures/extra.schema.json","exitCodes":[1],"stdio":"must have required property 'title'"}} */}
-{/* step {"description":"The date-time format is enforced: a malformed timestamp fails against OKF.","runShell":{"command":"npx docmeta validate test/fixtures/bad-timestamp.md","exitCodes":[1],"stdio":"date-time"}} */}
-{/* step {"description":"`schemas` lists the built-in OKF schema the page documents as the fallback.","runShell":{"command":"npx docmeta schemas","exitCodes":[0],"stdio":"google:okf:0.1"}} */}
-{/* step {"description":"`schemas` also lists the Diataxis vocabulary this page points readers at.","runShell":{"command":"npx docmeta schemas","exitCodes":[0],"stdio":"diataxis:diataxis:1.0"}} */}
-{/* step {"description":"Stacking OKF with a taxonomy schema passes a document carrying a canonical Diataxis type.","runShell":{"command":"npx docmeta validate test/fixtures/taxonomy/diataxis-how-to.md -s google:okf:0.1 -s diataxis:diataxis:1.0","exitCodes":[0],"stdio":"1 passed"}} */}
-{/* step {"description":"The vocabulary is closed: a near-miss spelling fails against the Diataxis schema.","runShell":{"command":"npx docmeta validate test/fixtures/taxonomy/diataxis-bad-type.md -s diataxis:diataxis:1.0","exitCodes":[1],"stdio":"allowed values"}} */}
-{/* step {"description":"`schemas` also lists the Good Docs Project vocabulary this page points readers at.","runShell":{"command":"npx docmeta schemas","exitCodes":[0],"stdio":"tgdp:templates:1.0"}} */}
-{/* step {"description":"The TGDP vocabulary accepts a template slug that has no Diataxis equivalent.","runShell":{"command":"npx docmeta validate test/fixtures/taxonomy/tgdp-installation-guide.md -s tgdp:templates:1.0","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"A document points itself at a schema via $schema (schema-ref.md names google:okf:0.1) and validates against it.","runShell":{"command":"npx moose-meta validate test/fixtures/schema-ref.md","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"The minimal title.schema.json shape (the extra.schema.json fixture) passes a doc that has a title.","runShell":{"command":"npx moose-meta validate test/fixtures/valid.md -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"A required field that is absent is a hard failure: a frontmatter-free doc fails the required `title`.","runShell":{"command":"npx moose-meta validate test/fixtures/no-frontmatter.md -s ./test/fixtures/extra.schema.json","exitCodes":[1],"stdio":"must have required property 'title'"}} */}
+{/* step {"description":"The date-time format is enforced: a malformed timestamp fails against OKF.","runShell":{"command":"npx moose-meta validate test/fixtures/bad-timestamp.md","exitCodes":[1],"stdio":"date-time"}} */}
+{/* step {"description":"`schemas` lists the built-in OKF schema the page documents as the fallback.","runShell":{"command":"npx moose-meta schemas","exitCodes":[0],"stdio":"google:okf:0.1"}} */}
+{/* step {"description":"`schemas` also lists the Diataxis vocabulary this page points readers at.","runShell":{"command":"npx moose-meta schemas","exitCodes":[0],"stdio":"diataxis:diataxis:1.0"}} */}
+{/* step {"description":"Stacking OKF with a taxonomy schema passes a document carrying a canonical Diataxis type.","runShell":{"command":"npx moose-meta validate test/fixtures/taxonomy/diataxis-how-to.md -s google:okf:0.1 -s diataxis:diataxis:1.0","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"The vocabulary is closed: a near-miss spelling fails against the Diataxis schema.","runShell":{"command":"npx moose-meta validate test/fixtures/taxonomy/diataxis-bad-type.md -s diataxis:diataxis:1.0","exitCodes":[1],"stdio":"allowed values"}} */}
+{/* step {"description":"`schemas` also lists the Good Docs Project vocabulary this page points readers at.","runShell":{"command":"npx moose-meta schemas","exitCodes":[0],"stdio":"tgdp:templates:1.0"}} */}
+{/* step {"description":"The TGDP vocabulary accepts a template slug that has no Diataxis equivalent.","runShell":{"command":"npx moose-meta validate test/fixtures/taxonomy/tgdp-installation-guide.md -s tgdp:templates:1.0","exitCodes":[0],"stdio":"1 passed"}} */}
 {/* test end */}
