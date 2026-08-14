@@ -7,7 +7,7 @@ on:
   pull_request:
 
 jobs:
-  docmeta:
+  moose-meta:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,7 +18,7 @@ jobs:
       # Validate all Markdown. `--format github` turns failures into inline PR
       # annotations; the nonzero exit code fails the job.
       - name: Validate frontmatter
-        run: npx -y docmeta validate "**/*.md" --format github
+        run: npx -y moose-meta validate "**/*.md" --format github
 
-      # Or, with a docmeta.config.yaml at the repo root, simply:
-      # - run: npx -y docmeta validate --format github
+      # Or, with a moose-meta.config.yaml at the repo root, simply:
+      # - run: npx -y moose-meta validate --format github
