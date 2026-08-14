@@ -1,6 +1,6 @@
 # Content strategy
 
-This directory holds the durable content strategy for the docmeta documentation site. It is the reference every writing task should consult before drafting a page.
+This directory holds the durable content strategy for the moose-meta documentation site. It is the reference every writing task should consult before drafting a page.
 
 These files live inside `docs/` but outside `docs/src/content/docs/**`, so they are not published as end-user pages. They are internal working documents for agents and contributors.
 
@@ -31,7 +31,7 @@ Before drafting or editing any user-facing documentation:
 
 ## Verifying technical claims
 
-docmeta docs document a real CLI, so every flag, exit code, output string, and schema rule must match the code — never the writer's assumption.
+moose-meta docs document a real CLI, so every flag, exit code, output string, and schema rule must match the code — never the writer's assumption.
 
 - **Source files are the contract for behavior** (`src/cli.ts` for flags, `src/core/` for config and schema resolution, `src/extractors/` for formats).
 - **The test suite is the contract for *exact emitted strings*.** Type definitions in `src/types.ts` describe the *shape* of output, but they over-promise: a field can be declared and never populated (e.g. `col` is part of the error shape but no extractor sets it today). Before documenting concrete output — pretty lines, JSON values, `github` annotations — verify the literal strings against the assertions in `test/*.test.ts` (e.g. `test/reporters.test.ts`, `test/commands.test.ts`, `test/cli.integration.test.ts`). The tests encode what the tool actually prints.
