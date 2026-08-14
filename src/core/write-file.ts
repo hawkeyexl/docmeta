@@ -41,7 +41,7 @@ export async function writeFileAtomic(
 ): Promise<void> {
   const tmp = join(
     dirname(path),
-    `.${basename(path)}.docmeta-${process.pid}-${Math.random().toString(36).slice(2, 8)}.tmp`,
+    `.${basename(path)}.moose-meta-${process.pid}-${Math.random().toString(36).slice(2, 8)}.tmp`,
   );
 
   try {
@@ -70,7 +70,7 @@ export async function writeFileAtomic(
     }
 
     process.stderr.write(
-      `docmeta: ${path} is locked by another process; writing in place (not atomically).\n`,
+      `moose-meta: ${path} is locked by another process; writing in place (not atomically).\n`,
     );
     try {
       await writeFile(path, contents, "utf8");

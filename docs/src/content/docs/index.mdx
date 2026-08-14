@@ -1,23 +1,23 @@
 ---
-title: docmeta
+title: moose-meta
 description: Validate the presence and format of document metadata against JSON Schema, built for CI.
 template: splash
 hero:
   tagline: Validate the presence and format of document metadata against JSON Schema, built for CI.
   actions:
     - text: Get started
-      link: /docmeta/get-started/
+      link: /moose-meta/get-started/
       icon: right-arrow
       variant: primary
     - text: Fix a failing check
-      link: /docmeta/fix/
+      link: /moose-meta/fix/
       icon: error
       variant: minimal
 ---
 
 import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-docmeta checks that your documents carry the metadata your tooling depends on,
+moose-meta checks that your documents carry the metadata your tooling depends on,
 that every page declares a `type`, that timestamps are real dates, that required
 fields are actually present, and it fails your build when they aren't. It reads
 the frontmatter or headers from your files, validates them against a
@@ -25,15 +25,15 @@ the frontmatter or headers from your files, validates them against a
 
 It validates the **presence and format** of metadata. It does not grade your
 prose, check your spelling, or judge your content. If your schema says every
-page needs a `title` and an ISO 8601 `timestamp`, docmeta enforces exactly that
+page needs a `title` and an ISO 8601 `timestamp`, moose-meta enforces exactly that
 and nothing more.
 
 ## A 30-second proof
 
-You don't need to install anything to try it. Point docmeta at a Markdown file:
+You don't need to install anything to try it. Point moose-meta at a Markdown file:
 
 ```sh
-npx docmeta validate path/to/your-doc.md
+npx moose-meta validate path/to/your-doc.md
 ```
 
 A file with complete, well-formed metadata passes:
@@ -55,7 +55,7 @@ which line, and which schema flagged it:
 ```
 
 That's the whole loop: run it, read the result, fix the field, run it again.
-With no schema configured, docmeta validates against its built-in
+With no schema configured, moose-meta validates against its built-in
 [OKF schema](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md),
 which requires only `type`.
 
@@ -64,37 +64,37 @@ which requires only `type`.
 <CardGrid>
   <LinkCard
     title="Set up validation"
-    href="/docmeta/set-up/"
-    description="Add a config file and a schema, then wire docmeta into your repo. Start here if you own the docs."
+    href="/moose-meta/set-up/"
+    description="Add a config file and a schema, then wire moose-meta into your repo. Start here if you own the docs."
   />
   <LinkCard
     title="Run it in CI"
-    href="/docmeta/ci/"
-    description="Drop docmeta into GitHub Actions, GitLab CI, Jenkins, or pre-commit. Exit codes and PR annotations."
+    href="/moose-meta/ci/"
+    description="Drop moose-meta into GitHub Actions, GitLab CI, Jenkins, or pre-commit. Exit codes and PR annotations."
   />
   <LinkCard
     title="Define & evolve schemas"
-    href="/docmeta/schemas/"
+    href="/moose-meta/schemas/"
     description="Encode your metadata standard as a JSON Schema, wire it to the right files, and evolve it safely."
   />
   <LinkCard
     title="Fix a failing check"
-    href="/docmeta/fix/"
-    description="Your PR's docmeta check is red? Map the error to a field and line, fix it, and confirm green."
+    href="/moose-meta/fix/"
+    description="Your PR's moose-meta check is red? Map the error to a field and line, fix it, and confirm green."
   />
   <LinkCard
     title="Reference"
-    href="/docmeta/reference/"
+    href="/moose-meta/reference/"
     description="Every command, flag, config key, output format, and exit code. The lookup shelf."
   />
 </CardGrid>
 
-Not sure you need to write a schema at all? docmeta ships seven, from the
+Not sure you need to write a schema at all? moose-meta ships seven, from the
 Docusaurus front matter contract to the Diátaxis and Good Docs vocabularies.
-The [built-in schema registry](/docmeta/reference/built-in-schemas/) lists them
+The [built-in schema registry](/moose-meta/reference/built-in-schemas/) lists them
 all in one table.
 
-## What docmeta checks, and what it doesn't
+## What moose-meta checks, and what it doesn't
 
 <CardGrid>
   <Card title="It checks" icon="approve-check">
@@ -108,14 +108,14 @@ all in one table.
   </Card>
 </CardGrid>
 
-New here? The [Get started](/docmeta/get-started/) page installs docmeta and walks you
+New here? The [Get started](/moose-meta/get-started/) page installs moose-meta and walks you
 through your first passing and failing result in under a minute.
 
-{/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+{/* Doc Detective inline tests: verify this page's documented moose-meta behavior
+    against the local build, exposed as `moose-meta` / `npx moose-meta` via `npm link`
     (see .github/workflows/doc-detective.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"landing-proof","description":"The hero proof, run against the local CLI build and committed fixtures."} */}
-{/* step {"description":"A file with complete, well-formed metadata passes with a green summary.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 file checked, 1 passed, 0 failed, 0 errors"}} */}
-{/* step {"description":"A file missing a required field fails and names the field and the flagging schema.","runShell":{"command":"npx docmeta validate test/fixtures/missing-type.md","exitCodes":[1],"stdio":"/must have required property 'type'.*google:okf:0.1/"}} */}
+{/* step {"description":"A file with complete, well-formed metadata passes with a green summary.","runShell":{"command":"npx moose-meta validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 file checked, 1 passed, 0 failed, 0 errors"}} */}
+{/* step {"description":"A file missing a required field fails and names the field and the flagging schema.","runShell":{"command":"npx moose-meta validate test/fixtures/missing-type.md","exitCodes":[1],"stdio":"/must have required property 'type'.*google:okf:0.1/"}} */}
 {/* test end */}

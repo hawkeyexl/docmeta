@@ -6,14 +6,14 @@
  */
 import { readFile } from "node:fs/promises";
 import { resolve, extname } from "node:path";
-import { DocmetaError } from "../types.js";
+import { MooseMetaError } from "../types.js";
 import {
   extractorByName,
   extractorForExtension,
   supportedExtensions,
 } from "../extractors/index.js";
 import { resolveTargets, STDIN_TOKEN } from "../core/load-files.js";
-import { loadConfig, type DocmetaConfig } from "../core/config.js";
+import { loadConfig, type MooseMetaConfig } from "../core/config.js";
 
 export interface GetOptions {
   fields: string[];
@@ -36,25 +36,25 @@ export interface GetFileResult {
 export async function runGet(opts: GetOptions): Promise<GetFileResult[]> {
   const cwd = opts.cwd ?? process.cwd();
   if (opts.fields.length === 0) {
-    throw new DocmetaError("Specify at least one field to get.");
+    throw new MooseMetaError("Specify at least one field to get.");
   }
 
   const loaded = await loadConfig(opts.configPath, cwd);
-  const config: DocmetaConfig | null = loaded?.config ?? null;
+  const config: MooseMetaConfig | null = loaded?.config ?? null;
 
   // Determine inputs: explicit CLI inputs win, else config.paths.
   const inputs = opts.inputs.length > 0 ? opts.inputs : (config?.paths ?? []);
   const usingStdin = inputs.includes(STDIN_TOKEN);
 
   if (inputs.length === 0) {
-    throw new DocmetaError(
-      "No files to read. Pass paths/globs, or add `paths:` to docmeta.config.yaml.",
+    throw new MooseMetaError(
+      "No files to read. Pass paths/globs, or add `paths:` to moose-meta.config.yaml.",
     );
   }
 
   const forced = opts.as ? extractorByName(opts.as) : undefined;
   if (opts.as && !forced) {
-    throw new DocmetaError(
+    throw new MooseMetaError(
       `Unknown format "${opts.as}". Supported extensions: ${supportedExtensions().join(", ")}.`,
     );
   }
@@ -73,7 +73,7 @@ export async function runGet(opts: GetOptions): Promise<GetFileResult[]> {
   const readOne = (label: string, content: string, extension: string): void => {
     const extractor = forced ?? extractorForExtension(extension);
     if (!extractor) {
-      throw new DocmetaError(
+      throw new MooseMetaError(
         `Unsupported file type "${extension}" for "${label}". Supported: ${supportedExtensions().join(", ")}. Use --as to override.`,
       );
     }
@@ -85,7 +85,7 @@ export async function runGet(opts: GetOptions): Promise<GetFileResult[]> {
 
   if (usingStdin) {
     if (!forced) {
-      throw new DocmetaError(
+      throw new MooseMetaError(
         "Reading from stdin (`-`) requires --as <format> to choose an extractor.",
       );
     }

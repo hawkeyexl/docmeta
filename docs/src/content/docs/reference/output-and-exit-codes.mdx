@@ -1,12 +1,12 @@
 ---
 title: Output formats & exit codes
-description: The pretty, json, and github output formats; the 0/1/2 exit-code contract; and color, stdout/stderr behavior for docmeta validate.
+description: The pretty, json, and github output formats; the 0/1/2 exit-code contract; and color, stdout/stderr behavior for moose-meta validate.
 ---
 
 import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
-`docmeta validate` renders results in one of three formats, chosen with
-[`-f/--format`](/docmeta/reference/cli/#options). Whatever the format, the process exit
+`moose-meta validate` renders results in one of three formats, chosen with
+[`-f/--format`](/moose-meta/reference/cli/#options). Whatever the format, the process exit
 code follows a fixed [contract](#exit-codes) so CI can branch on it.
 
 ## Output formats
@@ -38,7 +38,7 @@ Each error line has the form:
 
 The summary line is `N files checked, M passed, K failed, E errors`, where `E`
 is the total number of error lines across all files. Pass
-[`-q/--quiet`](/docmeta/reference/cli/#options) to hide passing files and show only
+[`-q/--quiet`](/moose-meta/reference/cli/#options) to hide passing files and show only
 failures and the summary.
 
 </TabItem>
@@ -127,10 +127,10 @@ whose `schemas` set is empty. The rest of the run continues.
 |---|---|
 | `0` | All files passed (or nothing failed). |
 | `1` | One or more files failed validation. |
-| `2` | Operational or usage error (a `DocmetaError`) — for example, no inputs, an unknown `--format`, a missing config file, or an unresolvable schema. |
+| `2` | Operational or usage error (a `MooseMetaError`) — for example, no inputs, an unknown `--format`, a missing config file, or an unresolvable schema. |
 
 Exit code `1` reflects validation failures in the documents. Exit code `2`
-reflects a problem running docmeta itself, and means no validation verdict was
+reflects a problem running moose-meta itself, and means no validation verdict was
 produced.
 
 ### Per-command meaning of exit 1
@@ -139,22 +139,28 @@ produced.
 |---|---|
 | `validate` | One or more files failed validation. |
 | `get` | Never — a requested field that is absent is reported as unset, not as a failure. |
-| [`fill`](/docmeta/reference/cli/#fill) | A property the schema lists as `required` could not be filled confidently, or a file errored. Skipped **optional** properties leave the exit code at `0`. |
+| [`fill`](/moose-meta/reference/cli/#fill) | A property the schema lists as `required` could not be filled confidently, or a file errored. Skipped **optional** properties leave the exit code at `0`. |
 | `schemas` | Never. |
 
 The rule behind `fill`'s version is the same as `validate`'s: exit 1 means the
-documents still need work, not that docmeta malfunctioned.
+documents still need work, not that moose-meta malfunctioned.
 
 ## stdout vs stderr
 
 - **Primary output**: the rendered report in any format, goes to **stdout**.
-- **Diagnostics**: operational errors that cause exit 2, go to **stderr**,
-  prefixed with `docmeta: `.
+- **Diagnostics**: operational errors that cause exit 2, and warnings that do
+  not change the exit code (such as the [deprecated config
+  name](/moose-meta/reference/configuration/#discovery) notice), go to
+  **stderr**, prefixed with `moose-meta: `.
+
+A warning never changes the exit code and never reaches stdout, so a run that
+emits one still pipes clean JSON. Warnings are deduplicated: the same message is
+printed at most once per run.
 
 This separation lets you capture machine-readable output cleanly:
 
 ```sh
-docmeta validate docs/ -f json > results.json
+moose-meta validate docs/ -f json > results.json
 ```
 
 ## Color behavior
@@ -171,14 +177,14 @@ destination:
 
 The `json` and `github` formats are never colored.
 
-{/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+{/* Doc Detective inline tests: verify this page's documented moose-meta behavior
+    against the local build, exposed as `moose-meta` / `npx moose-meta` via `npm link`
     (see .github/workflows/doc-detective.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"output-and-exit-codes","description":"The reference shapes, exercised against the local build."} */}
-{/* step {"description":"json prints a single object with a summary and results.","runShell":{"command":"docmeta validate test/fixtures/bad-timestamp.md --format json","exitCodes":[1],"stdio":"/\"summary\"[\\s\\S]*\"results\"/"}} */}
-{/* step {"description":"json error objects carry schema, instancePath, message, and line.","runShell":{"command":"docmeta validate test/fixtures/bad-timestamp.md --format json","exitCodes":[1],"stdio":"\"instancePath\": \"/timestamp\""}} */}
-{/* step {"description":"An unparseable file becomes a failing result whose schema is (parse).","runShell":{"command":"docmeta validate test/fixtures/dd/malformed-yaml.md --format json","exitCodes":[1],"stdio":"\"(parse)\""}} */}
-{/* step {"description":"-q/--quiet still prints the summary line.","runShell":{"command":"docmeta validate test/fixtures/valid.md -q","exitCodes":[0],"stdio":"1 file checked, 1 passed, 0 failed, 0 errors"}} */}
-{/* step {"description":"--no-color is a global flag placed before the subcommand.","runShell":{"command":"docmeta --no-color validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"json prints a single object with a summary and results.","runShell":{"command":"moose-meta validate test/fixtures/bad-timestamp.md --format json","exitCodes":[1],"stdio":"/\"summary\"[\\s\\S]*\"results\"/"}} */}
+{/* step {"description":"json error objects carry schema, instancePath, message, and line.","runShell":{"command":"moose-meta validate test/fixtures/bad-timestamp.md --format json","exitCodes":[1],"stdio":"\"instancePath\": \"/timestamp\""}} */}
+{/* step {"description":"An unparseable file becomes a failing result whose schema is (parse).","runShell":{"command":"moose-meta validate test/fixtures/dd/malformed-yaml.md --format json","exitCodes":[1],"stdio":"\"(parse)\""}} */}
+{/* step {"description":"-q/--quiet still prints the summary line.","runShell":{"command":"moose-meta validate test/fixtures/valid.md -q","exitCodes":[0],"stdio":"1 file checked, 1 passed, 0 failed, 0 errors"}} */}
+{/* step {"description":"--no-color is a global flag placed before the subcommand.","runShell":{"command":"moose-meta --no-color validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 passed"}} */}
 {/* test end */}

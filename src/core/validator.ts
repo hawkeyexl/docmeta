@@ -10,7 +10,7 @@ import * as AjvDraft04Ns from "ajv-draft-04";
 import * as addFormatsNs from "ajv-formats";
 import { createRequire } from "node:module";
 import type { ErrorObject, ValidateFunction } from "ajv/dist/2020.js";
-import { DocmetaError, type FieldError } from "../types.js";
+import { MooseMetaError, type FieldError } from "../types.js";
 
 // ajv ships its meta-schema refs as JSON. A static JSON import survives
 // bundling as a bare ESM import without the required `type: json` attribute, so
@@ -76,7 +76,7 @@ function buildAjv(dialect: Dialect): InstanceType<AjvCtor> {
 }
 
 /**
- * Compile an ad-hoc 2020-12 schema with docmeta's format support.
+ * Compile an ad-hoc 2020-12 schema with moose-meta's format support.
  *
  * `fill` needs this for the proposal envelope it builds around a document
  * schema's own property subschemas: those routinely carry `format: "date-time"`
@@ -153,7 +153,7 @@ export class Validator {
       const registered = id != null ? ajv.getSchema(id) : undefined;
       return registered ?? ajv.compile(schema);
     } catch (err) {
-      throw new DocmetaError(
+      throw new MooseMetaError(
         `Schema "${ref}" failed to compile: ${(err as Error).message}`,
       );
     }
@@ -169,7 +169,7 @@ export class Validator {
     refs: string[],
     lineFor: (pointer: string) => number | undefined,
   ): Promise<FieldError[]> {
-    // `$schema` is a docmeta directive, not part of the document's metadata —
+    // `$schema` is a moose-meta directive, not part of the document's metadata —
     // strip it so schemas with additionalProperties:false don't flag it.
     const { [FILE_SCHEMA_KEY]: _omit, ...subject } = data;
     void _omit;

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://hawkeyexl.github.io/docmeta/doc-frontmatter.schema.json",
-  "title": "docmeta docs page frontmatter",
+  "$id": "https://hawkeyexl.github.io/moose-meta/doc-frontmatter.schema.json",
+  "title": "moose-meta docs page frontmatter",
   "description": "Requires every published docs page to declare a non-empty title and description. Starlight-specific keys (sidebar, template, hero, etc.) are allowed but unconstrained.",
   "type": "object",
   "required": ["title", "description"],

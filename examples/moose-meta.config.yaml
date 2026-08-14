@@ -1,5 +1,5 @@
-# Example docmeta config. Place a `docmeta.config.yaml` at your repo root so CI
-# can run a bare `docmeta validate`. All keys are optional.
+# Example moose-meta config. Place a `moose-meta.config.yaml` at your repo root so CI
+# can run a bare `moose-meta validate`. All keys are optional.
 
 # Default targets when no paths are passed on the CLI. Files, dirs, or globs.
 paths:

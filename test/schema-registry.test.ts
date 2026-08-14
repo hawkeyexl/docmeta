@@ -6,7 +6,7 @@ import {
   classifyRef,
   loadSchema,
 } from "../src/core/schema-registry.js";
-import { DocmetaError } from "../src/types.js";
+import { MooseMetaError } from "../src/types.js";
 import { startSchemaServer, type SchemaServer } from "./helpers/schema-server.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -87,7 +87,7 @@ describe("schema registry", () => {
 
   it("errors on an unknown built-in id, listing available ones", async () => {
     await expect(loadSchema("google:nope:9.9")).rejects.toBeInstanceOf(
-      DocmetaError,
+      MooseMetaError,
     );
     await expect(loadSchema("google:nope:9.9")).rejects.toThrow(
       /google:okf:0\.1/,
@@ -131,7 +131,7 @@ describe("loadSchema over http(s)", () => {
 
   it("errors on a non-2xx response", async () => {
     await expect(loadSchema(`${server.url}/missing.json`)).rejects.toThrow(
-      DocmetaError,
+      MooseMetaError,
     );
     await expect(loadSchema(`${server.url}/missing.json`)).rejects.toThrow(
       /HTTP 404/,
@@ -140,7 +140,7 @@ describe("loadSchema over http(s)", () => {
 
   it("errors on a non-JSON body", async () => {
     await expect(loadSchema(`${server.url}/notjson.json`)).rejects.toThrow(
-      DocmetaError,
+      MooseMetaError,
     );
     await expect(loadSchema(`${server.url}/notjson.json`)).rejects.toThrow(
       /JSON/,
@@ -150,7 +150,7 @@ describe("loadSchema over http(s)", () => {
   it("errors when the request exceeds the timeout", async () => {
     await expect(
       loadSchema(`${server.url}/slow.json`, { timeoutMs: 50 }),
-    ).rejects.toThrow(DocmetaError);
+    ).rejects.toThrow(MooseMetaError);
     await expect(
       loadSchema(`${server.url}/slow.json`, { timeoutMs: 50 }),
     ).rejects.toThrow(/timed out/i);

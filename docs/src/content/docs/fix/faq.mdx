@@ -1,13 +1,13 @@
 ---
 title: FAQ
-description: Short answers to the questions that come up most when a docmeta check fails, covering no frontmatter, which schema fired, validating one field, stdin, exit codes, and more.
+description: Short answers to the questions that come up most when a moose-meta check fails, covering no frontmatter, which schema fired, validating one field, stdin, exit codes, and more.
 ---
 
 import { Aside, LinkCard } from '@astrojs/starlight/components';
 
-Quick answers to the questions contributors ask most when a docmeta check goes
+Quick answers to the questions contributors ask most when a moose-meta check goes
 red. Each one links to the page that covers it in full. If you're staring at a
-failing check right now, start with [Fix a failing check](/docmeta/fix/); this page is
+failing check right now, start with [Fix a failing check](/moose-meta/fix/); this page is
 for the "wait, but what about…" follow-ups.
 
 ## What if a file has no frontmatter at all?
@@ -20,13 +20,13 @@ error it would for a file that simply left `type` out.
 So an empty or frontmatter-less file is not a free pass. It's the maximally
 failing case. If you expected the file to have metadata, the usual cause is a
 missing opening `---` fence, or content sitting above the block. See
-[No frontmatter at all](/docmeta/fix/#no-frontmatter-at-all) for the fix.
+[No frontmatter at all](/moose-meta/fix/#no-frontmatter-at-all) for the fix.
 
 ## Which schema validated my file, and why did *this* rule fire?
 
 Every error line ends with the schema that produced it, in brackets. For
 example `[google:okf:0.1]`. That's the schema whose rule you tripped. If you're
-surprised by *which* schema applied, docmeta picks it through a fixed precedence
+surprised by *which* schema applied, moose-meta picks it through a fixed precedence
 chain: a `--schema` flag wins over a `$schema` key in your file, which wins over
 config `overrides`, then config `schemas`, then the built-in default.
 
@@ -37,7 +37,7 @@ anything in the file itself.
 
 <LinkCard
   title="How schema resolution works"
-  href="/docmeta/reference/schema-resolution/"
+  href="/moose-meta/reference/schema-resolution/"
   description="The full precedence chain, the three reference kinds, and how each error is tagged with its schema."
 />
 
@@ -52,19 +52,19 @@ If your goal is just to *read* a field's value rather than validate it, that's a
 different command: `get` extracts named field values without validating anything.
 
 ```sh
-docmeta get type docs/guide.md
+moose-meta get type docs/guide.md
 ```
 
-See the [`validate`](/docmeta/reference/cli/#validate) and [`get`](/docmeta/reference/cli/#get)
+See the [`validate`](/moose-meta/reference/cli/#validate) and [`get`](/moose-meta/reference/cli/#get)
 references for each command's full surface.
 
 ## How do I validate content coming from stdin?
 
-Pass `-` as the path and tell docmeta which format to use with `--as`, since
+Pass `-` as the path and tell moose-meta which format to use with `--as`, since
 there's no filename extension to detect from:
 
 ```sh
-cat page.md | docmeta validate - --as markdown
+cat page.md | moose-meta validate - --as markdown
 ```
 
 `--as` takes an extractor name (`markdown`, `mdx`, `asciidoc`, and so on). The
@@ -72,7 +72,7 @@ same pattern works for `get`. Without `--as`, stdin is an error.
 
 <LinkCard
   title="CLI reference: shared input model"
-  href="/docmeta/reference/cli/#shared-input-model"
+  href="/moose-meta/reference/cli/#shared-input-model"
   description="How paths, stdin, and --as work the same way across validate and get."
 />
 
@@ -81,7 +81,7 @@ same pattern works for `get`. Without `--as`, stdin is an error.
 Use `--ext` to restrict which extensions directory and glob walks pick up:
 
 ```sh
-docmeta validate docs/ --ext md
+moose-meta validate docs/ --ext md
 ```
 
 This walks `docs/` but considers only `.md` files, leaving `.mdx`, `.adoc`, and
@@ -100,20 +100,20 @@ One of three:
 | --- | --- |
 | `0` | Every file passed. The check is green. |
 | `1` | One or more files **failed validation** — a missing or malformed field. The red check you're here to fix. |
-| `2` | An **operational error** — docmeta couldn't run the check at all (a missing or unreadable schema, an unsupported file type, no files to validate). The message goes to stderr, prefixed `docmeta:`. |
+| `2` | An **operational error** — moose-meta couldn't run the check at all (a missing or unreadable schema, an unsupported file type, no files to validate). The message goes to stderr, prefixed `moose-meta:`. |
 
 A `1` means fix your document. A `2` means fix the setup, not the content. CI
 gates on this code, so the distinction matters when you read a raw log.
 
 <LinkCard
   title="Output formats & exit codes"
-  href="/docmeta/reference/output-and-exit-codes/"
+  href="/moose-meta/reference/output-and-exit-codes/"
   description="The exact 0/1/2 contract, plus the pretty, JSON, and GitHub output shapes."
 />
 
-## Does docmeta check my prose or page content?
+## Does moose-meta check my prose or page content?
 
-No. docmeta validates the **presence and format of metadata**, the fields in
+No. moose-meta validates the **presence and format of metadata**, the fields in
 your frontmatter, and nothing about the body of the document. It won't flag
 spelling, broken links, tone, or anything in the prose. A red check always points
 at a frontmatter field, never at your writing.
@@ -123,12 +123,12 @@ at a frontmatter field, never at your writing.
 Exclude them by glob. On the command line:
 
 ```sh
-docmeta validate docs/ --exclude "**/drafts/**"
+moose-meta validate docs/ --exclude "**/drafts/**"
 ```
 
 `--exclude` is repeatable and merges with the default ignores (`node_modules`,
 `.git`) and anything in your config. To make the exclusion permanent for the
-whole repo, add it under `exclude:` in `docmeta.config.yaml` instead, so every
+whole repo, add it under `exclude:` in `moose-meta.config.yaml` instead, so every
 run, local and CI, skips the same files.
 
 <Aside type="tip">
@@ -138,30 +138,30 @@ run, local and CI, skips the same files.
 
 <LinkCard
   title="Configuration reference"
-  href="/docmeta/reference/configuration/"
+  href="/moose-meta/reference/configuration/"
   description="The exclude key, paths, schemas, and overrides, with how config merges with CLI flags."
 />
 
 ## Still stuck?
 
 If your error doesn't match anything here or on the fix-it page, the
-[Reference](/docmeta/reference/) shelf documents every flag, output format, exit code,
+[Reference](/moose-meta/reference/) shelf documents every flag, output format, exit code,
 and resolution rule in full.
 
 <LinkCard
   title="Read & fix a validation failure"
-  href="/docmeta/fix/"
+  href="/moose-meta/fix/"
   description="Decode the error line, map it to a field and line, fix it, and confirm green locally."
 />
 
-{/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+{/* Doc Detective inline tests: verify this page's documented moose-meta behavior
+    against the local build, exposed as `moose-meta` / `npx moose-meta` via `npm link`
     (see .github/workflows/doc-detective.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"fix-faq","description":"The how-do-I answers that map to runnable commands."} */}
-{/* step {"description":"Read a field's value (not validate it) with get.","runShell":{"command":"docmeta get type test/fixtures/valid.md","exitCodes":[0],"stdio":"type=concept"}} */}
-{/* step {"description":"Validate content from stdin: pass - and tell docmeta the format with --as.","runShell":{"command":"docmeta validate - --as markdown < test/fixtures/valid.md","exitCodes":[0],"stdio":"1 passed"}} */}
-{/* step {"description":"Stdin without --as is an operational error (exit 2).","runShell":{"command":"docmeta validate - < test/fixtures/valid.md","exitCodes":[2],"stdio":"requires --as"}} */}
-{/* step {"description":"Restrict a directory walk to one extension with --ext. Mirrors the page's documented --ext form, so the walk is intentionally unfiltered: it includes the dd/ mixed-content fixtures (the next step shows excluding them). The assertion checks only 'files checked' + exit 1, so it does not depend on the file count.","runShell":{"command":"docmeta validate test/fixtures --ext md","exitCodes":[1],"stdio":"files checked"}} */}
-{/* step {"description":"Exclude a glob from a walk; --exclude is repeatable and merges with config and defaults.","runShell":{"command":"docmeta validate test/fixtures --ext md --exclude \"test/fixtures/dd/**\"","exitCodes":[1],"stdio":"files checked"}} */}
+{/* step {"description":"Read a field's value (not validate it) with get.","runShell":{"command":"moose-meta get type test/fixtures/valid.md","exitCodes":[0],"stdio":"type=concept"}} */}
+{/* step {"description":"Validate content from stdin: pass - and tell moose-meta the format with --as.","runShell":{"command":"moose-meta validate - --as markdown < test/fixtures/valid.md","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"Stdin without --as is an operational error (exit 2).","runShell":{"command":"moose-meta validate - < test/fixtures/valid.md","exitCodes":[2],"stdio":"requires --as"}} */}
+{/* step {"description":"Restrict a directory walk to one extension with --ext. Mirrors the page's documented --ext form, so the walk is intentionally unfiltered: it includes the dd/ mixed-content fixtures (the next step shows excluding them). The assertion checks only 'files checked' + exit 1, so it does not depend on the file count.","runShell":{"command":"moose-meta validate test/fixtures --ext md","exitCodes":[1],"stdio":"files checked"}} */}
+{/* step {"description":"Exclude a glob from a walk; --exclude is repeatable and merges with config and defaults.","runShell":{"command":"moose-meta validate test/fixtures --ext md --exclude \"test/fixtures/dd/**\"","exitCodes":[1],"stdio":"files checked"}} */}
 {/* test end */}

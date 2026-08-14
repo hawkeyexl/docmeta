@@ -1,7 +1,7 @@
 name: Docs
 
 # Build the Starlight docs site and publish it to GitHub Pages on every push to
-# main. The deploy is gated on docmeta validating its own docs frontmatter
+# main. The deploy is gated on moose-meta validating its own docs frontmatter
 # (dogfooding): if a page is missing a required field, the site does not ship.
 on:
   push:
@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Dogfood: build the docmeta CLI from this repo and use it to validate the
+  # Dogfood: build the moose-meta CLI from this repo and use it to validate the
   # frontmatter of the docs pages. -s overrides the default OKF schema (which
   # requires `type`) with a docs-specific schema that requires title +
   # description.

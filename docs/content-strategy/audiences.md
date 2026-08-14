@@ -1,12 +1,12 @@
 # Target audiences
 
-docmeta serves four distinct audiences. The **lead audience** drives the primary IA track and gets the deepest coverage; secondary audiences have dedicated tracks but are scoped to what they actually need from the tool.
+moose-meta serves four distinct audiences. The **lead audience** drives the primary IA track and gets the deepest coverage; secondary audiences have dedicated tracks but are scoped to what they actually need from the tool.
 
 ## 1. Docs-as-code teams (lead)
 
 Own a docs repo and its frontmatter conventions. They want those conventions enforced automatically so downstream systems — search indexes, catalogs, site nav, knowledge graphs — don't break on bad metadata.
 
-This is the lead audience because they are the ones adopting docmeta as part of their workflow, configuring it, writing schemas, and living with the CI gate every day. Everything else serves them or intersects with them.
+This is the lead audience because they are the ones adopting moose-meta as part of their workflow, configuring it, writing schemas, and living with the CI gate every day. Everything else serves them or intersects with them.
 
 ## 2. Platform / CI engineers
 
@@ -22,6 +22,6 @@ This audience may overlap with docs-as-code teams (often the same person in a sm
 
 ## 4. Doc contributors (high-volume, secondary)
 
-Developers or writers who opened a PR and hit a red metadata check. They did not configure docmeta and don't need to understand it deeply — they need to decode one error, find the field, fix it, and move on.
+Developers or writers who opened a PR and hit a red metadata check. They did not configure moose-meta and don't need to understand it deeply — they need to decode one error, find the field, fix it, and move on.
 
 This is the highest-traffic audience by page visits because every contributor who trips a check lands on the fix-it page. It is secondary in terms of depth: one targeted page (T1) serves the entire journey.

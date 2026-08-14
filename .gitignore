@@ -10,5 +10,8 @@ coverage/
 # config is .doc-detective.json at the repo root; this directory is run output only.
 .doc-detective/
 
-# `docmeta fill` proposal cache — machine-local, safe to delete at any time.
+# `moose-meta fill` proposal cache — machine-local, safe to delete at any time.
+# `.docmeta/` is the pre-rename location; kept ignored for a release or two so
+# contributors' stale caches stay untracked.
+.moose/
 .docmeta/

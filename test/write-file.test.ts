@@ -11,7 +11,7 @@ import { writeFileAtomic } from "../src/core/write-file.js";
 let dir: string;
 
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), "docmeta-fill-"));
+  dir = await mkdtemp(join(tmpdir(), "moose-meta-fill-"));
 });
 
 afterEach(async () => {

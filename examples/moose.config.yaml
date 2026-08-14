@@ -1,0 +1,46 @@
+# Example SHARED config for the moose tool family. Place a `moose.config.yaml`
+# at your repo root and every moose tool reads it, so the things that are true
+# for all of them are stated once.
+#
+# Top-level keys are the family base. Each tool then reads its own block and
+# applies it as an overlay: moose-meta reads `meta:`. A tool that has no block
+# just uses the base.
+#
+# Prefer this file when several moose tools share targets. If you only run
+# moose-meta, a `moose-meta.config.yaml` with these keys at top level is
+# equivalent — and it wins if both files exist.
+
+# Shared by every tool: what to look at, and what to skip.
+paths:
+  - "docs/**/*.md"
+  - "articles/**/*.md"
+
+exclude:
+  - "**/drafts/**"
+
+# moose-meta's slice. Overlay rules, per key:
+#   paths / schemas / overrides  replace the base wholesale
+#   exclude                      is appended to the base
+#   fill                         merges key by key
+meta:
+  # Default schema SET applied to every matched file. Each file must satisfy
+  # ALL of these. A ref is a built-in id (vendor:name:version), a local .json
+  # path, or an http(s) URL.
+  schemas:
+    - google:okf:0.1
+
+  # Skipped in addition to the shared excludes above, not instead of them.
+  exclude:
+    - "**/generated/**"
+
+  # Optional per-glob overrides (first match wins).
+  overrides:
+    - files: "articles/**/*.md"
+      schemas:
+        - google:okf:0.1
+        # - diataxis:diataxis:1.0   # add your own / additional schemas here
+
+  # Defaults for `moose-meta fill`; every key is overridable by a CLI flag.
+  fill:
+    provider: anthropic
+    confidenceThreshold: 0.9

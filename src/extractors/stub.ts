@@ -4,7 +4,7 @@
  * clear "not yet implemented" message, and so adding the real parser later is
  * an isolated change to a single file.
  */
-import { DocmetaError, type MetadataExtractor } from "../types.js";
+import { MooseMetaError, type MetadataExtractor } from "../types.js";
 
 export function createStubExtractor(
   name: string,
@@ -16,7 +16,7 @@ export function createStubExtractor(
     extensions,
     implemented: false,
     extract() {
-      throw new DocmetaError(
+      throw new MooseMetaError(
         `The "${name}" metadata format is not yet implemented (${note}).`,
       );
     },

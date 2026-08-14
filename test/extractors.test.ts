@@ -15,7 +15,7 @@ import {
   listFormats,
 } from "../src/extractors/index.js";
 import { createStubExtractor } from "../src/extractors/stub.js";
-import { DocmetaError } from "../src/types.js";
+import { MooseMetaError } from "../src/types.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const readFixture = (name: string): string =>
@@ -709,7 +709,7 @@ describe("extractor registry", () => {
     // No registered format is a stub anymore; exercise the factory directly.
     const stub = createStubExtractor("planned", [".planned"], "future format");
     expect(stub.implemented).toBe(false);
-    expect(() => stub.extract("x", "x.planned")).toThrow(DocmetaError);
+    expect(() => stub.extract("x", "x.planned")).toThrow(MooseMetaError);
   });
 });
 
@@ -742,7 +742,7 @@ describe("write capability", () => {
     // the document renders, so refuse rather than guess.
     expect(() =>
       rstExtractor.apply?.(fill("native-docinfo.rst"), { title: "Hello" }),
-    ).toThrow(DocmetaError);
+    ).toThrow(MooseMetaError);
     expect(() =>
       rstExtractor.apply?.(fill("native-docinfo.rst"), { title: "Hello" }),
     ).toThrow(/fenced/i);

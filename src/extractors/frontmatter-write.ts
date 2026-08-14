@@ -26,7 +26,7 @@
 import { parseDocument, isMap, isCollection } from "yaml";
 import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
 import {
-  DocmetaError,
+  MooseMetaError,
   type ApplyOptions,
   type FrontmatterFlavor,
   type MetadataPatch,
@@ -63,7 +63,7 @@ export function applyFrontmatter(
     // An opening fence with no closing fence is not front matter, so the
     // locator returns null — but prepending a fresh block above a stray `---`
     // would produce two overlapping fences and corrupt the file. Refuse.
-    throw new DocmetaError(
+    throw new MooseMetaError(
       "Unterminated front matter fence: the opening fence has no matching close. Add a closing fence before filling metadata.",
     );
   }
@@ -79,7 +79,7 @@ export function applyFrontmatter(
 
   /* c8 ignore next 3 -- defensive: every serializer above emits LF only. */
   if (merged.includes("\r")) {
-    throw new DocmetaError("Internal error: serialized front matter contains CR.");
+    throw new MooseMetaError("Internal error: serialized front matter contains CR.");
   }
   const emitted = loc.eol === "\r\n" ? merged.replace(/\n/g, "\r\n") : merged;
 
@@ -109,12 +109,12 @@ export function applyFencedOnly(
   // probe — see the note in applyFrontmatter.
   if (locateFrontmatter(content) === null) {
     if (hasFrontmatterFence(content)) {
-      throw new DocmetaError(
+      throw new MooseMetaError(
         "Unterminated front matter fence: the opening fence has no matching close. Add a closing fence before filling metadata.",
       );
     }
-    throw new DocmetaError(
-      `This ${format} document has no fenced front matter block; docmeta can only write fenced front matter for ${format}. Add a fenced block, or set the field manually.`,
+    throw new MooseMetaError(
+      `This ${format} document has no fenced front matter block; moose-meta can only write fenced front matter for ${format}. Add a fenced block, or set the field manually.`,
     );
   }
   if (Object.keys(dropUndefined(patch)).length === 0) return content;
@@ -177,12 +177,12 @@ function mergeBlock(
 function mergeYaml(inner: string, patch: MetadataPatch): string {
   const doc = parseDocument(inner);
   if (doc.errors.length > 0) {
-    throw new DocmetaError(
+    throw new MooseMetaError(
       `Cannot rewrite invalid YAML front matter: ${doc.errors[0]?.message ?? "parse error"}`,
     );
   }
   if (doc.contents != null && !isMap(doc.contents)) {
-    throw new DocmetaError(
+    throw new MooseMetaError(
       "Cannot rewrite front matter: the root must be a mapping.",
     );
   }
@@ -312,7 +312,7 @@ function skipString(line: string, from: number, quote: string): number {
 /** Emit one `key = value` line, rejecting values TOML cannot express inline. */
 function emitTomlLine(key: string, value: unknown): string {
   if (value === null) {
-    throw new DocmetaError(
+    throw new MooseMetaError(
       `TOML has no null value; cannot set "${key}" in TOML front matter.`,
     );
   }
@@ -321,13 +321,13 @@ function emitTomlLine(key: string, value: unknown): string {
     !Array.isArray(value) &&
     !(value instanceof Date)
   ) {
-    throw new DocmetaError(
+    throw new MooseMetaError(
       `Cannot write the object value for "${key}" into TOML front matter.`,
     );
   }
   const line = stringifyToml({ [key]: value }).trimEnd();
   if (line.includes("\n") || line.startsWith("[")) {
-    throw new DocmetaError(
+    throw new MooseMetaError(
       `Cannot write the value for "${key}" into TOML front matter.`,
     );
   }
@@ -378,7 +378,7 @@ function parseJsonBlockText(text: string): Record<string, unknown> {
   if (text.trim() === "") return {};
   const parsed: unknown = JSON.parse(text);
   if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new DocmetaError(
+    throw new MooseMetaError(
       "Cannot rewrite front matter: the root must be an object.",
     );
   }
@@ -400,14 +400,14 @@ function parseBlock(
     case "yaml": {
       const doc = parseDocument(text);
       if (doc.errors.length > 0) {
-        throw new DocmetaError(
+        throw new MooseMetaError(
           `Cannot rewrite invalid YAML front matter: ${doc.errors[0]?.message ?? "parse error"}`,
         );
       }
       const js: unknown = doc.toJS({ maxAliasCount: 100 });
       if (js == null) return {};
       if (typeof js !== "object" || Array.isArray(js)) {
-        throw new DocmetaError(
+        throw new MooseMetaError(
           "Cannot rewrite front matter: the root must be a mapping.",
         );
       }
@@ -430,7 +430,7 @@ function verify(
   const expected = { ...parseBlock(flavor, inner), ...patch };
   const actual = parseBlock(flavor, merged);
   if (!deepEqual(actual, expected)) {
-    throw new DocmetaError(
+    throw new MooseMetaError(
       "Refusing to write front matter: the rewritten block did not read back as expected.",
     );
   }

@@ -24,7 +24,7 @@ import {
 import { buildEnvelopeSchema } from "../src/commands/fill-prompt.js";
 import { loadSchema } from "../src/core/schema-registry.js";
 import { compileWithFormats } from "../src/core/validator.js";
-import { DocmetaError } from "../src/types.js";
+import { MooseMetaError } from "../src/types.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string): string =>
@@ -33,7 +33,7 @@ const fixture = (name: string): string =>
 let dir: string;
 
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), "docmeta-fill-"));
+  dir = await mkdtemp(join(tmpdir(), "moose-meta-fill-"));
 });
 
 afterEach(async () => {
@@ -936,7 +936,7 @@ describe("runFill — operational errors", () => {
   it("errors when there are no inputs and no config", async () => {
     await expect(
       runFill({ ...base, cwd: dir, inputs: [], inferenceProvider: propose({}) }),
-    ).rejects.toBeInstanceOf(DocmetaError);
+    ).rejects.toBeInstanceOf(MooseMetaError);
   });
 
   it("errors on an unknown provider even when no file needs filling", async () => {
@@ -1024,7 +1024,7 @@ describe("runFill — operational errors", () => {
   it("takes the threshold from config when no flag is given", async () => {
     await mkdir(join(dir, "docs"), { recursive: true });
     await writeFile(
-      join(dir, "docmeta.config.yaml"),
+      join(dir, "moose-meta.config.yaml"),
       "paths:\n  - 'docs/**/*.md'\nfill:\n  confidenceThreshold: 0.95\n",
       "utf8",
     );
@@ -1063,7 +1063,7 @@ describe("provider selection", () => {
     });
 
   it("rejects an unknown provider", async () => {
-    await expect(runWith({ provider: "antropic" })).rejects.toThrow(DocmetaError);
+    await expect(runWith({ provider: "antropic" })).rejects.toThrow(MooseMetaError);
     await expect(runWith({ provider: "antropic" })).rejects.toThrow(/antropic/);
   });
 
@@ -1084,15 +1084,15 @@ describe("provider selection", () => {
     }
   });
 
-  it("still gets `mock` from the library, which docmeta's own tests rely on", async () => {
+  it("still gets `mock` from the library, which moose-meta's own tests rely on", async () => {
     // The accepted names are derived from DEFAULT_MODELS rather than hardcoded,
-    // which is what stopped the list going stale — but it also means docmeta
+    // which is what stopped the list going stale — but it also means moose-meta
     // silently inherits whatever the library drops. `mock` is the one entry
-    // docmeta itself depends on, so assert it directly: if a future version
+    // moose-meta itself depends on, so assert it directly: if a future version
     // removes it, this fails with a reason instead of an `Unknown provider
     // "mock"` from an unrelated test.
     //
-    // Re-adding "mock" to the local list would be worse — docmeta would accept a
+    // Re-adding "mock" to the local list would be worse — moose-meta would accept a
     // provider the library could no longer construct, moving the failure later
     // and making it harder to read.
     expect(Object.keys(DEFAULT_MODELS)).toContain("mock");
@@ -1101,14 +1101,14 @@ describe("provider selection", () => {
   it("refuses a model without a provider, as an operational error", async () => {
     // A model name belongs to one provider, so under detection it is ambiguous.
     // Carried through, it reached the API and 404'd after the run had started.
-    await expect(runWith({ model: "gpt-4o-mini" })).rejects.toThrow(DocmetaError);
+    await expect(runWith({ model: "gpt-4o-mini" })).rejects.toThrow(MooseMetaError);
     await expect(runWith({ model: "gpt-4o-mini" })).rejects.toThrow(/--provider/);
   });
 
   it("still refuses it when auto was named explicitly", async () => {
     await expect(
       runWith({ provider: "auto", model: "gpt-4o-mini" }),
-    ).rejects.toThrow(DocmetaError);
+    ).rejects.toThrow(MooseMetaError);
   });
 
   it("allows a model once the provider is named", async () => {
@@ -1122,7 +1122,7 @@ describe("provider selection", () => {
     // satisfies it exactly as --provider does, so a bare --model alongside it is
     // fine — the flag and the config key are not different rules.
     await writeFile(
-      join(dir, "docmeta.config.yaml"),
+      join(dir, "moose-meta.config.yaml"),
       "paths:\n  - '**/*.md'\nfill:\n  provider: openai\n",
       "utf8",
     );
@@ -1198,7 +1198,7 @@ describe("provider selection", () => {
 
   it("reads the provider from config when no flag is given", async () => {
     await writeFile(
-      join(dir, "docmeta.config.yaml"),
+      join(dir, "moose-meta.config.yaml"),
       "paths:\n  - '**/*.md'\nfill:\n  provider: antropic\n",
       "utf8",
     );
@@ -1214,7 +1214,7 @@ describe("the llama-cpp provider", () => {
   // llama-cpp path.
   //
   // Both variables are load-bearing, and the second one is easy to miss.
-  // `node-llama-cpp` is not a docmeta dependency, so it is absent from
+  // `node-llama-cpp` is not a moose-meta dependency, so it is absent from
   // node_modules — but the library also looks in its own runtime prefix, and
   // anything that has ever run a local model on this machine populates that.
   // Running the doc-detective suite does exactly that, and it broke these tests:
@@ -1301,7 +1301,7 @@ describe("the llama-cpp provider", () => {
         dryRun: true,
         provider: "llama-cpp",
       }),
-    ).rejects.toThrow(DocmetaError);
+    ).rejects.toThrow(MooseMetaError);
   });
 
 });

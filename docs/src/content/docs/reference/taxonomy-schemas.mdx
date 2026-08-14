@@ -1,13 +1,13 @@
 ---
 title: Built-in taxonomy schemas
-description: The diataxis, tgdp, and seven-action schemas shipped with docmeta, their vocabularies, which ones compete for a key, and how to compose them with OKF.
+description: The diataxis, tgdp, and seven-action schemas shipped with moose-meta, their vocabularies, which ones compete for a key, and how to compose them with OKF.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-docmeta ships three **taxonomy** schemas: closed vocabularies that constrain a
+moose-meta ships three **taxonomy** schemas: closed vocabularies that constrain a
 classification field to a published set of values. They exist because
-[`google:okf:0.1`](/docmeta/reference/okf-schema/) requires a `type` but accepts
+[`google:okf:0.1`](/moose-meta/reference/okf-schema/) requires a `type` but accepts
 any non-empty string for it, so it cannot stop a docs set from drifting into
 `how-to`, `howto`, and `guide` all meaning the same thing.
 
@@ -17,15 +17,15 @@ any non-empty string for it, so it cannot stop a docs set from drifting into
 | `tgdp:templates:1.0` | `type` | **Yes** | [The Good Docs Project](https://www.thegooddocsproject.dev/template) |
 | `passo-uno:seven-action:1.0` | `action` | No | [Seven-Action Documentation Model](https://passo.uno/seven-action-model/) |
 
-All three use [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects),
+All three use [Draft 2020-12](/moose-meta/reference/schema-resolution/#dialects),
 allow additional properties, and are [built-in
-references](/docmeta/reference/schema-resolution/#reference-kinds).
+references](/moose-meta/reference/schema-resolution/#reference-kinds).
 
 The two keyed on `type` are alternatives to each other — see [Which ones
-compose](#which-ones-compose). For the other four schemas docmeta ships,
+compose](#which-ones-compose). For the other four schemas moose-meta ships,
 including the [Docusaurus front matter
-contracts](/docmeta/reference/docusaurus-schemas/), see the [built-in schema
-registry](/docmeta/reference/built-in-schemas/).
+contracts](/moose-meta/reference/docusaurus-schemas/), see the [built-in schema
+registry](/moose-meta/reference/built-in-schemas/).
 
 ## Vocabulary checks vs. presence checks
 
@@ -39,26 +39,26 @@ makes an untyped page a gap rather than an abstention:
     (root)  must have required property 'type'  (line 1)  [diataxis:diataxis:1.0]
 ```
 
-Pair either with [`google:okf:0.1`](/docmeta/reference/okf-schema/) for the
+Pair either with [`google:okf:0.1`](/moose-meta/reference/okf-schema/) for the
 other OKF fields, not for `type`:
 
 ```bash
-docmeta validate docs/ -s diataxis:diataxis:1.0 -s google:okf:0.1
+moose-meta validate docs/ -s diataxis:diataxis:1.0 -s google:okf:0.1
 ```
 
 `passo-uno:seven-action:1.0` is the exception. It checks `action` only *if one
 is present*, which is what makes it safe to layer onto an existing setup — and
 what makes it safe to carry in the [default
-set](/docmeta/reference/schema-resolution/#precedence).
+set](/moose-meta/reference/schema-resolution/#precedence).
 
 <Aside type="caution" title="Both `type` schemas require the key, so retrofit with `--dry-run` first">
 On an existing docs set that never adopted either vocabulary, turning one on
-reports every untyped page at once. Run [`docmeta fill
---dry-run`](/docmeta/reference/cli/#fill) to see what would be proposed before
+reports every untyped page at once. Run [`moose-meta fill
+--dry-run`](/moose-meta/reference/cli/#fill) to see what would be proposed before
 writing anything.
 
 Schema order does not matter, here or anywhere else. Both schemas define `type`,
-and [`fill`](/docmeta/reference/cli/#fill) infers against the two rules combined,
+and [`fill`](/moose-meta/reference/cli/#fill) infers against the two rules combined,
 so the vocabulary's enum reaches the model whichever `-s` comes first — the
 proposal can only be one of the four. `validate` likewise always runs every
 schema in the set.
@@ -83,7 +83,7 @@ title: Rotate an API key
 ```
 
 Diátaxis is **not** part of the [default
-set](/docmeta/reference/schema-resolution/#precedence). It both requires and
+set](/moose-meta/reference/schema-resolution/#precedence). It both requires and
 constrains `type`, so applying it by default would fail every repo not already
 using Diátaxis. Opt in with `-s` or a `schemas:` entry in config.
 
@@ -114,7 +114,7 @@ title: Install the collector
 ```
 
 Like Diátaxis, TGDP is **not** in the [default
-set](/docmeta/reference/schema-resolution/#precedence): it both constrains and
+set](/moose-meta/reference/schema-resolution/#precedence): it both constrains and
 requires `type`, so defaulting it would fail every untyped document in every
 repo that had not opted in.
 
@@ -124,9 +124,9 @@ carry no YAML block. The only metadata TGDP publishes is `index.json`, which
 describes the *templates* (`name`, `summary`, `last_updated`, `contributors`,
 `packs`), not documents written from them. So the vocabulary here is lifted from
 the template set, not an implementation of a TGDP metadata spec, and requiring
-`type` is docmeta's choice rather than an upstream rule — the same choice it
+`type` is moose-meta's choice rather than an upstream rule — the same choice it
 makes for Diátaxis, which likewise publishes no frontmatter spec. Pair it with
-[`google:okf:0.1`](/docmeta/reference/okf-schema/) for the fields TGDP leaves
+[`google:okf:0.1`](/moose-meta/reference/okf-schema/) for the fields TGDP leaves
 unspecified.
 </Aside>
 
@@ -166,11 +166,11 @@ something else (a workflow name, a button label), two things change:
 - **`validate` fails.** Your value is not in the vocabulary, so it is reported
   as an error against `passo-uno:seven-action:1.0`.
 - **`fill` overwrites it.** A key whose value is invalid is a candidate for
-  *replacement*, not just for filling a gap, and `docmeta fill` writes to disk
-  unless you pass `--dry-run`. Run `docmeta fill --dry-run` first on any repo
+  *replacement*, not just for filling a gap, and `moose-meta fill` writes to disk
+  unless you pass `--dry-run`. Run `moose-meta fill --dry-run` first on any repo
   that uses `action` for something of its own.
 
-Set a `schemas:` list in `docmeta.config.yaml` before running either command.
+Set a `schemas:` list in `moose-meta.config.yaml` before running either command.
 It replaces the default set entirely, which opts you out of both.
 </Aside>
 
@@ -216,7 +216,7 @@ three actions.
 | `develop` | `how-to` |
 | `troubleshoot` | `how-to` (problem-oriented) |
 
-Use it to sanity-check a pairing, not as a rule docmeta enforces. The two
+Use it to sanity-check a pairing, not as a rule moose-meta enforces. The two
 schemas validate independently; no combination of a valid `type` and a valid
 `action` is rejected.
 
@@ -246,4 +246,4 @@ Drop the `required` line if you want a vocabulary check without a presence
 check — a document with no `type` then passes.
 
 Then reference it by path instead of the built-in id. See [Author a
-schema](/docmeta/schemas/) for the full authoring guide.
+schema](/moose-meta/schemas/) for the full authoring guide.

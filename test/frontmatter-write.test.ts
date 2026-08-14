@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import { applyFrontmatter } from "../src/extractors/frontmatter-write.js";
 import { extractFrontmatter } from "../src/extractors/frontmatter.js";
-import { DocmetaError } from "../src/types.js";
+import { MooseMetaError } from "../src/types.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fx = (name: string): string =>
@@ -38,7 +38,7 @@ describe("applyFrontmatter — no-ops", () => {
     // An empty patch is used as a pre-flight writability probe, so structural
     // problems must surface here rather than reporting a false all-clear.
     expect(() => applyFrontmatter(fx("unterminated.md"), {})).toThrow(
-      DocmetaError,
+      MooseMetaError,
     );
   });
 });
@@ -138,7 +138,7 @@ describe("applyFrontmatter — TOML", () => {
 
   it("refuses a null value instead of silently dropping it", () => {
     expect(() => applyFrontmatter(content, { title: null })).toThrow(
-      DocmetaError,
+      MooseMetaError,
     );
     expect(() => applyFrontmatter(content, { title: null })).toThrow(/title/);
   });
@@ -188,7 +188,7 @@ describe("applyFrontmatter — hostile input", () => {
   it("refuses an unterminated fence rather than prepending a second block", () => {
     const content = fx("unterminated.md");
     expect(() => applyFrontmatter(content, { title: "Hello" })).toThrow(
-      DocmetaError,
+      MooseMetaError,
     );
     expect(() => applyFrontmatter(content, { title: "Hello" })).toThrow(
       /[Uu]nterminated/,
@@ -198,7 +198,7 @@ describe("applyFrontmatter — hostile input", () => {
   it("refuses frontmatter whose root is not a mapping", () => {
     expect(() =>
       applyFrontmatter("---\n- a\n- b\n---\n\n# Body\n", { title: "x" }),
-    ).toThrow(DocmetaError);
+    ).toThrow(MooseMetaError);
   });
 
   it("preserves CRLF throughout", () => {

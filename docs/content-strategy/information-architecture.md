@@ -51,23 +51,23 @@ Home — "What do you want to do?" router + 30-second proof
 | Page | CUJ | ★ | Notes |
 |---|---|---|---|
 | Landing / router page | All | ★ | Value prop, who it's for, 30-second quickstart. Links to each persona track. |
-| Install & first validation | M1 | ★ | `npx docmeta validate <file>`, read pass/fail output, Node 24+ requirement. |
+| Install & first validation | M1 | ★ | `npx moose-meta validate <file>`, read pass/fail output, Node 24+ requirement. |
 
 ### Set up validation (Maya)
 
 | Page | CUJ | ★ | Notes |
 |---|---|---|---|
 | Stand up validation for your repo | M1 | ★ | Anchor guide threading install → config → schema → CI. |
-| Create your `docmeta.config.yaml` | M1 | ★ | paths, exclude, schemas, discovery keys with types and defaults. |
+| Create your `moose-meta.config.yaml` | M1 | ★ | paths, exclude, schemas, discovery keys with types and defaults. |
 | Apply different schemas to different folders | M3 | ★ | Overrides, glob precedence, multi-schema per file. |
 | Roll out a new required field without breaking the build | M2 | | Incremental ratchet, staged rollout across a large repo. |
-| Retrofit docmeta into an existing docs repo | M1/M2 | | Start lenient, tighten over time. Cross-cutting guide. |
+| Retrofit moose-meta into an existing docs repo | M1/M2 | | Start lenient, tighten over time. Cross-cutting guide. |
 
 ### Run it in CI (Devin)
 
 | Page | CUJ | ★ | Notes |
 |---|---|---|---|
-| Add docmeta to CI — GitHub Actions recipe | D1 | ★ | From `examples/`. |
+| Add moose-meta to CI — GitHub Actions recipe | D1 | ★ | From `examples/`. |
 | CI recipes: GitLab CI, Jenkins, pre-commit | D1 | ★ | Fills current GitHub-only gap. |
 | Exit codes & PR annotations contract | D1 | ★ | 0/1/2 semantics, `--format github` annotation output. |
 | Govern a shared schema by URL | D2 | | Remote `$schema`, 10 s timeout, per-run caching, versioning. |
@@ -95,9 +95,9 @@ Home — "What do you want to do?" router + 30-second proof
 
 | Page | CUJ | ★ | Notes |
 |---|---|---|---|
-| Built-in schemas (registry) | S1, M1 | ★ | The hub for everything docmeta ships: one table of all seven ids with what each constrains, what it requires, and which two are on by default; the editorial-vs-platform distinction; the three ways to turn one on. The OKF, taxonomy, and Docusaurus pages are its detail pages. Source of truth: `src/core/schema-registry.ts`, `src/core/resolve-schema.ts`. |
+| Built-in schemas (registry) | S1, M1 | ★ | The hub for everything moose-meta ships: one table of all seven ids with what each constrains, what it requires, and which two are on by default; the editorial-vs-platform distinction; the three ways to turn one on. The OKF, taxonomy, and Docusaurus pages are its detail pages. Source of truth: `src/core/schema-registry.ts`, `src/core/resolve-schema.ts`. |
 | CLI reference | All | ★ | `validate`/`get`/`schemas`; every flag. Source of truth: `src/cli.ts`. |
-| Configuration reference | M1, D1 | ★ | Full `docmeta.config.yaml` keys, types, defaults, CLI-merge precedence. Source of truth: `src/core/config.ts`. |
+| Configuration reference | M1, D1 | ★ | Full `moose-meta.config.yaml` keys, types, defaults, CLI-merge precedence. Source of truth: `src/core/config.ts`. |
 | Schema resolution reference | S2, D2 | ★ | Precedence chain + ref kinds + dialects. Source of truth: `resolve-schema.ts`, `schema-registry.ts`, `validator.ts`. |
 | Supported formats reference | All | ★ | Extractor/extension/metadata-model table: Markdown, MDX, AsciiDoc, RST, XML, HTML. Source of truth: `src/extractors/`. |
 | Output formats & exit codes | D1, D3 | ★ | `pretty`/`json`/`github` shapes; `NO_COLOR`/TTY behavior. Source of truth: `src/reporters/index.ts`. |

@@ -1,27 +1,27 @@
 ---
 title: Built-in OKF schema
-description: The google:okf:0.1 schema shipped with docmeta, covering its required and recommended fields, value formats, and JSON Schema dialect.
+description: The google:okf:0.1 schema shipped with moose-meta, covering its required and recommended fields, value formats, and JSON Schema dialect.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
 **`google:okf:0.1`** is the Open Knowledge Format (OKF) v0.1 frontmatter
-schema shipped with docmeta. It anchors the [default
-set](/docmeta/reference/schema-resolution/#precedence): when no `--schema`, file
-`$schema`, or config rule applies, docmeta validates against `google:okf:0.1`
+schema shipped with moose-meta. It anchors the [default
+set](/moose-meta/reference/schema-resolution/#precedence): when no `--schema`, file
+`$schema`, or config rule applies, moose-meta validates against `google:okf:0.1`
 together with
-[`passo-uno:seven-action:1.0`](/docmeta/reference/taxonomy-schemas/), which
+[`passo-uno:seven-action:1.0`](/moose-meta/reference/taxonomy-schemas/), which
 constrains an optional `action` field and adds no requirements of its own. For
-the other five schemas docmeta ships, see the [built-in schema
-registry](/docmeta/reference/built-in-schemas/).
+the other five schemas moose-meta ships, see the [built-in schema
+registry](/moose-meta/reference/built-in-schemas/).
 
 | Property | Value |
 |---|---|
 | Id | `google:okf:0.1` |
 | Title | Open Knowledge Format (OKF) v0.1 |
-| Dialect | [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects) |
+| Dialect | [Draft 2020-12](/moose-meta/reference/schema-resolution/#dialects) |
 | Additional properties | Allowed (`additionalProperties: true`) |
-| Reference kind | [builtin](/docmeta/reference/schema-resolution/#reference-kinds) |
+| Reference kind | [builtin](/moose-meta/reference/schema-resolution/#reference-kinds) |
 
 OKF requires only `type`. Every other field is recommended, and unknown keys are
 explicitly tolerated, so a file may carry extra metadata without failing.
@@ -69,7 +69,7 @@ A fuller file using the recommended fields:
 ---
 type: concept
 title: Schema resolution
-description: How docmeta picks a schema set for each file.
+description: How moose-meta picks a schema set for each file.
 resource: https://example.com/docs/schema-resolution
 tags: [reference, schemas]
 timestamp: 2026-06-25T12:00:00Z

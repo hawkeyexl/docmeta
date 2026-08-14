@@ -27,7 +27,7 @@ scoped publish credential, and mints provenance automatically.
 Configured on npmjs.com under the package's **Settings → Trusted Publisher**:
 
 - Provider: **GitHub Actions**
-- Repository: `hawkeyexl/docmeta`
+- Repository: `hawkeyexl/moose-meta`
 - Workflow filename: **`release.yml`** (exact, case-sensitive)
 
 Requirements baked into the workflow: a GitHub-hosted runner, npm CLI ≥ 11.5.1
@@ -46,7 +46,7 @@ a **GitHub App** that is the sole bypass actor on the ruleset.
 ### One-time setup
 
 1. **Create a GitHub App** (Settings → Developer settings → GitHub Apps → New).
-   - Name: e.g. `docmeta-release-bot`.
+   - Name: e.g. `moose-meta-release-bot`.
    - Homepage URL: the repo URL (any valid URL works).
    - Uncheck **Webhook → Active**.
    - **Repository permissions:**
@@ -58,7 +58,7 @@ a **GitHub App** that is the sole bypass actor on the ruleset.
 2. **Generate a private key** for the App (App settings → Private keys →
    Generate) and note the **App ID** (shown at the top of the App settings).
 
-3. **Install the App** on the `hawkeyexl/docmeta` repository
+3. **Install the App** on the `hawkeyexl/moose-meta` repository
    (App settings → Install App → choose the repo).
 
 4. **Add repository secrets** (repo Settings → Secrets and variables → Actions):
@@ -75,12 +75,12 @@ a **GitHub App** that is the sole bypass actor on the ruleset.
    ```bash
    # Find the current ruleset ID for `main` (don't hardcode it — it changes if
    # the ruleset is deleted and recreated):
-   RULESET_ID=$(gh api repos/hawkeyexl/docmeta/rulesets --jq '.[] | select(.name=="main") | .id')
+   RULESET_ID=$(gh api repos/hawkeyexl/moose-meta/rulesets --jq '.[] | select(.name=="main") | .id')
 
-   gh api repos/hawkeyexl/docmeta/rulesets/$RULESET_ID > /tmp/rs.json
+   gh api repos/hawkeyexl/moose-meta/rulesets/$RULESET_ID > /tmp/rs.json
    jq '.bypass_actors += [{"actor_id": <APP_ID>, "actor_type": "Integration", "bypass_mode": "always"}]' \
      /tmp/rs.json > /tmp/rs.new.json
-   gh api repos/hawkeyexl/docmeta/rulesets/$RULESET_ID --method PUT --input /tmp/rs.new.json
+   gh api repos/hawkeyexl/moose-meta/rulesets/$RULESET_ID --method PUT --input /tmp/rs.new.json
    ```
 
    For an `"Integration"` bypass actor, `actor_id` is the **App ID** (the same

@@ -13,7 +13,7 @@ There is a calmer path. Add the field in a **lenient** form first, validated for
 A JSON Schema only fails a file for a missing field when that field is listed in `required`. A field that lives in `properties` but not `required` is checked for **format** when present and ignored when absent. That gap is the staging area: you get format enforcement immediately and defer the presence requirement until coverage catches up.
 </Aside>
 
-This guide assumes you already have a working `docmeta.config.yaml` and a schema you control. If you are still using the built-in OKF schema, [author your own schema first](/docmeta/schemas/) so you have a file to edit; you cannot add fields to a built-in.
+This guide assumes you already have a working `moose-meta.config.yaml` and a schema you control. If you are still using the built-in OKF schema, [author your own schema first](/moose-meta/schemas/) so you have a file to edit; you cannot add fields to a built-in.
 
 ## Stage 1: Add the field as optional-but-validated
 
@@ -42,7 +42,7 @@ A doc that omits `owner` still passes. A doc that includes it must give a non-em
 Commit this and run a validation pass to confirm the build is still green:
 
 ```bash
-npx docmeta validate
+npx moose-meta validate
 ```
 
 Nothing that passed yesterday fails today. The field is now part of the contract; it just is not mandatory yet.
@@ -56,7 +56,7 @@ Before you can require the field, you need to know how far coverage already exte
 1. **List the field across the repo.** Ask `get` for the new field in JSON so the result is easy to scan or pipe into other tooling.
 
    ```bash
-   npx docmeta get owner "docs/**/*.md" -f json
+   npx moose-meta get owner "docs/**/*.md" -f json
    ```
 
    Every file appears in the output. Files that already carry `owner` report its value; files that do not report it as unset. That split is your coverage map.
@@ -73,7 +73,7 @@ You do not have to backfill every file yourself. Because Stage 1 already validat
 
 If coverage will take a while to reach the whole repo, you do not have to wait for the slowest corner before getting any enforcement. Use a per-folder **override** to require the stricter rule where you *can* hold the line today, typically a new or actively maintained area, while the rest of the repo stays on the lenient schema.
 
-```yaml title="docmeta.config.yaml"
+```yaml title="moose-meta.config.yaml"
 # Lenient default: owner is validated when present, not required.
 schemas:
   - ./schemas/doc.json
@@ -110,7 +110,7 @@ Once your coverage probe shows the unset list at or near zero, make the field ma
 Run one final validation pass before you commit, so you catch any stragglers locally rather than in CI:
 
 ```bash
-npx docmeta validate
+npx moose-meta validate
 ```
 
 If the run is green, the promotion is safe: every doc already satisfies the new rule, so flipping it to required changes nothing about the build except that future omissions now fail. If a few files still trip, your coverage probe missed them (frontmatter-free files are the usual suspects); fix those and rerun.
@@ -124,27 +124,27 @@ A new required field that arrived without a wall of red checks. You enforced its
 <CardGrid>
   <LinkCard
     title="Apply different schemas to different folders"
-    href="/docmeta/set-up/different-schemas-per-folder/"
+    href="/moose-meta/set-up/different-schemas-per-folder/"
     description="The full mechanics of overrides and glob precedence, used here to enforce a strict schema on one area first."
   />
   <LinkCard
-    title="Retrofit docmeta into an existing repo"
-    href="/docmeta/set-up/retrofit/"
-    description="Adopting docmeta from scratch on a repo that has never had metadata validation: start permissive, then ratchet."
+    title="Retrofit moose-meta into an existing repo"
+    href="/moose-meta/set-up/retrofit/"
+    description="Adopting moose-meta from scratch on a repo that has never had metadata validation: start permissive, then ratchet."
   />
   <LinkCard
     title="Schema resolution reference"
-    href="/docmeta/reference/schema-resolution/"
-    description="How docmeta decides which schema set applies to each file, including override precedence."
+    href="/moose-meta/reference/schema-resolution/"
+    description="How moose-meta decides which schema set applies to each file, including override precedence."
   />
 </CardGrid>
 
-{/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+{/* Doc Detective inline tests: verify this page's documented moose-meta behavior
+    against the local build, exposed as `moose-meta` / `npx moose-meta` via `npm link`
     (see .github/workflows/doc-detective.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"new-required-field","description":"Staged ratchet, demonstrated with optional-vs-required `owner` schema fixtures and the get probe."} */}
-{/* step {"description":"Stage 1 (optional-but-validated): a doc without `owner` still passes when `owner` is in properties but not required.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md -s ./test/fixtures/dd/owner-optional.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
-{/* step {"description":"Stage 2 (coverage probe): `get` reads the field across files for a coverage map.","runShell":{"command":"npx docmeta get owner test/fixtures/valid.md -f json","exitCodes":[0],"stdio":"test/fixtures/valid.md"}} */}
-{/* step {"description":"Stage 4 (promote to required): once `owner` is in `required`, a doc lacking it fails. (Stage 3 — enforce on new areas first via a per-folder override — is config-only, so it has no runnable command here.)","runShell":{"command":"npx docmeta validate test/fixtures/valid.md -s ./test/fixtures/dd/owner-required.schema.json","exitCodes":[1],"stdio":"must have required property 'owner'"}} */}
+{/* step {"description":"Stage 1 (optional-but-validated): a doc without `owner` still passes when `owner` is in properties but not required.","runShell":{"command":"npx moose-meta validate test/fixtures/valid.md -s ./test/fixtures/dd/owner-optional.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"Stage 2 (coverage probe): `get` reads the field across files for a coverage map.","runShell":{"command":"npx moose-meta get owner test/fixtures/valid.md -f json","exitCodes":[0],"stdio":"test/fixtures/valid.md"}} */}
+{/* step {"description":"Stage 4 (promote to required): once `owner` is in `required`, a doc lacking it fails. (Stage 3 — enforce on new areas first via a per-folder override — is config-only, so it has no runnable command here.)","runShell":{"command":"npx moose-meta validate test/fixtures/valid.md -s ./test/fixtures/dd/owner-required.schema.json","exitCodes":[1],"stdio":"must have required property 'owner'"}} */}
 {/* test end */}

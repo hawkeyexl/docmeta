@@ -1,14 +1,14 @@
 ---
 title: Configuration reference
-description: Every docmeta.config.yaml key (paths, exclude, schemas, overrides), with types, defaults, discovery rules, and how config merges with CLI flags.
+description: Every moose-meta.config.yaml key (paths, exclude, schemas, overrides), with types, defaults, discovery rules, and how config merges with CLI flags.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-A `docmeta.config.yaml` file supplies default targets, excludes, the default
-[schema set](/docmeta/reference/schema-resolution/), and optional per-glob overrides, so
-CI can run a bare `docmeta validate`. The config is optional; every key has a
-default, and docmeta runs without a config when you pass paths and schemas on
+A `moose-meta.config.yaml` file supplies default targets, excludes, the default
+[schema set](/moose-meta/reference/schema-resolution/), and optional per-glob overrides, so
+CI can run a bare `moose-meta validate`. The config is optional; every key has a
+default, and moose-meta runs without a config when you pass paths and schemas on
 the command line.
 
 ## Keys
@@ -16,10 +16,11 @@ the command line.
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `paths` | `string[]` | none | Default files, directories, or globs to process when no positional paths are given. |
-| `exclude` | `string[]` | none | Globs to exclude from directory and glob walks. Merged with `--exclude` and the [default ignores](/docmeta/reference/cli/#default-ignores). |
-| `schemas` | `string[]` | none | Default [schema set](/docmeta/reference/schema-resolution/) applied to every file that no higher-precedence rule matches. |
+| `exclude` | `string[]` | none | Globs to exclude from directory and glob walks. Merged with `--exclude` and the [default ignores](/moose-meta/reference/cli/#default-ignores). |
+| `schemas` | `string[]` | none | Default [schema set](/moose-meta/reference/schema-resolution/) applied to every file that no higher-precedence rule matches. |
 | `overrides` | `Override[]` | none | Per-glob schema overrides. The first matching entry wins. See [Overrides](#overrides). |
-| `fill` | `Fill` | none | Defaults for [`docmeta fill`](/docmeta/reference/cli/#fill). See [Fill](#fill). |
+| `fill` | `Fill` | none | Defaults for [`moose-meta fill`](/moose-meta/reference/cli/#fill). See [Fill](#fill). |
+| `meta` | `Config` | none | This tool's slice of a shared [`moose.config.yaml`](#sharing-one-config-across-the-moose-family), applied as an overlay on the top-level keys. |
 
 The top level must be a YAML mapping. Each of `paths`, `exclude`, and `schemas`
 must be a list of strings; a non-list or a list containing a non-string value is
@@ -27,12 +28,12 @@ an error (exit 2).
 
 ### Fill
 
-`fill` is a mapping of defaults for the [`fill`](/docmeta/reference/cli/#fill)
+`fill` is a mapping of defaults for the [`fill`](/moose-meta/reference/cli/#fill)
 command. Every key is optional, and every one is overridden by its CLI flag.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `provider` | `string` | `auto` | Inference provider: `auto`, `anthropic`, `openai`, `claude-cli`, `llama-cpp`, or `mock`. `auto` [detects one](/docmeta/reference/cli/#fill). An unknown name is an error (exit 2). |
+| `provider` | `string` | `auto` | Inference provider: `auto`, `anthropic`, `openai`, `claude-cli`, `llama-cpp`, or `mock`. `auto` [detects one](/moose-meta/reference/cli/#fill). An unknown name is an error (exit 2). |
 | `model` | `string` | provider default | Model override. Requires `provider` to be set to something other than `auto`, since a model name does not say which provider owns it (exit 2). |
 | `confidenceThreshold` | `number` | `0.7` | Minimum self-reported confidence, from 0 to 1, needed to write a value. |
 | `maxCostUsd` | `number` | none | Stop scheduling new files once this much has been spent. |
@@ -41,7 +42,7 @@ command. Every key is optional, and every one is overridden by its CLI flag.
 A numeric key outside its range, or one that is not a finite number such as
 YAML's `1e999`, is an error (exit 2).
 
-```yaml title="docmeta.config.yaml"
+```yaml title="moose-meta.config.yaml"
 fill:
   provider: anthropic
   confidenceThreshold: 0.9
@@ -62,15 +63,15 @@ a glob.
 | `files` | `string` | yes | A glob matched against each file's path. |
 | `schemas` | `string[]` | yes | The schema set applied to matching files. |
 
-For a given file, docmeta uses the **first** override whose `files` glob matches
+For a given file, moose-meta uses the **first** override whose `files` glob matches
 (in list order); later matching overrides are ignored. See [schema
-resolution](/docmeta/reference/schema-resolution/#precedence) for where overrides sit in
+resolution](/moose-meta/reference/schema-resolution/#precedence) for where overrides sit in
 the precedence chain.
 
 ## Example
 
 ```yaml
-# docmeta.config.yaml
+# moose-meta.config.yaml
 paths:
   - "docs/**/*.md"
   - "docs/**/*.mdx"
@@ -89,21 +90,84 @@ overrides:
 
 ## Discovery
 
-When you do not pass `-c/--config`, docmeta looks in the current working
+When you do not pass `-c/--config`, moose-meta looks in the current working
 directory for these files, in order, and uses the first one it finds:
 
-1. `docmeta.config.yaml`
-2. `docmeta.config.yml`
+1. `moose-meta.config.yaml`
+2. `moose-meta.config.yml`
+3. `moose.config.yaml`
+4. `moose.config.yml`
+5. `docmeta.config.yaml` (deprecated)
+6. `docmeta.config.yml` (deprecated)
 
-If neither exists, docmeta runs with no config. When you pass `-c/--config
+Most specific wins: a config written for this tool beats the shared family
+config, which beats the pre-rename name. When more than one exists, moose-meta
+names the winner and the files it ignored on stderr.
+
+If none exists, moose-meta runs with no config. When you pass `-c/--config
 <path>` explicitly, that file must exist; a missing config file is an error
 (exit 2).
 
+<Aside type="caution">
+`docmeta.config.yaml` and `docmeta.config.yml` are the pre-rename names. They
+are still read, but a run that discovers one prints a deprecation warning to
+stderr, and a future major version will stop reading them. Rename the file to
+`moose-meta.config.yaml`, or move its keys under `meta:` in a shared
+`moose.config.yaml`. Passing one explicitly with `-c/--config` does not warn --
+the deprecation is about discovery by name, and an explicit path is a path.
+</Aside>
+
 <Aside type="note">
-Discovery only checks the current working directory; docmeta does not search
-parent directories. Run docmeta from your repo root, or point at the config with
+Discovery only checks the current working directory; moose-meta does not search
+parent directories. Run moose-meta from your repo root, or point at the config with
 `-c/--config`.
 </Aside>
+
+## Sharing one config across the moose family
+
+`moose.config.yaml` is read by every tool in the moose family, so a setting that
+is true for all of them is stated once. Top-level keys are the family base; each
+tool reads its own block and applies it as an overlay. moose-meta reads `meta:`.
+
+```yaml title="moose.config.yaml"
+# Shared by every moose tool.
+paths:
+  - "docs/**/*.md"
+exclude:
+  - "**/drafts/**"
+
+# moose-meta's slice.
+meta:
+  schemas:
+    - google:okf:0.1
+  exclude:
+    - "**/generated/**"
+```
+
+That resolves to `paths: ["docs/**/*.md"]`, `schemas: ["google:okf:0.1"]`, and
+`exclude: ["**/drafts/**", "**/generated/**"]`.
+
+The overlay combines with the base per key, the same way each key combines with
+its CLI flag:
+
+| Key | How `meta:` combines with the top level |
+|---|---|
+| `paths` | Replaces the base wholesale |
+| `schemas` | Replaces the base wholesale |
+| `overrides` | Replaces the base wholesale |
+| `exclude` | **Appended** to the base |
+| `fill` | Merged key by key, so a base key survives an overlay that omits it |
+
+The unwrap is unconditional, so it applies to every config source -- including a
+file passed with `-c/--config`, whatever it is named. A file with no `meta:` key
+has an empty overlay and behaves exactly as it always did, which is why
+`moose-meta.config.yaml` needs no `meta:` block.
+
+A `moose.config.yaml` with no `meta:` key is not an error: its top-level keys
+apply, and discovery does not fall through to the next candidate.
+
+A mistake inside the overlay is reported against what you wrote: a bad
+`meta.fill.concurrency` is named `meta.fill.concurrency`, not `fill.concurrency`.
 
 ## How config merges with CLI flags
 
@@ -113,8 +177,8 @@ corresponding config value; others merge with it.
 | Setting | CLI flag | Config key | How they combine |
 |---|---|---|---|
 | Inputs | `[paths...]` | `paths` | CLI positional paths **override** config `paths` entirely. Config `paths` is used only when no positional paths are given. |
-| Excludes | `--exclude` | `exclude` | **Merged.** The effective exclude set is config `exclude` plus every `--exclude` glob plus the [default ignores](/docmeta/reference/cli/#default-ignores). |
-| Schemas | `-s/--schema` | `schemas` / `overrides` | CLI `--schema` **overrides** both `schemas` and `overrides` for every file. See [precedence](/docmeta/reference/schema-resolution/#precedence). |
+| Excludes | `--exclude` | `exclude` | **Merged.** The effective exclude set is config `exclude` plus every `--exclude` glob plus the [default ignores](/moose-meta/reference/cli/#default-ignores). |
+| Schemas | `-s/--schema` | `schemas` / `overrides` | CLI `--schema` **overrides** both `schemas` and `overrides` for every file. See [precedence](/moose-meta/reference/schema-resolution/#precedence). |
 | Fill settings | `--confidence`, `--provider`, `--model`, `--max-cost-usd`, `--concurrency` | `fill.*` | Each flag **overrides** its matching `fill` key. An unset flag falls back to config, then to the built-in default. |
 
 <Aside type="caution">
@@ -123,12 +187,12 @@ corresponding config value; others merge with it.
 Use config `overrides` when different folders need different schemas.
 </Aside>
 
-{/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+{/* Doc Detective inline tests: verify this page's documented moose-meta behavior
+    against the local build, exposed as `moose-meta` / `npx moose-meta` via `npm link`
     (see .github/workflows/doc-detective.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"configuration-reference","description":"Config discovery, validation, and merge claims, exercised against the local build."} */}
-{/* step {"description":"An explicit -c to a missing file exits 2 rather than falling back to discovery.","runShell":{"command":"docmeta validate -c does-not-exist.yaml test/fixtures/valid.md","exitCodes":[2],"stdio":"Config file not found"}} */}
-{/* step {"description":"A config whose paths is not a list of strings is a usage error (exit 2).","runShell":{"command":"docmeta validate -c test/fixtures/dd/bad-config.yaml test/fixtures/valid.md","exitCodes":[2],"stdio":"\"paths\" must be a list of strings"}} */}
-{/* step {"description":"--schema overrides config/file schema resolution for every file in the run.","runShell":{"command":"docmeta validate test/fixtures/missing-type.md -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"An explicit -c to a missing file exits 2 rather than falling back to discovery.","runShell":{"command":"moose-meta validate -c does-not-exist.yaml test/fixtures/valid.md","exitCodes":[2],"stdio":"Config file not found"}} */}
+{/* step {"description":"A config whose paths is not a list of strings is a usage error (exit 2).","runShell":{"command":"moose-meta validate -c test/fixtures/dd/bad-config.yaml test/fixtures/valid.md","exitCodes":[2],"stdio":"\"paths\" must be a list of strings"}} */}
+{/* step {"description":"--schema overrides config/file schema resolution for every file in the run.","runShell":{"command":"moose-meta validate test/fixtures/missing-type.md -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
 {/* test end */}

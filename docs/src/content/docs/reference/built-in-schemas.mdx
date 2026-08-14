@@ -1,33 +1,33 @@
 ---
 title: Built-in schemas
-description: Every schema shipped with docmeta in one table, showing what each constrains, which fields it requires, which are on by default, and how to turn one on.
+description: Every schema shipped with moose-meta in one table, showing what each constrains, which fields it requires, which are on by default, and how to turn one on.
 ---
 
 import { Aside, Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-docmeta bundles seven schemas. You reference any of them by id, with no file to
+moose-meta bundles seven schemas. You reference any of them by id, with no file to
 write, no URL to host, and no network call at validation time. This page is the
 registry: what each one constrains, whether it requires anything, and which are
 applied when you pass no flags at all.
 
-Run `docmeta schemas` to print the same list from the version you have
+Run `moose-meta schemas` to print the same list from the version you have
 installed.
 
 ## The registry
 
 | Id | Constrains | Requires | On by default | Details |
 |---|---|---|---|---|
-| `google:okf:0.1` | `type`, `title`, `description`, `resource`, `tags`, `timestamp` | `type` | **Yes** | [OKF schema](/docmeta/reference/okf-schema/) |
-| `passo-uno:seven-action:1.0` | `action` | nothing | **Yes** | [Taxonomy schemas](/docmeta/reference/taxonomy-schemas/) |
-| `diataxis:diataxis:1.0` | `type` | `type` | No | [Taxonomy schemas](/docmeta/reference/taxonomy-schemas/) |
-| `tgdp:templates:1.0` | `type` | `type` | No | [Taxonomy schemas](/docmeta/reference/taxonomy-schemas/) |
-| `docusaurus:docs:3.10` | 25 Docusaurus docs fields | nothing | No | [Docusaurus schemas](/docmeta/reference/docusaurus-schemas/) |
-| `docusaurus:blog:3.10` | 20 Docusaurus blog fields | nothing | No | [Docusaurus schemas](/docmeta/reference/docusaurus-schemas/) |
-| `docusaurus:pages:3.10` | 9 Docusaurus pages fields | nothing | No | [Docusaurus schemas](/docmeta/reference/docusaurus-schemas/) |
+| `google:okf:0.1` | `type`, `title`, `description`, `resource`, `tags`, `timestamp` | `type` | **Yes** | [OKF schema](/moose-meta/reference/okf-schema/) |
+| `passo-uno:seven-action:1.0` | `action` | nothing | **Yes** | [Taxonomy schemas](/moose-meta/reference/taxonomy-schemas/) |
+| `diataxis:diataxis:1.0` | `type` | `type` | No | [Taxonomy schemas](/moose-meta/reference/taxonomy-schemas/) |
+| `tgdp:templates:1.0` | `type` | `type` | No | [Taxonomy schemas](/moose-meta/reference/taxonomy-schemas/) |
+| `docusaurus:docs:3.10` | 25 Docusaurus docs fields | nothing | No | [Docusaurus schemas](/moose-meta/reference/docusaurus-schemas/) |
+| `docusaurus:blog:3.10` | 20 Docusaurus blog fields | nothing | No | [Docusaurus schemas](/moose-meta/reference/docusaurus-schemas/) |
+| `docusaurus:pages:3.10` | 9 Docusaurus pages fields | nothing | No | [Docusaurus schemas](/moose-meta/reference/docusaurus-schemas/) |
 
-All seven use [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects),
+All seven use [Draft 2020-12](/moose-meta/reference/schema-resolution/#dialects),
 allow additional properties, and are [built-in
-references](/docmeta/reference/schema-resolution/#reference-kinds), so a typo in
+references](/moose-meta/reference/schema-resolution/#reference-kinds), so a typo in
 an id is reported as an unknown built-in rather than a missing file.
 
 ## Two kinds of built-in
@@ -50,7 +50,7 @@ page to your generator's contract and to your own standard, attributing each
 failure to the schema that raised it:
 
 ```bash
-docmeta validate docs/ -s docusaurus:docs:3.10 -s diataxis:diataxis:1.0
+moose-meta validate docs/ -s docusaurus:docs:3.10 -s diataxis:diataxis:1.0
 ```
 
 <Aside type="caution" title="One overlap to know about: `tags`">
@@ -74,7 +74,7 @@ appear in both, and those definitions agree.
 Both claim `type`. Stacking them is legal but narrows the accepted values to the
 intersection of the two vocabularies, which is rarely what anyone wants. Pick
 one. See [which ones
-compose](/docmeta/reference/taxonomy-schemas/#which-ones-compose).
+compose](/moose-meta/reference/taxonomy-schemas/#which-ones-compose).
 </Aside>
 
 ## What runs when you pass no flags
@@ -88,13 +88,13 @@ google:okf:0.1 + passo-uno:seven-action:1.0
 Everything else is opt-in. Seven-Action is safe to carry by default precisely
 because it requires nothing — it rules that an `action`, if present, is
 legitimate, without insisting on one. The default set sits at the bottom of the
-[precedence chain](/docmeta/reference/schema-resolution/#precedence) and applies
+[precedence chain](/moose-meta/reference/schema-resolution/#precedence) and applies
 only when no `--schema` flag, no in-file `$schema`, and no config rule matched.
 
 ## Turn one on
 
 Three ways, in [precedence
-order](/docmeta/reference/schema-resolution/#precedence) — the first one that
+order](/moose-meta/reference/schema-resolution/#precedence) — the first one that
 matches wins, and each replaces the set rather than adding to it.
 
 <Tabs>
@@ -103,7 +103,7 @@ matches wins, and each replaces the set rather than adding to it.
 Repeat `-s` to build a set. This overrides everything else for the whole run:
 
 ```bash
-docmeta validate docs/ -s docusaurus:docs:3.10 -s google:okf:0.1
+moose-meta validate docs/ -s docusaurus:docs:3.10 -s google:okf:0.1
 ```
 
 </TabItem>
@@ -113,7 +113,7 @@ Set a default for the repo, and override it per directory. This is the right
 place for the Docusaurus schemas, since a Docusaurus site has three content
 roots with three different contracts:
 
-```yaml title="docmeta.config.yaml"
+```yaml title="moose-meta.config.yaml"
 schemas:
   - google:okf:0.1
 overrides:
@@ -141,7 +141,7 @@ type: how-to
 ---
 ```
 
-`$schema` also takes a list, and docmeta strips the key before validating, so it
+`$schema` also takes a list, and moose-meta strips the key before validating, so it
 never trips a schema that forbids unknown properties.
 
 </TabItem>
@@ -150,13 +150,13 @@ never trips a schema that forbids unknown properties.
 ## Version ids
 
 A built-in id is `vendor:name:version`. The version segment tracks the upstream
-standard, not docmeta's own release number:
+standard, not moose-meta's own release number:
 
 - `google:okf:0.1` is OKF v0.1.
 - `docusaurus:docs:3.10` is the front matter contract of Docusaurus 3.10.
 
 Ids are stable. A new upstream version arrives as a *new* id rather than a
-change to an existing one, so upgrading docmeta never silently retightens a
+change to an existing one, so upgrading moose-meta never silently retightens a
 check you already passed. Pin the id you validated against and move it
 deliberately.
 
@@ -170,45 +170,45 @@ and editing it is usually faster than starting from nothing.
 <CardGrid>
   <LinkCard
     title="Author a schema"
-    href="/docmeta/schemas/"
+    href="/moose-meta/schemas/"
     description="Write a JSON Schema of your own, from a one-field example up to a full standard."
   />
   <LinkCard
     title="Schema resolution reference"
-    href="/docmeta/reference/schema-resolution/"
+    href="/moose-meta/reference/schema-resolution/"
     description="The precedence chain, the three reference kinds, and the supported dialects."
   />
   <LinkCard
     title="Built-in OKF schema"
-    href="/docmeta/reference/okf-schema/"
+    href="/moose-meta/reference/okf-schema/"
     description="Every field in google:okf:0.1, its formats, and the upstream spec."
   />
   <LinkCard
     title="Built-in taxonomy schemas"
-    href="/docmeta/reference/taxonomy-schemas/"
+    href="/moose-meta/reference/taxonomy-schemas/"
     description="The diataxis, tgdp, and seven-action vocabularies, and which ones compose."
   />
   <LinkCard
     title="Built-in Docusaurus schemas"
-    href="/docmeta/reference/docusaurus-schemas/"
+    href="/moose-meta/reference/docusaurus-schemas/"
     description="The docs, blog, and pages front matter contracts of Docusaurus 3.10."
   />
 </CardGrid>
 
-{/* Doc Detective inline tests: verify this page's documented docmeta behavior
-    against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
+{/* Doc Detective inline tests: verify this page's documented moose-meta behavior
+    against the local build, exposed as `moose-meta` / `npx moose-meta` via `npm link`
     (see .github/workflows/doc-detective.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"built-in-schemas","description":"Every id in the registry table resolves, and the default set is the two this page names."} */}
-{/* step {"description":"The registry lists google:okf:0.1.","runShell":{"command":"npx docmeta schemas","exitCodes":[0],"stdio":"google:okf:0.1"}} */}
-{/* step {"description":"The registry lists passo-uno:seven-action:1.0.","runShell":{"command":"npx docmeta schemas","exitCodes":[0],"stdio":"passo-uno:seven-action:1.0"}} */}
-{/* step {"description":"The registry lists diataxis:diataxis:1.0.","runShell":{"command":"npx docmeta schemas","exitCodes":[0],"stdio":"diataxis:diataxis:1.0"}} */}
-{/* step {"description":"The registry lists tgdp:templates:1.0.","runShell":{"command":"npx docmeta schemas","exitCodes":[0],"stdio":"tgdp:templates:1.0"}} */}
-{/* step {"description":"The registry lists docusaurus:docs:3.10.","runShell":{"command":"npx docmeta schemas","exitCodes":[0],"stdio":"docusaurus:docs:3.10"}} */}
-{/* step {"description":"The registry lists docusaurus:blog:3.10.","runShell":{"command":"npx docmeta schemas","exitCodes":[0],"stdio":"docusaurus:blog:3.10"}} */}
-{/* step {"description":"The registry lists docusaurus:pages:3.10.","runShell":{"command":"npx docmeta schemas","exitCodes":[0],"stdio":"docusaurus:pages:3.10"}} */}
-{/* step {"description":"A platform schema composes with an editorial one in a single run, as the page claims.","runShell":{"command":"npx docmeta validate test/fixtures/docusaurus/docs-unknown-key.md -s docusaurus:docs:3.10 -s diataxis:diataxis:1.0","exitCodes":[0],"stdio":"1 passed"}} */}
-{/* step {"description":"The default set applies when no flag is given, and does not include a Docusaurus schema.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 passed"}} */}
-{/* step {"description":"The documented `tags` overlap: OKF allows string tags only, so a Docusaurus tag object fails against OKF.","runShell":{"command":"npx docmeta validate test/fixtures/docusaurus/docs-okf-tag-conflict.md -s google:okf:0.1 -s docusaurus:docs:3.10","exitCodes":[1],"stdio":"/tags/0  must be string"}} */}
-{/* step {"description":"Pairing the platform schema with a vocabulary instead of OKF avoids that overlap.","runShell":{"command":"npx docmeta validate test/fixtures/docusaurus/docs-okf-tag-conflict.md -s docusaurus:docs:3.10 -s diataxis:diataxis:1.0","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"The registry lists google:okf:0.1.","runShell":{"command":"npx moose-meta schemas","exitCodes":[0],"stdio":"google:okf:0.1"}} */}
+{/* step {"description":"The registry lists passo-uno:seven-action:1.0.","runShell":{"command":"npx moose-meta schemas","exitCodes":[0],"stdio":"passo-uno:seven-action:1.0"}} */}
+{/* step {"description":"The registry lists diataxis:diataxis:1.0.","runShell":{"command":"npx moose-meta schemas","exitCodes":[0],"stdio":"diataxis:diataxis:1.0"}} */}
+{/* step {"description":"The registry lists tgdp:templates:1.0.","runShell":{"command":"npx moose-meta schemas","exitCodes":[0],"stdio":"tgdp:templates:1.0"}} */}
+{/* step {"description":"The registry lists docusaurus:docs:3.10.","runShell":{"command":"npx moose-meta schemas","exitCodes":[0],"stdio":"docusaurus:docs:3.10"}} */}
+{/* step {"description":"The registry lists docusaurus:blog:3.10.","runShell":{"command":"npx moose-meta schemas","exitCodes":[0],"stdio":"docusaurus:blog:3.10"}} */}
+{/* step {"description":"The registry lists docusaurus:pages:3.10.","runShell":{"command":"npx moose-meta schemas","exitCodes":[0],"stdio":"docusaurus:pages:3.10"}} */}
+{/* step {"description":"A platform schema composes with an editorial one in a single run, as the page claims.","runShell":{"command":"npx moose-meta validate test/fixtures/docusaurus/docs-unknown-key.md -s docusaurus:docs:3.10 -s diataxis:diataxis:1.0","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"The default set applies when no flag is given, and does not include a Docusaurus schema.","runShell":{"command":"npx moose-meta validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"The documented `tags` overlap: OKF allows string tags only, so a Docusaurus tag object fails against OKF.","runShell":{"command":"npx moose-meta validate test/fixtures/docusaurus/docs-okf-tag-conflict.md -s google:okf:0.1 -s docusaurus:docs:3.10","exitCodes":[1],"stdio":"/tags/0  must be string"}} */}
+{/* step {"description":"Pairing the platform schema with a vocabulary instead of OKF avoids that overlap.","runShell":{"command":"npx moose-meta validate test/fixtures/docusaurus/docs-okf-tag-conflict.md -s docusaurus:docs:3.10 -s diataxis:diataxis:1.0","exitCodes":[0],"stdio":"1 passed"}} */}
 {/* test end */}
