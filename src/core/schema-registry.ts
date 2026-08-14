@@ -4,7 +4,7 @@
  * a built-in id, a local `.json` path, or an `http(s)` URL.
  */
 import { readFile } from "node:fs/promises";
-import { DocmetaError } from "../types.js";
+import { MooseMetaError } from "../types.js";
 
 import okf01 from "../schemas/okf/0.1.json" with { type: "json" };
 import diataxis10 from "../schemas/diataxis/1.0.json" with { type: "json" };
@@ -84,7 +84,7 @@ export async function loadSchema(
     const schema = BUILTINS.get(ref);
     if (!schema) {
       const available = [...BUILTINS.keys()].join(", ");
-      throw new DocmetaError(
+      throw new MooseMetaError(
         `Unknown built-in schema "${ref}". Available: ${available || "(none)"}.`,
       );
     }
@@ -101,14 +101,14 @@ export async function loadSchema(
     } catch (err) {
       const e = err as Error;
       if (e.name === "TimeoutError" || e.name === "AbortError") {
-        throw new DocmetaError(
+        throw new MooseMetaError(
           `Failed to fetch schema "${ref}": timed out after ${timeoutMs}ms.`,
         );
       }
-      throw new DocmetaError(`Failed to fetch schema "${ref}": ${e.message}`);
+      throw new MooseMetaError(`Failed to fetch schema "${ref}": ${e.message}`);
     }
     if (!res.ok) {
-      throw new DocmetaError(
+      throw new MooseMetaError(
         `Failed to fetch schema "${ref}": HTTP ${res.status}.`,
       );
     }
@@ -116,7 +116,7 @@ export async function loadSchema(
     try {
       json = (await res.json()) as Record<string, unknown>;
     } catch (err) {
-      throw new DocmetaError(
+      throw new MooseMetaError(
         `Schema "${ref}" did not return valid JSON: ${(err as Error).message}`,
       );
     }
@@ -129,12 +129,12 @@ export async function loadSchema(
   try {
     raw = await readFile(ref, "utf8");
   } catch {
-    throw new DocmetaError(`Schema file not found: "${ref}".`);
+    throw new MooseMetaError(`Schema file not found: "${ref}".`);
   }
   try {
     return JSON.parse(raw) as Record<string, unknown>;
   } catch (err) {
-    throw new DocmetaError(
+    throw new MooseMetaError(
       `Schema file "${ref}" is not valid JSON: ${(err as Error).message}`,
     );
   }

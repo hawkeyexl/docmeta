@@ -6,7 +6,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
-import { DocmetaError } from "../types.js";
+import { MooseMetaError } from "../types.js";
 
 export interface SchemaOverride {
   files: string;
@@ -23,7 +23,7 @@ export interface FillConfig {
   concurrency?: number;
 }
 
-export interface DocmetaConfig {
+export interface MooseMetaConfig {
   paths?: string[];
   exclude?: string[];
   schemas?: string[];
@@ -35,7 +35,7 @@ const CONFIG_NAMES = ["docmeta.config.yaml", "docmeta.config.yml"];
 
 function asStringList(value: unknown, field: string, source: string): string[] {
   if (!Array.isArray(value) || value.some((v) => typeof v !== "string")) {
-    throw new DocmetaError(
+    throw new MooseMetaError(
       `${source}: "${field}" must be a list of strings.`,
     );
   }
@@ -43,21 +43,21 @@ function asStringList(value: unknown, field: string, source: string): string[] {
 }
 
 /** Parse and validate config YAML text. */
-export function parseConfig(text: string, source: string): DocmetaConfig {
+export function parseConfig(text: string, source: string): MooseMetaConfig {
   let raw: unknown;
   try {
     raw = parseYaml(text);
   } catch (err) {
-    throw new DocmetaError(
+    throw new MooseMetaError(
       `${source}: invalid YAML: ${(err as Error).message}`,
     );
   }
   if (raw == null) return {};
   if (typeof raw !== "object" || Array.isArray(raw)) {
-    throw new DocmetaError(`${source}: top level must be a mapping.`);
+    throw new MooseMetaError(`${source}: top level must be a mapping.`);
   }
   const obj = raw as Record<string, unknown>;
-  const config: DocmetaConfig = {};
+  const config: MooseMetaConfig = {};
 
   if (obj.paths !== undefined) config.paths = asStringList(obj.paths, "paths", source);
   if (obj.exclude !== undefined)
@@ -67,15 +67,15 @@ export function parseConfig(text: string, source: string): DocmetaConfig {
 
   if (obj.overrides !== undefined) {
     if (!Array.isArray(obj.overrides)) {
-      throw new DocmetaError(`${source}: "overrides" must be a list.`);
+      throw new MooseMetaError(`${source}: "overrides" must be a list.`);
     }
     config.overrides = obj.overrides.map((entry, i) => {
       if (typeof entry !== "object" || entry === null) {
-        throw new DocmetaError(`${source}: overrides[${i}] must be a mapping.`);
+        throw new MooseMetaError(`${source}: overrides[${i}] must be a mapping.`);
       }
       const e = entry as Record<string, unknown>;
       if (typeof e.files !== "string") {
-        throw new DocmetaError(
+        throw new MooseMetaError(
           `${source}: overrides[${i}].files must be a string glob.`,
         );
       }
@@ -93,7 +93,7 @@ export function parseConfig(text: string, source: string): DocmetaConfig {
 
 function parseFill(value: unknown, source: string): FillConfig {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new DocmetaError(`${source}: "fill" must be a mapping.`);
+    throw new MooseMetaError(`${source}: "fill" must be a mapping.`);
   }
   const raw = value as Record<string, unknown>;
   const fill: FillConfig = {};
@@ -102,7 +102,7 @@ function parseFill(value: unknown, source: string): FillConfig {
     const v = raw[key];
     if (v === undefined) return;
     if (typeof v !== "string") {
-      throw new DocmetaError(`${source}: "fill.${key}" must be a string.`);
+      throw new MooseMetaError(`${source}: "fill.${key}" must be a string.`);
     }
     fill[key] = v;
   };
@@ -120,14 +120,14 @@ function parseFill(value: unknown, source: string): FillConfig {
     // A YAML `1e999` parses to Infinity, and a bare range check would accept
     // it, so require a finite number explicitly.
     if (typeof v !== "number" || !Number.isFinite(v) || v < min || v > max) {
-      throw new DocmetaError(
+      throw new MooseMetaError(
         `${source}: "fill.${key}" must be a number between ${min} and ${max}.`,
       );
     }
     // A fractional worker count would be silently truncated downstream rather
     // than rejected, so catch it where the user can see the mistake.
     if (integer && !Number.isInteger(v)) {
-      throw new DocmetaError(
+      throw new MooseMetaError(
         `${source}: "fill.${key}" must be a whole number.`,
       );
     }
@@ -147,13 +147,13 @@ function parseFill(value: unknown, source: string): FillConfig {
 export async function loadConfig(
   explicitPath?: string,
   cwd: string = process.cwd(),
-): Promise<{ config: DocmetaConfig; path: string } | null> {
+): Promise<{ config: MooseMetaConfig; path: string } | null> {
   if (explicitPath) {
     let text: string;
     try {
       text = await readFile(explicitPath, "utf8");
     } catch {
-      throw new DocmetaError(`Config file not found: "${explicitPath}".`);
+      throw new MooseMetaError(`Config file not found: "${explicitPath}".`);
     }
     return { config: parseConfig(text, explicitPath), path: explicitPath };
   }

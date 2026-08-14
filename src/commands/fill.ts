@@ -36,8 +36,8 @@ import {
   type ProviderSpec,
   type TokenUsage,
 } from "@hawkeyexl/inference";
-import { DocmetaError, type FieldError, type MetadataPatch } from "../types.js";
-import { loadConfig, type DocmetaConfig } from "../core/config.js";
+import { MooseMetaError, type FieldError, type MetadataPatch } from "../types.js";
+import { loadConfig, type MooseMetaConfig } from "../core/config.js";
 import { resolveTargets, STDIN_TOKEN } from "../core/load-files.js";
 import {
   extractorByName,
@@ -82,11 +82,11 @@ const DEFAULT_CONCURRENCY = 4;
  * `auto` detects the highest-priority provider this machine can actually use —
  * an Anthropic key, then an OpenAI key, then the Claude CLI, then a local model
  * that needs no credentials at all. Defaulting to a named provider instead meant
- * `docmeta fill` failed outright for anyone who did not happen to hold that
+ * `moose-meta fill` failed outright for anyone who did not happen to hold that
  * vendor's key.
  */
 const DEFAULT_PROVIDER = "auto";
-const CACHE_DIR = ".docmeta/cache";
+const CACHE_DIR = ".moose/meta/cache";
 
 /** What the cache stores: the raw, *pre-gating* proposal for one file. */
 interface CachedProposal {
@@ -97,13 +97,13 @@ interface CachedProposal {
 export async function runFill(opts: FillOptions): Promise<FillRun> {
   const cwd = opts.cwd ?? process.cwd();
   const loaded = await loadConfig(opts.configPath, cwd);
-  const config: DocmetaConfig | null = loaded?.config ?? null;
+  const config: MooseMetaConfig | null = loaded?.config ?? null;
 
   const inputs = opts.inputs.length > 0 ? opts.inputs : (config?.paths ?? []);
   const usingStdin = inputs.includes(STDIN_TOKEN);
   if (inputs.length === 0) {
-    throw new DocmetaError(
-      "No files to fill. Pass paths/globs, or add `paths:` to docmeta.config.yaml.",
+    throw new MooseMetaError(
+      "No files to fill. Pass paths/globs, or add `paths:` to moose-meta.config.yaml.",
     );
   }
 
@@ -111,14 +111,14 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
   if (opts.as && !forcedExtractor) {
     // `--as` takes an extractor name ("markdown"), so list names — listing
     // extensions here would point the user at the wrong kind of value.
-    throw new DocmetaError(
+    throw new MooseMetaError(
       `Unknown format "${opts.as}". Known formats: ${listFormats()
         .map((f) => f.name)
         .join(", ")}.`,
     );
   }
   if (usingStdin && !forcedExtractor) {
-    throw new DocmetaError(
+    throw new MooseMetaError(
       "Reading from stdin (`-`) requires --as <format> to choose an extractor.",
     );
   }
@@ -194,7 +194,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
         provider = construct();
       } catch (err) {
         // Missing API key / unknown provider is operational, not per-file.
-        throw new DocmetaError(
+        throw new MooseMetaError(
           err instanceof InferenceError
             ? err.message
             : `Could not construct the "${providerName}" provider: ${(err as Error).message}`,
@@ -207,7 +207,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
   const cache =
     opts.cache === false
       ? undefined
-      : new JsonCache<CachedProposal>(join(cwd, CACHE_DIR), true, "docmeta");
+      : new JsonCache<CachedProposal>(join(cwd, CACHE_DIR), true, "moose-meta");
   const pricing = pricingFor(identity.model);
 
   // `-` is processed alongside any named paths, not instead of them — same as
@@ -280,7 +280,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
       return errorResult(
         label,
         extractor.name,
-        `The "${extractor.name}" format is read-only; docmeta fill cannot write metadata back to it.`,
+        `The "${extractor.name}" format is read-only; moose-meta fill cannot write metadata back to it.`,
       );
     }
 
@@ -577,7 +577,7 @@ export function collectCandidates(
     for (const [key, raw] of Object.entries(
       properties as Record<string, unknown>,
     )) {
-      // `$schema` is docmeta's schema wiring, not document metadata.
+      // `$schema` is moose-meta's schema wiring, not document metadata.
       if (key === FILE_SCHEMA_KEY) continue;
       if (only && !only.has(key)) continue;
       if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue;
@@ -952,12 +952,12 @@ function requireNumber(
 ): number {
   const { min, max, integer } = bounds;
   if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
-    throw new DocmetaError(
+    throw new MooseMetaError(
       `fill: "${name}" must be a number between ${min} and ${max}, got ${String(value)}.`,
     );
   }
   if (integer === true && !Number.isInteger(value)) {
-    throw new DocmetaError(
+    throw new MooseMetaError(
       `fill: "${name}" must be a whole number, got ${String(value)}.`,
     );
   }
@@ -973,7 +973,7 @@ const PROVIDERS = new Set<string>([...Object.keys(DEFAULT_MODELS), "auto"]);
 
 function assertKnownProvider(name: string): void {
   if (PROVIDERS.has(name)) return;
-  throw new DocmetaError(
+  throw new MooseMetaError(
     `Unknown provider "${name}". Available: ${[...PROVIDERS].join(", ")}.`,
   );
 }
@@ -995,7 +995,7 @@ function assertModelHasProvider(
   model: string | undefined,
 ): void {
   if (name !== "auto" || model == null) return;
-  throw new DocmetaError(
+  throw new MooseMetaError(
     `Model "${model}" was given without a provider: a model name does not say ` +
       `which provider owns it. Set --provider or fill.provider to one of ` +
       `${Object.keys(DEFAULT_MODELS).join(", ")}, or drop the model to take the ` +
@@ -1012,7 +1012,7 @@ async function resolveIdentity(spec: {
   } catch (err) {
     // Detection failing with nothing available is operational, not per-file:
     // the aggregate message names every provider it tried and why each was out.
-    throw new DocmetaError(
+    throw new MooseMetaError(
       err instanceof InferenceError
         ? err.message
         : `Could not resolve provider "${spec.provider}": ${(err as Error).message}`,

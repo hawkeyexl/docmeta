@@ -10,7 +10,7 @@ export interface SchemasInfo {
     name: string;
     extensions: string[];
     implemented: boolean;
-    /** Whether `docmeta fill` can write metadata back to this format. */
+    /** Whether `moose-meta fill` can write metadata back to this format. */
     writable: boolean;
   }[];
 }

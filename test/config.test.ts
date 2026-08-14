@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { loadConfig, parseConfig } from "../src/core/config.js";
-import { DocmetaError } from "../src/types.js";
+import { MooseMetaError } from "../src/types.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -22,7 +22,7 @@ describe("config", () => {
         "      - google:okf:0.1",
         "      - doc-detective:1.0",
       ].join("\n"),
-      "docmeta.config.yaml",
+      "moose-meta.config.yaml",
     );
     expect(cfg.paths).toEqual(["books/**/*.md"]);
     expect(cfg.exclude).toEqual(["**/drafts/**"]);
@@ -32,25 +32,25 @@ describe("config", () => {
   });
 
   it("treats an empty config as all-undefined", () => {
-    const cfg = parseConfig("", "docmeta.config.yaml");
+    const cfg = parseConfig("", "moose-meta.config.yaml");
     expect(cfg.paths).toBeUndefined();
     expect(cfg.schemas).toBeUndefined();
   });
 
   it("rejects a malformed schemas field", () => {
     expect(() => parseConfig("schemas: not-a-list", "x.yaml")).toThrow(
-      DocmetaError,
+      MooseMetaError,
     );
   });
 
   it("loads the fixture config from disk", async () => {
-    const loaded = await loadConfig(join(here, "fixtures", "docmeta.config.yaml"));
+    const loaded = await loadConfig(join(here, "fixtures", "moose-meta.config.yaml"));
     expect(loaded?.config.schemas).toEqual(["google:okf:0.1"]);
   });
 
   it("errors when an explicit config path is missing", async () => {
     await expect(loadConfig(join(here, "fixtures", "nope.yaml"))).rejects.toBeInstanceOf(
-      DocmetaError,
+      MooseMetaError,
     );
   });
 
@@ -83,17 +83,17 @@ describe("config", () => {
     it("rejects a confidence threshold outside 0-1", () => {
       expect(() =>
         parseConfig("fill:\n  confidenceThreshold: 1.5", "x.yaml"),
-      ).toThrow(DocmetaError);
+      ).toThrow(MooseMetaError);
       expect(() =>
         parseConfig("fill:\n  confidenceThreshold: -0.1", "x.yaml"),
-      ).toThrow(DocmetaError);
+      ).toThrow(MooseMetaError);
     });
 
     it("rejects a non-finite maxCostUsd", () => {
       // YAML parses 1e999 as Infinity, which a bare range check would accept.
       expect(() =>
         parseConfig("fill:\n  maxCostUsd: 1e999", "x.yaml"),
-      ).toThrow(DocmetaError);
+      ).toThrow(MooseMetaError);
     });
 
     it("rejects a fractional concurrency", () => {
@@ -104,9 +104,9 @@ describe("config", () => {
     });
 
     it("rejects a non-mapping fill block and wrong-typed keys", () => {
-      expect(() => parseConfig("fill: nope", "x.yaml")).toThrow(DocmetaError);
+      expect(() => parseConfig("fill: nope", "x.yaml")).toThrow(MooseMetaError);
       expect(() => parseConfig("fill:\n  provider: 3", "x.yaml")).toThrow(
-        DocmetaError,
+        MooseMetaError,
       );
     });
   });

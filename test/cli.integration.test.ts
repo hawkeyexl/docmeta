@@ -13,14 +13,14 @@ const bin = resolve(root, "dist", "cli.js");
  * An empty inference runtime prefix, for the tests that need the local binding
  * to be UNAVAILABLE.
  *
- * `node-llama-cpp` is not a docmeta dependency, so it is missing from
+ * `node-llama-cpp` is not a moose-meta dependency, so it is missing from
  * node_modules — but the library also looks in its own prefix under the home
  * directory, and anything that has ever run a local model populates that.
  * Running the doc-detective suite does, and it turned these assertions inside
  * out: runs that should have failed started succeeding. Pointing the prefix
  * somewhere empty makes absence a property of the test, not of the machine.
  */
-const noRuntimeDir = mkdtempSync(join(tmpdir(), "docmeta-no-runtime-"));
+const noRuntimeDir = mkdtempSync(join(tmpdir(), "moose-meta-no-runtime-"));
 
 interface Run {
   stdout: string;
@@ -51,7 +51,7 @@ function run(
   }
 }
 
-describe("docmeta CLI (built bin)", () => {
+describe("moose-meta CLI (built bin)", () => {
   beforeAll(() => {
     if (!existsSync(bin)) execSync("npm run build", { cwd: root, stdio: "ignore" });
   }, 180000);

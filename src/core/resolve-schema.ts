@@ -7,7 +7,7 @@
  *   5. the built-in default set (DEFAULT_SCHEMAS)
  */
 import picomatch from "picomatch";
-import type { DocmetaConfig } from "./config.js";
+import type { MooseMetaConfig } from "./config.js";
 
 /**
  * Applied when nothing else resolves. Seven-Action is safe to include here
@@ -30,7 +30,7 @@ export interface ResolveParams {
   /** Repeatable `--schema` values; non-empty means override. */
   cliSchemas?: string[];
   /** Loaded config, if any. */
-  config?: DocmetaConfig | null;
+  config?: MooseMetaConfig | null;
 }
 
 const matcherCache = new Map<string, (p: string) => boolean>();

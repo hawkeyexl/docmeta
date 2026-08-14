@@ -1,5 +1,5 @@
 /**
- * Shared types for docmeta.
+ * Shared types for moose-meta.
  *
  * The pipeline is: load files -> extract metadata (format-specific) ->
  * resolve a schema set per file -> validate against each schema -> report.
@@ -48,7 +48,7 @@ export interface MetadataExtractor {
    * Return new content with every key in `patch` set at the top level. Pure:
    * no IO, no mutation, deterministic; returns `content` itself for a no-op.
    *
-   * Absent means the format is read-only. Present but throwing `DocmetaError`
+   * Absent means the format is read-only. Present but throwing `MooseMetaError`
    * means this particular document cannot be rewritten safely.
    */
   apply?(content: string, patch: MetadataPatch, options?: ApplyOptions): string;
@@ -91,9 +91,9 @@ export interface RunSummary {
 }
 
 /** An operational/usage failure that should map to exit code 2. */
-export class DocmetaError extends Error {
+export class MooseMetaError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "DocmetaError";
+    this.name = "MooseMetaError";
   }
 }

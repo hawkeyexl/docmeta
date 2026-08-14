@@ -1,4 +1,4 @@
-/** Programmatic API for docmeta. */
+/** Programmatic API for moose-meta. */
 export { runValidate } from "./commands/validate.js";
 export type { ValidateOptions, ValidateRun } from "./commands/validate.js";
 export { runGet } from "./commands/get.js";
@@ -16,7 +16,7 @@ export type {
 export { Validator } from "./core/validator.js";
 export { resolveSchemaSet, DEFAULT_SCHEMAS } from "./core/resolve-schema.js";
 export { loadConfig, parseConfig } from "./core/config.js";
-export type { DocmetaConfig, FillConfig } from "./core/config.js";
+export type { MooseMetaConfig, FillConfig } from "./core/config.js";
 export {
   listBuiltins,
   loadSchema,

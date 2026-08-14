@@ -1,5 +1,5 @@
 /**
- * docmeta CLI. Thin commander wrapper over the command cores. Follows clig.dev:
+ * moose-meta CLI. Thin commander wrapper over the command cores. Follows clig.dev:
  * primary output to stdout, diagnostics to stderr, color only on a TTY (and
  * never when NO_COLOR/--no-color), meaningful exit codes (0 ok, 1 validation
  * failures, 2 operational/usage errors).
@@ -8,7 +8,7 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import pkg from "../package.json" with { type: "json" };
-import { DocmetaError } from "./types.js";
+import { MooseMetaError } from "./types.js";
 import { runValidate } from "./commands/validate.js";
 import { runGet } from "./commands/get.js";
 import { getSchemasInfo } from "./commands/schemas.js";
@@ -29,10 +29,10 @@ async function readStdin(): Promise<string> {
 
 function fail(err: unknown): never {
   const msg =
-    err instanceof DocmetaError
+    err instanceof MooseMetaError
       ? err.message
       : `Unexpected error: ${(err as Error).message}`;
-  process.stderr.write(`docmeta: ${msg}\n`);
+  process.stderr.write(`moose-meta: ${msg}\n`);
   process.exit(2);
 }
 
@@ -70,7 +70,7 @@ function numeric(
 ): void {
   if (value === undefined) return;
   if (!Number.isFinite(value) || value < min || value > max) {
-    throw new DocmetaError(
+    throw new MooseMetaError(
       `${name} must be a number between ${min} and ${max}, got ${value}.`,
     );
   }
@@ -79,7 +79,7 @@ function numeric(
 export function buildProgram(): Command {
   const program = new Command();
   program
-    .name("docmeta")
+    .name("moose-meta")
     .description(
       "Validate the presence and format of document metadata against JSON Schema.",
     )
@@ -104,24 +104,24 @@ export function buildProgram(): Command {
     .option("--exclude <glob>", "glob to exclude; repeatable", collect, [])
     .option("--as <format>", "force an input format (e.g. markdown, mdx)")
     .option("-f, --format <format>", "output: pretty | json | github", "pretty")
-    .option("-c, --config <path>", "path to a docmeta config file")
+    .option("-c, --config <path>", "path to a moose-meta config file")
     .option("-q, --quiet", "in pretty output, hide passing files")
     .addHelpText(
       "after",
       [
         "",
         "Examples:",
-        "  docmeta validate docs/                       # walk a directory",
-        '  docmeta validate "**/*.md" -f github         # CI annotations',
-        "  docmeta validate page.md -s google:okf:0.1 -s ./my.schema.json",
-        "  cat page.md | docmeta validate - --as markdown",
+        "  moose-meta validate docs/                       # walk a directory",
+        '  moose-meta validate "**/*.md" -f github         # CI annotations',
+        "  moose-meta validate page.md -s google:okf:0.1 -s ./my.schema.json",
+        "  cat page.md | moose-meta validate - --as markdown",
       ].join("\n"),
     )
     .action(async (paths: string[], options, command: Command) => {
       try {
         const format = options.format as ReportFormat;
         if (!REPORT_FORMATS.has(format)) {
-          throw new DocmetaError(
+          throw new MooseMetaError(
             `Unknown --format "${format}". Use pretty, json, or github.`,
           );
         }
@@ -171,23 +171,23 @@ export function buildProgram(): Command {
     .option("--exclude <glob>", "glob to exclude; repeatable", collect, [])
     .option("--as <format>", "force an input format (e.g. markdown, mdx)")
     .option("-f, --format <format>", "output: pretty | json", "pretty")
-    .option("-c, --config <path>", "path to a docmeta config file")
+    .option("-c, --config <path>", "path to a moose-meta config file")
     .addHelpText(
       "after",
       [
         "",
         "Examples:",
-        "  docmeta get title,type docs/intro.md",
-        "  docmeta get author.name,/author/email docs/intro.md",
-        '  docmeta get type "**/*.md" -f json',
-        "  cat page.md | docmeta get title - --as markdown",
+        "  moose-meta get title,type docs/intro.md",
+        "  moose-meta get author.name,/author/email docs/intro.md",
+        '  moose-meta get type "**/*.md" -f json',
+        "  cat page.md | moose-meta get title - --as markdown",
       ].join("\n"),
     )
     .action(async (fieldsArg: string, paths: string[], options, command: Command) => {
       try {
         const format = options.format as string;
         if (format !== "pretty" && format !== "json") {
-          throw new DocmetaError(
+          throw new MooseMetaError(
             `Unknown --format "${format}". Use pretty or json.`,
           );
         }
@@ -266,23 +266,23 @@ export function buildProgram(): Command {
     // defeat runFill's integer check and hide the mistake from the user.
     .option("--concurrency <n>", "files inferred in parallel", parseFloat)
     .option("-f, --format <format>", "output: pretty | json", "pretty")
-    .option("-c, --config <path>", "path to a docmeta config file")
+    .option("-c, --config <path>", "path to a moose-meta config file")
     .addHelpText(
       "after",
       [
         "",
         "Examples:",
-        "  docmeta fill docs/ --dry-run                 # preview proposals",
-        "  docmeta fill docs/ --confidence 0.9          # only near-certain values",
-        "  docmeta fill page.md --fields description",
-        "  cat page.md | docmeta fill - --as markdown   # filled doc to stdout",
+        "  moose-meta fill docs/ --dry-run                 # preview proposals",
+        "  moose-meta fill docs/ --confidence 0.9          # only near-certain values",
+        "  moose-meta fill page.md --fields description",
+        "  cat page.md | moose-meta fill - --as markdown   # filled doc to stdout",
       ].join("\n"),
     )
     .action(async (paths: string[], options, command: Command) => {
       try {
         const format = options.format as string;
         if (format !== "pretty" && format !== "json") {
-          throw new DocmetaError(
+          throw new MooseMetaError(
             `Unknown --format "${format}". Use pretty or json.`,
           );
         }

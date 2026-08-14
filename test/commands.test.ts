@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { runValidate } from "../src/commands/validate.js";
 import { runGet } from "../src/commands/get.js";
 import { getSchemasInfo } from "../src/commands/schemas.js";
-import { DocmetaError } from "../src/types.js";
+import { MooseMetaError } from "../src/types.js";
 import { startSchemaServer, type SchemaServer } from "./helpers/schema-server.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -94,7 +94,7 @@ describe("runValidate", () => {
 
   it("throws when no inputs and no config", async () => {
     await expect(runValidate({ inputs: [], cwd: root })).rejects.toBeInstanceOf(
-      DocmetaError,
+      MooseMetaError,
     );
   });
 
@@ -142,7 +142,7 @@ describe("runValidate", () => {
         stdinContent: "x",
         cwd: root,
       }),
-    ).rejects.toBeInstanceOf(DocmetaError);
+    ).rejects.toBeInstanceOf(MooseMetaError);
   });
 });
 
@@ -267,13 +267,13 @@ describe("runGet", () => {
   it("requires --as when reading from stdin", async () => {
     await expect(
       runGet({ fields: ["type"], inputs: ["-"], stdinContent: "x", cwd: root }),
-    ).rejects.toBeInstanceOf(DocmetaError);
+    ).rejects.toBeInstanceOf(MooseMetaError);
   });
 
   it("throws when no inputs and no config (parity with validate)", async () => {
     await expect(
       runGet({ fields: ["type"], inputs: [], cwd: root }),
-    ).rejects.toBeInstanceOf(DocmetaError);
+    ).rejects.toBeInstanceOf(MooseMetaError);
   });
 
   it("falls back to config paths when no inputs are given", async () => {
@@ -281,7 +281,7 @@ describe("runGet", () => {
       fields: ["type"],
       inputs: [],
       cwd: join(here, "fixtures"),
-      configPath: join(here, "fixtures", "docmeta.config.yaml"),
+      configPath: join(here, "fixtures", "moose-meta.config.yaml"),
     });
     expect(results.length).toBeGreaterThan(0);
   });

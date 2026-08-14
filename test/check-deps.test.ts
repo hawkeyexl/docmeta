@@ -45,7 +45,7 @@ let proj: string;
 beforeEach(async () => {
   // `proj` sits inside `outer`, mirroring `.claude/worktrees/<name>/` inside
   // the main checkout — that nesting is what makes the walk possible.
-  outer = await mkdtemp(join(tmpdir(), "docmeta-deps-"));
+  outer = await mkdtemp(join(tmpdir(), "moose-meta-deps-"));
   proj = join(outer, "proj");
   await mkdir(proj, { recursive: true });
   await writeFile(

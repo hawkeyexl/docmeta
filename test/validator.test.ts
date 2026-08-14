@@ -160,7 +160,7 @@ describe("Validator compile cache under concurrency", () => {
     // second time, which it can only do if the rejected entry was evicted. So
     // the schema appears on disk between the two calls, standing in for the
     // transient fetch failure this guards.
-    const dir = await mkdtemp(join(tmpdir(), "docmeta-validator-"));
+    const dir = await mkdtemp(join(tmpdir(), "moose-meta-validator-"));
     try {
       const ref = join(dir, "late.schema.json");
       const v = new Validator();
