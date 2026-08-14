@@ -1,6 +1,6 @@
-# Contributing to docmeta
+# Contributing to moose-meta
 
-Thanks for your interest in improving docmeta. This guide covers local setup, the development loop, and the conventions the project follows. Whether you're fixing a bug or adding support for a new input format, the steps below should get you productive quickly.
+Thanks for your interest in improving moose-meta. This guide covers local setup, the development loop, and the conventions the project follows. Whether you're fixing a bug or adding support for a new input format, the steps below should get you productive quickly.
 
 ## Prerequisites
 
@@ -10,8 +10,8 @@ Thanks for your interest in improving docmeta. This guide covers local setup, th
 ## Setup
 
 ```bash
-git clone https://github.com/hawkeyexl/docmeta.git
-cd docmeta
+git clone https://github.com/hawkeyexl/moose-meta.git
+cd moose-meta
 npm install
 ```
 
@@ -79,7 +79,7 @@ Every subcommand should expose a consistent surface. When one command gains an i
 
 - Targets are positional `[paths...]`: files, directories, and globs.
 - `-` reads stdin (and requires `--as <format>` to pick an extractor). It is one more input, so it is processed *alongside* any named paths, never instead of them.
-- `paths:` from `docmeta.config.yaml` is the fallback when no positional paths are given.
+- `paths:` from `moose-meta.config.yaml` is the fallback when no positional paths are given.
 - No inputs and no config is an operational error (exit 2), not silent empty output.
 - Shared flags use the same names and semantics: `--as`, `--ext`, `--exclude`, `-c/--config`, `-f/--format`.
 
@@ -107,7 +107,7 @@ The `MetadataExtractor` interface returns an `ExtractedMetadata` object: the par
 ### Write support is optional
 
 `MetadataExtractor` also has an optional `apply(content, patch)`, which
-[`docmeta fill`](https://hawkeyexl.github.io/docmeta/reference/cli/#fill) uses to
+[`moose-meta fill`](https://hawkeyexl.github.io/moose-meta/reference/cli/#fill) uses to
 write metadata back. Leaving it off is a valid choice, and the absence is the
 capability check: `typeof extractor.apply === "function"`. TypeScript then makes
 every call site handle the read-only case.

@@ -1,29 +1,39 @@
-# docmeta
+# moose-meta
 
 Validate the **presence and format** of document metadata against **JSON Schema**, built for CI.
 
+> **Renamed from `docmeta`.** This package was published as `docmeta` up to
+> v3.4.0 and is now `moose-meta` from v4.0.0. To upgrade: `npm i -D moose-meta`,
+> then replace `docmeta` with `moose-meta` in your scripts and CI. Your
+> `docmeta.config.yaml` is still read (with a deprecation warning) — rename it to
+> `moose-meta.config.yaml`, or move its keys under `meta:` in a shared
+> `moose.config.yaml`. Documentation that used to live at
+> `hawkeyexl.github.io/docmeta/` is now at
+> [`hawkeyexl.github.io/moose-meta/`](https://hawkeyexl.github.io/moose-meta/);
+> the old URLs do not redirect.
+
 <!-- badges: add npm version, build status, and license badges here -->
 
-`docmeta` checks the metadata in your documents (Markdown frontmatter and more) against one or more JSON Schemas. It verifies that required fields are present and correctly formatted (a `type`, an ISO 8601 `timestamp`, a URI `resource`); it does not judge prose quality. It ships with seven [built-in schemas](https://hawkeyexl.github.io/docmeta/reference/built-in-schemas/): the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md), vocabularies for [Diátaxis](https://diataxis.fr/), [The Good Docs Project](https://www.thegooddocsproject.dev/template), and the [Seven-Action model](https://passo.uno/seven-action-model/), and the docs, blog, and pages front matter contracts of [Docusaurus](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-docs#markdown-front-matter) 3.10. It follows [clig.dev](https://clig.dev) conventions and returns a nonzero exit code (plus optional GitHub annotations) when validation fails.
+`moose-meta` checks the metadata in your documents (Markdown frontmatter and more) against one or more JSON Schemas. It verifies that required fields are present and correctly formatted (a `type`, an ISO 8601 `timestamp`, a URI `resource`); it does not judge prose quality. It ships with seven [built-in schemas](https://hawkeyexl.github.io/moose-meta/reference/built-in-schemas/): the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md), vocabularies for [Diátaxis](https://diataxis.fr/), [The Good Docs Project](https://www.thegooddocsproject.dev/template), and the [Seven-Action model](https://passo.uno/seven-action-model/), and the docs, blog, and pages front matter contracts of [Docusaurus](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-docs#markdown-front-matter) 3.10. It follows [clig.dev](https://clig.dev) conventions and returns a nonzero exit code (plus optional GitHub annotations) when validation fails.
 
 It can also **fill in** the metadata that is missing, so adopting a standard on an existing docset is not a data-entry project.
 
 ## Install
 
 ```bash
-npm install -g docmeta
+npm install -g moose-meta
 # or run it without installing:
-npx docmeta validate "**/*.md"
+npx moose-meta validate "**/*.md"
 ```
 
 Requires Node.js 24 or later.
 
 ## Quick start
 
-Point `docmeta validate` at a file, a directory (walked recursively), or a glob. With no `--schema`, it validates against the default set: the built-in OKF schema plus `passo-uno:seven-action:1.0`, which constrains an optional `action` field and requires nothing on its own.
+Point `moose-meta validate` at a file, a directory (walked recursively), or a glob. With no `--schema`, it validates against the default set: the built-in OKF schema plus `passo-uno:seven-action:1.0`, which constrains an optional `action` field and requires nothing on its own.
 
 ```bash
-docmeta validate docs/intro.md
+moose-meta validate docs/intro.md
 ```
 
 ```text
@@ -38,13 +48,13 @@ A clean run exits `0`; validation failures exit `1`; operational errors (no inpu
 
 ## Fill in what's missing
 
-`docmeta fill` infers the metadata properties your schema asks for but a page
+`moose-meta fill` infers the metadata properties your schema asks for but a page
 does not carry, and writes back the values it is confident about. It is the
 fast way to clear the backlog on a repo that has never enforced metadata.
 
 ```bash
-docmeta fill docs/ --dry-run     # preview; writes nothing
-docmeta fill docs/               # apply
+moose-meta fill docs/ --dry-run     # preview; writes nothing
+moose-meta fill docs/               # apply
 ```
 
 ```text
@@ -70,12 +80,12 @@ credentials at all — so it works with whatever you have, and reports which it
 used. Pass `--provider` to pin one, which is worth doing in CI: left to detect, a
 runner that loses its key falls back to the local model and downloads it rather
 than failing the build. See the
-[`fill` reference](https://hawkeyexl.github.io/docmeta/reference/cli/#fill) for
+[`fill` reference](https://hawkeyexl.github.io/moose-meta/reference/cli/#fill) for
 every flag and for what the local fallback costs.
 
 ## Supported formats
 
-Markdown, MDX, AsciiDoc, reStructuredText, XML, and HTML. Run `docmeta schemas`
+Markdown, MDX, AsciiDoc, reStructuredText, XML, and HTML. Run `moose-meta schemas`
 to list the built-in schemas, every supported format, and which formats `fill`
 can write back to.
 
@@ -83,15 +93,15 @@ can write back to.
 
 Full guides, recipes, and reference live on the documentation site:
 
-**https://hawkeyexl.github.io/docmeta/**
+**https://hawkeyexl.github.io/moose-meta/**
 
 | Track | What it covers |
 |-------|----------------|
-| [Get started](https://hawkeyexl.github.io/docmeta/get-started/) | Install and run your first validation. |
-| [Set up validation](https://hawkeyexl.github.io/docmeta/set-up/) | Stand up validation for a repo: `docmeta.config.yaml`, per-folder schema overrides. |
-| [Run it in CI](https://hawkeyexl.github.io/docmeta/ci/) | GitHub Actions and other CI recipes, exit codes, and PR annotations. |
-| [Define & evolve schemas](https://hawkeyexl.github.io/docmeta/schemas/) | Author a schema, wire up resolution, and version it without breaking the build. |
-| [Reference](https://hawkeyexl.github.io/docmeta/reference/cli/) | Every CLI flag, config key, the schema-resolution precedence chain, and output formats. |
+| [Get started](https://hawkeyexl.github.io/moose-meta/get-started/) | Install and run your first validation. |
+| [Set up validation](https://hawkeyexl.github.io/moose-meta/set-up/) | Stand up validation for a repo: `moose-meta.config.yaml`, per-folder schema overrides. |
+| [Run it in CI](https://hawkeyexl.github.io/moose-meta/ci/) | GitHub Actions and other CI recipes, exit codes, and PR annotations. |
+| [Define & evolve schemas](https://hawkeyexl.github.io/moose-meta/schemas/) | Author a schema, wire up resolution, and version it without breaking the build. |
+| [Reference](https://hawkeyexl.github.io/moose-meta/reference/cli/) | Every CLI flag, config key, the schema-resolution precedence chain, and output formats. |
 
 ## Contributing
 

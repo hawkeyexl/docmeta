@@ -82,7 +82,7 @@ jobs:
             PR TITLE: ${{ github.event.pull_request.title }}
             PR DESCRIPTION: ${{ github.event.pull_request.body }}
 
-            Perform a thorough code review of this pull request. docmeta is a
+            Perform a thorough code review of this pull request. moose-meta is a
             TypeScript CLI (published to npm) that validates document metadata
             against JSON Schema. Focus areas:
 

@@ -2,7 +2,7 @@
 
 Guidance for agents working in this repository.
 
-## What docmeta is
+## What moose-meta is
 
 A TypeScript CLI (published to npm) that validates the **presence and format**
 of document metadata (frontmatter / headers) against **JSON Schema**, built for
@@ -34,9 +34,9 @@ baseline shared by `validate`, `get`, and `fill`:
 - Targets are **positional** `[paths...]`: files, directories, and globs.
 - `-` reads **stdin** (requires `--as <format>` to pick an extractor). It is one
   more input, processed *alongside* any named paths, never instead of them.
-- `paths:` from `docmeta.config.yaml` is the **fallback** when no positional
+- `paths:` from `moose-meta.config.yaml` is the **fallback** when no positional
   paths are given.
-- No inputs and no config is an **operational error** (`DocmetaError`, exit 2),
+- No inputs and no config is an **operational error** (`MooseMetaError`, exit 2),
   not silent empty output.
 - Shared flags use the same names/semantics: `--as`, `--ext`, `--exclude`,
   `-c/--config`, `-f/--format`.
@@ -159,7 +159,7 @@ npm run build       # tsup -> dist/ (needed before CLI integration tests)
 npm run check:deps  # deps installed here, at locked versions (auto-runs before the three above)
 npm run docs:check-cli  # CLI reference must match src/cli.ts
 
-# After editing anything under docs/, run the dogfood check too. docmeta
+# After editing anything under docs/, run the dogfood check too. moose-meta
 # validates its own docs, and the Docs deploy is gated on it.
 node dist/cli.js validate "docs/src/content/docs/**/*.{md,mdx}" \
   -s ./docs/doc-frontmatter.schema.json

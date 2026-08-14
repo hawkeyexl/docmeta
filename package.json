@@ -1,10 +1,10 @@
 {
-  "name": "docmeta",
+  "name": "moose-meta",
   "version": "3.4.0",
   "description": "Validate the presence and format of document metadata (Markdown frontmatter and more) against JSON Schema. CI-friendly.",
   "type": "module",
   "bin": {
-    "docmeta": "dist/cli.js"
+    "moose-meta": "dist/cli.js"
   },
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -21,11 +21,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hawkeyexl/docmeta.git"
+    "url": "git+https://github.com/hawkeyexl/moose-meta.git"
   },
-  "homepage": "https://hawkeyexl.github.io/docmeta/",
+  "homepage": "https://hawkeyexl.github.io/moose-meta/",
   "bugs": {
-    "url": "https://github.com/hawkeyexl/docmeta/issues"
+    "url": "https://github.com/hawkeyexl/moose-meta/issues"
   },
   "publishConfig": {
     "access": "public"
