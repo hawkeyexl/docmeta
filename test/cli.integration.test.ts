@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeAll } from "vitest";
-import { execFileSync, execSync } from "node:child_process";
-import { existsSync, mkdtempSync } from "node:fs";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { spawnSync, execSync } from "node:child_process";
+import { existsSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
@@ -28,27 +28,29 @@ interface Run {
   status: number;
 }
 
+/**
+ * Runs the built bin and captures BOTH streams, on success as well as failure.
+ * `execFileSync` returns only stdout and lets stderr through to the parent, so
+ * a diagnostic emitted on a successful run was invisible to assertions — which
+ * is exactly what the stream-discipline tests below need to see.
+ */
 function run(
   args: string[],
   input?: string,
   env?: Record<string, string>,
+  cwd: string = root,
 ): Run {
-  try {
-    const stdout = execFileSync("node", [bin, ...args], {
-      cwd: root,
-      encoding: "utf8",
-      input,
-      ...(env ? { env: { ...process.env, ...env } } : {}),
-    });
-    return { stdout, stderr: "", status: 0 };
-  } catch (e) {
-    const err = e as { stdout?: string; stderr?: string; status?: number };
-    return {
-      stdout: err.stdout ?? "",
-      stderr: err.stderr ?? "",
-      status: err.status ?? 1,
-    };
-  }
+  const r = spawnSync("node", [bin, ...args], {
+    cwd,
+    encoding: "utf8",
+    input,
+    ...(env ? { env: { ...process.env, ...env } } : {}),
+  });
+  return {
+    stdout: r.stdout ?? "",
+    stderr: r.stderr ?? "",
+    status: r.status ?? 1,
+  };
 }
 
 describe("moose-meta CLI (built bin)", () => {
@@ -380,5 +382,43 @@ describe("cli fill", () => {
     }[];
     expect(formats.find((f) => f.name === "markdown")?.writable).toBe(true);
     expect(formats.find((f) => f.name === "html")?.writable).toBe(false);
+  });
+});
+
+describe("deprecated config name (stream discipline)", () => {
+  let dir: string;
+
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), "moose-meta-deprecated-cfg-"));
+    writeFileSync(
+      join(dir, "docmeta.config.yaml"),
+      "schemas:\n  - google:okf:0.1\n",
+    );
+  });
+
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  const page = resolve(root, "test", "fixtures", "valid.md");
+
+  it("keeps stdout valid JSON while the warning is on stderr", () => {
+    const r = run(["validate", page, "-f", "json"], undefined, undefined, dir);
+    expect(r.stderr).toContain("deprecated config file name");
+    expect(() => JSON.parse(r.stdout) as unknown).not.toThrow();
+  });
+
+  it("never puts the warning on stdout", () => {
+    const r = run(["validate", page], undefined, undefined, dir);
+    expect(r.stderr).toContain("moose-meta:");
+    expect(r.stdout).not.toContain("deprecated");
+  });
+
+  it("does not warn when the config is passed explicitly by path", () => {
+    const r = run(
+      ["validate", page, "-c", join(dir, "docmeta.config.yaml")],
+      undefined,
+      undefined,
+      root,
+    );
+    expect(r.stderr).not.toContain("deprecated");
   });
 });
