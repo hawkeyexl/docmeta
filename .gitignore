@@ -12,3 +12,7 @@ coverage/
 
 # `docmeta fill` proposal cache — machine-local, safe to delete at any time.
 .docmeta/
+
+# Feature demo videos (see CLAUDE.md). Generated per feature, handed to the
+# user or attached to the PR — never committed, since binaries bloat history.
+media/

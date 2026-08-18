@@ -137,6 +137,57 @@ It runs automatically before `test`, `typecheck`, and `build`, so the walk now
 announces itself instead of being diagnosed. Before believing any failure that
 smells like a dependency, check that it passes.
 
+### Every new feature ships with a short demo video
+
+When a change adds a **feature**, also produce a short demo video suitable for
+posting on LinkedIn. Do it as part of the same piece of work, without being
+asked.
+
+**When this applies.** Trigger on the commit type, since that is already the
+thing semantic-release and commitlint agree on:
+
+| Commit type | Video? |
+|---|---|
+| `feat:` / `feat(scope):` | **Yes** |
+| `fix:`, `perf:`, `refactor:`, `docs:`, `test:`, `chore:`, `ci:`, `build:` | No |
+
+A bug fix does not get a video no matter how significant it felt to write. If a
+branch carries both a `feat:` and some `fix:` commits, the feature is what the
+video shows. When it is genuinely unclear whether something is a feature or a
+fix, ask rather than guessing — the commit type is a release-visible decision
+anyway.
+
+**What it shows.** docmeta is a CLI, so the demo is a terminal session, not
+slides:
+
+1. the problem — a real document or repo that is missing something;
+2. the new command or flag, typed out and run;
+3. the result, including the exit code where that is the point.
+
+Aim for **20–45 seconds**. Use `test/fixtures/` as the material wherever it
+fits, so the demo stays true to what CI actually runs. Keep the terminal legible
+at phone size: large font, short lines, no scrollback noise, `--no-color` off (the
+color is worth showing). Add a one-line caption per step rather than narration.
+
+**How to make it.** No tool is vendored for this, so pick what is available and
+say which you used:
+
+- a scripted terminal recording rendered to MP4 or GIF is the default;
+- the `remotion-best-practices` skill is available if the piece needs titles or
+  motion beyond a raw capture;
+- if no capture tooling is available in the environment, say so and hand over a
+  shot list plus the exact commands rather than silently skipping the step.
+
+**Where it goes.** Write to `media/` (gitignored). **Do not commit video or GIF
+binaries** — they bloat the history permanently and this repo publishes a docs
+site that does not need them. Attach the file to the PR, or hand the path to the
+user.
+
+**Posting is a human action.** Generate the asset and hand it over; never post
+to LinkedIn or any other account, and never draft-and-send on someone's behalf.
+Writing the suggested caption text is fine and useful. Publishing it is the
+user's call, every time.
+
 ### Other conventions
 
 - **Strict TypeScript.** `tsconfig` enables strict settings including
