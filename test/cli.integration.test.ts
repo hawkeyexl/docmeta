@@ -242,11 +242,13 @@ describe("cli empty and unmatched inputs", () => {
     expect(r.stderr).toContain("No files matched");
   });
 
+  // `fill` pulls in the inference package, so even a fast-failing run costs
+  // seconds of module loading. Matches the 60s the other fill cases use.
   it("exits 2 when fill matches no files", () => {
     const r = run(["fill", "test/fixtures/*.nomatch"]);
     expect(r.status).toBe(2);
     expect(r.stderr).toContain("No files matched");
-  });
+  }, 60000);
 
   it("keeps stdin working: one input, zero files, still a verdict", () => {
     const r = run(["validate", "-", "--as", "markdown"], "---\ntype: note\n---\n");
