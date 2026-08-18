@@ -197,13 +197,34 @@ schema changes every fingerprint. This is *correct* — it is a different contra
 as far as docmeta can tell — but it is surprising. It must be called out on the
 reference page, with `--write-baseline` as the remedy.
 
-### 8. Baseline present, repo clean — verified benign
+### 8. `--write-baseline` shrinkage is invisible — fixed by reporting it
+
+The read path reports stale entries, but the *write* path was silent. A developer
+who fixes half the backlog and re-records gets a smaller baseline with no
+indication that anything was dropped — and in a CI log
+`Baseline written.` and `Baseline written. (12 entries pruned)` are
+indistinguishable. Worse, an accidental `--write-baseline` on a run that resolved
+fewer files than intended (a narrowed glob, or an `--exclude` typo) silently
+*forgives* everything it did not see.
+
+So `--write-baseline` must report the delta in both directions:
+
+```
+Baseline written to .docmeta-baseline.json
+  14 findings recorded (+2 new, -12 no longer occur)
+```
+
+The `-12` is the number that makes an over-broad re-record visible. This is the
+same philosophy as the stale-entry line on the read path, applied to the side that
+actually mutates the file.
+
+### 9. Baseline present, repo clean — verified benign
 
 Every entry is stale, the run exits 0, and all entries are reported prunable.
 That is the natural end state of a completed ratchet: the user deletes the file
 and drops the flag.
 
-### 9. Interaction with 0004 (config discovery) — genuine coupling
+### 10. Interaction with 0004 (config discovery) — genuine coupling
 
 A relative `baseline:` path must resolve **relative to the config file**, not
 `cwd`. Resolving against `cwd` reintroduces the class of bug 0004 fixes: run from
@@ -211,19 +232,19 @@ a subdirectory, silently find no baseline, and every violation reads as new
 (noisy rather than silent — the safe direction, but still wrong). 0004 should
 land first, or this must carry its own config-relative resolution.
 
-### 10. Interaction with `fill` — verified benign
+### 11. Interaction with `fill` — verified benign
 
 `fill` removes violations, so it only ever produces stale entries. No interaction
 beyond the prune prompt.
 
-### 11. Interaction with 0014 (empty input) — the ratchet must not mask it
+### 12. Interaction with 0014 (empty input) — the ratchet must not mask it
 
 A baseline makes "0 findings" the expected steady state, which makes
 [0014](0014-empty-input-is-not-success.md)'s silent-pass-on-zero-files strictly
 more dangerous: a glob that stops matching looks identical to a clean ratchet.
 0014 should land before or with this.
 
-### 12. Determinism — verified
+### 13. Determinism — verified
 
 Baseline correctness needs deterministic output. Three consecutive runs produced
 a byte-identical `errors` array (`sha256` prefix `f1a3aabdcbbb06dc` each time),

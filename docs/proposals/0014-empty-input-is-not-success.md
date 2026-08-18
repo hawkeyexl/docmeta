@@ -180,7 +180,39 @@ it — so the check should run **after** a `stat`, and only fire when the token
 does not exist on disk. That makes a false positive impossible: if it exists, it
 is a path.
 
-### 8. Monorepo template runs — the legitimate case, handled
+### 8. Replacing edit distance with a known-commands allowlist — considered and declined
+
+Suggested in review: since there are only four short command names, drop
+Levenshtein and instead fire whenever the first token has no separator, no glob
+character, no extension, and is not one of the four — emitting a generic
+"did you mean validate/get/fill/schemas?".
+
+Declined, on precision rather than cost. That predicate is true of **every**
+mistyped path that happens to be a bare word, so `docmeta myproject` (a real
+directory, renamed last week) would answer "did you mean validate/get/fill/
+schemas?" — which is both wrong and less informative than
+`File not found: "myproject"`. Edit distance is the only thing separating "this is
+plausibly a misspelled command" from "this is some other mistake", and that
+distinction *is* the feature. The cost being avoided is four comparisons of
+≤ 7-character strings, once per invocation, on a token that has already failed a
+`stat`.
+
+Implementation made the trade sharper. Once the missing-literal rule in item 2 is
+in place, the typo'd subcommand **already** exits 2 with the right code:
+
+```console
+$ docmeta valdiate docs/
+exit=2
+docmeta: File not found: "valdiate".
+```
+
+So the suggestion is purely a message upgrade on an already-correct failure. That
+raises the bar for precision rather than lowering it: a targeted
+`Unknown command "valdiate". Did you mean "validate"?` earns its keep, while a
+scattershot four-way suggestion attached to every mistyped directory name is
+strictly worse than the plain not-found message it would replace.
+
+### 9. Monorepo template runs — the legitimate case, handled
 
 A shared workflow running `docmeta validate "docs/**/*.md"` across 40 repos where
 6 have no `docs/` would newly fail in 6. That is the one genuine cost, and

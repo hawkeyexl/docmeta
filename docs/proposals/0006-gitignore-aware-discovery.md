@@ -227,10 +227,27 @@ alternative is a rare, baffling failure.
 4. `test/load-files.test.ts` — run from a subdirectory of the git root.
 5. `test/cli.integration.test.ts` — `--no-gitignore`; the skipped count appears in
    `pretty` output.
-6. Fixtures: `test/fixtures/gitignored/` cannot contain a real `.gitignore`-ignored
-   file (this repo's own git would ignore it and it would never be committed).
-   The test must therefore build a temp git repo at runtime — call this out, it is
-   a trap that will otherwise produce a test that passes for the wrong reason.
+6. **Fixtures cannot live in `test/fixtures/`, and the reason is a trap.** A file
+   this repo's own `.gitignore` ignores would never be committed, so a
+   `test/fixtures/gitignored/` directory would arrive on CI *empty*. The test
+   would then find nothing to ignore, assert that nothing was ignored, and
+   **pass for the wrong reason** — a green test proving nothing.
+
+   The test helper must therefore build a throwaway repo at runtime:
+
+   ```
+   mkdtemp() -> git init -> write .gitignore ("build/") -> write build/x.md and
+   docs/x.md -> run resolveTargets -> assert build/x.md absent, docs/x.md present
+   -> rm -rf the temp dir in afterEach
+   ```
+
+   Two assertions are non-negotiable, per the red/green agreement:
+   - the test **fails** when the `git init` step is removed (proving the filter,
+     not the fixture layout, is what excludes the file);
+   - the temp directory is cleaned up even when the test fails.
+
+   Without the first, this test can pass on a machine where `git` is absent and
+   the filter silently no-ops (stress test 5).
 
 Then `reference/configuration.mdx` (`respectGitignore`), `reference/cli.mdx`
 (`--no-gitignore`, enforced by `npm run docs:check-cli`), and the "Default

@@ -107,14 +107,28 @@ The extractor documents "duplicate keys: last tag wins". A writer that updates t
 no-op that `fill` would report as written. Update the last occurrence so read and
 write agree. This is the kind of mismatch the mandatory re-parse check catches.
 
-### 3. `<title>` in SVG — the extractor already has this hazard
+### 3. `<title>` in SVG — a read bug that must be fixed *before* any write code
 
 `html.ts` takes the **first** `<title>`, noting later ones "e.g. in SVG" are
-ignored. An inline `<svg><title>` before the document `<title>` would make the
-first `<title>` the SVG's. The reader has this bug today; a writer would then
-rewrite the SVG's title. Fix the reader to prefer a `<title>` inside `<head>` as
-part of this work, and add a fixture. Flagged because writing turns a
-mostly-harmless read quirk into content corruption.
+ignored. An inline `<svg><title>` before the document `<title>` makes the first
+`<title>` the SVG's. The reader has this bug today; a writer would then rewrite
+the SVG's title — turning a mostly-harmless read quirk into content corruption.
+
+Scope this explicitly rather than folding it into the write work, because **it is
+a behavior change on its own**: the `title` extracted from an SVG-headed document
+changes, which alters `validate` and `get` output for those documents with no
+write feature involved. That means it needs:
+
+- its own red test and fixture, landed **before** any `apply` code exists
+  (step 0 in the implementation sketch, not part of step 1);
+- its own changelog entry as a `fix(extractors):` commit, since it changes
+  existing output;
+- its own decision on precedence — prefer a `<title>` that is a descendant of
+  `<head>`, and fall back to first-wins only when `<head>` has none.
+
+Shipping it separately also means the write work starts from a reader whose
+contract is already correct, which is the only way the mandatory re-parse
+verification is meaningful.
 
 ### 4. Escaping the written value — required, and not symmetric with reading
 
@@ -193,21 +207,23 @@ After this proposal the reasons differ per format and the docs should say so.
 
 ## Implementation sketch
 
-1. `test/extractors.test.ts` — fix the `<title>`-in-SVG precedence bug first, with
-   a fixture. Red before any write code exists.
-2. `test/html-write.test.ts` — update existing `<meta>`: bytes outside the value
+0. **Ship the reader fix on its own** (stress test 3). `test/extractors.test.ts`
+   with an SVG-headed fixture; prefer a `<title>` inside `<head>`. Separate
+   `fix(extractors):` commit with a changelog note, merged before any write code
+   is written.
+1. `test/html-write.test.ts` — update existing `<meta>`: bytes outside the value
    span are identical.
-3. `test/html-write.test.ts` — insert new `<meta>` after `<head>`; indentation
+2. `test/html-write.test.ts` — insert new `<meta>` after `<head>`; indentation
    matches the first child; prevailing newline preserved (CRLF fixture, BOM
    fixture).
-4. `test/html-write.test.ts` — `property=` tag updated as `property`, never
+3. `test/html-write.test.ts` — `property=` tag updated as `property`, never
    duplicated as `name`; duplicate `name` tags update the last.
-5. `test/html-write.test.ts` — escaping fixture with `"`, `'`, `&`, `<` in the
+4. `test/html-write.test.ts` — escaping fixture with `"`, `'`, `&`, `<` in the
    value; unquoted and single-quoted existing attributes.
-6. `test/html-write.test.ts` — fragment with no `<head>` throws `DocmetaError`.
-7. `test/fill.test.ts` — replace `test/fixtures/fill/unsupported.html` with a
+5. `test/html-write.test.ts` — fragment with no `<head>` throws `DocmetaError`.
+6. `test/fill.test.ts` — replace `test/fixtures/fill/unsupported.html` with a
    writable fixture, and add `unsupported.dita` asserting the refusal *and* its
    message.
-8. `CONTRIBUTING.md § Write support is optional` — update the XML/HTML sentence to
+7. `CONTRIBUTING.md § Write support is optional` — update the XML/HTML sentence to
    the per-format reasoning above; it is currently the canonical statement of a
    decision this proposal changes for one format and hardens for two.

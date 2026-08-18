@@ -30,12 +30,12 @@ changed as a result, and lists what it depends on.
 | [0004](0004-config-upward-discovery.md) | Config discovery walks up | all | Proposed |
 | [0005](0005-command-parity.md) | Command parity, flags with fallbacks | all | Proposed |
 | [0006](0006-gitignore-aware-discovery.md) | `.gitignore`-aware file discovery | all | Proposed |
-| [0007](0007-html-xml-write-support.md) | `fill` write support for HTML and XML | Maya · M1 | Proposed |
+| [0007](0007-html-xml-write-support.md) | `fill` write support for HTML (XML/DITA stay read-only) | Maya · M1 | Proposed |
 | [0008](0008-remote-schema-durability.md) | Remote schema durability | Devin · D2 | Proposed |
 | [0009](0009-publish-builtin-schemas.md) | Publish built-in schemas at stable URLs | Sara · S1 | Proposed |
 | [0010](0010-init-and-schema-inference.md) | `docmeta init` and schema inference | Maya · M1 / Sara · S1 | Proposed |
 | [0011](0011-fill-in-content-strategy.md) | Fold `fill` into the content strategy | strategy debt | Proposed |
-| [0012](0012-fill-cost-and-privacy.md) | `fill` cost, privacy, and offline operation | Devin · D1 / Maya | Proposed |
+| [0012](0012-fill-cost-and-privacy.md) | `fill` cost, privacy, and offline operation | Maya · M4 / Devin · D1 | Proposed |
 | [0013](0013-cleanup-dead-code-and-exit-codes.md) | Dead code, unpopulated fields, usage exit codes | correctness | Proposed |
 | [0014](0014-empty-input-is-not-success.md) | An empty input set is not success | correctness | Proposed |
 
@@ -43,6 +43,31 @@ changed as a result, and lists what it depends on.
 is the most severe item in the set: **docmeta currently exits `0` when it
 validates nothing at all**, including when an explicitly named file does not
 exist.
+
+## Dependency order
+
+At a glance, so a planning pass does not have to reconstruct it from 14 headers.
+
+```
+0014 ──┬─> 0006          (0006 can turn a gate into a silent no-op without 0014)
+       └─> 0001          (a ratchet makes "0 findings" normal, so 0014 first)
+
+0004 ──┬─> 0001          (baseline paths must resolve config-relative)
+       ├─> 0003          (SARIF needs repo-root-relative URIs)
+       └─> 0006          (both need the repo root / .git boundary)
+
+0001 ──┬─> 0003          (shared FieldError identity — see below)
+
+0008 ──> 0009            (publishing adds URL refs that must stay durable)
+0011 ──> 0012            (0012 is the content gap 0011's journey walk exposes)
+```
+
+**Safe to start in any order, no blockers:** 0002, 0007, 0011, 0013, and the
+standalone false-green guard called out in
+[0008 § Problem](0008-remote-schema-durability.md#problem).
+
+**Start here:** 0014 and 0004. Both are false-green defects, both are cheap, and
+between them they unblock five other proposals.
 
 ## Shared prerequisite
 

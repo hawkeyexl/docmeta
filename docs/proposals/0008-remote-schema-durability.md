@@ -35,6 +35,29 @@ host produces flaky builds rather than a degraded-but-working state.
 There is precedent for the fix in-repo: `fill` already keeps a disk cache at
 `.docmeta/cache` via `JsonCache`, and `.docmeta/` is already in `.gitignore`.
 
+### One part of this is a standalone bug, shippable today
+
+Stress test 3 below identifies a **live false green** that has nothing to do with
+caching, vendoring, or TTLs: `loadSchema` checks `res.ok` but never checks that
+the fetched JSON is actually a schema. A JSON error envelope served with HTTP 200 —
+`{"error":"not found"}` from an API gateway, a proxy, or a misconfigured
+bucket — compiles as a schema with no constraints and therefore **passes every
+document**.
+
+That guard is one condition and needs none of the rest of this proposal:
+
+```ts
+// A schema must constrain something. An object that constrains nothing is far
+// more likely to be an error envelope served with HTTP 200 than a real schema.
+const KEYS = ["$schema", "$id", "type", "properties", "required",
+              "allOf", "anyOf", "oneOf"];
+if (!KEYS.some((k) => k in fetched)) throw new DocmetaError(...);
+```
+
+It should be fixed in isolation, ahead of and independent of the caching and
+vendoring work, because it is the difference between a silently-passing gate and a
+failing one. Tracked as implementation-sketch item 1.
+
 ## Proposal
 
 Three layers, in increasing order of durability. The third is the one that
@@ -162,9 +185,15 @@ and make its own file validate against a schema that requires nothing.
 That is a genuine trust issue, not just a durability one, and it is out of scope
 here — but it must be recorded. The fix is an allowlist
 (`allowRemoteSchemas: false` or a host allowlist in config), and it deserves its
-own proposal. Flagging it because `--offline` partially mitigates it by accident,
-which is the kind of accidental protection that gets removed later by someone who
-does not know it was load-bearing.
+own proposal.
+
+**Tracked as a future security proposal — reserve `0015` for it**, so the
+cross-reference has somewhere to point before it is written. This matters more
+than a normal deferral: `--offline` partially mitigates the hole *by accident*,
+and accidental protection is exactly what a later implementer removes while
+"simplifying", without knowing it was load-bearing. Whoever implements `--offline`
+should add a code comment naming this, and whoever writes 0015 should remove the
+comment and replace it with the real guard.
 
 ### 7. Where do vendored schemas live? — not under `.docmeta/`
 

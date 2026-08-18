@@ -119,6 +119,38 @@ genuine fix ships as a new version file. This is a real constraint on the projec
 and it is the reason to do this deliberately rather than casually: publishing a URL
 is a promise.
 
+The manifest shape has to be specified, or two implementers will pick differently
+and the check becomes its own merge-conflict source. Use
+`src/schemas/manifest.json`, sorted by key, one entry per published file:
+
+```json
+{
+  "version": 1,
+  "schemas": {
+    "docusaurus-blog/3.10.json": "sha256-2f0c…",
+    "docusaurus-docs/3.10.json": "sha256-8ab1…",
+    "okf/0.1.json": "sha256-9f8e…"
+  }
+}
+```
+
+Rules that make it unambiguous:
+
+- **Key** is the path relative to `src/schemas/`, posix separators, so it is
+  platform-stable.
+- **Value** is `sha256-<hex>` over the file's exact bytes — no JSON
+  canonicalization, because the published artifact is the bytes.
+- **Adding** a version adds a key; the check fails only when an **existing** key's
+  value changes, so new schemas need no ceremony.
+- **Removing** a key fails the check too: a published URL must not 404 after
+  someone deletes the source file.
+- Sorted keys keep the diff to one line per change, which is what keeps this from
+  becoming a conflict magnet.
+
+A regenerate script (`npm run schemas:manifest`) writes it, and the CI check runs
+the script and fails on a dirty tree — the same pattern as `docs:check-cli`, so
+there is one idiom in the repo rather than two.
+
 Note this repo has already edited built-ins in place —
 `f7e611b fix(schemas): require type on the Diataxis vocabulary` changed
 `diataxis:diataxis:1.0` and shipped as a **major** version bump of docmeta. That

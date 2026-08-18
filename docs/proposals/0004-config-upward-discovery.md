@@ -132,6 +132,13 @@ instance of exactly the bug CLAUDE.md already documents for `node_modules`
 resolution in worktrees. The check must be `existsSync(join(dir, ".git"))`,
 accepting both a directory and a gitfile.
 
+No OS-specific branching is needed. A Windows gitfile holds an absolute
+`gitdir: C:\path\to\...\worktrees\<name>`, but boundary detection only asks whether
+`.git` **exists**, never what it points at — so `existsSync` is true either way and
+one line covers Windows, Linux, submodules, and worktrees alike. Stated explicitly
+so an implementer does not go hunting for a platform special case that is not
+required.
+
 ### 3. Merging ancestor configs — rejected
 
 ESLint-style cascading (merge each ancestor, nearest wins per key) was
