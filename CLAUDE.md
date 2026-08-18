@@ -137,6 +137,75 @@ It runs automatically before `test`, `typecheck`, and `build`, so the walk now
 announces itself instead of being diagnosed. Before believing any failure that
 smells like a dependency, check that it passes.
 
+### Every new feature ships with a short demo video
+
+When a change adds a **feature**, also produce a short demo video suitable for
+posting on LinkedIn. Do it as part of the same piece of work, without being
+asked.
+
+**When this applies.** Trigger on the commit type, since that is already the
+thing semantic-release and commitlint agree on:
+
+| Commit type | Video? |
+|---|---|
+| `feat:` / `feat(scope):` | **Yes** |
+| `fix:`, `perf:`, `refactor:`, `docs:`, `test:`, `chore:`, `ci:`, `build:` | No |
+
+A bug fix does not get a video no matter how significant it felt to write. If a
+branch carries both a `feat:` and some `fix:` commits, the feature is what the
+video shows. When it is genuinely unclear whether something is a feature or a
+fix, ask rather than guessing — the commit type is a release-visible decision
+anyway.
+
+**What it shows.** docmeta is a CLI, so the demo is a terminal session, not
+slides:
+
+1. the problem — a real document or repo that is missing something;
+2. the new command or flag, typed out and run;
+3. the result, including the exit code where that is the point.
+
+Aim for **20–45 seconds**. Use `test/fixtures/` as the material wherever it
+fits, so the demo stays true to what CI actually runs. Keep the terminal legible
+at phone size: large font, short lines, no scrollback noise, `--no-color` off (the
+color is worth showing). Add a one-line caption per step rather than narration.
+
+**How to make it.** The tooling is **not in this repo** — it comes from plugin
+skills, which you invoke with the Skill tool. Do not go looking for a vendored
+script, and do not hand-roll `ffmpeg` when a skill covers the step:
+
+| Step | Skill |
+|---|---|
+| Script the 20–45s beat sheet | `writing-toolkit:video-script-writing` |
+| Plan the shots, if the feature needs more than one | `writing-toolkit:storyboard-creation` |
+| Capture the terminal session | `writing-toolkit:video-recording` |
+| Titles, callouts, motion | `remotion-best-practices` |
+| Trim and assemble | `writing-toolkit:video-editing` |
+| Burn in captions | `writing-toolkit:closed-caption-creation` |
+| GIF instead of MP4 | `writing-toolkit:gif-creation` |
+
+`writing-toolkit:video-multimedia-producer` is available as an agent when the
+whole pipeline is worth delegating in one go, and
+`writing-toolkit:video-multimedia-production-workflow` describes the end-to-end
+process.
+
+**Caption it.** LinkedIn autoplays muted, so a demo with no on-screen text reads
+as a silent flicker in the feed. Captions or step titles are not optional
+polish — they are the only thing most viewers will read.
+
+If a skill is genuinely unavailable in the session, say so plainly and hand over
+the script plus the exact commands to run, rather than silently skipping the
+step or substituting a screenshot.
+
+**Where it goes.** Write to `media/` (gitignored). **Do not commit video or GIF
+binaries** — they bloat the history permanently and this repo publishes a docs
+site that does not need them. Attach the file to the PR, or hand the path to the
+user.
+
+**Posting is a human action.** Generate the asset and hand it over; never post
+to LinkedIn or any other account, and never draft-and-send on someone's behalf.
+Writing the suggested caption text is fine and useful. Publishing it is the
+user's call, every time.
+
 ### Other conventions
 
 - **Strict TypeScript.** `tsconfig` enables strict settings including
