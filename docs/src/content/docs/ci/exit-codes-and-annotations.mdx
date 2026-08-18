@@ -19,7 +19,7 @@ non-zero exit as a failed step, so the gate is enforced without extra scripting.
 |------|---------|-----------------|
 | `0`  | Success | Every validated file satisfies its schema set. |
 | `1`  | Validation failures | One or more files failed validation. The run completed; the documents are non-conformant. |
-| `2`  | Operational or usage error | docmeta could not complete the run — for example, no inputs and no config, an unknown `--format`, an unreadable config file, or an unexpected internal error. |
+| `2`  | Operational or usage error | docmeta could not complete the run — for example, no inputs and no config, **no files matched**, an unknown `--format`, an unreadable config file, or an unexpected internal error. |
 
 The distinction between `1` and `2` matters in a pipeline. Exit `1` is a *result*:
 docmeta ran and found problems your authors must fix. Exit `2` is a *failure of
@@ -30,6 +30,16 @@ separating the two lets you tell "the docs are wrong" from "the check is broken.
 <Aside type="note" title="The default command is validate">
 `docmeta` with no subcommand runs `validate`, so `docmeta "**/*.md"` and
 `docmeta validate "**/*.md"` are equivalent and share these exit codes.
+</Aside>
+
+<Aside type="caution" title="Checking nothing is exit 2, not exit 0">
+A glob that matches no files, a directory that does not exist, or a named file
+that is missing all exit `2`. That is the case a green build hides worst: move
+`docs/` to `content/` and a gate that returned `0` for an empty run would report
+success forever. If a repo legitimately has nothing to check — a shared workflow
+running across many repos, say — pass `--allow-empty` or set `allowEmpty: true`
+in that repo's config. See [empty input
+sets](/docmeta/reference/cli/#empty-input-sets).
 </Aside>
 
 ## Output formats

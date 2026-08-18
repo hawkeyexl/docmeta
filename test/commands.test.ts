@@ -303,3 +303,75 @@ describe("getSchemasInfo", () => {
     expect(html?.implemented).toBe(true);
   });
 });
+
+describe("an empty input set is not success (0014)", () => {
+  const nomatch = "test/fixtures/*.nomatch";
+
+  it("runValidate errors when a glob matches nothing", async () => {
+    await expect(
+      runValidate({ inputs: [nomatch], cwd: root }),
+    ).rejects.toBeInstanceOf(DocmetaError);
+  });
+
+  it("names the patterns it tried", async () => {
+    await expect(
+      runValidate({ inputs: [nomatch], cwd: root }),
+    ).rejects.toThrow(/\*\.nomatch/);
+  });
+
+  it("runGet errors when a glob matches nothing", async () => {
+    await expect(
+      runGet({ fields: ["title"], inputs: [nomatch], cwd: root }),
+    ).rejects.toBeInstanceOf(DocmetaError);
+  });
+
+  it("allowEmpty returns an empty run instead of erroring", async () => {
+    const { results, summary } = await runValidate({
+      inputs: [nomatch],
+      cwd: root,
+      allowEmpty: true,
+    });
+    expect(results).toEqual([]);
+    expect(summary.files).toBe(0);
+  });
+
+  it("stdin alone is not an empty input set", async () => {
+    const { results } = await runValidate({
+      inputs: ["-"],
+      as: "markdown",
+      stdinContent: "---\ntype: guide\n---\n",
+      cwd: root,
+    });
+    expect(results).toHaveLength(1);
+    expect(results[0]?.file).toBe("<stdin>");
+  });
+
+  it("empty stdin content is still one input, not zero", async () => {
+    const { results } = await runValidate({
+      inputs: ["-"],
+      as: "markdown",
+      stdinContent: "",
+      cwd: root,
+    });
+    expect(results).toHaveLength(1);
+  });
+
+  it("a named file that does not exist errors even alongside a match", async () => {
+    await expect(
+      runValidate({
+        inputs: ["test/fixtures/valid.md", "test/fixtures/nope.md"],
+        cwd: root,
+      }),
+    ).rejects.toThrow(/nope\.md/);
+  });
+
+  it("excluding everything is still an empty input set", async () => {
+    await expect(
+      runValidate({
+        inputs: ["test/fixtures/*.md"],
+        exclude: ["test/fixtures/**"],
+        cwd: root,
+      }),
+    ).rejects.toBeInstanceOf(DocmetaError);
+  });
+});

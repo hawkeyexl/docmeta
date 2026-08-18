@@ -12,7 +12,11 @@ import {
   extractorForExtension,
   supportedExtensions,
 } from "../extractors/index.js";
-import { resolveTargets, STDIN_TOKEN } from "../core/load-files.js";
+import {
+  assertNonEmpty,
+  resolveTargets,
+  STDIN_TOKEN,
+} from "../core/load-files.js";
 import { loadConfig, type DocmetaConfig } from "../core/config.js";
 
 export interface GetOptions {
@@ -25,6 +29,8 @@ export interface GetOptions {
   cwd?: string;
   /** Content for the `-` (stdin) input, injected by the CLI/tests. */
   stdinContent?: string;
+  /** Permit an input set that resolves to zero files (see `assertNonEmpty`). */
+  allowEmpty?: boolean;
 }
 
 export interface GetFileResult {
@@ -61,11 +67,23 @@ export async function runGet(opts: GetOptions): Promise<GetFileResult[]> {
 
   const exts = opts.exts ?? (forced ? forced.extensions : undefined);
   const fileInputs = inputs.filter((i) => i !== STDIN_TOKEN);
+  const allowEmpty = opts.allowEmpty ?? config?.allowEmpty;
+  const exclude = [...(config?.exclude ?? []), ...(opts.exclude ?? [])];
   const files = await resolveTargets({
     inputs: fileInputs,
     exts,
-    exclude: [...(config?.exclude ?? []), ...(opts.exclude ?? [])],
+    exclude,
     cwd,
+    allowEmpty,
+  });
+  assertNonEmpty({
+    files,
+    inputs: fileInputs,
+    usingStdin,
+    allowEmpty,
+    exclude,
+    exts,
+    action: "read",
   });
 
   const out: GetFileResult[] = [];

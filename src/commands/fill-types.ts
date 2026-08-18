@@ -94,6 +94,8 @@ export interface FillOptions {
   cwd?: string;
   /** Content for the `-` (stdin) input, injected by the CLI/tests. */
   stdinContent?: string;
+  /** Permit an input set that resolves to zero files (see `assertNonEmpty`). */
+  allowEmpty?: boolean;
   /** Restrict proposals to these top-level fields. */
   fields?: string[];
   /** Minimum self-reported confidence to write (0-1). Default 0.7. */

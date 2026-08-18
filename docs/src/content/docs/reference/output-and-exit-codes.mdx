@@ -127,18 +127,33 @@ whose `schemas` set is empty. The rest of the run continues.
 |---|---|
 | `0` | All files passed (or nothing failed). |
 | `1` | One or more files failed validation. |
-| `2` | Operational or usage error (a `DocmetaError`) — for example, no inputs, an unknown `--format`, a missing config file, or an unresolvable schema. |
+| `2` | Operational or usage error (a `DocmetaError`) — for example, no inputs, **no files matched**, an unknown `--format`, a missing config file, or an unresolvable schema. |
 
 Exit code `1` reflects validation failures in the documents. Exit code `2`
 reflects a problem running docmeta itself, and means no validation verdict was
 produced.
+
+### Exit 2 when nothing was checked
+
+An input set that resolves to **zero files** is exit 2, not exit 0. Two shapes,
+both covered by `--allow-empty` (or config `allowEmpty: true`):
+
+| Situation | Message |
+|---|---|
+| A named path that does not exist, even if other inputs matched. | `File not found: "docs/typo.md".` |
+| Nothing matched — a glob with no hits, a missing directory, or an `--ext`/`--exclude` filter that removed everything. | `No files matched. Patterns tried: …` |
+
+Exit 2 rather than 1 is deliberate: nothing was validated, so no verdict exists.
+`1` sends you looking for a bad document; `2` sends you to look at the
+invocation, which is where the problem is. Reading stdin with `-` is one input,
+so a piped document — even an empty one — still produces a verdict.
 
 ### Per-command meaning of exit 1
 
 | Command | Exits 1 when |
 |---|---|
 | `validate` | One or more files failed validation. |
-| `get` | Never — a requested field that is absent is reported as unset, not as a failure. |
+| `get` | Never — a requested field that is absent is reported as unset, not as a failure. An absent **file** is a different thing: it is an operational error and exits 2. |
 | [`fill`](/docmeta/reference/cli/#fill) | A property the schema lists as `required` could not be filled confidently, or a file errored. Skipped **optional** properties leave the exit code at `0`. |
 | `schemas` | Never. |
 

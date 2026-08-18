@@ -16,7 +16,11 @@ import {
   extractorForExtension,
   supportedExtensions,
 } from "../extractors/index.js";
-import { resolveTargets, STDIN_TOKEN } from "../core/load-files.js";
+import {
+  assertNonEmpty,
+  resolveTargets,
+  STDIN_TOKEN,
+} from "../core/load-files.js";
 import { loadConfig, type DocmetaConfig } from "../core/config.js";
 import { resolveSchemaSet, FILE_SCHEMA_KEY } from "../core/resolve-schema.js";
 import { Validator } from "../core/validator.js";
@@ -32,6 +36,8 @@ export interface ValidateOptions {
   cwd?: string;
   /** Content for the `-` (stdin) input, injected by the CLI/tests. */
   stdinContent?: string;
+  /** Permit an input set that resolves to zero files (see `assertNonEmpty`). */
+  allowEmpty?: boolean;
 }
 
 export interface ValidateRun {
@@ -79,11 +85,23 @@ export async function runValidate(
     opts.exts ?? (forcedExtractor ? forcedExtractor.extensions : undefined);
 
   const fileInputs = inputs.filter((i) => i !== STDIN_TOKEN);
+  const allowEmpty = opts.allowEmpty ?? config?.allowEmpty;
+  const exclude = [...(config?.exclude ?? []), ...(opts.exclude ?? [])];
   const files = await resolveTargets({
     inputs: fileInputs,
     exts,
-    exclude: [...(config?.exclude ?? []), ...(opts.exclude ?? [])],
+    exclude,
     cwd,
+    allowEmpty,
+  });
+  assertNonEmpty({
+    files,
+    inputs: fileInputs,
+    usingStdin,
+    allowEmpty,
+    exclude,
+    exts,
+    action: "validated",
   });
 
   const validator = new Validator();

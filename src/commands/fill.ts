@@ -38,7 +38,11 @@ import {
 } from "@hawkeyexl/inference";
 import { DocmetaError, type FieldError, type MetadataPatch } from "../types.js";
 import { loadConfig, type DocmetaConfig } from "../core/config.js";
-import { resolveTargets, STDIN_TOKEN } from "../core/load-files.js";
+import {
+  assertNonEmpty,
+  resolveTargets,
+  STDIN_TOKEN,
+} from "../core/load-files.js";
 import {
   extractorByName,
   extractorForExtension,
@@ -156,6 +160,36 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
   assertKnownProvider(providerName);
   assertModelHasProvider(providerName, model);
 
+  // Resolve targets BEFORE identity. Under `auto`, resolving identity probes the
+  // environment, the Claude CLI and the local runtime, and that last probe is
+  // slow on a machine holding no credentials — so a mistyped glob would spend
+  // seconds detecting a provider it is never going to use before failing. The
+  // work is wasted in exactly the case where the user most wants a fast answer.
+  //
+  // Identity is still resolved unconditionally below, so an `--allow-empty` run
+  // that legitimately matches nothing still reports which provider it would have
+  // used.
+  const fileInputs = inputs.filter((i) => i !== STDIN_TOKEN);
+  const allowEmpty = opts.allowEmpty ?? config?.allowEmpty;
+  const fillExts = opts.exts ?? forcedExtractor?.extensions;
+  const fillExclude = [...(config?.exclude ?? []), ...(opts.exclude ?? [])];
+  const files = await resolveTargets({
+    inputs: fileInputs,
+    exts: fillExts,
+    exclude: fillExclude,
+    cwd,
+    allowEmpty,
+  });
+  assertNonEmpty({
+    files,
+    inputs: fileInputs,
+    usingStdin,
+    allowEmpty,
+    exclude: fillExclude,
+    exts: fillExts,
+    action: "filled",
+  });
+
   // Identity comes from the spec, not a constructed provider, so a fully cached
   // run needs no API key at all. Under `auto` this is also where detection runs
   // — it probes the environment, the Claude CLI and the local runtime, but never
@@ -209,15 +243,6 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
       ? undefined
       : new JsonCache<CachedProposal>(join(cwd, CACHE_DIR), true, "docmeta");
   const pricing = pricingFor(identity.model);
-
-  // `-` is processed alongside any named paths, not instead of them — same as
-  // validate and get.
-  const files = await resolveTargets({
-    inputs: inputs.filter((i) => i !== STDIN_TOKEN),
-    exts: opts.exts ?? forcedExtractor?.extensions,
-    exclude: [...(config?.exclude ?? []), ...(opts.exclude ?? [])],
-    cwd,
-  });
 
   const validator = new Validator();
   let costUsd = 0;
