@@ -468,4 +468,19 @@ describe("config discovery and resolution base (0004)", () => {
     });
     expect(seen).toEqual([]);
   });
+
+  it("reports nothing when noConfig suppresses a config that exists", async () => {
+    // Distinct from the case above: here discovery *would* find one. Asserted
+    // at the API level rather than only through the absence of a line in CLI
+    // output, so the contract is visible to a library caller.
+    const seen: unknown[] = [];
+    const { results } = await runValidate({
+      inputs: ["api/page.md"],
+      cwd: nestedDocs,
+      noConfig: true,
+      onConfigLoaded: (info) => seen.push(info),
+    });
+    expect(seen).toEqual([]);
+    expect(results[0]?.schemas).toEqual([...DEFAULT_SCHEMAS]);
+  });
 });

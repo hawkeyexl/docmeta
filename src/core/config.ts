@@ -243,7 +243,7 @@ export async function loadConfig(
       }
       // Name the file the way the user would have to type it, so a parse
       // error from an ancestor config says which one.
-      const source = (relative(cwd, p) || name).replace(/\\/g, "/");
+      const source = relative(cwd, p).replace(/\\/g, "/");
       return { config: parseConfig(text, source), path: p, dir };
     }
   }
@@ -259,7 +259,8 @@ export interface ConfigNotice {
 }
 
 export interface RunConfigOptions {
-  cwd: string;
+  /** Defaults to `process.cwd()`, matching `loadConfig`. */
+  cwd?: string;
   /** `-c/--config`. */
   configPath?: string;
   /** `--no-config`: skip discovery and run on the built-in defaults. */
@@ -297,19 +298,18 @@ export async function resolveRunConfig(
 ): Promise<RunConfig> {
   // `--no-config` wins over an explicit path. The CLI cannot supply both (they
   // are one commander option), but the cores are public API.
-  const loaded = opts.noConfig
-    ? null
-    : await loadConfig(opts.configPath, opts.cwd);
+  const cwd = opts.cwd ?? process.cwd();
+
+  const loaded = opts.noConfig ? null : await loadConfig(opts.configPath, cwd);
   if (loaded) opts.onConfigLoaded?.({ path: loaded.path, dir: loaded.dir });
 
   const config = loaded
-    ? rebaseConfigSchemaRefs(loaded.config, loaded.dir, opts.cwd)
+    ? rebaseConfigSchemaRefs(loaded.config, loaded.dir, cwd)
     : null;
 
   const fromConfig = opts.inputs.length === 0;
   const inputs = fromConfig ? (config?.paths ?? []) : opts.inputs;
-  const base =
-    fromConfig && inputs.length > 0 && loaded ? loaded.dir : opts.cwd;
+  const base = fromConfig && inputs.length > 0 && loaded ? loaded.dir : cwd;
 
   return { config, inputs, base };
 }

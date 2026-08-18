@@ -50,6 +50,13 @@ export function rebaseConfigSchemaRefs(
   configDir: string,
   cwd: string,
 ): DocmetaConfig {
+  // Exact string comparison, deliberately. `path.resolve` preserves input
+  // casing rather than canonicalizing it, so two differently-cased spellings of
+  // the same directory on a case-insensitive filesystem would compare unequal
+  // and refs would be rebased to absolute paths needlessly — cosmetic, not
+  // incorrect. Lowercasing instead would be wrong on a case-sensitive
+  // filesystem, where two casings really are two directories. In practice both
+  // values reach here from the same `resolve(cwd)` call site.
   if (resolve(configDir) === resolve(cwd)) return config;
 
   const rebase = (ref: string): string =>
