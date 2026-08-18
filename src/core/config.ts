@@ -29,6 +29,12 @@ export interface DocmetaConfig {
   schemas?: string[];
   overrides?: SchemaOverride[];
   fill?: FillConfig;
+  /**
+   * Treat an input set that resolves to zero files as success rather than an
+   * operational error. Off by default: a glob that stops matching would
+   * otherwise leave a permanently green gate that checks nothing.
+   */
+  allowEmpty?: boolean;
 }
 
 const CONFIG_NAMES = ["docmeta.config.yaml", "docmeta.config.yml"];
@@ -84,6 +90,13 @@ export function parseConfig(text: string, source: string): DocmetaConfig {
         schemas: asStringList(e.schemas, `overrides[${i}].schemas`, source),
       };
     });
+  }
+
+  if (obj.allowEmpty !== undefined) {
+    if (typeof obj.allowEmpty !== "boolean") {
+      throw new DocmetaError(`${source}: "allowEmpty" must be a boolean.`);
+    }
+    config.allowEmpty = obj.allowEmpty;
   }
 
   if (obj.fill !== undefined) config.fill = parseFill(obj.fill, source);

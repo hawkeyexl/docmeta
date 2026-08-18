@@ -4,9 +4,11 @@
  * never when NO_COLOR/--no-color), meaningful exit codes (0 ok, 1 validation
  * failures, 2 operational/usage errors).
  */
-import { realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
+import { resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
+import picomatch from "picomatch";
 import pkg from "../package.json" with { type: "json" };
 import { DocmetaError } from "./types.js";
 import { runValidate } from "./commands/validate.js";
@@ -49,6 +51,58 @@ function stringifyValue(v: unknown): string {
 }
 
 const REPORT_FORMATS = new Set(["pretty", "json", "github"]);
+
+const COMMAND_NAMES = ["validate", "get", "fill", "schemas"];
+
+/** Levenshtein distance. Only used to offer a "did you mean" hint. */
+function editDistance(a: string, b: string): number {
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      row.push(
+        Math.min(
+          (row[j - 1] ?? 0) + 1,
+          (prev[j] ?? 0) + 1,
+          (prev[j - 1] ?? 0) + cost,
+        ),
+      );
+    }
+    prev = row;
+  }
+  return prev[b.length] ?? 0;
+}
+
+/**
+ * `validate` is the default command, so an unrecognized first token is parsed as
+ * a *path* rather than rejected. Since a named path that does not exist is now
+ * an error, `docmeta valdiate docs/` already fails with the right exit code —
+ * but it fails as `File not found: "valdiate"`, which does not say what went
+ * wrong. Upgrade the message when the token is plainly a misspelled command.
+ *
+ * The guard is deliberately narrow: anything holding a separator or a dot, any
+ * glob, and — crucially — anything that actually exists on disk is a path, not a
+ * typo. That last check is what makes a false positive impossible.
+ */
+function suggestCommand(token: string | undefined, cwd: string): void {
+  if (token === undefined || token === "-") return;
+  if (/[\\/.]/.test(token)) return;
+  if (picomatch.scan(token).isGlob) return;
+  if (existsSync(resolvePath(cwd, token))) return;
+
+  const near = COMMAND_NAMES.map(
+    (name) => [name, editDistance(token.toLowerCase(), name)] as const,
+  )
+    .filter(([, d]) => d > 0 && d <= 2)
+    .sort((x, y) => x[1] - y[1]);
+
+  const best = near[0];
+  if (!best) return;
+  throw new DocmetaError(
+    `Unknown command "${token}". Did you mean "${best[0]}"?`,
+  );
+}
 
 function splitList(value: string): string[] {
   return value
@@ -106,6 +160,7 @@ export function buildProgram(): Command {
     .option("-f, --format <format>", "output: pretty | json | github", "pretty")
     .option("-c, --config <path>", "path to a docmeta config file")
     .option("-q, --quiet", "in pretty output, hide passing files")
+    .option("--allow-empty", "treat zero matched files as success")
     .addHelpText(
       "after",
       [
@@ -119,6 +174,9 @@ export function buildProgram(): Command {
     )
     .action(async (paths: string[], options, command: Command) => {
       try {
+        // `validate` is the default command, so a misspelled subcommand lands
+        // here as a path. Upgrade the message before it becomes "not found".
+        suggestCommand(paths[0], process.cwd());
         const format = options.format as ReportFormat;
         if (!REPORT_FORMATS.has(format)) {
           throw new DocmetaError(
@@ -143,6 +201,9 @@ export function buildProgram(): Command {
           as: options.as,
           configPath: options.config,
           stdinContent,
+          // `undefined` rather than `false` when the flag is absent, so config
+          // `allowEmpty:` still wins (the cores do `opts ?? config`).
+          allowEmpty: options.allowEmpty ? true : undefined,
         });
 
         const color = resolveColor(command.parent ?? command);
@@ -172,6 +233,7 @@ export function buildProgram(): Command {
     .option("--as <format>", "force an input format (e.g. markdown, mdx)")
     .option("-f, --format <format>", "output: pretty | json", "pretty")
     .option("-c, --config <path>", "path to a docmeta config file")
+    .option("--allow-empty", "treat zero matched files as success")
     .addHelpText(
       "after",
       [
@@ -213,6 +275,7 @@ export function buildProgram(): Command {
           exts,
           configPath: options.config,
           stdinContent,
+          allowEmpty: options.allowEmpty ? true : undefined,
         });
         if (format === "json") {
           process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
@@ -267,6 +330,7 @@ export function buildProgram(): Command {
     .option("--concurrency <n>", "files inferred in parallel", parseFloat)
     .option("-f, --format <format>", "output: pretty | json", "pretty")
     .option("-c, --config <path>", "path to a docmeta config file")
+    .option("--allow-empty", "treat zero matched files as success")
     .addHelpText(
       "after",
       [
@@ -306,6 +370,7 @@ export function buildProgram(): Command {
           as: options.as,
           configPath: options.config,
           stdinContent,
+          allowEmpty: options.allowEmpty ? true : undefined,
           fields: options.fields ? splitList(String(options.fields)) : undefined,
           confidence: options.confidence,
           dryRun: Boolean(options.dryRun),

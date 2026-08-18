@@ -38,7 +38,11 @@ import {
 } from "@hawkeyexl/inference";
 import { DocmetaError, type FieldError, type MetadataPatch } from "../types.js";
 import { loadConfig, type DocmetaConfig } from "../core/config.js";
-import { resolveTargets, STDIN_TOKEN } from "../core/load-files.js";
+import {
+  assertNonEmpty,
+  resolveTargets,
+  STDIN_TOKEN,
+} from "../core/load-files.js";
 import {
   extractorByName,
   extractorForExtension,
@@ -212,11 +216,25 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
 
   // `-` is processed alongside any named paths, not instead of them — same as
   // validate and get.
+  const fileInputs = inputs.filter((i) => i !== STDIN_TOKEN);
+  const allowEmpty = opts.allowEmpty ?? config?.allowEmpty;
+  const fillExts = opts.exts ?? forcedExtractor?.extensions;
+  const fillExclude = [...(config?.exclude ?? []), ...(opts.exclude ?? [])];
   const files = await resolveTargets({
-    inputs: inputs.filter((i) => i !== STDIN_TOKEN),
-    exts: opts.exts ?? forcedExtractor?.extensions,
-    exclude: [...(config?.exclude ?? []), ...(opts.exclude ?? [])],
+    inputs: fileInputs,
+    exts: fillExts,
+    exclude: fillExclude,
     cwd,
+    allowEmpty,
+  });
+  assertNonEmpty({
+    files,
+    inputs: fileInputs,
+    usingStdin,
+    allowEmpty,
+    exclude: fillExclude,
+    exts: fillExts,
+    action: "filled",
   });
 
   const validator = new Validator();

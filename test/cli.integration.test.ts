@@ -192,6 +192,68 @@ describe("docmeta CLI (built bin)", () => {
   });
 });
 
+// Exit 0 means "every file passed". With no files there is no verdict, so
+// reporting success turns a broken glob or a moved directory into a
+// permanently green gate that checks nothing.
+describe("cli empty and unmatched inputs", () => {
+  it("exits 2 when a glob matches no files", () => {
+    const r = run(["validate", "test/fixtures/*.nomatch"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("No files matched");
+  });
+
+  it("returns to 0 on an unmatched glob with --allow-empty", () => {
+    const r = run(["validate", "test/fixtures/*.nomatch", "--allow-empty"]);
+    expect(r.status).toBe(0);
+  });
+
+  it("exits 2 on a named file that does not exist, naming it", () => {
+    const r = run(["validate", "test/fixtures/typo.md"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("test/fixtures/typo.md");
+  });
+
+  it("exits 2 on a directory that does not exist", () => {
+    const r = run(["validate", "no-such-dir/"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("no-such-dir");
+  });
+
+  it("exits 2 on a misspelled subcommand, suggesting the real one", () => {
+    // `validate` is the default command, so `valdiate` parses as a *path*.
+    // The missing-literal rule already makes this exit 2; the suggestion is
+    // what turns `File not found: "valdiate"` into an actionable message.
+    const r = run(["valdiate", "test/fixtures/"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain('Did you mean "validate"');
+  });
+
+  it("still validates a real path given to the default command", () => {
+    // The guard must not fire on anything that is actually a path — otherwise
+    // `docmeta docs/` stops working.
+    const r = run(["test/fixtures/valid.md"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("1 passed");
+  });
+
+  it("exits 2 when get matches no files", () => {
+    const r = run(["get", "title", "test/fixtures/*.nomatch"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("No files matched");
+  });
+
+  it("exits 2 when fill matches no files", () => {
+    const r = run(["fill", "test/fixtures/*.nomatch"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("No files matched");
+  });
+
+  it("keeps stdin working: one input, zero files, still a verdict", () => {
+    const r = run(["validate", "-", "--as", "markdown"], "---\ntype: note\n---\n");
+    expect(r.status).toBe(0);
+  });
+});
+
 // `fill` reaches an LLM provider, so the integration tests cover only the
 // argument surface and the failure paths that never get that far. The gate
 // itself is exercised hermetically in test/fill.test.ts against a MockProvider.
@@ -267,9 +329,19 @@ describe("cli fill", () => {
     // rephrased upstream.
     //
     // A path matching no files resolves identity but never calls a provider, so
-    // this needs no network and no key that works.
+    // this needs no network and no key that works. A named file that does not
+    // exist is otherwise an error, hence --allow-empty: the point here is
+    // provider identity, not the input set.
     const r = run(
-      ["fill", "test/fixtures/does-not-exist.md", "--dry-run", "--no-cache", "-f", "json"],
+      [
+        "fill",
+        "test/fixtures/does-not-exist.md",
+        "--allow-empty",
+        "--dry-run",
+        "--no-cache",
+        "-f",
+        "json",
+      ],
       undefined,
       { ANTHROPIC_API_KEY: "", OPENAI_API_KEY: "x" },
     );

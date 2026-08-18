@@ -1051,12 +1051,17 @@ describe("provider selection", () => {
    * spawns the Claude CLI, or touches a GPU. Validating the NAME has to happen
    * regardless of injection — it is cheap, and a typo must fail on a fully
    * cached run too, where nothing is ever constructed to catch it.
+   *
+   * `missing.md` resolves to nothing on purpose, which keeps these cases away
+   * from any file handling; `allowEmpty` is what stops the empty input set from
+   * becoming the error under test.
    */
   const runWith = (over: Record<string, unknown>): Promise<unknown> =>
     runFill({
       ...base,
       cwd: dir,
       inputs: ["missing.md"],
+      allowEmpty: true,
       dryRun: true,
       inferenceProvider: propose({}),
       ...over,
@@ -1131,6 +1136,7 @@ describe("provider selection", () => {
         ...base,
         cwd: dir,
         inputs: ["missing.md"],
+        allowEmpty: true,
         dryRun: true,
         inferenceProvider: propose({}),
         model: "gpt-4o",

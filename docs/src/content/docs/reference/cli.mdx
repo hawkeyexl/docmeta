@@ -60,6 +60,7 @@ docmeta [paths...] [options]
 | `-f, --format` | `<pretty\|json\|github>` | `pretty` | [Output format](/docmeta/reference/output-and-exit-codes/). An unknown value is an error (exit 2). |
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). When set, the file must exist or docmeta exits 2. |
 | `-q, --quiet` | — | off | In `pretty` output, hide passing files. Has no effect on `json` or `github`. |
+| `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
 
 <Aside type="note">
 Repeatable flags (`-s/--schema`, `--exclude`) accumulate; pass the flag once per
@@ -125,6 +126,7 @@ unaffected.
 | `--as` | `<format>` | — | Force an input [format](/docmeta/reference/formats/) (extractor name). Required when reading from stdin. |
 | `-f, --format` | `<pretty\|json>` | `pretty` | Output format. `get` has no `github` format. An unknown value is an error (exit 2). |
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). When set, the file must exist or docmeta exits 2. |
+| `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
 
 ### Output
 
@@ -206,6 +208,7 @@ used, in both output formats.
 | `--concurrency` | `<n>` | `4` | Files inferred in parallel. |
 | `-f, --format` | `<pretty\|json>` | `pretty` | Output format. `fill` has no `github` format. An unknown value is an error (exit 2). |
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). |
+| `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
 
 ### Which properties get filled
 
@@ -313,10 +316,47 @@ docmeta schemas -f json
 - **No input and no config is an error.** If you pass no paths and no config
   supplies `paths:`, docmeta reports an operational error and exits 2. It does
   not silently produce empty output.
+- **Matching no files is also an error.** A named path that does not exist, or
+  an input set that resolves to zero files, exits 2 unless you pass
+  `--allow-empty`. See [empty input sets](#empty-input-sets).
 
 <Aside type="caution">
 `--as` forces one extractor for every input in the run. Use it for stdin, or to
 read a file whose extension docmeta would not otherwise recognize.
+</Aside>
+
+### Empty input sets
+
+Resolving **zero files is an error** (exit 2), not a pass. Exit 0 means every
+file passed; with no files there is no verdict, so reporting success would turn
+a glob that stopped matching into a permanently green gate that checks nothing.
+
+Two cases, both exit 2:
+
+| Situation | Message |
+|---|---|
+| A named path that does not exist — `docmeta validate docs/typo.md` | `File not found: "docs/typo.md".` |
+| Everything resolved, but nothing matched — `docmeta validate "docs/**/*.nomatch"` | `No files matched. Patterns tried: …` |
+
+A named path is reported even when other inputs did match, so `docmeta validate
+good.md typo.md` is an error rather than a partial success. `--ext` and
+`--exclude` filters are named in the message when they were in play, because
+"no files matched" is baffling when the glob plainly matches files on disk.
+
+Reading stdin with `-` is one input, so an empty piped document still produces a
+verdict and is unaffected.
+
+Pass `--allow-empty` (or set [`allowEmpty:
+true`](/docmeta/reference/configuration/#keys)) when matching nothing is
+expected — a shared CI template running across repos that may have no docs yet,
+or a pre-commit hook whose file list can be empty.
+
+<Aside type="note">
+Because `validate` is the default command, a misspelled subcommand parses as a
+path. `docmeta valdiate docs/` exits 2 with `Unknown command "valdiate". Did you
+mean "validate"?`. The suggestion only fires on a token that is not a path, has
+no separator, extension, or glob character, and does not exist on disk — so
+`docmeta docs/` keeps working.
 </Aside>
 
 ### Default ignores
@@ -362,7 +402,7 @@ glob or is a dotfile.
      `VAR= cmd` is bash-only and fails on Windows, where these tests also run. The
      keyless claim is carried by naming llama-cpp outright, which needs no key by
      construction, rather than by manipulating the environment. */}
-{/* step {"description":"Detection always resolves a concrete provider, whatever credentials are present — never the literal selector.","runShell":{"command":"docmeta fill test/fixtures/fill/does-not-exist.md --dry-run --no-cache -f json","exitCodes":[0],"stdio":"/\"provider\": \"(anthropic|openai|claude-cli|llama-cpp)\"/"}} */}
+{/* step {"description":"Detection always resolves a concrete provider, whatever credentials are present — never the literal selector. --allow-empty keeps the empty input set (which is what avoids inference here) from being the error under test.","runShell":{"command":"docmeta fill test/fixtures/fill/does-not-exist.md --allow-empty --dry-run --no-cache -f json","exitCodes":[0],"stdio":"/\"provider\": \"(anthropic|openai|claude-cli|llama-cpp)\"/"}} */}
 {/* step {"description":"fill completes end to end on a local model, needing no credential, and names the provider and model in its report.","runShell":{"command":"docmeta fill test/fixtures/fill/no-block.md --provider llama-cpp --model granite-4.1-3b-q2 --fields title --dry-run --no-cache","exitCodes":[0],"stdio":"llama-cpp/granite-4.1-3b-q2"}} */}
 {/* step {"description":"A local run costs nothing, so the report carries a zero cost rather than a billed figure.","runShell":{"command":"docmeta fill test/fixtures/fill/no-block.md --provider llama-cpp --model granite-4.1-3b-q2 --fields title --dry-run --no-cache -f json","exitCodes":[0],"stdio":"/\"costUsd\": 0/"}} */}
 {/* test end */}
