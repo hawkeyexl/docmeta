@@ -59,6 +59,7 @@ docmeta [paths...] [options]
 | `--as` | `<format>` | — | Force an input [format](/docmeta/reference/formats/) (extractor name, e.g. `markdown`). Required when reading from stdin. |
 | `-f, --format` | `<pretty\|json\|github>` | `pretty` | [Output format](/docmeta/reference/output-and-exit-codes/). An unknown value is an error (exit 2). |
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). When set, the file must exist or docmeta exits 2. |
+| `--no-config` | — | off | Ignore any discovered config file and run on the [built-in default schema set](/docmeta/reference/schema-resolution/#precedence). `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
 | `-q, --quiet` | — | off | In `pretty` output, hide passing files. Has no effect on `json` or `github`. |
 | `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
 
@@ -126,6 +127,7 @@ unaffected.
 | `--as` | `<format>` | — | Force an input [format](/docmeta/reference/formats/) (extractor name). Required when reading from stdin. |
 | `-f, --format` | `<pretty\|json>` | `pretty` | Output format. `get` has no `github` format. An unknown value is an error (exit 2). |
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). When set, the file must exist or docmeta exits 2. |
+| `--no-config` | — | off | Ignore any discovered config file and run on the [built-in default schema set](/docmeta/reference/schema-resolution/#precedence). `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
 | `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
 
 ### Output
@@ -208,6 +210,7 @@ used, in both output formats.
 | `--concurrency` | `<n>` | `4` | Files inferred in parallel. |
 | `-f, --format` | `<pretty\|json>` | `pretty` | Output format. `fill` has no `github` format. An unknown value is an error (exit 2). |
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). |
+| `--no-config` | — | off | Ignore any discovered config file and run on the [built-in default schema set](/docmeta/reference/schema-resolution/#precedence). `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
 | `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
 
 ### Which properties get filled

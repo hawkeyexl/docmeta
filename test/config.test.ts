@@ -1,6 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { loadConfig, parseConfig } from "../src/core/config.js";
 import { DocmetaError } from "../src/types.js";
 
@@ -109,5 +112,154 @@ describe("config", () => {
         DocmetaError,
       );
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0004 — discovery walks up to a project boundary
+// ---------------------------------------------------------------------------
+
+/**
+ * Every directory at or above `from` that holds a `.git` entry.
+ *
+ * Used as an explicit precondition in the "no boundary" test: that case is
+ * only meaningful when nothing above the temp directory is a repository, and
+ * a silent violation would make the test assert the opposite of its name.
+ */
+function gitAncestors(from: string): string[] {
+  const found: string[] = [];
+  let dir = resolve(from);
+  for (;;) {
+    if (existsSync(join(dir, ".git"))) found.push(dir);
+    const parent = dirname(dir);
+    if (parent === dir) return found;
+    dir = parent;
+  }
+}
+
+describe("config discovery walks up (0004)", () => {
+  let tmp: string | undefined;
+
+  afterEach(async () => {
+    if (tmp) await rm(tmp, { recursive: true, force: true });
+    tmp = undefined;
+  });
+
+  /**
+   * Build a throwaway tree. A `.git` **file** cannot be committed inside this
+   * repo's own working tree in a form git preserves, so boundary fixtures are
+   * built at runtime instead.
+   */
+  async function tree(spec: Record<string, string>): Promise<string> {
+    // realpath: macOS hands back a /var symlink for /private/var, and the walk
+    // compares resolved directory strings.
+    tmp = await realpath(await mkdtemp(join(tmpdir(), "docmeta-cfg-")));
+    for (const [rel, content] of Object.entries(spec)) {
+      const p = join(tmp, rel);
+      await mkdir(dirname(p), { recursive: true });
+      await writeFile(p, content, "utf8");
+    }
+    return tmp;
+  }
+
+  const CONFIG = "schemas:\n  - ./strict.schema.json\n";
+
+  it("finds a config in an ancestor directory", async () => {
+    const root = await tree({
+      ".git/HEAD": "ref: refs/heads/main\n",
+      "docmeta.config.yaml": CONFIG,
+      "docs/api/page.md": "---\ntype: guide\n---\n",
+    });
+    const loaded = await loadConfig(undefined, join(root, "docs", "api"));
+    expect(loaded?.config.schemas).toEqual(["./strict.schema.json"]);
+    expect(loaded?.dir).toBe(root);
+    expect(loaded?.path).toBe(join(root, "docmeta.config.yaml"));
+  });
+
+  it("stops at a `.git` directory", async () => {
+    const root = await tree({
+      "docmeta.config.yaml": CONFIG,
+      "inner/.git/HEAD": "ref: refs/heads/main\n",
+      "inner/docs/page.md": "---\ntype: guide\n---\n",
+    });
+    expect(await loadConfig(undefined, join(root, "inner", "docs"))).toBeNull();
+  });
+
+  it("stops at a `.git` *file* as well (the worktree case)", async () => {
+    // This repo's own worktrees carry `.git` as a regular file holding a
+    // `gitdir:` pointer. An isDirectory() boundary check would walk straight
+    // past it into the outer checkout.
+    const root = await tree({
+      "docmeta.config.yaml": CONFIG,
+      "inner/.git": "gitdir: /somewhere/else/.git/worktrees/inner\n",
+      "inner/docs/page.md": "---\ntype: guide\n---\n",
+    });
+    expect(await loadConfig(undefined, join(root, "inner", "docs"))).toBeNull();
+  });
+
+  it("searches the boundary directory itself, not just below it", async () => {
+    const root = await tree({
+      ".git": "gitdir: /somewhere/else\n",
+      "docmeta.config.yaml": CONFIG,
+      "docs/page.md": "---\ntype: guide\n---\n",
+    });
+    const loaded = await loadConfig(undefined, join(root, "docs"));
+    expect(loaded?.dir).toBe(root);
+  });
+
+  it("considers only cwd when no ancestor is a repository", async () => {
+    const root = await tree({
+      "docmeta.config.yaml": CONFIG,
+      "docs/page.md": "---\ntype: guide\n---\n",
+    });
+    // Precondition: a stray repository above the temp directory would make
+    // the walk legitimate and invert this assertion.
+    expect(gitAncestors(root)).toEqual([]);
+
+    expect(await loadConfig(undefined, join(root, "docs"))).toBeNull();
+    // ...while cwd itself is still searched, exactly as before.
+    expect((await loadConfig(undefined, root))?.dir).toBe(root);
+  });
+
+  it("takes the nearest config: a subdirectory shadows the root", async () => {
+    const root = await tree({
+      ".git/HEAD": "ref: refs/heads/main\n",
+      "docmeta.config.yaml": "schemas:\n  - google:okf:0.1\n",
+      "docs/docmeta.config.yaml": "schemas:\n  - diataxis:diataxis:1.0\n",
+      "docs/api/page.md": "---\ntype: guide\n---\n",
+    });
+    const loaded = await loadConfig(undefined, join(root, "docs", "api"));
+    // First found wins; ancestor configs are not merged in.
+    expect(loaded?.config.schemas).toEqual(["diataxis:diataxis:1.0"]);
+    expect(loaded?.dir).toBe(join(root, "docs"));
+  });
+
+  it("prefers .yaml over .yml within one directory", async () => {
+    const root = await tree({
+      ".git/HEAD": "ref: refs/heads/main\n",
+      "docmeta.config.yaml": "schemas:\n  - google:okf:0.1\n",
+      "docmeta.config.yml": "schemas:\n  - diataxis:diataxis:1.0\n",
+      "docs/page.md": "---\ntype: guide\n---\n",
+    });
+    const loaded = await loadConfig(undefined, join(root, "docs"));
+    expect(loaded?.config.schemas).toEqual(["google:okf:0.1"]);
+  });
+
+  it("an explicit path still errors when missing, and never walks", async () => {
+    const root = await tree({
+      ".git/HEAD": "ref: refs/heads/main\n",
+      "docmeta.config.yaml": CONFIG,
+      "docs/page.md": "---\ntype: guide\n---\n",
+    });
+    await expect(
+      loadConfig(join(root, "docs", "nope.yaml"), join(root, "docs")),
+    ).rejects.toThrow(/Config file not found/);
+  });
+
+  it("reports the directory of an explicit config path", async () => {
+    const loaded = await loadConfig(
+      join(here, "fixtures", "docmeta.config.yaml"),
+    );
+    expect(loaded?.dir).toBe(join(here, "fixtures"));
   });
 });

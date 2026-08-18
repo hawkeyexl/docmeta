@@ -1,5 +1,6 @@
 /** Shared shapes for the `fill` command, split out to keep imports acyclic. */
 import type { InferenceProvider } from "@hawkeyexl/inference";
+import type { ConfigNotice } from "../core/config.js";
 
 /** A schema property `fill` may propose a value for. */
 export interface Candidate {
@@ -91,11 +92,15 @@ export interface FillOptions {
   /** `--as` format override (extractor name). */
   as?: string;
   configPath?: string;
+  /** `--no-config`: skip config discovery and use the built-in defaults. */
+  noConfig?: boolean;
   cwd?: string;
   /** Content for the `-` (stdin) input, injected by the CLI/tests. */
   stdinContent?: string;
   /** Permit an input set that resolves to zero files (see `assertNonEmpty`). */
   allowEmpty?: boolean;
+  /** Called once when a config governs the run, so the CLI can report it. */
+  onConfigLoaded?: (info: ConfigNotice) => void;
   /** Restrict proposals to these top-level fields. */
   fields?: string[];
   /** Minimum self-reported confidence to write (0-1). Default 0.7. */

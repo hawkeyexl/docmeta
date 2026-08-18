@@ -96,21 +96,62 @@ overrides:
 
 ## Discovery
 
-When you do not pass `-c/--config`, docmeta looks in the current working
-directory for these files, in order, and uses the first one it finds:
+When you do not pass `-c/--config`, docmeta searches the current working
+directory and then each parent directory in turn. In every directory it looks
+for these files, in order:
 
 1. `docmeta.config.yaml`
 2. `docmeta.config.yml`
 
-If neither exists, docmeta runs with no config. When you pass `-c/--config
-<path>` explicitly, that file must exist; a missing config file is an error
-(exit 2).
+The **first file found wins** and the search stops there. Configs are never
+merged: `schemas` is a set every file must satisfy in full and `overrides` is
+first-match-wins ordered, so a partial merge would quietly redefine what the
+contract means. A `docmeta.config.yaml` inside `docs/` therefore *shadows* the
+one at the repo root for runs started inside `docs/` — the escape hatch for a
+subtree with genuinely different rules. For per-directory rules within one
+contract, prefer [`overrides`](#overrides) instead.
 
-<Aside type="note">
-Discovery only checks the current working directory; docmeta does not search
-parent directories. Run docmeta from your repo root, or point at the config with
-`-c/--config`.
-</Aside>
+The search stops at the **project boundary**: the first directory containing a
+`.git` entry, which is itself searched. A git *file* — what a worktree or a
+submodule carries — counts as a boundary just as a directory does. If no
+ancestor is a repository, only the current working directory is searched;
+docmeta never reads a config from your home directory or from `/`.
+
+If no config is found, docmeta runs on the [built-in default schema
+set](/docmeta/reference/schema-resolution/#precedence). Pass `--no-config` to
+skip discovery deliberately — useful for a one-off run against the defaults.
+
+When you pass `-c/--config <path>` explicitly, no search happens at all and that
+file must exist; a missing config file is an error (exit 2).
+
+When a run is governed by a config, docmeta says so before the report:
+
+```
+Using docmeta.config.yaml (../..)
+```
+
+The path in parentheses is the config's directory relative to where you ran the
+command. The line goes to stdout in `pretty` output and to stderr for `json` and
+`github`, so machine-readable output stays parseable.
+
+## What relative paths are relative to
+
+A config's relative paths mean what they look like they mean to whoever is
+editing the config: they resolve against **the config file's own directory**,
+not the directory you happened to run from. That applies to `paths`, `exclude`,
+and any local `.json` schema file named in `schemas` or `overrides`. So a config
+means the same thing whether you run from the repo root, from `docs/`, or from a
+monorepo package script.
+
+Two things stay relative to the **current working directory** instead, because
+a person standing in a shell typed them there:
+
+- positional `[paths...]` on the command line, and `-s/--schema`;
+- a document's own `$schema` value.
+
+A single run uses *either* positional paths *or* config `paths`, never both, so
+there is exactly one base per run. When the run takes its targets from config
+`paths`, reported file paths are relative to the config's directory.
 
 ## How config merges with CLI flags
 
@@ -122,6 +163,7 @@ corresponding config value; others merge with it.
 | Inputs | `[paths...]` | `paths` | CLI positional paths **override** config `paths` entirely. Config `paths` is used only when no positional paths are given. |
 | Excludes | `--exclude` | `exclude` | **Merged.** The effective exclude set is config `exclude` plus every `--exclude` glob plus the [default ignores](/docmeta/reference/cli/#default-ignores). |
 | Schemas | `-s/--schema` | `schemas` / `overrides` | CLI `--schema` **overrides** both `schemas` and `overrides` for every file. See [precedence](/docmeta/reference/schema-resolution/#precedence). |
+| Config discovery | `--no-config` | — | `--no-config` skips discovery entirely, so no config value applies. It sets the same option as `-c/--config`, so if you pass both, whichever comes later on the command line wins. |
 | Empty input sets | `--allow-empty` | `allowEmpty` | The flag **overrides** the config key, and only in the permissive direction: passing it turns the check off. Omitting it falls back to config, then to off. |
 | Fill settings | `--confidence`, `--provider`, `--model`, `--max-cost-usd`, `--concurrency` | `fill.*` | Each flag **overrides** its matching `fill` key. An unset flag falls back to config, then to the built-in default. |
 

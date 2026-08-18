@@ -17,7 +17,7 @@ import {
   resolveTargets,
   STDIN_TOKEN,
 } from "../core/load-files.js";
-import { loadConfig, type DocmetaConfig } from "../core/config.js";
+import { resolveRunConfig, type ConfigNotice } from "../core/config.js";
 
 export interface GetOptions {
   fields: string[];
@@ -26,11 +26,15 @@ export interface GetOptions {
   exclude?: string[];
   exts?: string[];
   configPath?: string;
+  /** `--no-config`: skip config discovery and use the built-in defaults. */
+  noConfig?: boolean;
   cwd?: string;
   /** Content for the `-` (stdin) input, injected by the CLI/tests. */
   stdinContent?: string;
   /** Permit an input set that resolves to zero files (see `assertNonEmpty`). */
   allowEmpty?: boolean;
+  /** Called once when a config governs the run, so the CLI can report it. */
+  onConfigLoaded?: (info: ConfigNotice) => void;
 }
 
 export interface GetFileResult {
@@ -45,11 +49,15 @@ export async function runGet(opts: GetOptions): Promise<GetFileResult[]> {
     throw new DocmetaError("Specify at least one field to get.");
   }
 
-  const loaded = await loadConfig(opts.configPath, cwd);
-  const config: DocmetaConfig | null = loaded?.config ?? null;
-
-  // Determine inputs: explicit CLI inputs win, else config.paths.
-  const inputs = opts.inputs.length > 0 ? opts.inputs : (config?.paths ?? []);
+  // Explicit CLI inputs win, else config `paths:`; `base` is whichever of the
+  // two directories those inputs were written relative to.
+  const { config, inputs, base } = await resolveRunConfig({
+    cwd,
+    configPath: opts.configPath,
+    noConfig: opts.noConfig,
+    inputs: opts.inputs,
+    onConfigLoaded: opts.onConfigLoaded,
+  });
   const usingStdin = inputs.includes(STDIN_TOKEN);
 
   if (inputs.length === 0) {
@@ -73,7 +81,7 @@ export async function runGet(opts: GetOptions): Promise<GetFileResult[]> {
     inputs: fileInputs,
     exts,
     exclude,
-    cwd,
+    cwd: base,
     allowEmpty,
   });
   assertNonEmpty({
@@ -111,7 +119,7 @@ export async function runGet(opts: GetOptions): Promise<GetFileResult[]> {
   }
 
   for (const file of files) {
-    const content = await readFile(resolve(cwd, file), "utf8");
+    const content = await readFile(resolve(base, file), "utf8");
     readOne(file, content, extname(file));
   }
 

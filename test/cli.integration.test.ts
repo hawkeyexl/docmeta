@@ -1,6 +1,13 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
 import { execFileSync, execSync } from "node:child_process";
-import { existsSync, mkdtempSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
@@ -32,10 +39,11 @@ function run(
   args: string[],
   input?: string,
   env?: Record<string, string>,
+  cwd: string = root,
 ): Run {
   try {
     const stdout = execFileSync("node", [bin, ...args], {
-      cwd: root,
+      cwd,
       encoding: "utf8",
       input,
       ...(env ? { env: { ...process.env, ...env } } : {}),
@@ -454,5 +462,123 @@ describe("cli fill", () => {
     }[];
     expect(formats.find((f) => f.name === "markdown")?.writable).toBe(true);
     expect(formats.find((f) => f.name === "html")?.writable).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0004 — the config means the same thing from any directory
+// ---------------------------------------------------------------------------
+
+describe("config discovery walks up (0004)", () => {
+  let sandbox: string;
+
+  const STRICT = JSON.stringify({
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    type: "object",
+    required: ["type", "owner"],
+    properties: { type: { type: "string" }, owner: { type: "string" } },
+  });
+  // Satisfies the built-in default set; violates the configured one.
+  const PAGE = "---\ntype: guide\ntitle: Hi\n---\n\n# Hi\n";
+
+  function write(rel: string, content: string): void {
+    const p = join(sandbox, rel);
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, content, "utf8");
+  }
+
+  beforeEach(() => {
+    // A `.git` **file** cannot be committed inside this repo's tree in a form
+    // git preserves, so the boundary fixtures are built here instead.
+    sandbox = realpathSync(mkdtempSync(join(tmpdir(), "docmeta-0004-")));
+    write(".git/HEAD", "ref: refs/heads/main\n");
+    write("docmeta.config.yaml", 'schemas:\n  - "./strict.schema.json"\n');
+    write("c2.yaml", 'paths:\n  - "docs/**/*.md"\n');
+    write("strict.schema.json", STRICT);
+    write("docs/api/page.md", PAGE);
+  });
+
+  afterEach(() => {
+    rmSync(sandbox, { recursive: true, force: true });
+  });
+
+  it("gives the same verdict from the repo root and from a subdirectory", () => {
+    const fromRoot = run(["validate", "docs/**/*.md"], undefined, undefined, sandbox);
+    const fromDocs = run(
+      ["validate", "api/*.md"],
+      undefined,
+      undefined,
+      join(sandbox, "docs"),
+    );
+    expect(fromRoot.status).toBe(1);
+    expect(fromRoot.stdout).toContain("required property 'owner'");
+    // Defect 1: this used to exit 0 against the built-in defaults.
+    expect(fromDocs.status).toBe(1);
+    expect(fromDocs.stdout).toContain("required property 'owner'");
+  });
+
+  it("--no-config opts out of the discovered config", () => {
+    const r = run(
+      ["validate", "api/*.md", "--no-config"],
+      undefined,
+      undefined,
+      join(sandbox, "docs"),
+    );
+    expect(r.status).toBe(0);
+    expect(r.stdout).not.toContain("Using docmeta.config.yaml");
+  });
+
+  it("loads a config-relative schema ref through -c (defect 2A)", () => {
+    const r = run(
+      ["validate", "api/page.md", "-c", "../docmeta.config.yaml"],
+      undefined,
+      undefined,
+      join(sandbox, "docs"),
+    );
+    // Used to exit 2 with `Schema file not found: "./strict.schema.json"`.
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("required property 'owner'");
+  });
+
+  it("resolves config `paths:` against the config's directory (defect 2B)", () => {
+    const r = run(
+      ["validate", "-c", "../c2.yaml"],
+      undefined,
+      undefined,
+      join(sandbox, "docs"),
+    );
+    // Used to resolve zero files (silently exit 0 before 0014, exit 2 after).
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("1 file checked");
+    expect(r.stdout).toContain("docs/api/page.md");
+  });
+
+  it("names the config it picked up, on stdout for pretty output", () => {
+    const r = run(
+      ["validate", "api/*.md"],
+      undefined,
+      undefined,
+      join(sandbox, "docs"),
+    );
+    expect(r.stdout).toContain("Using docmeta.config.yaml (..)");
+  });
+
+  it("keeps machine-readable output clean by sending the notice to stderr", () => {
+    const r = run(
+      ["validate", "api/*.md", "-f", "json"],
+      undefined,
+      undefined,
+      join(sandbox, "docs"),
+    );
+    expect(r.stderr).toContain("Using docmeta.config.yaml (..)");
+    expect(() => JSON.parse(r.stdout)).not.toThrow();
+  });
+
+  it("stops at a `.git` file, so a worktree cannot inherit the outer config", () => {
+    write("wt/.git", `gitdir: ${join(sandbox, ".git", "worktrees", "wt")}\n`);
+    write("wt/docs/page.md", PAGE);
+    const r = run(["validate", "docs/*.md"], undefined, undefined, join(sandbox, "wt"));
+    expect(r.status).toBe(0);
+    expect(r.stdout).not.toContain("Using docmeta.config.yaml");
   });
 });

@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { runValidate } from "../src/commands/validate.js";
 import { runGet } from "../src/commands/get.js";
 import { getSchemasInfo } from "../src/commands/schemas.js";
+import { DEFAULT_SCHEMAS } from "../src/core/resolve-schema.js";
 import { DocmetaError } from "../src/types.js";
 import { startSchemaServer, type SchemaServer } from "./helpers/schema-server.js";
 
@@ -373,5 +374,98 @@ describe("an empty input set is not success (0014)", () => {
         cwd: root,
       }),
     ).rejects.toBeInstanceOf(DocmetaError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0004 — the config means the same thing from any directory
+// ---------------------------------------------------------------------------
+
+describe("config discovery and resolution base (0004)", () => {
+  // Root config pins ./strict.schema.json (requires `owner`); docs/api/page.md
+  // satisfies the built-in default set and violates the configured one, so a
+  // run that fails to find the config reports a false green.
+  const nested = join(here, "fixtures", "nested-config");
+  const nestedDocs = join(nested, "docs");
+  const nestedConfig = join(nested, "docmeta.config.yaml");
+
+  const ownerError = (results: { errors: { message: string }[] }[]): boolean =>
+    results.some((r) => r.errors.some((e) => /'owner'/.test(e.message)));
+
+  // The matching "run from the repo root" control lives in
+  // cli.integration.test.ts, not here: `loadSchema` reads a local schema ref
+  // relative to `process.cwd()` rather than the core's `cwd`, so a run whose
+  // config directory already *is* its `cwd` can only be exercised honestly by
+  // a child process actually started in that directory.
+
+  it("applies the same config when run from a subdirectory (defect 1)", async () => {
+    const { results, summary } = await runValidate({
+      inputs: ["api/page.md"],
+      cwd: nestedDocs,
+    });
+    expect(summary.failed).toBe(1);
+    expect(ownerError(results)).toBe(true);
+    expect(results[0]?.schemas[0]).toMatch(/strict\.schema\.json$/);
+  });
+
+  it("resolves a config-relative schema ref for an out-of-cwd -c (defect 2A)", async () => {
+    const { results, summary } = await runValidate({
+      inputs: ["api/page.md"],
+      cwd: nestedDocs,
+      configPath: nestedConfig,
+    });
+    expect(summary.failed).toBe(1);
+    expect(ownerError(results)).toBe(true);
+  });
+
+  it("resolves config `paths:` against the config's directory (defect 2B)", async () => {
+    const { results } = await runValidate({
+      inputs: [],
+      cwd: nestedDocs,
+      configPath: nestedConfig,
+    });
+    // The glob is `docs/**/*.md`, written from the config's directory.
+    expect(results.map((r) => r.file)).toEqual(["docs/api/page.md"]);
+  });
+
+  it("runGet resolves config `paths:` the same way", async () => {
+    const results = await runGet({
+      fields: ["type"],
+      inputs: [],
+      cwd: nestedDocs,
+      configPath: nestedConfig,
+    });
+    expect(results.map((r) => r.file)).toEqual(["docs/api/page.md"]);
+    expect(results[0]?.values.type).toBe("guide");
+  });
+
+  it("noConfig suppresses discovery and restores the built-in defaults", async () => {
+    const { results, summary } = await runValidate({
+      inputs: ["api/page.md"],
+      cwd: nestedDocs,
+      noConfig: true,
+    });
+    expect(summary.failed).toBe(0);
+    expect(results[0]?.schemas).toEqual([...DEFAULT_SCHEMAS]);
+  });
+
+  it("reports which config a run picked up", async () => {
+    const seen: { path: string; dir: string }[] = [];
+    await runValidate({
+      inputs: ["api/page.md"],
+      cwd: nestedDocs,
+      onConfigLoaded: (info) => seen.push(info),
+    });
+    expect(seen).toEqual([{ path: nestedConfig, dir: nested }]);
+  });
+
+  it("reports nothing when no config is found", async () => {
+    const seen: unknown[] = [];
+    await runValidate({
+      inputs: ["test/fixtures/valid.md"],
+      cwd: root,
+      onConfigLoaded: (info) => seen.push(info),
+    });
+    expect(seen).toEqual([]);
   });
 });

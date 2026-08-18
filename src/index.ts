@@ -15,8 +15,15 @@ export type {
 } from "./commands/fill.js";
 export { Validator } from "./core/validator.js";
 export { resolveSchemaSet, DEFAULT_SCHEMAS } from "./core/resolve-schema.js";
-export { loadConfig, parseConfig } from "./core/config.js";
-export type { DocmetaConfig, FillConfig } from "./core/config.js";
+export { loadConfig, parseConfig, resolveRunConfig } from "./core/config.js";
+export type {
+  ConfigNotice,
+  DocmetaConfig,
+  FillConfig,
+  LoadedConfig,
+  RunConfig,
+  RunConfigOptions,
+} from "./core/config.js";
 export {
   listBuiltins,
   loadSchema,

@@ -81,6 +81,28 @@ This deliberately classifies a Windows path (`C:\...`), a URL, and any `.json`
 reference as non-builtin, so a typo'd built-in id is reported as an unknown
 built-in rather than silently treated as a missing file.
 
+### File references
+
+A relative **file** reference resolves against the directory of whatever named
+it — which is the directory the person who wrote it was looking at:
+
+| Where the ref came from | Resolved relative to |
+|---|---|
+| `schemas:` or `overrides[].schemas` in a config | The **config file's** directory |
+| A document's own `$schema` | The current working directory |
+| `-s/--schema` on the command line | The current working directory |
+
+So `schemas: ["./house.schema.json"]` in a config at the repo root means the
+file next to that config, whether you run docmeta from the repo root, from
+`docs/`, or with `-c ../docmeta.config.yaml`. See [config
+discovery](/docmeta/reference/configuration/#what-relative-paths-are-relative-to).
+
+<Aside type="note">
+When a config directory differs from the working directory, docmeta reports
+config-supplied file schemas by their absolute path, so it is unambiguous which
+file a run actually loaded.
+</Aside>
+
 ### URL references
 
 A `url` reference is fetched with a default **10-second timeout**. Within a
