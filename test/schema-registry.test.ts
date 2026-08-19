@@ -704,3 +704,42 @@ describe("loadSchema over http(s) — offline is not satisfied by a warm memo", 
     }
   });
 });
+
+describe("loadSchema over http(s) — offline with the cache disabled", () => {
+  // The CLI always supplies a `cacheDir`, so `schemaCache.ttlHours: 0` yields a
+  // cache object that exists but reads and writes nothing. Branching on the
+  // object rather than on `enabled` told that user to "run once without
+  // --offline to populate the cache" — advice that cannot work, because the
+  // write is a no-op too. Neither existing test covered the combination: one
+  // uses a working cacheDir with an empty cache, the other uses no cacheDir.
+  it("does not advise populating a cache that is switched off", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-off0-"));
+    try {
+      const err = await loadSchema("http://127.0.0.1:9/disabled.json", {
+        cacheDir: dir,
+        ttlHours: 0,
+        offline: true,
+      }).catch((e: Error) => e);
+      expect(err).toBeInstanceOf(DocmetaError);
+      expect(err.message).toMatch(/ttlHours: 0/);
+      expect(err.message).not.toMatch(/Run once without --offline/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("still advises populating a cache that is switched on", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-off24-"));
+    try {
+      const err = await loadSchema("http://127.0.0.1:9/enabled.json", {
+        cacheDir: dir,
+        ttlHours: 24,
+        offline: true,
+      }).catch((e: Error) => e);
+      expect(err).toBeInstanceOf(DocmetaError);
+      expect(err.message).toMatch(/Run once without --offline/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

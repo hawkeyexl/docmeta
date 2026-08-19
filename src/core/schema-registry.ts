@@ -466,9 +466,15 @@ async function resolveRemote(
     // no cache configured, or with the TTL set to 0, running online populates
     // nothing — so saying "run once online" there sends the operator in a
     // circle.
-    const remedy = cache
+    // Branch on whether the cache *works*, not on whether the object exists.
+    // `cacheDir` is always supplied by the CLI, so `cache` is non-null even
+    // when `ttlHours: 0` has disabled reads and writes alike — and telling that
+    // user to "run once without --offline to populate the cache" is advice that
+    // can never work, which is the circular remedy this message was rewritten
+    // to remove.
+    const remedy = cache?.enabled
       ? `Run once without --offline to populate ${options.cacheDir}, or point the reference at a local file.`
-      : "No schema cache is configured for this run (`schemaCache.ttlHours: 0` disables it), so there is nothing for --offline to read. Enable the cache, or point the reference at a local file or a built-in id.";
+      : "No schema cache is available for this run — `schemaCache.ttlHours: 0` disables it — so there is nothing for --offline to read. Set a non-zero `schemaCache.ttlHours`, or point the reference at a local file or a built-in id.";
     throw new DocmetaError(
       `Cannot resolve schema "${ref}": --offline is set and it could not be served from cache. ${remedy}`,
     );
