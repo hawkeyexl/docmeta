@@ -1,3 +1,10 @@
+# [3.6.0](https://github.com/hawkeyexl/docmeta/compare/v3.5.0...v3.6.0) (2026-08-19)
+
+
+### Features
+
+* **cli:** honor .gitignore when walking directories and globs ([#77](https://github.com/hawkeyexl/docmeta/issues/77)) ([1f501ae](https://github.com/hawkeyexl/docmeta/commit/1f501aeee734384185f95fbd140a6ab8dd56953a))
+
 # [3.5.0](https://github.com/hawkeyexl/docmeta/compare/v3.4.2...v3.5.0) (2026-08-19)
 
 
