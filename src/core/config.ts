@@ -34,6 +34,16 @@ export interface SchemaCacheConfig {
   ttlHours?: number;
 }
 
+/**
+ * Upper bound on `schemaCache.ttlHours` — one year.
+ *
+ * Not tidiness: freshness compares elapsed time against `ttlHours * 3_600_000`,
+ * and a finite-but-enormous value overflows that product to `Infinity`, so no
+ * entry is ever older than the limit and the cache silently stops expiring.
+ * `Number.isFinite` alone does not catch it, because `1e308` is finite.
+ */
+const MAX_TTL_HOURS = 8760;
+
 export interface DocmetaConfig {
   paths?: string[];
   exclude?: string[];
@@ -174,9 +184,21 @@ function parseSchemaCache(value: unknown, source: string): SchemaCacheConfig {
     // A YAML `1e999` parses to Infinity, and a bare range check would accept
     // it. A negative TTL is worse than useless: every entry would read as
     // stale, so the cache would silently do nothing at all.
-    if (typeof ttl !== "number" || !Number.isFinite(ttl) || ttl < 0) {
+    //
+    // The upper bound is not tidiness. Freshness compares against
+    // `ttlHours * 3_600_000`, and a finite-but-huge value overflows that
+    // product to Infinity, so `elapsed >= Infinity` is never true and every
+    // entry is served forever — a cache that silently stops expiring, which is
+    // the opposite of what a TTL is for. One year is well past any real
+    // setting, and anyone wanting "never expire" has a clearer way to say it.
+    if (
+      typeof ttl !== "number" ||
+      !Number.isFinite(ttl) ||
+      ttl < 0 ||
+      ttl > MAX_TTL_HOURS
+    ) {
       throw new DocmetaError(
-        `${source}: "schemaCache.ttlHours" must be a number of hours, 0 or greater (0 disables the cache).`,
+        `${source}: "schemaCache.ttlHours" must be a number of hours between 0 and ${MAX_TTL_HOURS} (0 disables the cache).`,
       );
     }
     schemaCache.ttlHours = ttl;

@@ -8,7 +8,6 @@ import { Buffer } from "node:buffer";
 import { DocmetaError } from "../types.js";
 import {
   DEFAULT_TTL_HOURS,
-  SCHEMA_CACHE_DIR,
   SchemaCache,
   schemaCacheDir,
 } from "./schema-cache.js";

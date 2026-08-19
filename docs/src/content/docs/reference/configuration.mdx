@@ -75,17 +75,20 @@ fetched over `http(s)`.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `ttlHours` | `number` | `24` | Hours a cached schema is served before it is re-fetched. `0` disables the cache entirely, in both directions. |
+| `ttlHours` | `number` | `24` | Hours a cached schema is served before it is re-fetched. `0` disables the cache entirely, in both directions; the maximum is `8760` (one year). |
 
 ```yaml title="docmeta.config.yaml"
 schemaCache:
   ttlHours: 1
 ```
 
-`ttlHours` must be a finite number of 0 or greater; a negative value, a
-non-number, or YAML's `1e999` is an error (exit 2). A negative TTL is rejected
-rather than clamped because it would make every entry read as stale — a cache
-that silently does nothing, which is the failure the key exists to prevent.
+`ttlHours` must be a number between 0 and 8760 (one year); a negative value, a
+non-number, YAML's `1e999`, or anything past the upper bound is an error
+(exit 2). Both bounds are rejected rather than clamped, and for symmetric
+reasons: a negative TTL makes every entry read as stale, while a value large
+enough to overflow the internal millisecond arithmetic makes no entry ever read
+as stale. Each gives a cache that silently stops doing its job — in opposite
+directions — which is the failure this key exists to prevent.
 
 <Aside type="note">
 The cache lives in `.docmeta/schema-cache/`, alongside the proposal cache

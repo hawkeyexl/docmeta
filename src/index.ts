@@ -39,7 +39,7 @@ export {
   DEFAULT_TTL_HOURS,
   schemaCacheDir,
 } from "./core/schema-cache.js";
-export type { SchemaCacheEntry } from "./core/schema-cache.js";
+export type { ReadOptions, SchemaCacheEntry } from "./core/schema-cache.js";
 export {
   REPORT_FORMATS,
   isReportFormat,

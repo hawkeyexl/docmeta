@@ -375,3 +375,28 @@ describe("config: schemaCache", () => {
     ).toBeUndefined();
   });
 });
+
+describe("schemaCache.ttlHours upper bound", () => {
+  // `Number.isFinite(1e308)` is true, so the finiteness check alone lets it
+  // through — and `1e308 * 3_600_000` overflows to Infinity, so `elapsed >=
+  // Infinity` is never true and every entry is served forever. A cache that
+  // silently stops expiring is the opposite of what a TTL is for.
+  it("rejects a finite value large enough to overflow the millisecond product", () => {
+    expect(() =>
+      parseConfig("schemaCache:\n  ttlHours: 1e308\n", "c.yaml"),
+    ).toThrow(DocmetaError);
+    expect(() =>
+      parseConfig("schemaCache:\n  ttlHours: 1e308\n", "c.yaml"),
+    ).toThrow(/between 0 and/);
+  });
+
+  it("accepts a year and rejects just past it", () => {
+    expect(
+      parseConfig("schemaCache:\n  ttlHours: 8760\n", "c.yaml").schemaCache
+        ?.ttlHours,
+    ).toBe(8760);
+    expect(() =>
+      parseConfig("schemaCache:\n  ttlHours: 8761\n", "c.yaml"),
+    ).toThrow(DocmetaError);
+  });
+});
