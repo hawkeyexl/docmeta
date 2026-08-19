@@ -136,6 +136,24 @@ function reportConfig(
   };
 }
 
+/**
+ * Diagnostics from a command core. Always stderr, never stdout: `json` and
+ * `github` output has to stay parseable, and a note is not the report.
+ */
+function notice(message: string): void {
+  process.stderr.write(`docmeta: ${message}\n`);
+}
+
+/**
+ * `--no-gitignore` for the core. Commander gives `true` when the flag is
+ * absent, but that is its *default*, not a choice the user made — passing it
+ * on would override config `respectGitignore:`. Only the explicit `false`
+ * travels; absence stays `undefined` so config still decides.
+ */
+function gitignoreFlag(value: unknown): boolean | undefined {
+  return value === false ? false : undefined;
+}
+
 function splitList(value: string): string[] {
   return value
     .split(",")
@@ -194,6 +212,7 @@ export function buildProgram(): Command {
     .option("--no-config", "ignore any discovered config file")
     .option("-q, --quiet", "in pretty output, hide passing files")
     .option("--allow-empty", "treat zero matched files as success")
+    .option("--no-gitignore", "check files .gitignore covers")
     // Neither flag carries `.preset()`, and neither carries a `defaultValue`.
     //
     // No `defaultValue`, because that would make the baseline active on runs
@@ -272,6 +291,8 @@ export function buildProgram(): Command {
           // `undefined` rather than `false` when the flag is absent, so config
           // `allowEmpty:` still wins (the cores do `opts ?? config`).
           allowEmpty: options.allowEmpty ? true : undefined,
+          respectGitignore: gitignoreFlag(options.gitignore),
+          onNotice: notice,
           // `--baseline` and `--no-baseline` share one commander attribute, the
           // same three-state `undefined | string | false` split as `-c` /
           // `--no-config`: absent leaves the config in charge, a string names a
@@ -309,6 +330,7 @@ export function buildProgram(): Command {
     .option("-c, --config <path>", "path to a docmeta config file")
     .option("--no-config", "ignore any discovered config file")
     .option("--allow-empty", "treat zero matched files as success")
+    .option("--no-gitignore", "read files .gitignore covers")
     .addHelpText(
       "after",
       [
@@ -352,6 +374,8 @@ export function buildProgram(): Command {
           onConfigLoaded: reportConfig(format === "pretty", process.cwd()),
           stdinContent,
           allowEmpty: options.allowEmpty ? true : undefined,
+          respectGitignore: gitignoreFlag(options.gitignore),
+          onNotice: notice,
         });
         if (format === "json") {
           process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
@@ -408,6 +432,7 @@ export function buildProgram(): Command {
     .option("-c, --config <path>", "path to a docmeta config file")
     .option("--no-config", "ignore any discovered config file")
     .option("--allow-empty", "treat zero matched files as success")
+    .option("--no-gitignore", "fill files .gitignore covers")
     .addHelpText(
       "after",
       [
@@ -454,6 +479,8 @@ export function buildProgram(): Command {
           ),
           stdinContent,
           allowEmpty: options.allowEmpty ? true : undefined,
+          respectGitignore: gitignoreFlag(options.gitignore),
+          onNotice: notice,
           fields: options.fields ? splitList(String(options.fields)) : undefined,
           confidence: options.confidence,
           dryRun: Boolean(options.dryRun),

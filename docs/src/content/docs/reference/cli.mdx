@@ -62,6 +62,7 @@ docmeta [paths...] [options]
 | `--no-config` | — | off | Ignore any discovered config file and run on the [built-in default schema set](/docmeta/reference/schema-resolution/#precedence). `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
 | `-q, --quiet` | — | off | In `pretty` output, hide passing files. Has no effect on `json` or `github`. |
 | `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
+| `--no-gitignore` | — | on | Validate files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
 | `--baseline` | `[path]` | config `baseline:`, else `.docmeta-baseline.json` | Compare findings against a recorded [baseline](#baselines) and fail only on new ones. The value is optional, and omitting it means *this project's* baseline: the configured `baseline:` path when there is one, resolved against the config file, otherwise `.docmeta-baseline.json`. Config `baseline:` turns this on for every run. A named file that does not exist is an error (exit 2). |
 | `--write-baseline` | `[path]` | config `baseline:`, else `.docmeta-baseline.json` | Record this run's findings as the baseline, then exit 0. The value is optional. Wins over `--baseline`. Findings from `-` (stdin) are the one exception: they cannot be recorded, so they still fail the run. |
 | `--no-baseline` | — | off | Ignore a baseline supplied by config `baseline:` for this run. `--baseline` and `--no-baseline` set the same option, so the one written later on the command line wins. |
@@ -216,6 +217,7 @@ unaffected.
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). When set, the file must exist or docmeta exits 2. |
 | `--no-config` | — | off | Ignore any discovered config file and run on the [built-in default schema set](/docmeta/reference/schema-resolution/#precedence). `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
 | `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
+| `--no-gitignore` | — | on | Read files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
 
 ### Output
 
@@ -299,6 +301,7 @@ used, in both output formats.
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). |
 | `--no-config` | — | off | Ignore any discovered config file and run on the [built-in default schema set](/docmeta/reference/schema-resolution/#precedence). `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
 | `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
+| `--no-gitignore` | — | on | Fill files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
 
 ### Which properties get filled
 
@@ -396,7 +399,8 @@ docmeta schemas -f json
 - **Positional paths** are files, directories, or globs. A named file is always
   read. A directory or glob is expanded and filtered to the extensions in
   `--ext` (or, by default, the extensions of the [implemented
-  formats](/docmeta/reference/formats/)).
+  formats](/docmeta/reference/formats/)), and then to what your repository does
+  not [ignore](#gitignore).
 - **`-` reads stdin.** Stdin requires `--as <format>` to choose an extractor,
   because there is no filename extension to detect from. Without `--as`, docmeta
   exits 2.
@@ -431,7 +435,14 @@ Two cases, both exit 2:
 A named path is reported even when other inputs did match, so `docmeta validate
 good.md typo.md` is an error rather than a partial success. `--ext` and
 `--exclude` filters are named in the message when they were in play, because
-"no files matched" is baffling when the glob plainly matches files on disk.
+"no files matched" is baffling when the glob plainly matches files on disk. So
+is [`.gitignore`](#gitignore), which is the one filter you never wrote on the
+command line:
+
+```
+No files matched. Patterns tried: "**/*.md".
+Filters applied — .gitignore skipped 12 (pass --no-gitignore to check them).
+```
 
 Reading stdin with `-` is one input, so an empty piped document still produces a
 verdict and is unaffected.
@@ -463,6 +474,48 @@ Dotfiles and dot-directories are also excluded from directory and glob walks by
 default. An explicitly named file is always read, even if it matches an ignore
 glob or is a dotfile.
 
+#### `.gitignore`
+
+Directory and glob expansion also skips anything your repository already
+ignores, so a built site (`build/`, `_site/`, `.docusaurus/`), a vendored copy,
+or a local scratch directory is not validated. Generated Markdown usually has
+transformed or stripped front matter, which produces violations nobody can fix
+in source — and restating `.gitignore` in `exclude:` means two lists to keep in
+sync.
+
+The question is put to **git itself**, one `git check-ignore` per run, so the
+answer is git's: nested `.gitignore` files, directory-only patterns, anchoring,
+`.git/info/exclude`, and `core.excludesFile` all behave exactly as they do for
+`git status`. Notably, a negation cannot re-include a file below an excluded
+directory — with `tmp/` and then `!keep.md`, `docs/tmp/keep.md` stays ignored.
+
+Four things bound it:
+
+- **Explicitly named files are never filtered.** `docmeta validate
+  build/generated.md` validates that file. Filtering applies only to directory
+  and glob expansion, exactly like the extension filter.
+- **The count is reported.** A run that skipped something says so:
+  `1 file checked, 1 passed, 0 failed, 0 errors, 1 skipped by .gitignore`, and
+  `json` output carries
+  [`summary.gitignoreSkipped`](/docmeta/reference/output-and-exit-codes/#json).
+  The count covers only files that passed the extension filter, so it answers
+  "how many candidate documents did `.gitignore` take away". `--exclude`
+  removals are not counted — those you asked for.
+- **Outside a repository, nothing is filtered.** An extracted tarball, `npm
+  pack` output, or a container with no `git` binary runs exactly as before, and
+  silently. Set [`respectGitignore:
+  true`](/docmeta/reference/configuration/#keys) explicitly to be told on stderr
+  when filtering was asked for and could not happen.
+- **`--no-gitignore` turns it off** for one run, and `respectGitignore: false`
+  for a repository.
+
+<Aside type="caution">
+This makes the gate **quieter**: a repo that was validating generated files will
+check fewer of them, and a run that was red can turn green. The skipped count is
+what makes that auditable, and a docs tree that is ignored in its entirety fails
+with `No files matched` (exit 2) rather than reporting a green zero.
+</Aside>
+
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
     against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
     (see .github/workflows/doc-detective.yml), over committed fixtures.
@@ -474,6 +527,7 @@ glob or is a dotfile.
 {/* step {"description":"get reports an absent field as unset (pretty) and present:false for a file with no metadata block.","runShell":{"command":"docmeta get title test/fixtures/no-frontmatter.md","exitCodes":[0],"stdio":"title=(unset)"}} */}
 {/* step {"description":"Nested fields: dot-notation, JSON Pointer (/author/email), and array index all resolve in one comma-separated request.","runShell":{"command":"docmeta get author.name,/author/email,tags.0 test/fixtures/nested/doc.md -f json","exitCodes":[0],"stdio":"/\"Jane\"[\\s\\S]*\"jane@example.com\"[\\s\\S]*\"intro\"/"}} */}
 {/* step {"description":"Requesting a parent key returns the whole nested object.","runShell":{"command":"docmeta get author test/fixtures/nested/doc.md -f json","exitCodes":[0],"stdio":"/\"name\": \"Jane\"[\\s\\S]*\"email\": \"jane@example.com\"/"}} */}
+{/* step {"description":"An explicitly named file is validated whether or not .gitignore covers it, and --no-gitignore is accepted on validate.","runShell":{"command":"docmeta validate test/fixtures/valid.md --no-gitignore -s google:okf:0.1","exitCodes":[0],"stdio":"1 passed"}} */}
 {/* step {"description":"schemas -f json prints { builtins, formats }.","runShell":{"command":"docmeta schemas -f json","exitCodes":[0],"stdio":"/\"builtins\"[\\s\\S]*\"formats\"/"}} */}
 {/* step {"description":"schemas reports per-format writability, which fill depends on.","runShell":{"command":"docmeta schemas -f json","exitCodes":[0],"stdio":"/\"name\": \"markdown\"[\\s\\S]*\"writable\": true/"}} */}
 {/* step {"description":"fill documents its confidence gate and provider flags in --help.","runShell":{"command":"docmeta fill --help","exitCodes":[0],"stdio":"--confidence"}} */}

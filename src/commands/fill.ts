@@ -40,7 +40,8 @@ import { DocmetaError, type FieldError, type MetadataPatch } from "../types.js";
 import { resolveRunConfig } from "../core/config.js";
 import {
   assertNonEmpty,
-  resolveTargets,
+  gitignoreOptions,
+  resolveTargetSet,
   STDIN_TOKEN,
 } from "../core/load-files.js";
 import {
@@ -178,12 +179,17 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
   const allowEmpty = opts.allowEmpty ?? config?.allowEmpty;
   const fillExts = opts.exts ?? forcedExtractor?.extensions;
   const fillExclude = [...(config?.exclude ?? []), ...(opts.exclude ?? [])];
-  const files = await resolveTargets({
+  const { files, gitignoreSkipped } = await resolveTargetSet({
     inputs: fileInputs,
     exts: fillExts,
     exclude: fillExclude,
     cwd: base,
     allowEmpty,
+    ...gitignoreOptions({
+      flag: opts.respectGitignore,
+      configured: config?.respectGitignore,
+      onNotice: opts.onNotice,
+    }),
   });
   assertNonEmpty({
     files,
@@ -192,6 +198,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
     allowEmpty,
     exclude: fillExclude,
     exts: fillExts,
+    gitignoreSkipped,
     action: "filled",
   });
 

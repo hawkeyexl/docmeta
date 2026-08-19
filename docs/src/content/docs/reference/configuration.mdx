@@ -21,17 +21,34 @@ the command line.
 | `overrides` | `Override[]` | none | Per-glob schema overrides. The first matching entry wins. See [Overrides](#overrides). |
 | `baseline` | `string` | none | Path to a [validation baseline](/docmeta/reference/cli/#baselines). Setting it turns on `--baseline` for every run; `--no-baseline` suppresses it for one. A bare `--write-baseline` records into this same file. |
 | `allowEmpty` | `boolean` | `false` | Treat an input set that resolves to zero files as success instead of an error (exit 2). Equivalent to `--allow-empty`. See [empty input sets](/docmeta/reference/cli/#empty-input-sets). |
+| `respectGitignore` | `boolean` | `true` | Skip files `.gitignore` covers when expanding directories and globs. `--no-gitignore` overrides it for one run. See [`.gitignore`](/docmeta/reference/cli/#gitignore). |
 | `fill` | `Fill` | none | Defaults for [`docmeta fill`](/docmeta/reference/cli/#fill). See [Fill](#fill). |
 
 The top level must be a YAML mapping. Each of `paths`, `exclude`, and `schemas`
 must be a list of strings; a non-list or a list containing a non-string value is
-an error (exit 2). `allowEmpty` must be a boolean.
+an error (exit 2). `allowEmpty` and `respectGitignore` must be booleans — a
+quoted `"false"` is a string, and accepting it would turn a setting **on** for
+someone who wrote it off.
 
 <Aside type="caution">
 `allowEmpty: true` disables the check that stops a glob which stopped matching
 from reporting a permanently green result. Set it only where matching nothing is
 genuinely expected — a repo in a shared CI template that may have no docs yet.
 </Aside>
+
+### `respectGitignore`
+
+Set it to `false` for a repository whose ignored files should still be checked —
+a vendored docset, or a generated tree you deliberately validate:
+
+```yaml title="docmeta.config.yaml"
+respectGitignore: false
+```
+
+Setting it to `true` says the same thing as the default, with one addition: it
+records that you *asked*, so a run where git could not answer — no repository,
+or no `git` on `PATH` — prints one line to stderr instead of silently checking
+everything. Worth doing in a CI image you do not control.
 
 ### Fill
 

@@ -99,6 +99,13 @@ export interface FillOptions {
   stdinContent?: string;
   /** Permit an input set that resolves to zero files (see `assertNonEmpty`). */
   allowEmpty?: boolean;
+  /**
+   * `--no-gitignore` (false). Absent leaves config `respectGitignore:` in
+   * charge, which itself defaults to on.
+   */
+  respectGitignore?: boolean;
+  /** Diagnostics for the user; the CLI writes these to stderr. */
+  onNotice?: (message: string) => void;
   /** Called once when a config governs the run, so the CLI can report it. */
   onConfigLoaded?: (info: ConfigNotice) => void;
   /** Restrict proposals to these top-level fields. */

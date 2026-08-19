@@ -30,7 +30,8 @@ import {
 } from "../extractors/index.js";
 import {
   assertNonEmpty,
-  resolveTargets,
+  gitignoreOptions,
+  resolveTargetSet,
   STDIN_TOKEN,
 } from "../core/load-files.js";
 import { resolveRunConfig, type ConfigNotice } from "../core/config.js";
@@ -52,6 +53,13 @@ export interface ValidateOptions {
   stdinContent?: string;
   /** Permit an input set that resolves to zero files (see `assertNonEmpty`). */
   allowEmpty?: boolean;
+  /**
+   * `--no-gitignore` (false). Absent leaves config `respectGitignore:` in
+   * charge, which itself defaults to on.
+   */
+  respectGitignore?: boolean;
+  /** Diagnostics for the user; the CLI writes these to stderr. */
+  onNotice?: (message: string) => void;
   /**
    * `--baseline [path]`: compare findings against a recorded baseline and fail
    * only on new ones. A string is a path relative to `cwd`; `true` means the
@@ -207,12 +215,17 @@ export async function runValidate(
   const fileInputs = inputs.filter((i) => i !== STDIN_TOKEN);
   const allowEmpty = opts.allowEmpty ?? config?.allowEmpty;
   const exclude = [...(config?.exclude ?? []), ...(opts.exclude ?? [])];
-  const files = await resolveTargets({
+  const { files, gitignoreSkipped } = await resolveTargetSet({
     inputs: fileInputs,
     exts,
     exclude,
     cwd: base,
     allowEmpty,
+    ...gitignoreOptions({
+      flag: opts.respectGitignore,
+      configured: config?.respectGitignore,
+      onNotice: opts.onNotice,
+    }),
   });
   assertNonEmpty({
     files,
@@ -221,6 +234,7 @@ export async function runValidate(
     allowEmpty,
     exclude,
     exts,
+    gitignoreSkipped,
     action: "validated",
   });
 
@@ -309,6 +323,9 @@ export async function runValidate(
     passed: reported.length - failed,
     failed,
     errors: reported.reduce((n, r) => n + r.errors.length, 0),
+    // Omitted when nothing was skipped: there is nothing to audit, and the
+    // JSON summary stays as it was for every run in a clean repo.
+    ...(gitignoreSkipped > 0 ? { gitignoreSkipped } : {}),
     ...(baseline ? { baseline } : {}),
   };
 

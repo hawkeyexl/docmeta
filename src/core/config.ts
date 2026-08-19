@@ -42,6 +42,13 @@ export interface DocmetaConfig {
    * otherwise leave a permanently green gate that checks nothing.
    */
   allowEmpty?: boolean;
+  /**
+   * Skip files `.gitignore` covers when expanding directories and globs. On by
+   * default; set false to check generated or vendored documents the repo does
+   * not track. Setting it **true** explicitly also asks to be told when git
+   * cannot answer — see `GITIGNORE_UNAVAILABLE`.
+   */
+  respectGitignore?: boolean;
 }
 
 const CONFIG_NAMES = ["docmeta.config.yaml", "docmeta.config.yml"];
@@ -113,6 +120,13 @@ export function parseConfig(text: string, source: string): DocmetaConfig {
       throw new DocmetaError(`${source}: "allowEmpty" must be a boolean.`);
     }
     config.allowEmpty = obj.allowEmpty;
+  }
+
+  if (obj.respectGitignore !== undefined) {
+    if (typeof obj.respectGitignore !== "boolean") {
+      throw new DocmetaError(`${source}: "respectGitignore" must be a boolean.`);
+    }
+    config.respectGitignore = obj.respectGitignore;
   }
 
   if (obj.fill !== undefined) config.fill = parseFill(obj.fill, source);

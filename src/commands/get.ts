@@ -14,7 +14,8 @@ import {
 } from "../extractors/index.js";
 import {
   assertNonEmpty,
-  resolveTargets,
+  gitignoreOptions,
+  resolveTargetSet,
   STDIN_TOKEN,
 } from "../core/load-files.js";
 import { resolveRunConfig, type ConfigNotice } from "../core/config.js";
@@ -33,6 +34,13 @@ export interface GetOptions {
   stdinContent?: string;
   /** Permit an input set that resolves to zero files (see `assertNonEmpty`). */
   allowEmpty?: boolean;
+  /**
+   * `--no-gitignore` (false). Absent leaves config `respectGitignore:` in
+   * charge, which itself defaults to on.
+   */
+  respectGitignore?: boolean;
+  /** Diagnostics for the user; the CLI writes these to stderr. */
+  onNotice?: (message: string) => void;
   /** Called once when a config governs the run, so the CLI can report it. */
   onConfigLoaded?: (info: ConfigNotice) => void;
 }
@@ -77,12 +85,17 @@ export async function runGet(opts: GetOptions): Promise<GetFileResult[]> {
   const fileInputs = inputs.filter((i) => i !== STDIN_TOKEN);
   const allowEmpty = opts.allowEmpty ?? config?.allowEmpty;
   const exclude = [...(config?.exclude ?? []), ...(opts.exclude ?? [])];
-  const files = await resolveTargets({
+  const { files, gitignoreSkipped } = await resolveTargetSet({
     inputs: fileInputs,
     exts,
     exclude,
     cwd: base,
     allowEmpty,
+    ...gitignoreOptions({
+      flag: opts.respectGitignore,
+      configured: config?.respectGitignore,
+      onNotice: opts.onNotice,
+    }),
   });
   assertNonEmpty({
     files,
@@ -91,6 +104,7 @@ export async function runGet(opts: GetOptions): Promise<GetFileResult[]> {
     allowEmpty,
     exclude,
     exts,
+    gitignoreSkipped,
     action: "read",
   });
 

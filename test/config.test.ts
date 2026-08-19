@@ -263,3 +263,33 @@ describe("config discovery walks up (0004)", () => {
     expect(loaded?.dir).toBe(join(here, "fixtures"));
   });
 });
+
+describe("config: respectGitignore", () => {
+  it("parses a boolean", () => {
+    expect(
+      parseConfig("respectGitignore: false\n", "docmeta.config.yaml")
+        .respectGitignore,
+    ).toBe(false);
+    expect(
+      parseConfig("respectGitignore: true\n", "docmeta.config.yaml")
+        .respectGitignore,
+    ).toBe(true);
+  });
+
+  it("is undefined when absent, so the default stays in one place", () => {
+    expect(
+      parseConfig("paths: ['a.md']\n", "docmeta.config.yaml").respectGitignore,
+    ).toBeUndefined();
+  });
+
+  it("rejects a non-boolean", () => {
+    // `respectGitignore: "false"` is a truthy string, so accepting it would
+    // turn filtering ON for someone who wrote it off.
+    expect(() =>
+      parseConfig("respectGitignore: 'false'\n", "docmeta.config.yaml"),
+    ).toThrow(DocmetaError);
+    expect(() =>
+      parseConfig("respectGitignore: 'false'\n", "docmeta.config.yaml"),
+    ).toThrow(/"respectGitignore" must be a boolean/);
+  });
+});
