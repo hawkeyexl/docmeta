@@ -100,7 +100,10 @@ jobs:
             echo "<details><summary>Failing test cases</summary>"
             echo
             echo '```xml'
-            grep -B 1 "<failure" docmeta-junit.xml | head -40
+            # `|| true`: bash -e would fail the whole step on grep exit 1,
+            # i.e. precisely when the fixtures are clean and there is nothing
+            # to report. A clean run must still produce a summary.
+            grep -B 1 "<failure" docmeta-junit.xml | head -40 || true
             echo '```'
             echo
             echo "</details>"

@@ -667,3 +667,92 @@ describe("junit and sarif agree on rule identity", () => {
     expect(junit).toContain(`type="${ruleId}"`);
   });
 });
+
+describe("sarif: no git repository", () => {
+  // Falling back to the fingerprint frame measures URIs against the *config's*
+  // directory. For a config outside the tree being validated that yields `../…`
+  // for every file, and `artifactUri` drops those — turning "no git repo" into
+  // "no findings at all", which is the silent emptiness this reporter exists to
+  // avoid. Measure from where the run resolved its inputs instead.
+  const outOfTreeConfig = {
+    cwd: "/work/proj",
+    base: "/work/cfg", // config lives outside the validated tree
+    runBase: "/work/proj",
+  };
+  const one: ValidationResult[] = [
+    {
+      file: "docs/a.md",
+      format: "markdown",
+      ok: false,
+      schemas: ["google:okf:0.1"],
+      errors: [
+        {
+          schema: "google:okf:0.1",
+          instancePath: "",
+          message: "must have required property 'type'",
+          keyword: "required",
+          subject: "type",
+          line: 1,
+        },
+      ],
+    },
+  ];
+
+  it("still emits the finding when there is no repository root", () => {
+    const notices: string[] = [];
+    const out = JSON.parse(
+      renderSarif(one, { frame: outOfTreeConfig, onNotice: (m) => notices.push(m) }),
+    ) as { runs: { results: { locations: unknown[] }[] }[] };
+    expect(out.runs[0]?.results).toHaveLength(1);
+    // And it says the paths are not repository-relative, rather than going quiet.
+    expect(notices.join(" ")).toMatch(/git repository/i);
+  });
+
+  it("measures the uri from the run base, not the config directory", () => {
+    const out = JSON.parse(renderSarif(one, { frame: outOfTreeConfig })) as {
+      runs: { results: { locations: { physicalLocation: { artifactLocation: { uri: string } } }[] }[] }[];
+    };
+    const uri = out.runs[0]?.results[0]?.locations[0]?.physicalLocation.artifactLocation.uri;
+    expect(uri).toBe("docs/a.md");
+    expect(uri?.startsWith("..")).toBe(false);
+  });
+});
+
+describe("junit: the XML 1.0 Char production", () => {
+  // C0 controls are the familiar exclusion; a lone surrogate half and the
+  // noncharacters U+FFFE/U+FFFF are equally illegal and equally fatal — the
+  // document does not parse at all. All three can sit in a JS string.
+  const withChar = (bad: string): ValidationResult[] => [
+    {
+      file: "a.md",
+      format: "markdown",
+      ok: false,
+      schemas: ["s"],
+      errors: [
+        {
+          schema: "s",
+          instancePath: "",
+          message: `bad${bad}char`,
+          keyword: "pattern",
+        },
+      ],
+    },
+  ];
+
+  it("drops a lone surrogate half", () => {
+    const out = renderJunit(withChar("\uD800"));
+    expect(out).toContain("badchar");
+    expect(out).not.toContain("\uD800");
+  });
+
+  it("drops the U+FFFE and U+FFFF noncharacters", () => {
+    expect(renderJunit(withChar("\uFFFE"))).not.toContain("\uFFFE");
+    expect(renderJunit(withChar("\uFFFF"))).not.toContain("\uFFFF");
+  });
+
+  it("keeps a well-formed astral character, which is legal", () => {
+    // A surrogate *pair* is one code point >= U+10000 and perfectly valid XML.
+    const out = renderJunit(withChar("\u{1F600}"));
+    expect(out).toContain("\u{1F600}");
+  });
+});

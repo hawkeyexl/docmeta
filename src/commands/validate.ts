@@ -32,6 +32,7 @@ import {
   assertNonEmpty,
   gitignoreOptions,
   resolveTargetSet,
+  STDIN_LABEL,
   STDIN_TOKEN,
 } from "../core/load-files.js";
 import { resolveRunConfig, type ConfigNotice } from "../core/config.js";
@@ -188,9 +189,6 @@ function resolveBaselineRequest(
   if (configured) return { ...implied(), write: false };
   return null;
 }
-
-/** Label used for the `-` input. Never baselined: it is not a file path. */
-const STDIN_LABEL = "<stdin>";
 
 export async function runValidate(
   opts: ValidateOptions,

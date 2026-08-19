@@ -28,6 +28,10 @@ import {
   type FingerprintContext,
 } from "../core/baseline.js";
 import { findGitRoot } from "../core/config.js";
+// One definition, in core: commands set this label and reporters test for it,
+// so two copies would drift and a `<stdin>` result would acquire an
+// `artifactLocation.uri` naming a file that does not exist.
+import { STDIN_LABEL } from "../core/load-files.js";
 import { RESERVED_RULES, fieldLabel, ruleIdFor } from "./rule-id.js";
 
 /** Where a consumer is sent to read about docmeta itself. */
@@ -40,7 +44,9 @@ const HELP_URI = "https://hawkeyexl.github.io/docmeta/fix/";
 const FINGERPRINT_KEY = "docmetaViolation/v1";
 
 /** Not a path anyone can resolve, so it can never be an artifact location. */
-const STDIN_LABEL = "<stdin>";
+// Imported rather than redeclared: two independent copies of this literal
+// would drift silently, and the failure mode is a `<stdin>` result acquiring an
+// `artifactLocation.uri` that names no file.
 
 /**
  * Said once, on stderr, when SARIF paths could not be made
@@ -148,7 +154,15 @@ export function renderSarif(
   // measured against the repository root (so GitHub can resolve them).
   const rebased = frame ? uriFrame(frame) : undefined;
   if (frame && rebased === null) onNotice?.(SARIF_NO_GIT_ROOT);
-  const pathFrame = rebased ?? frame;
+  // With no repository there is no root to measure from, and falling back to
+  // `frame` would measure against the *config's* directory — which for a config
+  // outside the tree being validated yields `../…` for every file, and
+  // `artifactUri` drops those. That turns "no git repo" into "no findings at
+  // all". Measure from where the run actually resolved its inputs instead: the
+  // paths are no longer repository-relative, which the notice above already
+  // says, but they are at least the paths the user typed.
+  const pathFrame =
+    rebased ?? (frame ? { ...frame, base: frame.runBase ?? frame.cwd } : undefined);
 
   const rules = new Map<string, SarifRule>();
   const sarifResults: SarifResult[] = [];

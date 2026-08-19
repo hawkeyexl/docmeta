@@ -16,6 +16,14 @@ const DEFAULT_IGNORE = ["**/node_modules/**", "**/.git/**"];
 
 export const STDIN_TOKEN = "-";
 
+/**
+ * What a stdin result is labelled in output. Lives here beside the input token
+ * so the two spellings cannot drift: commands set it, reporters test for it,
+ * and a reporter that missed a rename would give a `<stdin>` result an
+ * `artifactLocation.uri` naming a file that does not exist.
+ */
+export const STDIN_LABEL = "<stdin>";
+
 function toPosix(p: string): string {
   return p.replace(/\\/g, "/");
 }
