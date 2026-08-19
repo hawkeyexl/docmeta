@@ -196,14 +196,38 @@ export interface LoadedConfig {
 }
 
 /**
+ * The nearest **project boundary** at or above `cwd`: a directory holding
+ * `.git`. Null when there is none.
+ *
+ * `existsSync` rather than `isDirectory()`, because a git *file* — what a
+ * worktree or a submodule carries — bounds a project just as a directory does,
+ * and this repo's own worktrees are exactly that case. `existsSync` never
+ * dereferences the `gitdir:` target, so one line covers Windows, Linux,
+ * submodules, and worktrees alike.
+ *
+ * The answer is returned as a *fact*, not as a search path, because two callers
+ * need it for opposite reasons and only one of them wants a chain. Config
+ * discovery walks the chain and stops here. The SARIF reporter needs the root
+ * itself, and needs "there is no repository" to be distinguishable from "the
+ * repository root is where you are standing" — a one-element chain conflates
+ * the two, and getting that wrong means emitting paths GitHub silently drops.
+ */
+export function findGitRoot(cwd: string): string | null {
+  let dir = resolve(cwd);
+  for (;;) {
+    if (existsSync(join(dir, ".git"))) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/**
  * The directories a discovery walk may look in, nearest first.
  *
- * The walk stops at a **project boundary**: a directory containing `.git`,
- * which is included in the search. `existsSync` rather than `isDirectory()`,
- * because a git *file* — what a worktree or a submodule carries — bounds a
- * project just as a directory does, and this repo's own worktrees are exactly
- * that case. `existsSync` never dereferences the `gitdir:` target, so one line
- * covers Windows, Linux, submodules, and worktrees alike.
+ * The walk stops at the project boundary `findGitRoot` reports, which is
+ * included in the search. Only that one call touches the filesystem; the chain
+ * itself is then assembled from path strings.
  *
  * With **no** boundary anywhere above cwd, only cwd is considered. A
  * project-scoped config has no meaning without a project, and walking on would
@@ -212,16 +236,20 @@ export interface LoadedConfig {
  * directories under the user's home.
  */
 function searchPath(cwd: string): string[] {
+  const start = resolve(cwd);
+  const root = findGitRoot(start);
+  if (root === null) return [start];
   const chain: string[] = [];
-  let dir = resolve(cwd);
+  let dir = start;
   for (;;) {
     chain.push(dir);
-    if (existsSync(join(dir, ".git"))) return chain;
+    if (dir === root) return chain;
     const parent = dirname(dir);
-    if (parent === dir) break;
+    // `root` is an ancestor of `start` by construction, so this is unreachable
+    // — but a filesystem race (the boundary removed mid-walk) must not loop.
+    if (parent === dir) return chain;
     dir = parent;
   }
-  return chain.slice(0, 1);
 }
 
 /**

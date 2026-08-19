@@ -1,11 +1,11 @@
 ---
 title: Output formats & exit codes
-description: The pretty, json, and github output formats; the 0/1/2 exit-code contract; and color, stdout/stderr behavior for docmeta validate.
+description: The pretty, json, github, sarif, and junit output formats; the 0/1/2 exit-code contract; and color, stdout/stderr behavior for docmeta validate.
 ---
 
 import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
-`docmeta validate` renders results in one of three formats, chosen with
+`docmeta validate` renders results in one of five formats, chosen with
 [`-f/--format`](/docmeta/reference/cli/#options). Whatever the format, the process exit
 code follows a fixed [contract](#exit-codes) so CI can branch on it.
 
@@ -135,6 +135,168 @@ Each line has the form:
 `(root)` for a whole-document error.
 
 </TabItem>
+<TabItem label="sarif">
+
+[SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html),
+the interchange format GitHub code scanning, GitLab, and Azure DevOps ingest
+directly. Where `github` annotations vanish with the job log, SARIF findings
+become **tracked alerts** with state across commits. A clean run still prints a
+complete envelope with an empty `results` array — never an empty file, which
+`upload-sarif` rejects.
+
+```json
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "docmeta",
+          "version": "3.5.0",
+          "informationUri": "https://hawkeyexl.github.io/docmeta/",
+          "rules": [
+            {
+              "id": "google:okf:0.1/format",
+              "shortDescription": {
+                "text": "Schema \"google:okf:0.1\" rejected the document on its \"format\" keyword."
+              },
+              "helpUri": "https://hawkeyexl.github.io/docmeta/fix/"
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "google:okf:0.1/format",
+          "level": "error",
+          "message": { "text": "/timestamp must match format \"date-time\"" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "docs/api.md" },
+                "region": { "startLine": 4 }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "docmetaViolation/v1": "a0e67da36246d5d9"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `runs[].tool.driver.name` | string | Always `docmeta`. |
+| `runs[].tool.driver.version` | string | The docmeta version that produced the log. |
+| `runs[].tool.driver.rules` | object[] | Only the rules this run actually **hit**, deduplicated. docmeta does not enumerate every keyword of every schema. |
+| `results[].ruleId` | string | `<schema-ref>/<keyword>` — for example `google:okf:0.1/required`. Built from `keyword`, never from the message, so an Ajv rewording cannot close and reopen every historical alert. |
+| `results[].level` | string | Always `error`. See [severity](#severity-is-always-error) below. |
+| `results[].message.text` | string | The field path (or `(root)`) followed by the violation message. |
+| `results[].locations[].physicalLocation.artifactLocation.uri` | string | The file, **relative to the repository root**. See [paths](#sarif-paths-are-repository-root-relative). |
+| `results[].locations[].physicalLocation.region.startLine` | number | 1-based source line. The whole `region` is **omitted** when no line is known — SARIF requires `startLine >= 1`, so `0` would be invalid and `1` would silently mislocate the finding at the top of the file. A location with only an `artifactLocation` renders as a file-level alert, which is true. No `startColumn` is ever emitted. |
+| `results[].partialFingerprints` | object | `{"docmetaViolation/v1": "<fingerprint>"}` — the same fingerprint the [baseline](/docmeta/reference/cli/#baselines) records. |
+
+docmeta's own failures do not get a rule id built from `(parse)`. A document
+whose metadata block could not be read reports `docmeta/parse-error`, and one
+whose schema set could not be resolved reports `docmeta/schema-error`. Each is a
+real entry in `rules[]`.
+
+The `-` (stdin) input produces **no** SARIF result. `<stdin>` is not a path any
+consumer can resolve, and a location pointing at one would be dropped anyway.
+
+#### SARIF paths are repository-root-relative
+
+GitHub resolves `artifactLocation.uri` **against the repository root**, and
+silently drops results that do not resolve — so a wrong path means the upload
+*succeeds* with zero alerts, which reads as a clean scan. docmeta therefore
+rebases every path onto the nearest git repository root, so
+`docmeta validate api.md -f sarif` run from inside `docs/` reports
+`docs/api.md`, exactly as a run from the repository root does.
+
+When there is no git repository above the working directory, paths stay relative
+to that directory and docmeta says so on stderr. A file **outside** the
+repository — validated through a `../` path — has no repository-relative name at
+all, so its findings are omitted and the count is reported on stderr rather than
+quietly missing from the log.
+
+#### The fingerprint does not include the path
+
+`partialFingerprints` carries the [baseline](/docmeta/reference/cli/#baselines)
+fingerprint verbatim, which deliberately excludes the file path — the path sits
+beside it in `artifactLocation.uri`, exactly as the baseline keeps it as the
+entry key. So **two files with the same violation share a fingerprint.** They
+still track as separate alerts, because GitHub derives alert identity from
+fingerprint *plus* rule *plus* location. Do not use the fingerprint alone as an
+alert key.
+
+#### Severity is always `error`
+
+SARIF's `level` is its main triage axis, and docmeta has no severity concept to
+map onto it, so every finding is reported as `error`. That is honest rather than
+invented, and it is tracked as
+[issue #78](https://github.com/hawkeyexl/docmeta/issues/78).
+
+<Aside type="note" title="Two unrelated $schema keys">
+The SARIF envelope's own `$schema` names the SARIF meta-schema. It has nothing
+to do with the document-level [`$schema`
+directive](/docmeta/reference/schema-resolution/) docmeta reads from front
+matter, which is easy to misread when you are debugging schema resolution *and*
+looking at a SARIF file.
+</Aside>
+
+<Aside type="caution" title="GitHub caps SARIF uploads at 10 MB">
+Roughly 15,000 results reach that limit. A repository with that many findings
+wants a [baseline](/docmeta/reference/cli/#baselines) reporting only new ones —
+docmeta never silently truncates a log, because a short log is worse than a
+rejected upload.
+</Aside>
+
+</TabItem>
+<TabItem label="junit">
+
+JUnit XML, which Jenkins, GitLab, CircleCI, and Azure render natively in their
+"Tests" tab. A clean run still prints a complete envelope.
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="docmeta" tests="2" failures="1" errors="0">
+  <testsuite name="docmeta" tests="2" failures="1" errors="0">
+    <testcase name="docs/api.md" classname="docmeta.validate">
+      <failure type="google:okf:0.1/format" message="/timestamp must match format &quot;date-time&quot; (line 4)"/>
+    </testcase>
+    <testcase name="docs/intro.md" classname="docmeta.validate"/>
+  </testsuite>
+</testsuites>
+```
+
+| Attribute | On | Description |
+|---|---|---|
+| `name` | `testsuites`, `testsuite` | Always `docmeta`. |
+| `tests` | `testsuites`, `testsuite` | Files checked — **one test per file**, not per violation. |
+| `failures` | `testsuites`, `testsuite` | Files with at least one violation. |
+| `errors` | `testsuites`, `testsuite` | Always `0`. Every violation is a `<failure>`; `errors` is reserved for a test that could not run, which has no analogue here. |
+| `name` | `testcase` | The file path, as docmeta reported it. Not rebased onto the repository root — unlike SARIF, nothing resolves it. |
+| `classname` | `testcase` | Always `docmeta.validate`. |
+| `type` | `failure` | The same rule id SARIF uses: `<schema-ref>/<keyword>`. |
+| `message` | `failure` | The field path (or `(root)`), the violation message, and `(line N)` when the line is known. |
+
+One test per **file** is deliberate: the tab then reads "2 tests, 1 failed" and
+matches `2 files checked, 1 failed`. One test per *violation* would make the
+test count rise and fall with document quality, which reads as a suite someone
+broke.
+
+<Aside type="note" title="There is no authoritative JUnit schema">
+Jenkins, GitLab, and Azure each accept a different superset. docmeta emits only
+the attributes all of them honor, and avoids the contested ones — `time`, which
+would be meaningless here, `system-out`, and nested suites.
+</Aside>
+
+</TabItem>
 </Tabs>
 
 <Aside type="note">
@@ -240,7 +402,13 @@ destination:
 | stdout is **not** a TTY (e.g. piped or redirected) | off |
 | stdout is a TTY and none of the above | on |
 
-The `json` and `github` formats are never colored.
+The `json`, `github`, `sarif`, and `junit` formats are never colored, whatever
+the conditions above say — a machine format that changed shape with the terminal
+would not be a machine format.
+
+For the same reason, those four own stdout completely: the "Using
+docmeta.config.yaml" notice that `pretty` prints to stdout goes to **stderr**
+instead, so the report stays parseable.
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
     against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
@@ -252,4 +420,8 @@ The `json` and `github` formats are never colored.
 {/* step {"description":"An unparseable file becomes a failing result whose schema is (parse).","runShell":{"command":"docmeta validate test/fixtures/dd/malformed-yaml.md --format json","exitCodes":[1],"stdio":"\"(parse)\""}} */}
 {/* step {"description":"-q/--quiet still prints the summary line.","runShell":{"command":"docmeta validate test/fixtures/valid.md -q","exitCodes":[0],"stdio":"1 file checked, 1 passed, 0 failed, 0 errors"}} */}
 {/* step {"description":"--no-color is a global flag placed before the subcommand.","runShell":{"command":"docmeta --no-color validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"sarif emits a 2.1.0 envelope whose ruleId joins the schema ref to the keyword.","runShell":{"command":"docmeta validate test/fixtures/bad-timestamp.md --format sarif","exitCodes":[1],"stdio":"\"ruleId\": \"google:okf:0.1/format\""}} */}
+{/* step {"description":"A clean sarif run still prints the envelope rather than nothing.","runShell":{"command":"docmeta validate test/fixtures/valid.md --format sarif","exitCodes":[0],"stdio":"\"version\": \"2.1.0\""}} */}
+{/* step {"description":"junit counts one test per file, so the tab matches the summary.","runShell":{"command":"docmeta validate test/fixtures/valid.md test/fixtures/bad-timestamp.md --format junit","exitCodes":[1],"stdio":"/<testsuites name=\"docmeta\" tests=\"2\" failures=\"1\"/"}} */}
+{/* step {"description":"junit escapes the XML metacharacters a schema pattern puts in a message.","runShell":{"command":"docmeta validate test/fixtures/xml-hostile.md -s ./test/fixtures/xml-hostile.schema.json --format junit","exitCodes":[1],"stdio":"&lt;a href=&quot;x&quot;&gt;"}} */}
 {/* test end */}

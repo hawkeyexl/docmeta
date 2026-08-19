@@ -1,6 +1,6 @@
 ---
 title: Exit codes & PR annotations
-description: The docmeta exit-code contract (0/1/2) and the pretty, json, and github output formats, including the exact annotation line format and color behavior.
+description: The docmeta exit-code contract (0/1/2) and the pretty, json, github, sarif, and junit output formats, including the exact annotation line format and color behavior.
 ---
 
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
@@ -44,7 +44,7 @@ sets](/docmeta/reference/cli/#empty-input-sets).
 
 ## Output formats
 
-`docmeta validate` supports three output formats, selected with `-f` / `--format`.
+`docmeta validate` supports five output formats, selected with `-f` / `--format`.
 The default is `pretty`.
 
 | Format   | Audience | Machine-readable | Available on |
@@ -52,11 +52,23 @@ The default is `pretty`.
 | `pretty` | Humans, local runs | No | `validate`, `get`, `schemas` |
 | `json`   | Dashboards, scripts, tooling | Yes | `validate`, `get`, `schemas` |
 | `github` | GitHub Actions PR annotations | Yes (one line per error) | `validate` only |
+| `sarif`  | Code scanning, security dashboards | Yes (SARIF 2.1.0) | `validate` only |
+| `junit`  | The CI "Tests" tab | Yes (JUnit XML) | `validate` only |
 
-<Aside type="caution" title="github is validate-only">
-Only `validate` accepts `--format github`. The `get` and `schemas` subcommands
-accept `pretty` and `json` only. Passing an unsupported format is a usage error
-and exits `2`.
+<Aside type="caution" title="github, sarif, and junit are validate-only">
+Only `validate` accepts those three. The `get` and `schemas` subcommands accept
+`pretty` and `json` only, and `fill` the same — `fill`'s output is *proposals
+with confidence scores*, a different thing from *findings in files*, and
+encoding a skipped optional property as a SARIF result would misrepresent it.
+Passing an unsupported format is a usage error and exits `2`.
+</Aside>
+
+<Aside type="tip" title="Pick by what you need to survive the job">
+`github` renders on the pull request and then vanishes with the log. `sarif`
+persists: findings become tracked alerts with state across commits, which is
+what makes "when did this regress" answerable. `junit` is the one CI systems
+already render as a test report. They compose — a job can emit annotations for
+the reviewer and SARIF for the dashboard by running `validate` twice.
 </Aside>
 
 ### pretty
@@ -196,16 +208,62 @@ required-property error at the document root reports the field as `(root)`:
 
 <Aside type="tip" title="github output outside GitHub">
 The `::error` lines are GitHub-specific. On other CI systems they print as plain
-text with no annotation behavior. Use `pretty` or `json` there; see
-[CI recipes](/docmeta/ci/recipes/).
+text with no annotation behavior. Use `pretty`, `json`, `sarif`, or `junit`
+there; see [CI recipes](/docmeta/ci/recipes/).
 </Aside>
+
+### sarif
+
+A [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html)
+log on stdout, which GitHub code scanning, GitLab, and Azure DevOps ingest
+directly. Findings become tracked alerts with state across commits.
+
+```sh
+$ docmeta validate "docs/**/*.md" --format sarif > docmeta.sarif
+```
+
+Three things matter when wiring it up:
+
+- **`validate` exits 1 when there are findings, and the findings are the
+  point.** Without `continue-on-error: true` on the docmeta step and
+  `if: always()` on the upload, the job stops before anything is uploaded and
+  the dashboard stays permanently empty. See the
+  [`upload-sarif` recipe](/docmeta/ci/recipes/#github-code-scanning-upload-sarif).
+- **A clean run still writes a full envelope**, so redirecting to a file always
+  produces a valid one. `upload-sarif` fails on an empty file.
+- **Paths are rebased onto the repository root**, because that is what GitHub
+  resolves `artifactLocation.uri` against — and it *silently drops* results that
+  do not resolve, so a wrong path uploads successfully with zero alerts.
+
+Every finding is reported at `level: "error"`; docmeta has no severity concept
+to map onto SARIF's triage axis, tracked as
+[issue #78](https://github.com/hawkeyexl/docmeta/issues/78). The full field
+reference is on
+[Output formats & exit codes](/docmeta/reference/output-and-exit-codes/).
+
+### junit
+
+JUnit XML on stdout, which Jenkins, GitLab, CircleCI, and Azure render in their
+"Tests" tab.
+
+```sh
+$ docmeta validate "docs/**/*.md" --format junit > docmeta-junit.xml
+```
+
+One `<testcase>` per **file** and one `<failure>` per violation, so the tab
+reads "2 tests, 1 failed" and matches the `2 files checked, 1 failed` summary.
+GitHub Actions has no native JUnit renderer; on GitHub prefer `github` for
+annotations or `sarif` for tracked alerts, and keep `junit` for the platforms
+that render it.
 
 ## Color and TTY behavior
 
 docmeta follows [clig.dev](https://clig.dev/) conventions: primary output goes to
 stdout, diagnostics go to stderr, and color is emitted only when it is safe to do
-so. Color affects only the `pretty` format; `json` and `github` are always plain
-text so they parse reliably.
+so. Color affects only the `pretty` format; `json`, `github`, `sarif`, and
+`junit` are always plain text so they parse reliably. Those four also keep the
+"Using docmeta.config.yaml" notice on stderr, so a redirected report stays
+parseable.
 
 docmeta decides whether to emit ANSI color like this, in order:
 

@@ -1,9 +1,26 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import * as AjvDraft04Ns from "ajv-draft-04";
 import {
+  DOMParser,
+  type Document as XmlDocument,
+  type Element as XmlElement,
+} from "@xmldom/xmldom";
+import {
+  SARIF_NO_GIT_ROOT,
+  render,
   renderPretty,
   renderJson,
   renderGithub,
+  renderJunit,
+  renderSarif,
+  type ReportFormat,
 } from "../src/reporters/index.js";
+import { fingerprint, type FingerprintContext } from "../src/core/baseline.js";
+import { runValidate } from "../src/commands/validate.js";
+import { makeTempRepo, removeTempRepo } from "./helpers/temp-repo.js";
 import type {
   BaselineSummary,
   RunSummary,
@@ -11,6 +28,8 @@ import type {
 } from "../src/types.js";
 
 const ESC = String.fromCharCode(27);
+const here = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(here, "..");
 
 const results: ValidationResult[] = [
   { file: "ok.md", format: "markdown", ok: true, schemas: ["google:okf:0.1"], errors: [] },
@@ -187,5 +206,553 @@ describe("reporters: the .gitignore skip count", () => {
       renderJson(results, { ...summary, gitignoreSkipped: 3 }),
     ) as { summary: { gitignoreSkipped?: number } };
     expect(parsed.summary.gitignoreSkipped).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The format list is one list now, so `render` can no longer fall through to
+// pretty for a value the caller invented.
+// ---------------------------------------------------------------------------
+describe("reporters: the format list", () => {
+  it("rejects a format it does not implement rather than silently rendering pretty", () => {
+    expect(() => render("yaml" as ReportFormat, results, summary)).toThrow(
+      /Unknown report format/,
+    );
+  });
+
+  it("routes every documented format to its own renderer", () => {
+    expect(render("json", results, summary)).toBe(renderJson(results, summary));
+    expect(render("github", results, summary)).toBe(renderGithub(results));
+    expect(render("sarif", results, summary)).toBe(renderSarif(results));
+    expect(render("junit", results, summary)).toBe(renderJunit(results));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SARIF
+// ---------------------------------------------------------------------------
+
+/** Only the parts of the envelope these tests reach into. */
+interface SarifLog {
+  version: string;
+  runs: {
+    tool: {
+      driver: {
+        name: string;
+        version: string;
+        informationUri: string;
+        rules: { id: string; shortDescription: { text: string } }[];
+      };
+    };
+    results: {
+      ruleId: string;
+      level: string;
+      message: { text: string };
+      partialFingerprints: Record<string, string>;
+      locations: {
+        physicalLocation: {
+          artifactLocation: { uri: string };
+          region?: { startLine: number };
+        };
+      }[];
+    }[];
+  }[];
+}
+
+const parseSarif = (text: string): SarifLog => JSON.parse(text) as SarifLog;
+const sarifRun = (text: string): SarifLog["runs"][number] => {
+  const run = parseSarif(text).runs[0];
+  if (!run) throw new Error("SARIF envelope carried no run");
+  return run;
+};
+
+// The meta-schema is vendored (test/fixtures/sarif-2.1.0.schema.json) so the
+// conformance check never touches the network, and draft-04 is the dialect the
+// OASIS TC published it in — stock Ajv 8 refuses to compile it.
+type AjvCtor = typeof import("ajv/dist/2020.js").default;
+const AjvDraft04 = AjvDraft04Ns.default as unknown as AjvCtor;
+const metaSchema = JSON.parse(
+  readFileSync(join(repoRoot, "test/fixtures/sarif-2.1.0.schema.json"), "utf8"),
+) as Record<string, unknown>;
+const validateSarif = new AjvDraft04({
+  allErrors: true,
+  strict: false,
+  // The meta-schema annotates uri/date-time formats this writer never emits;
+  // leaving them unregistered would only add log noise to a passing test.
+  validateFormats: false,
+  logger: false,
+}).compile(metaSchema);
+
+/** Assert conformance and say *what* failed when it does not. */
+function expectValidSarif(text: string): SarifLog {
+  const log = parseSarif(text);
+  const ok = validateSarif(log);
+  expect(
+    ok ? [] : (validateSarif.errors ?? []).map((e) => `${e.instancePath} ${e.message}`),
+  ).toEqual([]);
+  return log;
+}
+
+const parseErrorResults: ValidationResult[] = [
+  {
+    file: "broken.md",
+    format: "markdown",
+    ok: false,
+    schemas: [],
+    errors: [
+      {
+        schema: "(parse)",
+        instancePath: "",
+        message: "Invalid YAML frontmatter: unexpected end of stream",
+        keyword: "parse",
+      },
+    ],
+  },
+  {
+    file: "unresolvable.md",
+    format: "markdown",
+    ok: false,
+    schemas: [],
+    errors: [
+      {
+        schema: "(parse)",
+        instancePath: "",
+        message: 'Unknown schema reference "nope:1".',
+        keyword: "schema",
+      },
+    ],
+  },
+];
+
+const cleanResults: ValidationResult[] = [
+  { file: "ok.md", format: "markdown", ok: true, schemas: ["google:okf:0.1"], errors: [] },
+];
+
+describe("reporters: sarif", () => {
+  it("emits a log that conforms to the SARIF 2.1.0 meta-schema for a failing run", () => {
+    const log = expectValidSarif(renderSarif(results));
+    expect(log.version).toBe("2.1.0");
+    expect(log.runs[0]?.results).toHaveLength(2);
+  });
+
+  it("emits a conforming log for a clean run rather than an empty string", () => {
+    const text = renderSarif(cleanResults);
+    expect(text.length).toBeGreaterThan(0);
+    const log = expectValidSarif(text);
+    expect(log.runs[0]?.results).toEqual([]);
+    expect(log.runs[0]?.tool.driver.rules).toEqual([]);
+  });
+
+  it("emits a conforming log for a run whose documents could not be parsed", () => {
+    expectValidSarif(renderSarif(parseErrorResults));
+  });
+
+  it("names the tool, its version, and where to read about it", () => {
+    const driver = sarifRun(renderSarif(results)).tool.driver;
+    expect(driver.name).toBe("docmeta");
+    expect(driver.version).toMatch(/^\d+\.\d+\.\d+/);
+    expect(driver.informationUri).toBe("https://hawkeyexl.github.io/docmeta/");
+  });
+
+  it("builds every ruleId from the schema reference and the failing keyword", () => {
+    const run = sarifRun(renderSarif(results));
+    expect(run.results.map((r) => r.ruleId)).toEqual([
+      "google:okf:0.1/required",
+      "google:okf:0.1/format",
+    ]);
+  });
+
+  it("lists each rule that was hit exactly once, and no rule that was not", () => {
+    const doubled = [...results, results[1] as ValidationResult];
+    const run = sarifRun(renderSarif(doubled));
+    expect(run.tool.driver.rules.map((r) => r.id)).toEqual([
+      "google:okf:0.1/required",
+      "google:okf:0.1/format",
+    ]);
+  });
+
+  it("gives docmeta's own failures reserved rule ids instead of a garbage one", () => {
+    const run = sarifRun(renderSarif(parseErrorResults));
+    expect(run.results.map((r) => r.ruleId)).toEqual([
+      "docmeta/parse-error",
+      "docmeta/schema-error",
+    ]);
+    expect(run.tool.driver.rules.map((r) => r.id)).toEqual([
+      "docmeta/parse-error",
+      "docmeta/schema-error",
+    ]);
+    expect(JSON.stringify(run)).not.toContain("(parse)/");
+  });
+
+  it("reports every finding at error level, because docmeta has no severity to map", () => {
+    const run = sarifRun(renderSarif([...results, ...parseErrorResults]));
+    expect(run.results.every((r) => r.level === "error")).toBe(true);
+  });
+
+  it("carries exactly the baseline's fingerprint, so the two identities cannot drift", () => {
+    const frame: FingerprintContext = { cwd: repoRoot, base: repoRoot };
+    const run = sarifRun(renderSarif(results, { frame }));
+    const violation = results[1]?.errors[0];
+    if (!violation) throw new Error("fixture lost its violation");
+    expect(run.results[0]?.partialFingerprints).toEqual({
+      "docmetaViolation/v1": fingerprint(violation, frame),
+    });
+  });
+
+  it("omits the region entirely when no source line is known", () => {
+    const noLine: ValidationResult[] = [
+      {
+        file: "bad.md",
+        format: "markdown",
+        ok: false,
+        schemas: ["google:okf:0.1"],
+        errors: [
+          {
+            schema: "google:okf:0.1",
+            instancePath: "",
+            message: "must have required property 'type'",
+            keyword: "required",
+            subject: "type",
+          },
+        ],
+      },
+    ];
+    const log = expectValidSarif(renderSarif(noLine));
+    const location = log.runs[0]?.results[0]?.locations[0]?.physicalLocation;
+    expect(location?.artifactLocation.uri).toBe("bad.md");
+    expect(location).not.toHaveProperty("region");
+  });
+
+  it("never emits a startColumn, which no extractor populates", () => {
+    expect(renderSarif(results)).not.toContain("startColumn");
+  });
+
+  it("skips the stdin label, which is not a path any consumer can resolve", () => {
+    const piped: ValidationResult[] = [
+      { ...(results[1] as ValidationResult), file: "<stdin>" },
+      results[1] as ValidationResult,
+    ];
+    const run = sarifRun(renderSarif(piped));
+    expect(run.results).toHaveLength(2);
+    expect(JSON.stringify(run)).not.toContain("<stdin>");
+  });
+
+  it("is never colored, even when the run asked for color", () => {
+    const out = render("sarif", results, summary, { color: true });
+    expect(out.includes(ESC)).toBe(false);
+  });
+});
+
+// The 0004-class bug: a uri that does not resolve against the repository root
+// makes an upload succeed with zero alerts, silently.
+describe("reporters: sarif paths are repository-root-relative", () => {
+  let repo: string | undefined;
+
+  afterEach(() => {
+    removeTempRepo(repo);
+    repo = undefined;
+  });
+
+  const uriOf = (text: string): string | undefined =>
+    sarifRun(text).results[0]?.locations[0]?.physicalLocation.artifactLocation.uri;
+
+  const BAD = "---\ntitle: No type here\n---\n\n# t\n";
+
+  it("yields the same uri from the repository root and from a subdirectory", async () => {
+    repo = makeTempRepo({ files: { "docs/api.md": BAD } });
+    const fromRoot = await runValidate({
+      inputs: ["docs/api.md"],
+      cwd: repo,
+      noConfig: true,
+      cliSchemas: ["google:okf:0.1"],
+    });
+    const fromSub = await runValidate({
+      inputs: ["api.md"],
+      cwd: join(repo, "docs"),
+      noConfig: true,
+      cliSchemas: ["google:okf:0.1"],
+    });
+
+    expect(fromRoot.results[0]?.file).toBe("docs/api.md");
+    expect(fromSub.results[0]?.file).toBe("api.md");
+    expect(uriOf(renderSarif(fromRoot.results, { frame: fromRoot.frame }))).toBe(
+      "docs/api.md",
+    );
+    expect(uriOf(renderSarif(fromSub.results, { frame: fromSub.frame }))).toBe(
+      "docs/api.md",
+    );
+  });
+
+  // Dropping is the only truthful option — GitHub cannot resolve the path
+  // either — but a silent drop is the very failure this reporter guards against.
+  it("drops a finding that lies outside the repository, and says so", () => {
+    repo = makeTempRepo({ files: { "docs/api.md": BAD } });
+    const frame: FingerprintContext = { cwd: repo, base: repo, runBase: repo };
+    const outside: ValidationResult[] = [
+      { ...(results[1] as ValidationResult), file: "../elsewhere/x.md" },
+    ];
+    const notices: string[] = [];
+    const text = renderSarif(outside, {
+      frame,
+      onNotice: (m) => notices.push(m),
+    });
+    expect(sarifRun(text).results).toEqual([]);
+    expect(notices.some((m) => m.includes("outside the repository"))).toBe(true);
+  });
+
+  it("says so on stderr when there is no repository to rebase onto", async () => {
+    repo = makeTempRepo({ files: { "docs/api.md": BAD }, init: false });
+    const run = await runValidate({
+      inputs: ["api.md"],
+      cwd: join(repo, "docs"),
+      noConfig: true,
+      cliSchemas: ["google:okf:0.1"],
+    });
+    const notices: string[] = [];
+    const text = renderSarif(run.results, {
+      frame: run.frame,
+      onNotice: (m) => notices.push(m),
+    });
+    expect(notices).toEqual([SARIF_NO_GIT_ROOT]);
+    expect(uriOf(text)).toBe("api.md");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// JUnit
+// ---------------------------------------------------------------------------
+
+/** Parse strictly: xmldom throws on a fatal error and reports the rest here. */
+function parseXml(xml: string): XmlDocument {
+  const problems: string[] = [];
+  const doc = new DOMParser({
+    onError: (level, message) => problems.push(`${level}: ${message}`),
+  }).parseFromString(xml, "text/xml");
+  expect(problems).toEqual([]);
+  return doc;
+}
+
+const attr = (el: XmlElement | null | undefined, name: string): string | null =>
+  el ? el.getAttribute(name) : null;
+
+describe("reporters: junit", () => {
+  it("counts one test per file, not one per violation, so the tab matches the summary", () => {
+    const doc = parseXml(renderJunit(results));
+    const suites = doc.documentElement;
+    expect(suites?.nodeName).toBe("testsuites");
+    expect(attr(suites, "tests")).toBe("2");
+    expect(attr(suites, "failures")).toBe("1");
+    expect(attr(suites, "errors")).toBe("0");
+
+    const cases = doc.getElementsByTagName("testcase");
+    expect(cases.length).toBe(2);
+    expect(attr(cases[0], "name")).toBe("ok.md");
+    expect(attr(cases[0], "classname")).toBe("docmeta.validate");
+    expect(attr(cases[1], "name")).toBe("bad.md");
+    expect(doc.getElementsByTagName("failure").length).toBe(2);
+  });
+
+  it("types each failure with the same rule id sarif uses", () => {
+    const doc = parseXml(renderJunit(results));
+    const failures = doc.getElementsByTagName("failure");
+    expect(attr(failures[0], "type")).toBe("google:okf:0.1/required");
+    expect(attr(failures[1], "type")).toBe("google:okf:0.1/format");
+    expect(attr(failures[0], "message")).toBe(
+      "(root) must have required property 'type' (line 1)",
+    );
+  });
+
+  it("uses only attributes Jenkins, GitLab, and Azure all honor", () => {
+    const xml = renderJunit(results);
+    expect(xml).not.toContain("time=");
+    expect(xml).not.toContain("system-out");
+  });
+
+  it("emits a full envelope for a clean run rather than an empty string", () => {
+    const xml = renderJunit(cleanResults);
+    expect(xml.length).toBeGreaterThan(0);
+    const doc = parseXml(xml);
+    expect(attr(doc.documentElement, "failures")).toBe("0");
+    expect(doc.getElementsByTagName("failure").length).toBe(0);
+  });
+
+  it("is never colored, even when the run asked for color", () => {
+    const out = render("junit", results, summary, { color: true });
+    expect(out.includes(ESC)).toBe(false);
+  });
+});
+
+// Escaping is the likeliest bug in a hand-rolled writer: schema-authored text
+// reaches the report verbatim, and a `pattern` regex may hold any of `& < > " '`.
+describe("reporters: junit escaping", () => {
+  it("escapes every metacharacter a schema pattern can put in a message", async () => {
+    const run = await runValidate({
+      inputs: ["test/fixtures/xml-hostile.md"],
+      cwd: repoRoot,
+      noConfig: true,
+      cliSchemas: ["./test/fixtures/xml-hostile.schema.json"],
+    });
+    const message = run.results[0]?.errors[0]?.message;
+    expect(message).toContain("<");
+    expect(message).toContain("&");
+    expect(message).toContain('"');
+
+    const xml = renderJunit(run.results);
+    // Nothing may leave the writer as a bare `&` or `<`.
+    expect(xml).not.toMatch(/&(?!(amp|lt|gt|quot|apos);)/);
+    expect(xml).toContain("&lt;a href=&quot;x&quot;&gt;&amp;amp;&lt;/a&gt;");
+
+    const doc = parseXml(xml);
+    const failure = doc.getElementsByTagName("failure")[0];
+    expect(attr(failure, "message")).toContain(message);
+  });
+
+  it("escapes a file path holding an ampersand", () => {
+    const amp: ValidationResult[] = [
+      { ...(results[1] as ValidationResult), file: "docs/a&b/<x>.md" },
+    ];
+    const xml = renderJunit(amp);
+    expect(xml).toContain('name="docs/a&amp;b/&lt;x&gt;.md"');
+    expect(xml).not.toMatch(/&(?!(amp|lt|gt|quot|apos);)/);
+    const doc = parseXml(xml);
+    expect(attr(doc.getElementsByTagName("testcase")[0], "name")).toBe(
+      "docs/a&b/<x>.md",
+    );
+  });
+});
+
+describe("junit and sarif agree on rule identity", () => {
+  // A consumer correlating a SARIF `ruleId` with a JUnit `<failure type>` for
+  // the same run must see the same string. Built-in ids are stable either way;
+  // a *local file* schema ref is the case that diverges, because the canonical
+  // form is measured against the config directory while the raw ref is relative
+  // to wherever the command was run.
+  const frame = {
+    cwd: "/repo/docs",
+    base: "/repo",
+    runBase: "/repo/docs",
+  };
+  const localRefResults: ValidationResult[] = [
+    {
+      file: "a.md",
+      format: "markdown",
+      ok: false,
+      schemas: ["../my.schema.json"],
+      errors: [
+        {
+          schema: "../my.schema.json",
+          instancePath: "",
+          message: "must have required property 'owner'",
+          keyword: "required",
+          subject: "owner",
+          line: 1,
+        },
+      ],
+    },
+  ];
+
+  it("uses the canonical schema ref in the JUnit failure type", () => {
+    const out = renderJunit(localRefResults, { frame });
+    expect(out).toContain('type="my.schema.json/required"');
+    expect(out).not.toContain('type="../my.schema.json/required"');
+  });
+
+  it("produces the same identity as the SARIF ruleId", () => {
+    const junit = renderJunit(localRefResults, { frame });
+    const sarif = JSON.parse(renderSarif(localRefResults, { frame })) as {
+      runs: { results: { ruleId: string }[] }[];
+    };
+    const ruleId = sarif.runs[0]?.results[0]?.ruleId ?? "";
+    expect(ruleId).toBe("my.schema.json/required");
+    expect(junit).toContain(`type="${ruleId}"`);
+  });
+});
+
+describe("sarif: no git repository", () => {
+  // Falling back to the fingerprint frame measures URIs against the *config's*
+  // directory. For a config outside the tree being validated that yields `../…`
+  // for every file, and `artifactUri` drops those — turning "no git repo" into
+  // "no findings at all", which is the silent emptiness this reporter exists to
+  // avoid. Measure from where the run resolved its inputs instead.
+  const outOfTreeConfig = {
+    cwd: "/work/proj",
+    base: "/work/cfg", // config lives outside the validated tree
+    runBase: "/work/proj",
+  };
+  const one: ValidationResult[] = [
+    {
+      file: "docs/a.md",
+      format: "markdown",
+      ok: false,
+      schemas: ["google:okf:0.1"],
+      errors: [
+        {
+          schema: "google:okf:0.1",
+          instancePath: "",
+          message: "must have required property 'type'",
+          keyword: "required",
+          subject: "type",
+          line: 1,
+        },
+      ],
+    },
+  ];
+
+  it("still emits the finding when there is no repository root", () => {
+    const notices: string[] = [];
+    const out = JSON.parse(
+      renderSarif(one, { frame: outOfTreeConfig, onNotice: (m) => notices.push(m) }),
+    ) as { runs: { results: { locations: unknown[] }[] }[] };
+    expect(out.runs[0]?.results).toHaveLength(1);
+    // And it says the paths are not repository-relative, rather than going quiet.
+    expect(notices.join(" ")).toMatch(/git repository/i);
+  });
+
+  it("measures the uri from the run base, not the config directory", () => {
+    const out = JSON.parse(renderSarif(one, { frame: outOfTreeConfig })) as {
+      runs: { results: { locations: { physicalLocation: { artifactLocation: { uri: string } } }[] }[] }[];
+    };
+    const uri = out.runs[0]?.results[0]?.locations[0]?.physicalLocation.artifactLocation.uri;
+    expect(uri).toBe("docs/a.md");
+    expect(uri?.startsWith("..")).toBe(false);
+  });
+});
+
+describe("junit: the XML 1.0 Char production", () => {
+  // C0 controls are the familiar exclusion; a lone surrogate half and the
+  // noncharacters U+FFFE/U+FFFF are equally illegal and equally fatal — the
+  // document does not parse at all. All three can sit in a JS string.
+  const withChar = (bad: string): ValidationResult[] => [
+    {
+      file: "a.md",
+      format: "markdown",
+      ok: false,
+      schemas: ["s"],
+      errors: [
+        {
+          schema: "s",
+          instancePath: "",
+          message: `bad${bad}char`,
+          keyword: "pattern",
+        },
+      ],
+    },
+  ];
+
+  it("drops a lone surrogate half", () => {
+    const out = renderJunit(withChar("\uD800"));
+    expect(out).toContain("badchar");
+    expect(out).not.toContain("\uD800");
+  });
+
+  it("drops the U+FFFE and U+FFFF noncharacters", () => {
+    expect(renderJunit(withChar("\uFFFE"))).not.toContain("\uFFFE");
+    expect(renderJunit(withChar("\uFFFF"))).not.toContain("\uFFFF");
+  });
+
+  it("keeps a well-formed astral character, which is legal", () => {
+    // A surrogate *pair* is one code point >= U+10000 and perfectly valid XML.
+    const out = renderJunit(withChar("\u{1F600}"));
+    expect(out).toContain("\u{1F600}");
   });
 });

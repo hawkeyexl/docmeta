@@ -29,8 +29,21 @@ export {
   loadSchema,
   classifyRef,
 } from "./core/schema-registry.js";
-export { render } from "./reporters/index.js";
-export type { ReportFormat } from "./reporters/index.js";
+export {
+  REPORT_FORMATS,
+  isReportFormat,
+  render,
+  renderJunit,
+  renderSarif,
+} from "./reporters/index.js";
+export type {
+  ReportFormat,
+  ReportOptions,
+  SarifOptions,
+} from "./reporters/index.js";
+// `ValidateRun.frame` is typed with this, so a caller passing the frame back
+// into `render` needs to be able to name it.
+export type { FingerprintContext } from "./core/baseline.js";
 export { renderFill } from "./reporters/fill.js";
 export type { FillReportFormat } from "./reporters/fill.js";
 export {

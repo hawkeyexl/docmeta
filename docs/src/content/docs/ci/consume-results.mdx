@@ -210,7 +210,8 @@ npx -y docmeta get type "docs/**/*.md" --format json \
 
 <Aside type="note" title="get supports pretty and json only">
 `docmeta get` accepts `--format pretty` (the default) and `--format json`. It
-does **not** accept `--format github`, which is specific to `validate`.
+does **not** accept `--format github`, `sarif`, or `junit`, which are specific
+to `validate`.
 Passing an unsupported format is a usage error and exits `2`.
 </Aside>
 
@@ -272,7 +273,7 @@ Alongside `runValidate`, the entry point exports the other cores and helpers:
 | `resolveSchemaSet`, `DEFAULT_SCHEMAS` | Resolve a file's schema set; the built-in default set. |
 | `loadConfig`, `parseConfig` | Load or parse a `docmeta.config.yaml`. |
 | `listBuiltins`, `loadSchema`, `classifyRef` | Enumerate, fetch, and classify schema references. |
-| `render` | Format a result set as `pretty`, `json`, or `github` text. |
+| `render` | Format a result set as `pretty`, `json`, `github`, `sarif`, or `junit` text. `sarif` also takes the run's `frame`, which `runValidate` returns. |
 | `DocmetaError` and the result types | The operational-error class and `ValidationResult` / `RunSummary` / `FieldError` interfaces. |
 
 <Aside type="caution" title="Operational failures throw DocmetaError">
@@ -313,7 +314,7 @@ docmeta is an ES module targeting Node.js 24 or newer. Import it from ESM (or a
   <LinkCard
     title="Exit codes & PR annotations"
     href="/docmeta/ci/exit-codes-and-annotations/"
-    description="The full json shape, the 0/1/2 exit contract, and the github annotation format."
+    description="The full json, sarif, and junit shapes, the 0/1/2 exit contract, and the github annotation format."
   />
   <LinkCard
     title="Govern a shared schema by URL"

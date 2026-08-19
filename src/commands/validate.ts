@@ -32,6 +32,7 @@ import {
   assertNonEmpty,
   gitignoreOptions,
   resolveTargetSet,
+  STDIN_LABEL,
   STDIN_TOKEN,
 } from "../core/load-files.js";
 import { resolveRunConfig, type ConfigNotice } from "../core/config.js";
@@ -79,6 +80,19 @@ export interface ValidateOptions {
 export interface ValidateRun {
   results: ValidationResult[];
   summary: RunSummary;
+  /**
+   * Where the run stood: the working directory, the directory canonical paths
+   * are measured from, and the directory `results[].file` labels are relative
+   * to.
+   *
+   * Returned rather than kept private because a `ValidationResult.file` is only
+   * meaningful *with* it. A reporter that has to name a file the same way from
+   * anywhere — SARIF, whose `artifactLocation.uri` GitHub resolves against the
+   * repository root — cannot reconstruct this after the fact, and guessing puts
+   * it in the same false-green trap the baseline's canonical keys exist to
+   * avoid.
+   */
+  frame: FingerprintContext;
 }
 
 /**
@@ -175,9 +189,6 @@ function resolveBaselineRequest(
   if (configured) return { ...implied(), write: false };
   return null;
 }
-
-/** Label used for the `-` input. Never baselined: it is not a file path. */
-const STDIN_LABEL = "<stdin>";
 
 export async function runValidate(
   opts: ValidateOptions,
@@ -309,12 +320,14 @@ export async function runValidate(
     await processOne(file, content, extname(file));
   }
 
+  // Fingerprints must not depend on where the command was run from, so a
+  // local file schema ref is measured against the config's directory.
+  const frame: FingerprintContext = { cwd, base: configDir ?? cwd, runBase: base };
+
   const { results: reported, baseline } = await settleBaseline(
     results,
     resolveBaselineRequest(opts, config?.baseline, configDir, cwd),
-    // Fingerprints must not depend on where the command was run from, so a
-    // local file schema ref is measured against the config's directory.
-    { cwd, base: configDir ?? cwd, runBase: base },
+    frame,
   );
 
   const failed = reported.filter((r) => !r.ok).length;
@@ -329,7 +342,7 @@ export async function runValidate(
     ...(baseline ? { baseline } : {}),
   };
 
-  return { results: reported, summary };
+  return { results: reported, summary, frame };
 }
 
 /**

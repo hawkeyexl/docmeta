@@ -15,7 +15,15 @@ import { runValidate } from "./commands/validate.js";
 import { runGet } from "./commands/get.js";
 import { getSchemasInfo } from "./commands/schemas.js";
 import { runFill } from "./commands/fill.js";
-import { render, type ReportFormat } from "./reporters/index.js";
+import {
+  OMITTED_WHEN_CLEAN,
+  REPORT_FORMATS,
+  REPORT_FORMAT_LIST,
+  isMachineFormat,
+  isReportFormat,
+  render,
+  type ReportFormat,
+} from "./reporters/index.js";
 import { renderFill } from "./reporters/fill.js";
 import { shouldColor, palette } from "./reporters/color.js";
 
@@ -49,8 +57,6 @@ function stringifyValue(v: unknown): string {
   if (typeof v === "string") return v;
   return JSON.stringify(v);
 }
-
-const REPORT_FORMATS = new Set(["pretty", "json", "github"]);
 
 const COMMAND_NAMES = ["validate", "get", "fill", "schemas"];
 
@@ -207,7 +213,11 @@ export function buildProgram(): Command {
     .option("--ext <list>", "comma-separated extensions for directory walks")
     .option("--exclude <glob>", "glob to exclude; repeatable", collect, [])
     .option("--as <format>", "force an input format (e.g. markdown, mdx)")
-    .option("-f, --format <format>", "output: pretty | json | github", "pretty")
+    .option(
+      "-f, --format <format>",
+      `output: ${REPORT_FORMATS.join(" | ")}`,
+      "pretty",
+    )
     .option("-c, --config <path>", "path to a docmeta config file")
     .option("--no-config", "ignore any discovered config file")
     .option("-q, --quiet", "in pretty output, hide passing files")
@@ -252,6 +262,7 @@ export function buildProgram(): Command {
         "Examples:",
         "  docmeta validate docs/                       # walk a directory",
         '  docmeta validate "**/*.md" -f github         # CI annotations',
+        '  docmeta validate "**/*.md" -f sarif > o.sarif # code scanning',
         "  docmeta validate page.md -s google:okf:0.1 -s ./my.schema.json",
         "  cat page.md | docmeta validate - --as markdown",
         "  docmeta validate --write-baseline            # record today's backlog",
@@ -263,10 +274,10 @@ export function buildProgram(): Command {
         // `validate` is the default command, so a misspelled subcommand lands
         // here as a path. Upgrade the message before it becomes "not found".
         suggestCommand(paths[0], process.cwd());
-        const format = options.format as ReportFormat;
-        if (!REPORT_FORMATS.has(format)) {
+        const format = String(options.format);
+        if (!isReportFormat(format)) {
           throw new DocmetaError(
-            `Unknown --format "${format}". Use pretty, json, or github.`,
+            `Unknown --format "${format}". Use ${REPORT_FORMAT_LIST}.`,
           );
         }
         const exts: string[] | undefined = options.ext
@@ -279,14 +290,14 @@ export function buildProgram(): Command {
           ? await readStdin()
           : undefined;
 
-        const { results, summary } = await runValidate({
+        const { results, summary, frame } = await runValidate({
           inputs: paths,
           cliSchemas: options.schema,
           exts,
           exclude: options.exclude,
           as: options.as,
           ...configOption(options.config),
-          onConfigLoaded: reportConfig(format === "pretty", process.cwd()),
+          onConfigLoaded: reportConfig(!isMachineFormat(format), process.cwd()),
           stdinContent,
           // `undefined` rather than `false` when the flag is absent, so config
           // `allowEmpty:` still wins (the cores do `opts ?? config`).
@@ -305,8 +316,16 @@ export function buildProgram(): Command {
         const text = render(format, results, summary, {
           color,
           quiet: Boolean(options.quiet),
+          // Non-presentational: SARIF needs to know where the run stood before
+          // it can name a file the way the repository does.
+          frame,
+          onNotice: notice,
         });
-        if (text.length > 0) process.stdout.write(`${text}\n`);
+        // Only `github` may say nothing on a clean run. Every other format owes
+        // its envelope even when it is empty — see `OMITTED_WHEN_CLEAN`.
+        if (text.length > 0 || !OMITTED_WHEN_CLEAN.has(format)) {
+          process.stdout.write(`${text}\n`);
+        }
         process.exitCode = summary.failed > 0 ? 1 : 0;
       } catch (err) {
         fail(err);
