@@ -63,7 +63,7 @@ docmeta [paths...] [options]
 | `-q, --quiet` | — | off | In `pretty` output, hide passing files. Has no effect on `json` or `github`. |
 | `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
 | `--baseline` | `[path]` | `.docmeta-baseline.json` | Compare findings against a recorded [baseline](#baselines) and fail only on new ones. The value is optional. Config `baseline:` turns this on for every run. A named file that does not exist is an error (exit 2). |
-| `--write-baseline` | `[path]` | config `baseline:`, else `.docmeta-baseline.json` | Record this run's findings as the baseline and exit 0. The value is optional. Wins over `--baseline`. |
+| `--write-baseline` | `[path]` | config `baseline:`, else `.docmeta-baseline.json` | Record this run's findings as the baseline, then exit 0. The value is optional. Wins over `--baseline`. Findings from `-` (stdin) are the one exception: they cannot be recorded, so they still fail the run. |
 | `--no-baseline` | — | off | Ignore a baseline supplied by config `baseline:` for this run. `--baseline` and `--no-baseline` set the same option, so the one written later on the command line wins. |
 
 <Aside type="note">
@@ -80,7 +80,7 @@ applies to everything written from now on, and the debt stays visible rather
 than blocking the build.
 
 ```sh
-docmeta validate --write-baseline   # record today's findings, exit 0
+docmeta validate --write-baseline   # record today's findings, then exit 0
 docmeta validate --baseline         # from now on, fail only on new ones
 ```
 

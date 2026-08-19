@@ -10,10 +10,11 @@
  * machine-stable. See `fingerprint` for what is deliberately excluded and why.
  */
 import { createHash } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import { DocmetaError, type FieldError, type ValidationResult } from "../types.js";
 import { classifyRef } from "./schema-registry.js";
+import { writeFileAtomic } from "./write-file.js";
 
 /** Where `--baseline` / `--write-baseline` / `baseline:` point when unspecified. */
 export const DEFAULT_BASELINE_PATH = ".docmeta-baseline.json";
@@ -137,7 +138,10 @@ export function fingerprint(
 
 /** Sorted keys and sorted fingerprints, so the file diffs and merges legibly. */
 export function serializeBaseline(baseline: Baseline): string {
-  const entries: Record<string, string[]> = {};
+  // Null-prototype for the same reason `parseBaseline` uses one: a file key of
+  // `__proto__` assigned into a plain object literal would set the prototype
+  // and drop the entry, so a parse/serialize round-trip would lose it silently.
+  const entries: Record<string, string[]> = Object.create(null);
   for (const file of Object.keys(baseline.entries).sort()) {
     entries[file] = [...(baseline.entries[file] ?? [])].sort();
   }
@@ -188,7 +192,11 @@ export function parseBaseline(text: string, source: string): Baseline {
     bad(source, '"entries" must be an object mapping file paths to fingerprints.');
   }
 
-  const entries: Record<string, string[]> = {};
+  // Null-prototype, so a file key of `__proto__` is stored as an ordinary entry
+  // rather than triggering the inherited setter — which would replace this
+  // object's prototype and silently drop the entry. Every other malformation
+  // here is rejected loudly; this one would not even be visible.
+  const entries: Record<string, string[]> = Object.create(null);
   for (const [file, value] of Object.entries(
     rawEntries as Record<string, unknown>,
   )) {
@@ -218,11 +226,19 @@ export async function readBaseline(
   return parseBaseline(text, source);
 }
 
+/**
+ * Write the baseline atomically.
+ *
+ * The baseline is a committed artifact the whole team's gate reads, and a
+ * truncated write is not merely lost work: the next run cannot parse it and
+ * exits 2 until someone re-records. `writeFileAtomic` gives the same
+ * temp-file-plus-rename guarantee `fill` relies on when it edits sources.
+ */
 export async function writeBaselineFile(
   absPath: string,
   baseline: Baseline,
 ): Promise<void> {
-  await writeFile(absPath, serializeBaseline(baseline), "utf8");
+  await writeFileAtomic(absPath, serializeBaseline(baseline));
 }
 
 /** Record every finding in `results` as a baseline. Clean files are omitted. */

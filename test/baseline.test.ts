@@ -290,3 +290,31 @@ describe("diffBaselines", () => {
     expect(diffBaselines(null, b)).toEqual({ added: 3, removed: 0 });
   });
 });
+
+describe("parseBaseline: a hostile entry key", () => {
+  it("stores `__proto__` as an ordinary entry instead of dropping it", () => {
+    // Written as a raw string on purpose: an object literal with a `__proto__`
+    // key sets the prototype rather than creating one, so building this fixture
+    // through JSON.stringify would not reproduce the case at all.
+    const text =
+      '{"version":1,"generatedWith":"3.4.2",' +
+      '"entries":{"__proto__":["aaaaaaaaaaaaaaaa"],"docs/a.md":["bbbbbbbbbbbbbbbb"]}}';
+    const parsed = parseBaseline(text, "hostile.json");
+
+    // Assigning into a plain `{}` would fire the inherited setter: the entry
+    // vanishes and the object's prototype becomes the array.
+    expect(Object.keys(parsed.entries).sort()).toEqual([
+      "__proto__",
+      "docs/a.md",
+    ]);
+    expect(Array.isArray(Object.getPrototypeOf(parsed.entries))).toBe(false);
+    expect(parsed.entries["docs/a.md"]).toEqual(["bbbbbbbbbbbbbbbb"]);
+  });
+
+  it("round-trips that entry through serialize", () => {
+    const text =
+      '{"version":1,"generatedWith":"3.4.2","entries":{"__proto__":["aaaaaaaaaaaaaaaa"]}}';
+    const again = parseBaseline(serializeBaseline(parseBaseline(text, "h.json")), "h.json");
+    expect(again.entries["__proto__"]).toEqual(["aaaaaaaaaaaaaaaa"]);
+  });
+});
