@@ -357,6 +357,27 @@ describe("loadSchema over http(s) — in-flight dedup", () => {
     for (const schema of schemas) expect(schema).toEqual(schemas[0]);
   });
 
+  it("does not retain a settled entry once the fetch has resolved", async () => {
+    // The in-flight map exists only to collapse *concurrent* callers; `urlCache`
+    // is the real cache. A resolved entry left behind would accumulate one per
+    // distinct URL for the life of the process — invisible, because the schema
+    // still resolves correctly from either map.
+    //
+    // Asserted through behavior rather than by reaching into module state: a
+    // *sequential* second call must be served by `urlCache` without a new
+    // request, which holds whether or not the in-flight entry was evicted, and
+    // a concurrent pair must still collapse. Together they pin that eviction did
+    // not break either path.
+    const ref = `${server.url}/settled.json`;
+    await loadSchema(ref);
+    await loadSchema(ref);
+    expect(server.hits("/settled.json")).toBe(1);
+
+    const again = await Promise.all([loadSchema(ref), loadSchema(ref)]);
+    expect(server.hits("/settled.json")).toBe(1);
+    expect(again[0]).toEqual(again[1]);
+  });
+
   it("keeps a failed fetch retryable rather than caching the rejection", async () => {
     const ref = `${server.url}/dedup-fail.json`;
     await expect(loadSchema(ref)).rejects.toBeInstanceOf(DocmetaError);
@@ -588,26 +609,6 @@ describe("loadSchema over http(s) — cross-run cache", () => {
     expect(file).toBeTypeOf("object");
   });
 
-  it("does not retain a settled entry once the fetch has resolved", async () => {
-    // The in-flight map exists only to collapse *concurrent* callers; `urlCache`
-    // is the real cache. A resolved entry left behind would accumulate one per
-    // distinct URL for the life of the process — invisible, because the schema
-    // still resolves correctly from either map.
-    //
-    // Asserted through behavior rather than by reaching into module state: a
-    // *sequential* second call must be served by `urlCache` without a new
-    // request, which holds whether or not the in-flight entry was evicted, and
-    // a concurrent pair must still collapse. Together they pin that eviction did
-    // not break either path.
-    const ref = `${server.url}/settled.json`;
-    await loadSchema(ref);
-    await loadSchema(ref);
-    expect(server.hits("/settled.json")).toBe(1);
-
-    const again = await Promise.all([loadSchema(ref), loadSchema(ref)]);
-    expect(server.hits("/settled.json")).toBe(1);
-    expect(again[0]).toEqual(again[1]);
-  });
 });
 
 describe("loadSchema over http(s) — the guard must not reject real schemas", () => {
