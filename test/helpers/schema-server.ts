@@ -17,6 +17,19 @@ export interface Route {
   contentType?: string;
   /** Delay before responding, to drive timeout tests. */
   delayMs?: number;
+  /**
+   * Send the status line and headers immediately, then wait this long before
+   * the body. Drives the abort-*during*-the-body case, which `delayMs` cannot
+   * reach: that one never gets past `fetch()`.
+   */
+  bodyDelayMs?: number;
+  /**
+   * Stream `count` copies of `text` as separate writes. No `content-length` is
+   * set, so the response is chunked — which is the point: a response-size cap
+   * has to count the bytes it actually reads, because `content-length` is
+   * advisory and may be absent or a lie.
+   */
+  streamChunks?: { text: string; count: number };
 }
 
 export interface SchemaServer {
@@ -39,15 +52,34 @@ export async function startSchemaServer(
       res.end("not found");
       return;
     }
+    const sendBody = () => {
+      if (res.writableEnded || res.destroyed) return;
+      try {
+        const stream = route.streamChunks;
+        if (stream) {
+          for (let i = 0; i < stream.count; i++) res.write(stream.text);
+          res.end();
+          return;
+        }
+        const body =
+          route.body ??
+          (route.json !== undefined ? JSON.stringify(route.json) : "");
+        res.end(body);
+      } catch {
+        /* socket may have been aborted (timeout tests) */
+      }
+    };
     const send = () => {
       if (res.writableEnded || res.destroyed) return;
       try {
         res.statusCode = route.status ?? 200;
         res.setHeader("content-type", route.contentType ?? "application/json");
-        const body =
-          route.body ??
-          (route.json !== undefined ? JSON.stringify(route.json) : "");
-        res.end(body);
+        if (route.bodyDelayMs) {
+          res.flushHeaders();
+          setTimeout(sendBody, route.bodyDelayMs).unref();
+          return;
+        }
+        sendBody();
       } catch {
         /* socket may have been aborted (timeout tests) */
       }

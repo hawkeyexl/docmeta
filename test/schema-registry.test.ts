@@ -110,6 +110,7 @@ describe("loadSchema over http(s)", () => {
       "/cached.json": { json: URL_SCHEMA },
       "/notjson.json": { body: "<html>nope</html>", contentType: "text/html" },
       "/slow.json": { json: URL_SCHEMA, delayMs: 500 },
+      "/gone.json": { status: 404, json: { error: "not found" } },
     });
   });
 
@@ -138,6 +139,15 @@ describe("loadSchema over http(s)", () => {
     );
   });
 
+  it("errors on a routed non-2xx response with a JSON body", async () => {
+    // The unregistered-path case above only proves the helper's fallback. A
+    // real gateway answers 404 *with* a JSON envelope, and the status is what
+    // must decide — before the payload guard ever sees the body.
+    await expect(loadSchema(`${server.url}/gone.json`)).rejects.toThrow(
+      /HTTP 404/,
+    );
+  });
+
   it("errors on a non-JSON body", async () => {
     await expect(loadSchema(`${server.url}/notjson.json`)).rejects.toThrow(
       DocmetaError,
@@ -154,5 +164,185 @@ describe("loadSchema over http(s)", () => {
     await expect(
       loadSchema(`${server.url}/slow.json`, { timeoutMs: 50 }),
     ).rejects.toThrow(/timed out/i);
+  });
+});
+
+/**
+ * Every test here must use a **fresh path**: `urlCache` is module-global and
+ * has no reset hook, so a reused path silently replays an earlier test's entry.
+ */
+describe("loadSchema over http(s) — payload guard", () => {
+  let server: SchemaServer;
+
+  beforeAll(async () => {
+    server = await startSchemaServer({
+      "/guard-envelope.json": {
+        json: { error: "not found", requestId: "abc123" },
+      },
+      "/guard-permissive.json": { json: { type: "object" } },
+      "/guard-empty.json": { json: {} },
+      "/guard-array.json": { json: [{ type: "object" }] },
+      "/guard-boolean.json": { body: "true" },
+      "/guard-ref.json": { json: { $ref: "https://example.com/other.json" } },
+    });
+  });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  it("rejects a JSON error envelope served with HTTP 200", async () => {
+    // The false green this guard exists for: an API gateway, proxy, or
+    // misconfigured bucket answers 200 with `{"error":"..."}`, which compiles
+    // as a schema with no constraints and therefore passes every document.
+    const ref = `${server.url}/guard-envelope.json`;
+    await expect(loadSchema(ref)).rejects.toBeInstanceOf(DocmetaError);
+    const err = await loadSchema(ref).catch((e: Error) => e);
+    // Names the URL and shows what actually came back, so the operator can see
+    // it is their gateway talking and not a schema at all.
+    expect(err.message).toContain(ref);
+    expect(err.message).toContain('"error":"not found"');
+  });
+
+  it("accepts a legitimately permissive schema", async () => {
+    // `{"type":"object"}` constrains almost nothing, and is still a real
+    // contract. The guard targets a non-schema served as one, not schema
+    // quality, so this must pass.
+    const schema = await loadSchema(`${server.url}/guard-permissive.json`);
+    expect(schema).toEqual({ type: "object" });
+  });
+
+  it("rejects `{}` — it is indistinguishable from an error envelope", async () => {
+    // Decision, recorded: an empty object is a *valid* JSON Schema, but over
+    // the wire it is exactly the failure shape — it constrains nothing, so
+    // every document passes. Nothing in the response separates a deliberate
+    // no-op contract from a body that lost its content, so a fetched `{}` is
+    // rejected. Local files and built-ins are not guarded, so a deliberate
+    // no-op schema is still expressible.
+    await expect(
+      loadSchema(`${server.url}/guard-empty.json`),
+    ).rejects.toBeInstanceOf(DocmetaError);
+  });
+
+  it("rejects a JSON array and a bare boolean", async () => {
+    await expect(
+      loadSchema(`${server.url}/guard-array.json`),
+    ).rejects.toBeInstanceOf(DocmetaError);
+    // `true` is a legal JSON Schema meaning "everything passes" — the same
+    // false green, and never what a published document contract means.
+    await expect(
+      loadSchema(`${server.url}/guard-boolean.json`),
+    ).rejects.toBeInstanceOf(DocmetaError);
+  });
+
+  it("accepts a schema that only delegates with $ref", async () => {
+    const schema = await loadSchema(`${server.url}/guard-ref.json`);
+    expect(schema).toHaveProperty("$ref");
+  });
+});
+
+describe("loadSchema over http(s) — response size cap", () => {
+  let server: SchemaServer;
+  /** A real schema roughly 64 KB on the wire — under the 5 MB default cap. */
+  const BIG_BUT_FINE = {
+    ...URL_SCHEMA,
+    description: "x".repeat(64 * 1024),
+  };
+
+  beforeAll(async () => {
+    server = await startSchemaServer({
+      // Chunked, so there is no `content-length` to consult: the cap must
+      // count bytes as they arrive.
+      "/cap-huge.json": {
+        streamChunks: { text: "x".repeat(1024), count: 64 },
+      },
+      "/cap-under.json": { json: BIG_BUT_FINE },
+    });
+  });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  it("rejects a body past the cap, counting bytes rather than content-length", async () => {
+    const ref = `${server.url}/cap-huge.json`;
+    const err = await loadSchema(ref, { maxBytes: 8 * 1024 }).catch(
+      (e: Error) => e,
+    );
+    expect(err).toBeInstanceOf(DocmetaError);
+    expect(err.message).toContain(ref);
+    expect(err.message).toMatch(/too large|exceeds/i);
+  });
+
+  it("accepts a large-but-reasonable schema under the default cap", async () => {
+    const schema = await loadSchema(`${server.url}/cap-under.json`);
+    expect((schema as { description?: string }).description).toHaveLength(
+      64 * 1024,
+    );
+  });
+});
+
+describe("loadSchema over http(s) — timeout during the body", () => {
+  let server: SchemaServer;
+
+  beforeAll(async () => {
+    server = await startSchemaServer({
+      "/body-timeout.json": { json: URL_SCHEMA, bodyDelayMs: 1_000 },
+    });
+  });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  it("reports a timeout, not a JSON parse failure", async () => {
+    // The headers arrive, so `fetch()` resolves and the abort lands while the
+    // body is being read. That used to surface as "did not return valid JSON",
+    // which points the operator at the schema author instead of the network.
+    const ref = `${server.url}/body-timeout.json`;
+    const err = await loadSchema(ref, { timeoutMs: 100 }).catch(
+      (e: Error) => e,
+    );
+    expect(err).toBeInstanceOf(DocmetaError);
+    expect(err.message).toMatch(/timed out/i);
+    expect(err.message).not.toMatch(/valid JSON/i);
+  });
+});
+
+describe("loadSchema over http(s) — in-flight dedup", () => {
+  let server: SchemaServer;
+
+  beforeAll(async () => {
+    server = await startSchemaServer({
+      // Delayed so the concurrent callers really do overlap.
+      "/dedup.json": { json: URL_SCHEMA, delayMs: 100 },
+      "/dedup-fail.json": { status: 500, json: { error: "boom" } },
+    });
+  });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  it("collapses concurrent loads of one URL into a single fetch", async () => {
+    // `fill` calls loadSchema directly, once per file, inside a worker pool —
+    // and `urlCache` only populates once the response has been read, so N
+    // files sharing one remote ref fired N concurrent fetches.
+    const ref = `${server.url}/dedup.json`;
+    const schemas = await Promise.all(
+      Array.from({ length: 8 }, () => loadSchema(ref)),
+    );
+    expect(server.hits("/dedup.json")).toBe(1);
+    // Every caller gets the one schema, not a partially-shared object.
+    for (const schema of schemas) expect(schema).toEqual(schemas[0]);
+  });
+
+  it("keeps a failed fetch retryable rather than caching the rejection", async () => {
+    const ref = `${server.url}/dedup-fail.json`;
+    await expect(loadSchema(ref)).rejects.toBeInstanceOf(DocmetaError);
+    await expect(loadSchema(ref)).rejects.toBeInstanceOf(DocmetaError);
+    // A transient failure must not poison the ref for the life of the process:
+    // the second call has to reach the server again.
+    expect(server.hits("/dedup-fail.json")).toBe(2);
   });
 });

@@ -4,6 +4,7 @@
  * a built-in id, a local `.json` path, or an `http(s)` URL.
  */
 import { readFile } from "node:fs/promises";
+import { Buffer } from "node:buffer";
 import { DocmetaError } from "../types.js";
 
 import okf01 from "../schemas/okf/0.1.json" with { type: "json" };
@@ -65,12 +66,216 @@ export function classifyRef(ref: string): { kind: RefKind; ref: string } {
 
 const urlCache = new Map<string, Record<string, unknown>>();
 
+/**
+ * In-flight fetches, keyed on the *promise* rather than the resolved schema.
+ *
+ * `urlCache` only populates once the response has been read, so it collapses
+ * repeat loads but not concurrent ones — and `fill` calls `loadSchema`
+ * directly, once per file, inside a worker pool. Every worker therefore missed
+ * the cache while the first fetch was still pending, and N files sharing one
+ * remote ref fired N concurrent requests at the same host.
+ *
+ * Mirrors `Validator.compile`, including its two disciplines: the entry is
+ * stored before the first await, and a rejection evicts it through a detached
+ * `.catch()`. See the comments at the `set` below for why each matters.
+ */
+const urlInflight = new Map<string, Promise<Record<string, unknown>>>();
+
 /** Default network timeout for fetching a remote (`http(s)`) schema. */
 const DEFAULT_TIMEOUT_MS = 10_000;
+
+/**
+ * Default cap on a fetched schema's body, in bytes.
+ *
+ * `AbortSignal.timeout` covers a *slow* body but not a *fast, huge* one, so
+ * without a cap a hostile or misconfigured endpoint can stream until the
+ * process runs out of memory. The largest schema docmeta itself ships is the
+ * 112 KB SARIF meta-schema, so 5 MB is roughly two orders of magnitude of
+ * headroom over anything a real document contract needs.
+ */
+const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Keys that make a JSON object a *contract* — something that can reject a
+ * document. An object carrying none of them constrains nothing, so every
+ * document passes it, and it is far likelier to be an error envelope served
+ * with HTTP 200 (an API gateway, a proxy, a misconfigured bucket) than a
+ * schema.
+ *
+ * This is deliberately **not** meta-schema validation. docmeta compiles four
+ * dialects, and schema quality is the author's business: a sparse but real
+ * schema must keep working. The guard targets one specific failure — a
+ * non-schema served as one — and nothing else.
+ */
+const SCHEMA_KEYS = [
+  "$schema",
+  "$id",
+  "$ref",
+  "type",
+  "properties",
+  "required",
+  "allOf",
+  "anyOf",
+  "oneOf",
+  "not",
+  "enum",
+  "const",
+  "items",
+] as const;
 
 export interface LoadSchemaOptions {
   /** Abort a remote fetch after this many ms (default 10_000). */
   timeoutMs?: number;
+  /** Reject a remote schema whose body exceeds this many bytes (default 5 MB). */
+  maxBytes?: number;
+}
+
+/** An abort — ours are only ever raised by the request's timeout signal. */
+function isAbort(err: unknown): boolean {
+  const name = (err as { name?: unknown } | null)?.name;
+  return name === "TimeoutError" || name === "AbortError";
+}
+
+/** A short, single-line sample of a response body, for an error message. */
+function excerpt(raw: string, limit = 200): string {
+  const flat = raw.replace(/\s+/g, " ").trim();
+  return flat.length > limit ? `${flat.slice(0, limit)}…` : flat;
+}
+
+/**
+ * Read a response body, aborting once it exceeds `maxBytes`.
+ *
+ * Counts the bytes actually received. `content-length` is advisory — it may be
+ * absent on a chunked response and it may simply be a lie — so it is never
+ * consulted; trusting it is what leaves the cap bypassable.
+ */
+async function readCappedBody(
+  ref: string,
+  res: Response,
+  maxBytes: number,
+): Promise<string> {
+  const body = res.body;
+  if (!body) return "";
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        throw new DocmetaError(
+          `Schema "${ref}" is too large: the response exceeds the ${maxBytes}-byte limit.`,
+        );
+      }
+      chunks.push(value);
+    }
+  } finally {
+    // Drop the rest of the response when we bailed out early; a no-op once the
+    // stream has already completed.
+    void reader.cancel().catch(() => {});
+  }
+  // Concatenate before decoding: a multi-byte character can straddle a chunk
+  // boundary, and decoding per chunk would corrupt it.
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+/**
+ * Reject a fetched payload that is not a schema.
+ *
+ * Only remote refs are guarded. A local file or a built-in is something the
+ * user chose deliberately and can inspect, and a no-op contract there is their
+ * call; a URL is a live third party that can answer with anything.
+ */
+function assertFetchedSchema(
+  ref: string,
+  value: unknown,
+  raw: string,
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    // A bare `true` is a legal JSON Schema meaning "everything passes" — the
+    // same false green as an envelope, and never what a published document
+    // contract means.
+    return failNotASchema(
+      ref,
+      raw,
+      `expected a JSON object, got ${Array.isArray(value) ? "an array" : `a ${typeof value}`}`,
+    );
+  }
+  const schema = value as Record<string, unknown>;
+  if (!SCHEMA_KEYS.some((key) => key in schema)) {
+    return failNotASchema(
+      ref,
+      raw,
+      "it constrains nothing, so every document would pass it. Expected an " +
+        `object using at least one of: ${SCHEMA_KEYS.join(", ")}`,
+    );
+  }
+  return schema;
+}
+
+function failNotASchema(ref: string, raw: string, reason: string): never {
+  throw new DocmetaError(
+    `Schema "${ref}" does not look like a JSON Schema: ${reason}. ` +
+      `The server returned: ${excerpt(raw)}`,
+  );
+}
+
+/** Fetch, size-cap, parse, and guard a remote schema. One request per call. */
+async function fetchSchema(
+  ref: string,
+  options: LoadSchemaOptions,
+): Promise<Record<string, unknown>> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
+  const timedOut = new DocmetaError(
+    `Failed to fetch schema "${ref}": timed out after ${timeoutMs}ms.`,
+  );
+
+  let res: Response;
+  try {
+    res = await fetch(ref, { signal: AbortSignal.timeout(timeoutMs) });
+  } catch (err) {
+    if (isAbort(err)) throw timedOut;
+    throw new DocmetaError(
+      `Failed to fetch schema "${ref}": ${(err as Error).message}`,
+    );
+  }
+  if (!res.ok) {
+    throw new DocmetaError(
+      `Failed to fetch schema "${ref}": HTTP ${res.status}.`,
+    );
+  }
+
+  let raw: string;
+  try {
+    raw = await readCappedBody(ref, res, maxBytes);
+  } catch (err) {
+    if (err instanceof DocmetaError) throw err;
+    // The headers arrive first, so a timeout during the body lands here rather
+    // than on the `fetch` above. Reporting it as a parse failure — which is
+    // what reading the body as JSON in one step did — points the operator at
+    // the schema author instead of at the network.
+    if (isAbort(err)) throw timedOut;
+    throw new DocmetaError(
+      `Failed to fetch schema "${ref}": ${(err as Error).message}`,
+    );
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new DocmetaError(
+      `Schema "${ref}" did not return valid JSON: ${(err as Error).message}`,
+    );
+  }
+
+  const schema = assertFetchedSchema(ref, parsed, raw);
+  urlCache.set(ref, schema);
+  return schema;
 }
 
 /** Load and return the JSON Schema object for a reference. */
@@ -94,34 +299,23 @@ export async function loadSchema(
   if (kind === "url") {
     const cached = urlCache.get(ref);
     if (cached) return cached;
-    const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    let res: Response;
-    try {
-      res = await fetch(ref, { signal: AbortSignal.timeout(timeoutMs) });
-    } catch (err) {
-      const e = err as Error;
-      if (e.name === "TimeoutError" || e.name === "AbortError") {
-        throw new DocmetaError(
-          `Failed to fetch schema "${ref}": timed out after ${timeoutMs}ms.`,
-        );
-      }
-      throw new DocmetaError(`Failed to fetch schema "${ref}": ${e.message}`);
-    }
-    if (!res.ok) {
-      throw new DocmetaError(
-        `Failed to fetch schema "${ref}": HTTP ${res.status}.`,
-      );
-    }
-    let json: Record<string, unknown>;
-    try {
-      json = (await res.json()) as Record<string, unknown>;
-    } catch (err) {
-      throw new DocmetaError(
-        `Schema "${ref}" did not return valid JSON: ${(err as Error).message}`,
-      );
-    }
-    urlCache.set(ref, json);
-    return json;
+    const inflight = urlInflight.get(ref);
+    if (inflight) return inflight;
+    // Synchronous by design: the `set` has to happen in the same tick as the
+    // miss, or a second caller slips in before the entry exists and fetches
+    // again.
+    const pending = fetchSchema(ref, options);
+    urlInflight.set(ref, pending);
+    // A failed fetch is not cached — a transient failure must stay retryable
+    // rather than poisoning the ref for the life of the process. The extra
+    // `catch` keeps the eviction off the returned promise's chain, so it does
+    // not convert the rejection into a handled one for the caller. On success
+    // `urlCache` holds the schema and is consulted first, so the settled entry
+    // left here is only a duplicate handle.
+    pending.catch(() => {
+      if (urlInflight.get(ref) === pending) urlInflight.delete(ref);
+    });
+    return pending;
   }
 
   // file
