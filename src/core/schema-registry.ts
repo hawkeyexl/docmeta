@@ -256,8 +256,12 @@ function assertFetchedSchema(
     return failNotASchema(
       ref,
       raw,
-      "it constrains nothing, so every document would pass it. Expected an " +
-        `object using at least one of: ${SCHEMA_KEYS.join(", ")}`,
+      // Diagnosis only. Naming all ~47 accepted keywords here pushed several
+      // hundred characters between the operator and the response excerpt below,
+      // which is the part that actually identifies the culprit. The full list
+      // is reference material and lives in the schema-resolution docs.
+      "it carries no JSON Schema keyword, so it constrains nothing and every " +
+        "document would pass it",
     );
   }
   return schema;

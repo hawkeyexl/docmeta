@@ -401,17 +401,19 @@ describe("loadSchema over http(s) — the guard must not reject real schemas", (
   // schema it literally is; rejecting a real schema breaks a working setup
   // outright. A schema whose only root keyword is a conditional or an
   // object-shape applicator is perfectly ordinary.
-  const ordinary = [
-    "real-if-then",
-    "real-pattern-props",
-    "real-additional",
-    "real-defs",
+  // Named by the keyword under test rather than the route, so a failure says
+  // which keyword the guard rejected without the reader opening the file.
+  const ordinary: { keyword: string; path: string }[] = [
+    { keyword: "if/then", path: "real-if-then" },
+    { keyword: "patternProperties", path: "real-pattern-props" },
+    { keyword: "additionalProperties", path: "real-additional" },
+    { keyword: "$defs", path: "real-defs" },
   ];
 
-  for (const name of ordinary) {
-    it(`accepts a schema whose only root keyword is in ${name}`, async () => {
+  for (const { keyword, path } of ordinary) {
+    it(`accepts a schema whose only root keyword is ${keyword}`, async () => {
       await expect(
-        loadSchema(`${server.url}/${name}.json`),
+        loadSchema(`${server.url}/${path}.json`),
       ).resolves.toBeTypeOf("object");
     });
   }
