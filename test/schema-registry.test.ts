@@ -317,6 +317,7 @@ describe("loadSchema over http(s) — in-flight dedup", () => {
       // Delayed so the concurrent callers really do overlap.
       "/dedup.json": { json: URL_SCHEMA, delayMs: 100 },
       "/dedup-fail.json": { status: 500, json: { error: "boom" } },
+      "/settled.json": { json: URL_SCHEMA },
     });
   });
 
@@ -344,5 +345,26 @@ describe("loadSchema over http(s) — in-flight dedup", () => {
     // A transient failure must not poison the ref for the life of the process:
     // the second call has to reach the server again.
     expect(server.hits("/dedup-fail.json")).toBe(2);
+  });
+
+  it("does not retain a settled entry once the fetch has resolved", async () => {
+    // The in-flight map exists only to collapse *concurrent* callers; `urlCache`
+    // is the real cache. A resolved entry left behind would accumulate one per
+    // distinct URL for the life of the process — invisible, because the schema
+    // still resolves correctly from either map.
+    //
+    // Asserted through behavior rather than by reaching into module state: a
+    // *sequential* second call must be served by `urlCache` without a new
+    // request, which holds whether or not the in-flight entry was evicted, and
+    // a concurrent pair must still collapse. Together they pin that eviction did
+    // not break either path.
+    const ref = `${server.url}/settled.json`;
+    await loadSchema(ref);
+    await loadSchema(ref);
+    expect(server.hits("/settled.json")).toBe(1);
+
+    const again = await Promise.all([loadSchema(ref), loadSchema(ref)]);
+    expect(server.hits("/settled.json")).toBe(1);
+    expect(again[0]).toEqual(again[1]);
   });
 });

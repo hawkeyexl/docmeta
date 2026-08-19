@@ -178,8 +178,9 @@ async function readCappedBody(
     void reader.cancel().catch(() => {});
   }
   // Concatenate before decoding: a multi-byte character can straddle a chunk
-  // boundary, and decoding per chunk would corrupt it.
-  return Buffer.concat(chunks).toString("utf8");
+  // boundary, and decoding per chunk would corrupt it. `total` is already exact,
+  // so passing it spares `concat` a second pass to re-derive the same length.
+  return Buffer.concat(chunks, total).toString("utf8");
 }
 
 /**
@@ -306,15 +307,24 @@ export async function loadSchema(
     // again.
     const pending = fetchSchema(ref, options);
     urlInflight.set(ref, pending);
-    // A failed fetch is not cached — a transient failure must stay retryable
-    // rather than poisoning the ref for the life of the process. The extra
-    // `catch` keeps the eviction off the returned promise's chain, so it does
-    // not convert the rejection into a handled one for the caller. On success
-    // `urlCache` holds the schema and is consulted first, so the settled entry
-    // left here is only a duplicate handle.
-    pending.catch(() => {
-      if (urlInflight.get(ref) === pending) urlInflight.delete(ref);
-    });
+    // Evict once settled, either way. This map exists only to collapse
+    // *concurrent* callers onto one request; `urlCache` is the actual cache and
+    // is consulted first, so a resolved entry left here is a duplicate handle
+    // that would accumulate one per distinct URL for the life of the process.
+    // Eviction is safe at this point because `fetchSchema` populates `urlCache`
+    // before it resolves, so a caller arriving after the delete finds the
+    // schema rather than re-fetching.
+    //
+    // A failed fetch is likewise not retained, so a transient failure stays
+    // retryable rather than poisoning the ref. The `catch` before `finally`
+    // keeps this chain off the returned promise: without it, a rejection would
+    // surface here as an unhandled one, and the caller's own rejection must
+    // remain theirs to handle.
+    void pending
+      .catch(() => {})
+      .finally(() => {
+        if (urlInflight.get(ref) === pending) urlInflight.delete(ref);
+      });
     return pending;
   }
 
