@@ -132,6 +132,12 @@ export interface RunSummary {
   failed: number;
   /** Violations reported. Baselined ones are excluded — see `baseline`. */
   errors: number;
+  /**
+   * Candidate documents `.gitignore` removed from the walk. Omitted when it
+   * removed none. Reported because silent removal is what makes the filter
+   * dangerous — a counted removal is auditable.
+   */
+  gitignoreSkipped?: number;
   baseline?: BaselineSummary;
 }
 

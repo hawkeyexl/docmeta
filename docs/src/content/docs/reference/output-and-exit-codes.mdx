@@ -41,6 +41,17 @@ is the total number of error lines across all files. Pass
 [`-q/--quiet`](/docmeta/reference/cli/#options) to hide passing files and show only
 failures and the summary.
 
+When [`.gitignore`](/docmeta/reference/cli/#gitignore) removed candidate
+documents from the walk, the line says so too, so a gate that got quieter is
+visible rather than inferred from a count that shrank:
+
+```
+1 file checked, 1 passed, 0 failed, 0 errors, 1 skipped by .gitignore
+```
+
+The clause is omitted when nothing was skipped, which is every run in a repo
+that ignores no documents.
+
 </TabItem>
 <TabItem label="json">
 
@@ -84,6 +95,7 @@ Machine-readable. Prints a single JSON object with a run `summary` and a
 | `summary.passed` | number | Files that passed. |
 | `summary.failed` | number | Files that failed. |
 | `summary.errors` | number | Errors reported across all files. Findings a [baseline](/docmeta/reference/cli/#baselines) forgave are **not** counted here. |
+| `summary.gitignoreSkipped` | number | Candidate documents [`.gitignore`](/docmeta/reference/cli/#gitignore) removed from the walk. Counted after the extension filter, and excluding `--exclude` removals. **Omitted** when none were skipped. |
 | `summary.baseline` | object | Present only when a baseline governed the run. See [baseline fields](#baseline-fields). |
 | `results[].file` | string | File path. |
 | `results[].format` | string | Extractor that read the file. |

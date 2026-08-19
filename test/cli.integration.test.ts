@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync, execSync, spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
+import { DOC, makeTempRepo, removeTempRepo } from "./helpers/temp-repo.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
@@ -833,5 +834,142 @@ describe("docmeta CLI violation identity (built bin)", () => {
       schema: "(parse)",
       keyword: "parse",
     });
+  });
+});
+
+/**
+ * `.gitignore`-aware discovery, end to end.
+ *
+ * Each repo is built at runtime (see test/helpers/temp-repo.ts for why a
+ * gitignored fixture cannot be committed), and validated against a permissive
+ * schema so the exit code reports the *discovery*, not the documents.
+ */
+describe("docmeta CLI: .gitignore-aware discovery", () => {
+  let repo: string | undefined;
+
+  afterEach(() => {
+    removeTempRepo(repo);
+    repo = undefined;
+  });
+
+  /**
+   * `run()` cannot see stderr on a successful exit: `execFileSync` returns
+   * only stdout, and the child's stderr goes straight to the parent. Two tests
+   * here are precisely about a diagnostic on an exit-0 run, and asserting
+   * `stderr === ""` against a helper that always reports "" would prove
+   * nothing at all.
+   */
+  const runIn = (args: string[], cwd: string): Run => {
+    const r = spawnSync("node", [bin, ...args], { cwd, encoding: "utf8" });
+    return {
+      stdout: r.stdout ?? "",
+      stderr: r.stderr ?? "",
+      status: r.status ?? 1,
+    };
+  };
+
+  const PERMISSIVE = `${JSON.stringify({ type: "object" })}\n`;
+  const tree = (): Record<string, string> => ({
+    ".gitignore": "build/\n",
+    "permissive.schema.json": PERMISSIVE,
+    "build/generated.md": DOC,
+    "docs/real.md": DOC,
+  });
+  const withSchema = (...args: string[]): string[] => [
+    ...args,
+    "-s",
+    "./permissive.schema.json",
+  ];
+
+  it("skips a gitignored file, and says how many it skipped", () => {
+    repo = makeTempRepo({ files: tree() });
+    const r = runIn(withSchema("validate", "**/*.md"), repo);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("docs/real.md");
+    expect(r.stdout).not.toContain("build/generated.md");
+    expect(r.stdout).toContain("1 file checked");
+    expect(r.stdout).toContain("1 skipped by .gitignore");
+  });
+
+  it("--no-gitignore checks them again, and reports no skips", () => {
+    repo = makeTempRepo({ files: tree() });
+    const r = runIn(withSchema("validate", "**/*.md", "--no-gitignore"), repo);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("build/generated.md");
+    expect(r.stdout).toContain("2 files checked");
+    expect(r.stdout).not.toContain("skipped by .gitignore");
+  });
+
+  it("respectGitignore: false in config checks them again", () => {
+    repo = makeTempRepo({
+      files: { ...tree(), "docmeta.config.yaml": "respectGitignore: false\n" },
+    });
+    const r = runIn(withSchema("validate", "**/*.md"), repo);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("2 files checked");
+  });
+
+  it("carries the count in the json summary", () => {
+    repo = makeTempRepo({ files: tree() });
+    const r = runIn(withSchema("validate", "**/*.md", "-f", "json"), repo);
+    const parsed = JSON.parse(r.stdout) as {
+      summary: { files: number; gitignoreSkipped?: number };
+    };
+    expect(parsed.summary).toMatchObject({ files: 1, gitignoreSkipped: 1 });
+  });
+
+  it("omits the count from the json summary when nothing was skipped", () => {
+    repo = makeTempRepo({ files: tree() });
+    const r = runIn(withSchema("validate", "docs/real.md", "-f", "json"), repo);
+    const parsed = JSON.parse(r.stdout) as { summary: Record<string, unknown> };
+    expect(parsed.summary).not.toHaveProperty("gitignoreSkipped");
+  });
+
+  it("still validates a gitignored file the user named outright", () => {
+    repo = makeTempRepo({ files: tree() });
+    const r = runIn(withSchema("validate", "build/generated.md"), repo);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("build/generated.md");
+    expect(r.stdout).toContain("1 file checked");
+  });
+
+  it("get honors .gitignore too", () => {
+    repo = makeTempRepo({ files: tree() });
+    const r = runIn(["get", "title", "**/*.md"], repo);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("docs/real.md");
+    expect(r.stdout).not.toContain("build/generated.md");
+  });
+
+  it("names .gitignore when it is why nothing matched", () => {
+    repo = makeTempRepo({
+      files: {
+        ".gitignore": "build/\n",
+        "permissive.schema.json": PERMISSIVE,
+        "build/generated.md": DOC,
+      },
+    });
+    const r = runIn(withSchema("validate", "**/*.md"), repo);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain(".gitignore skipped 1");
+  });
+
+  it("says nothing about git outside a repository", () => {
+    repo = makeTempRepo({ init: false, files: tree() });
+    const r = runIn(withSchema("validate", "**/*.md"), repo);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("2 files checked");
+    expect(r.stderr).toBe("");
+  });
+
+  it("says so outside a repository when config asked for filtering explicitly", () => {
+    repo = makeTempRepo({
+      init: false,
+      files: { ...tree(), "docmeta.config.yaml": "respectGitignore: true\n" },
+    });
+    const r = runIn(withSchema("validate", "**/*.md"), repo);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("2 files checked");
+    expect(r.stderr).toContain("git could not answer");
   });
 });

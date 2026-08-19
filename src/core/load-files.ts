@@ -10,6 +10,7 @@ import fg from "fast-glob";
 import picomatch from "picomatch";
 import { supportedExtensions } from "../extractors/index.js";
 import { DocmetaError } from "../types.js";
+import { GITIGNORE_UNAVAILABLE, gitIgnored } from "./gitignore.js";
 
 const DEFAULT_IGNORE = ["**/node_modules/**", "**/.git/**"];
 
@@ -42,15 +43,80 @@ export interface ResolveOptions {
    * pre-commit hook with an empty file list).
    */
   allowEmpty?: boolean;
+  /**
+   * Skip files `.gitignore` covers during directory and glob expansion.
+   * Default true; `--no-gitignore` / `respectGitignore: false` turns it off.
+   *
+   * Explicitly named files are never filtered — the user who types a path
+   * means it — which mirrors how an explicit file already bypasses `--ext`.
+   */
+  respectGitignore?: boolean;
+  /**
+   * Called when filtering was asked for but git could not answer (no
+   * repository, no git binary). Callers pass this only when the user asked
+   * for filtering *explicitly*, since on the default it would put a line of
+   * stderr on every run outside a repo.
+   */
+  onGitignoreUnavailable?: () => void;
 }
 
+export interface ResolvedTargets {
+  /** The files to process, posix-style and relative to `cwd`. */
+  files: string[];
+  /**
+   * Candidate documents `.gitignore` removed. Counted **after** the extension
+   * filter, so the number answers "how many files I would otherwise have
+   * checked did .gitignore take away" rather than including every ignored
+   * `.png` under `build/`. `--exclude` removals are not counted here; those
+   * are the caller's own instruction, not a surprise.
+   */
+  gitignoreSkipped: number;
+}
+
+/**
+ * Settle the two gitignore knobs every command core passes down, so the three
+ * of them cannot drift on either the precedence or the diagnostic.
+ *
+ * `flag` is `--no-gitignore` (or a programmatic override), `configured` is
+ * `respectGitignore:` from config, and the default is on.
+ */
+export function gitignoreOptions(opts: {
+  flag?: boolean;
+  configured?: boolean;
+  onNotice?: (message: string) => void;
+}): Pick<ResolveOptions, "respectGitignore" | "onGitignoreUnavailable"> {
+  // Only a value someone actually wrote is worth a diagnostic. On the default,
+  // a note would land on every run outside a repository — an extracted
+  // tarball, `npm pack` output, some Docker build contexts — for a filter
+  // nobody asked for.
+  const asked =
+    opts.flag === true || (opts.flag === undefined && opts.configured === true);
+  const notice = opts.onNotice;
+  return {
+    respectGitignore: opts.flag ?? opts.configured ?? true,
+    ...(asked && notice
+      ? { onGitignoreUnavailable: () => notice(GITIGNORE_UNAVAILABLE) }
+      : {}),
+  };
+}
+
+/** The file list alone, for callers with no use for what was filtered out. */
 export async function resolveTargets(opts: ResolveOptions): Promise<string[]> {
+  return (await resolveTargetSet(opts)).files;
+}
+
+export async function resolveTargetSet(
+  opts: ResolveOptions,
+): Promise<ResolvedTargets> {
   const cwd = opts.cwd ?? process.cwd();
   const exts = (opts.exts ?? supportedExtensions()).map((e) =>
     e.toLowerCase().startsWith(".") ? e.toLowerCase() : `.${e.toLowerCase()}`,
   );
   const ignore = [...DEFAULT_IGNORE, ...(opts.exclude ?? [])];
-  const out = new Set<string>();
+  // Kept apart until the end: `named` is what the user typed and is never
+  // filtered, `walked` is what a directory or glob produced and is.
+  const named = new Set<string>();
+  const walked = new Set<string>();
 
   const keepByExt = (file: string): boolean =>
     exts.includes(extname(file).toLowerCase());
@@ -80,7 +146,7 @@ export async function resolveTargets(opts: ResolveOptions): Promise<string[]> {
     const st = await statOrNull(abs);
 
     if (st?.isFile()) {
-      out.add(toPosix(relative(cwd, abs)));
+      named.add(toPosix(relative(cwd, abs)));
       continue;
     }
 
@@ -91,7 +157,7 @@ export async function resolveTargets(opts: ResolveOptions): Promise<string[]> {
         onlyFiles: true,
         dot: false,
       });
-      for (const f of found) if (keepByExt(f)) out.add(f);
+      for (const f of found) if (keepByExt(f)) walked.add(f);
       continue;
     }
 
@@ -110,7 +176,7 @@ export async function resolveTargets(opts: ResolveOptions): Promise<string[]> {
       onlyFiles: true,
       dot: false,
     });
-    for (const f of found) if (keepByExt(f)) out.add(f);
+    for (const f of found) if (keepByExt(f)) walked.add(f);
   }
 
   if (missing.length > 0 && !opts.allowEmpty) {
@@ -122,7 +188,26 @@ export async function resolveTargets(opts: ResolveOptions): Promise<string[]> {
     );
   }
 
-  return [...out].sort();
+  // Gitignore runs last, over the extension-filtered walk only. A file the
+  // user also named explicitly is excluded from the question rather than from
+  // the answer, so it can neither be dropped nor inflate the skipped count.
+  let gitignoreSkipped = 0;
+  if (opts.respectGitignore !== false && walked.size > 0) {
+    const candidates = [...walked].filter((f) => !named.has(f));
+    const { ignored, available } = await gitIgnored(candidates, cwd);
+    if (available) {
+      for (const f of ignored) {
+        if (walked.delete(f)) gitignoreSkipped += 1;
+      }
+    } else {
+      opts.onGitignoreUnavailable?.();
+    }
+  }
+
+  return {
+    files: [...new Set([...named, ...walked])].sort(),
+    gitignoreSkipped,
+  };
 }
 
 export interface NonEmptyParams {
@@ -135,6 +220,8 @@ export interface NonEmptyParams {
   allowEmpty?: boolean;
   exclude?: string[];
   exts?: string[];
+  /** Candidates `.gitignore` removed, so an empty set says so rather than baffles. */
+  gitignoreSkipped?: number;
   /** Past-tense verb for the message: "validated", "read", "filled". */
   action: string;
 }
@@ -160,6 +247,13 @@ export function assertNonEmpty(p: NonEmptyParams): void {
   }
   if (p.exclude && p.exclude.length > 0) {
     notes.push(`excludes: ${p.exclude.map((e) => `"${e}"`).join(", ")}`);
+  }
+  // The one filter the user never wrote down, so it is the one most worth
+  // naming: a docs tree the repo happens to ignore looks like a broken glob.
+  if (p.gitignoreSkipped && p.gitignoreSkipped > 0) {
+    notes.push(
+      `.gitignore skipped ${p.gitignoreSkipped} (pass --no-gitignore to check them)`,
+    );
   }
 
   throw new DocmetaError(

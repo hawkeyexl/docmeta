@@ -165,3 +165,27 @@ describe("reporters with a baseline", () => {
     expect(out).toContain("14 findings recorded (+2 new, -12 no longer occur)");
   });
 });
+
+// Files .gitignore took away are named, not silently missing from the count.
+describe("reporters: the .gitignore skip count", () => {
+  it("names it on the pretty summary line", () => {
+    const out = renderPretty(results, { ...summary, gitignoreSkipped: 3 }, {
+      color: false,
+    });
+    expect(out).toContain(
+      "2 files checked, 1 passed, 1 failed, 2 errors, 3 skipped by .gitignore",
+    );
+  });
+
+  it("says nothing when nothing was skipped", () => {
+    const out = renderPretty(results, summary, { color: false });
+    expect(out).not.toContain("skipped by .gitignore");
+  });
+
+  it("carries it in json", () => {
+    const parsed = JSON.parse(
+      renderJson(results, { ...summary, gitignoreSkipped: 3 }),
+    ) as { summary: { gitignoreSkipped?: number } };
+    expect(parsed.summary.gitignoreSkipped).toBe(3);
+  });
+});

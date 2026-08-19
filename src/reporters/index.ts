@@ -79,7 +79,15 @@ export function renderPretty(
     }
   }
 
-  const summaryText = `${summary.files} file${summary.files === 1 ? "" : "s"} checked, ${summary.passed} passed, ${summary.failed} failed, ${summary.errors} error${summary.errors === 1 ? "" : "s"}`;
+  // Files `.gitignore` took away are named on the summary line, not left to be
+  // inferred from a count that quietly shrank. A gate getting quieter without
+  // being asked is the dangerous direction of change; this is what makes it
+  // auditable. Omitted at zero, which is every run in a clean repo.
+  const skipped =
+    summary.gitignoreSkipped != null && summary.gitignoreSkipped > 0
+      ? `, ${summary.gitignoreSkipped} skipped by .gitignore`
+      : "";
+  const summaryText = `${summary.files} file${summary.files === 1 ? "" : "s"} checked, ${summary.passed} passed, ${summary.failed} failed, ${summary.errors} error${summary.errors === 1 ? "" : "s"}${skipped}`;
   if (lines.length > 0) lines.push("");
   lines.push(summary.failed > 0 ? c.red(summaryText) : c.green(summaryText));
   if (summary.baseline) {
