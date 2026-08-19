@@ -366,3 +366,29 @@ describe("writeBaselineFile: failures name the baseline", () => {
     ).rejects.toThrow(/Baseline ".meta\/base\.json" could not be written/);
   });
 });
+
+describe("entry keys that collide with Object.prototype", () => {
+  // The `__proto__` case is the famous one, but it is not the reachable one:
+  // a file path can never be literally `__proto__` after canonicalization,
+  // while `toString` is a perfectly legal filename. A *clean* file named
+  // `toString` is skipped by buildBaseline, so applyBaseline's lookup finds the
+  // inherited method instead of `undefined`, sails past the `!known` guard, and
+  // dies in `new Set(known)` with "function is not iterable".
+  const proto = ["toString", "constructor", "valueOf", "hasOwnProperty"];
+
+  it("does not inherit Object.prototype members as entries", () => {
+    const built = buildBaseline([result("docs/a.md", [err()])], "3.4.2");
+    for (const name of proto) {
+      expect(built.entries[name]).toBeUndefined();
+    }
+  });
+
+  it("applies cleanly when a clean file is named like a prototype member", () => {
+    const built = buildBaseline([result("docs/a.md", [err()])], "3.4.2");
+    // `toString` is clean, so it has no entry — the exact shape that crashed.
+    const results = [result("docs/a.md", [err()]), result("toString", [])];
+    expect(() => applyBaseline(results, built)).not.toThrow();
+    const applied = applyBaseline(results, built);
+    expect(applied.results.find((r) => r.file === "toString")?.ok).toBe(true);
+  });
+});

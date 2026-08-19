@@ -273,7 +273,14 @@ export function buildBaseline(
   generatedWith: string,
   ctx?: FingerprintContext,
 ): Baseline {
-  const entries: Record<string, string[]> = {};
+  // Null-prototype, matching `parseBaseline` and `serializeBaseline` — and here
+  // it prevents a crash rather than a lost entry. `__proto__` is the famous
+  // collision but not the reachable one; `toString` is a legal filename. A file
+  // that is *clean* gets no entry, so `applyBaseline`'s lookup would find the
+  // inherited method instead of `undefined`, pass the `!known` guard because a
+  // function is truthy, and then die in `new Set(known)` with "function is not
+  // iterable".
+  const entries: Record<string, string[]> = Object.create(null);
   for (const r of results) {
     if (r.errors.length === 0) continue;
     // Two identical violations in one file are one fingerprint; storing the

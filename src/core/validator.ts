@@ -211,6 +211,10 @@ function subjectOf(e: DefinedError): string | undefined {
     case "format":
       return e.params.format;
     case "type":
+      // A union schema (`"type": ["string", "null"]`) yields the comma-joined
+      // `"string,null"` rather than a single name. That is stable, so it
+      // fingerprints correctly — but anyone matching on `subject` downstream
+      // should not assume one type per value.
       return e.params.type;
     default:
       return undefined;
