@@ -293,3 +293,85 @@ describe("config: respectGitignore", () => {
     ).toThrow(/"respectGitignore" must be a boolean/);
   });
 });
+
+describe("config: offline", () => {
+  it("parses a boolean", () => {
+    expect(parseConfig("offline: true\n", "docmeta.config.yaml").offline).toBe(
+      true,
+    );
+    expect(parseConfig("offline: false\n", "docmeta.config.yaml").offline).toBe(
+      false,
+    );
+  });
+
+  it("is undefined when absent, so the default stays in one place", () => {
+    expect(
+      parseConfig("paths: ['a.md']\n", "docmeta.config.yaml").offline,
+    ).toBeUndefined();
+  });
+
+  it("rejects a non-boolean", () => {
+    // `offline: "false"` is a truthy string; accepting it would cut a repo off
+    // from the network for someone who wrote the setting off.
+    expect(() =>
+      parseConfig("offline: 'false'\n", "docmeta.config.yaml"),
+    ).toThrow(/"offline" must be a boolean/);
+  });
+});
+
+describe("config: schemaCache", () => {
+  it("parses ttlHours", () => {
+    expect(
+      parseConfig("schemaCache:\n  ttlHours: 6\n", "docmeta.config.yaml")
+        .schemaCache,
+    ).toEqual({ ttlHours: 6 });
+  });
+
+  it("accepts 0, which disables the cache", () => {
+    expect(
+      parseConfig("schemaCache:\n  ttlHours: 0\n", "docmeta.config.yaml")
+        .schemaCache,
+    ).toEqual({ ttlHours: 0 });
+  });
+
+  it("accepts a fractional TTL", () => {
+    // Unlike `fill.concurrency`, a fraction of an hour is meaningful.
+    expect(
+      parseConfig("schemaCache:\n  ttlHours: 0.5\n", "docmeta.config.yaml")
+        .schemaCache,
+    ).toEqual({ ttlHours: 0.5 });
+  });
+
+  it("rejects a non-mapping", () => {
+    expect(() =>
+      parseConfig("schemaCache: 24\n", "docmeta.config.yaml"),
+    ).toThrow(/"schemaCache" must be a mapping/);
+  });
+
+  it("rejects a non-number", () => {
+    expect(() =>
+      parseConfig("schemaCache:\n  ttlHours: '24'\n", "docmeta.config.yaml"),
+    ).toThrow(DocmetaError);
+  });
+
+  it("rejects a negative TTL", () => {
+    // Negative would make every entry stale forever — a cache that silently
+    // does nothing, which is exactly the failure the key exists to avoid.
+    expect(() =>
+      parseConfig("schemaCache:\n  ttlHours: -1\n", "docmeta.config.yaml"),
+    ).toThrow(/"schemaCache.ttlHours" must be a number/);
+  });
+
+  it("rejects a non-finite TTL", () => {
+    // YAML's `1e999` parses to Infinity, and a bare range check would accept it.
+    expect(() =>
+      parseConfig("schemaCache:\n  ttlHours: 1e999\n", "docmeta.config.yaml"),
+    ).toThrow(DocmetaError);
+  });
+
+  it("is undefined when absent, so the default stays in one place", () => {
+    expect(
+      parseConfig("paths: ['a.md']\n", "docmeta.config.yaml").schemaCache,
+    ).toBeUndefined();
+  });
+});

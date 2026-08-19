@@ -112,10 +112,72 @@ processed concurrently, which shares the one in-flight request rather than
 opening one per file. A timeout, a non-2xx HTTP status, or a response that is
 not valid JSON is an error (exit 2).
 
+A failed request is retried **once**, after roughly 500 ms, and only for the
+failures that can plausibly heal: a network-level error (DNS, refused
+connection, reset socket) or a `5xx`. A `4xx` is not retried — a 404 will not
+become a 200 — and neither is a timeout, since the timeout is already the budget
+for a host that is not answering and retrying it would double the ceiling per
+URL for no new information.
+
+#### The cross-run cache
+
+A schema fetched successfully is written to a **disk cache** and served from
+there on later runs, so an edit-validate loop against a remote contract does not
+re-fetch it every time.
+
+| | |
+|---|---|
+| Location | `.docmeta/schema-cache/`, under the config file's directory when a config governs the run, otherwise the working directory. |
+| One file per URL | Named for a SHA-256 digest of the URL, holding the schema plus the URL and the fetch time. |
+| Freshness | The file's **mtime**, against `schemaCache.ttlHours` (default 24). |
+| Turning it off | [`schemaCache.ttlHours: 0`](/docmeta/reference/configuration/#schema-cache). |
+
+Running from a subdirectory shares one cache with running from the repo root,
+because the location follows the config rather than where you are standing.
+
+What invalidates an entry:
+
+- **Age.** Past `ttlHours` since the file was last written, the next run
+  re-fetches and rewrites it. Freshness reads the filesystem's mtime rather than
+  the `fetchedAt` recorded inside the file, because a restored cache or a clock
+  change makes an embedded timestamp disagree with reality — and an entry that
+  never looks old is a cache that never expires.
+- **A different URL.** The key is the full URL, so changing the version segment
+  is a different entry, not a stale one.
+- **Damage.** An unreadable, unparseable, or unrecognized entry is treated as a
+  **miss**, not an error: a corrupt cache costs one fetch, never a failed run.
+
+A failed fetch is never cached, and a payload the checks below reject is never
+cached either.
+
 <Aside type="caution">
-The URL cache lives only for the duration of one run. Each invocation re-fetches
-remote schemas; docmeta does not persist a cross-run cache.
+**This is a local win, not a CI one.** A hosted runner starts with an empty
+workspace, so the cache is cold on **every** job and the remote host is still a
+single point of failure for every repository that points at it. Restoring the
+cache with a CI cache action does not fix that either — an entry keyed on the
+URL can restore a *stale* contract, which is worse than fetching, because the
+build then validates against a rule nobody is looking at.
+
+Treat the cache as a developer and pre-commit convenience. For CI durability,
+keep a copy of the schema in the consuming repository and reference it as a
+local file, so the contract is a reviewable artifact in your own history.
 </Aside>
+
+#### Offline
+
+`--offline` (or [`offline: true`](/docmeta/reference/configuration/#offline))
+makes a run touch the network not at all:
+
+- a `url` reference is served from the cache, **ignoring the TTL** — expiry
+  exists to trigger a re-fetch, and there is none available, so a stale copy
+  beats failing the run;
+- a `url` reference that is not cached is an operational error (exit 2) naming
+  the URL;
+- built-in ids and local `.json` files resolve exactly as they always do.
+
+Priming the cache is one ordinary run: fetch once online, and every later run
+can be `--offline`. With `schemaCache.ttlHours: 0` there is no cache to read, so
+`--offline` fails on any `url` reference.
 
 #### What docmeta requires of a fetched schema
 

@@ -25,6 +25,15 @@ export interface FillConfig {
   concurrency?: number;
 }
 
+/** Settings for the cross-run cache of schemas fetched over `http(s)`. */
+export interface SchemaCacheConfig {
+  /**
+   * Hours a cached schema is served before it is re-fetched. `0` disables the
+   * cache entirely, in both directions.
+   */
+  ttlHours?: number;
+}
+
 export interface DocmetaConfig {
   paths?: string[];
   exclude?: string[];
@@ -49,6 +58,14 @@ export interface DocmetaConfig {
    * cannot answer — see `GITIGNORE_UNAVAILABLE`.
    */
   respectGitignore?: boolean;
+  /** Defaults for the cross-run schema cache. See `SchemaCacheConfig`. */
+  schemaCache?: SchemaCacheConfig;
+  /**
+   * Never fetch a remote schema. A URL reference resolves from the schema
+   * cache; an uncached one is an operational error naming the URL. Built-in and
+   * local-file references are unaffected — neither touches the network.
+   */
+  offline?: boolean;
 }
 
 const CONFIG_NAMES = ["docmeta.config.yaml", "docmeta.config.yml"];
@@ -129,9 +146,43 @@ export function parseConfig(text: string, source: string): DocmetaConfig {
     config.respectGitignore = obj.respectGitignore;
   }
 
+  if (obj.offline !== undefined) {
+    if (typeof obj.offline !== "boolean") {
+      throw new DocmetaError(`${source}: "offline" must be a boolean.`);
+    }
+    config.offline = obj.offline;
+  }
+
+  if (obj.schemaCache !== undefined) {
+    config.schemaCache = parseSchemaCache(obj.schemaCache, source);
+  }
+
   if (obj.fill !== undefined) config.fill = parseFill(obj.fill, source);
 
   return config;
+}
+
+function parseSchemaCache(value: unknown, source: string): SchemaCacheConfig {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new DocmetaError(`${source}: "schemaCache" must be a mapping.`);
+  }
+  const raw = value as Record<string, unknown>;
+  const schemaCache: SchemaCacheConfig = {};
+
+  const ttl = raw.ttlHours;
+  if (ttl !== undefined) {
+    // A YAML `1e999` parses to Infinity, and a bare range check would accept
+    // it. A negative TTL is worse than useless: every entry would read as
+    // stale, so the cache would silently do nothing at all.
+    if (typeof ttl !== "number" || !Number.isFinite(ttl) || ttl < 0) {
+      throw new DocmetaError(
+        `${source}: "schemaCache.ttlHours" must be a number of hours, 0 or greater (0 disables the cache).`,
+      );
+    }
+    schemaCache.ttlHours = ttl;
+  }
+
+  return schemaCache;
 }
 
 function parseFill(value: unknown, source: string): FillConfig {

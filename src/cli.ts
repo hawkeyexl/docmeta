@@ -223,6 +223,10 @@ export function buildProgram(): Command {
     .option("-q, --quiet", "in pretty output, hide passing files")
     .option("--allow-empty", "treat zero matched files as success")
     .option("--no-gitignore", "check files .gitignore covers")
+    .option(
+      "--offline",
+      "never fetch a remote schema; resolve URL refs from the schema cache",
+    )
     // Neither flag carries `.preset()`, and neither carries a `defaultValue`.
     //
     // No `defaultValue`, because that would make the baseline active on runs
@@ -303,6 +307,9 @@ export function buildProgram(): Command {
           // `allowEmpty:` still wins (the cores do `opts ?? config`).
           allowEmpty: options.allowEmpty ? true : undefined,
           respectGitignore: gitignoreFlag(options.gitignore),
+          // `undefined` rather than `false` when absent, so config `offline:`
+          // still decides.
+          offline: options.offline ? true : undefined,
           onNotice: notice,
           // `--baseline` and `--no-baseline` share one commander attribute, the
           // same three-state `undefined | string | false` split as `-c` /
@@ -350,6 +357,10 @@ export function buildProgram(): Command {
     .option("--no-config", "ignore any discovered config file")
     .option("--allow-empty", "treat zero matched files as success")
     .option("--no-gitignore", "read files .gitignore covers")
+    .option(
+      "--offline",
+      "never fetch a remote schema; resolve URL refs from the schema cache",
+    )
     .addHelpText(
       "after",
       [
@@ -394,6 +405,7 @@ export function buildProgram(): Command {
           stdinContent,
           allowEmpty: options.allowEmpty ? true : undefined,
           respectGitignore: gitignoreFlag(options.gitignore),
+          offline: options.offline ? true : undefined,
           onNotice: notice,
         });
         if (format === "json") {
@@ -452,6 +464,10 @@ export function buildProgram(): Command {
     .option("--no-config", "ignore any discovered config file")
     .option("--allow-empty", "treat zero matched files as success")
     .option("--no-gitignore", "fill files .gitignore covers")
+    .option(
+      "--offline",
+      "never fetch a remote schema; resolve URL refs from the schema cache",
+    )
     .addHelpText(
       "after",
       [
@@ -499,6 +515,7 @@ export function buildProgram(): Command {
           stdinContent,
           allowEmpty: options.allowEmpty ? true : undefined,
           respectGitignore: gitignoreFlag(options.gitignore),
+          offline: options.offline ? true : undefined,
           onNotice: notice,
           fields: options.fields ? splitList(String(options.fields)) : undefined,
           confidence: options.confidence,

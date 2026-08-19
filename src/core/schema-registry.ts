@@ -6,6 +6,12 @@
 import { readFile } from "node:fs/promises";
 import { Buffer } from "node:buffer";
 import { DocmetaError } from "../types.js";
+import {
+  DEFAULT_TTL_HOURS,
+  SCHEMA_CACHE_DIR,
+  SchemaCache,
+  schemaCacheDir,
+} from "./schema-cache.js";
 
 import okf01 from "../schemas/okf/0.1.json" with { type: "json" };
 import diataxis10 from "../schemas/diataxis/1.0.json" with { type: "json" };
@@ -167,12 +173,63 @@ const SCHEMA_KEYS = [
   "multipleOf",
 ] as const;
 
+/**
+ * Backoff before the single retry.
+ *
+ * One attempt, not three: the timeout already means a hung host costs
+ * `timeoutMs`, and three retries would make that three times over per URL. One
+ * removes the most common flake at a bounded cost.
+ */
+const RETRY_DELAY_MS = 500;
+
+/**
+ * Not `unref`'d, deliberately. During the backoff this timer is frequently the
+ * only thing left on the event loop — an unref'd one lets node exit **0 with no
+ * output at all**, turning a failed fetch into a silent green run.
+ */
+const wait = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
 export interface LoadSchemaOptions {
   /** Abort a remote fetch after this many ms (default 10_000). */
   timeoutMs?: number;
   /** Reject a remote schema whose body exceeds this many bytes (default 5 MB). */
   maxBytes?: number;
+  /**
+   * Directory for the cross-run schema cache. Omitted means **no disk cache**:
+   * the registry never guesses a project root, so a library caller gets the
+   * in-process behavior until it opts in. The command cores pass
+   * `schemaCacheDir(configDir ?? cwd)`.
+   */
+  cacheDir?: string;
+  /** Hours a cached entry stays fresh; `0` disables the cache (default 24). */
+  ttlHours?: number;
+  /**
+   * Never touch the network. A URL ref resolves from the disk cache — ignoring
+   * the TTL, since there is no re-fetch to fall back on — and an uncached one
+   * fails naming the URL. Built-ins and local files are unaffected.
+   *
+   * NOTE for whoever implements the remote-schema allowlist (proposal 0015): a
+   * document's own `$schema` sits *above* config in the precedence chain, so a
+   * document can name any URL and trigger a fetch, bypassing `schemas:`
+   * entirely. `offline` blocks that **by accident** rather than by design. It
+   * is not the guard, but it is currently the only thing standing there, so do
+   * not remove it while "simplifying" until the real allowlist exists.
+   */
+  offline?: boolean;
 }
+
+/**
+ * A fetch failure a second attempt might not hit: a network-level error, or a
+ * 5xx. Never a 4xx — a 404 will not heal, and retrying it only doubles the
+ * cost of a misconfiguration.
+ *
+ * Extends `DocmetaError` so that if the retry also fails, the error escaping
+ * this module is already the operational error the CLI knows how to report.
+ */
+class RetryableFetchError extends DocmetaError {}
 
 /** An abort — ours are only ever raised by the request's timeout signal. */
 function isAbort(err: unknown): boolean {
@@ -274,7 +331,41 @@ function failNotASchema(ref: string, raw: string, reason: string): never {
   );
 }
 
-/** Fetch, size-cap, parse, and guard a remote schema. One request per call. */
+/**
+ * One request, returning an OK response.
+ *
+ * A network error and a 5xx are raised as `RetryableFetchError`; a 4xx and a
+ * timeout are not. The timeout is deliberate: it is already the budget for a
+ * host that is not answering, so retrying it buys no new information and
+ * doubles the ceiling per URL.
+ */
+async function requestSchema(
+  ref: string,
+  timeoutMs: number,
+  timedOut: DocmetaError,
+): Promise<Response> {
+  let res: Response;
+  try {
+    res = await fetch(ref, { signal: AbortSignal.timeout(timeoutMs) });
+  } catch (err) {
+    if (isAbort(err)) throw timedOut;
+    throw new RetryableFetchError(
+      `Failed to fetch schema "${ref}": ${(err as Error).message}`,
+    );
+  }
+  if (!res.ok) {
+    // Discard the body: nothing reads it, and leaving it undrained can hold the
+    // socket open — which matters now that a second request may follow.
+    void res.body?.cancel().catch(() => {});
+    const message = `Failed to fetch schema "${ref}": HTTP ${res.status}.`;
+    throw res.status >= 500
+      ? new RetryableFetchError(message)
+      : new DocmetaError(message);
+  }
+  return res;
+}
+
+/** Fetch, size-cap, parse, and guard a remote schema. At most two requests. */
 async function fetchSchema(
   ref: string,
   options: LoadSchemaOptions,
@@ -287,17 +378,14 @@ async function fetchSchema(
 
   let res: Response;
   try {
-    res = await fetch(ref, { signal: AbortSignal.timeout(timeoutMs) });
+    res = await requestSchema(ref, timeoutMs, timedOut);
   } catch (err) {
-    if (isAbort(err)) throw timedOut;
-    throw new DocmetaError(
-      `Failed to fetch schema "${ref}": ${(err as Error).message}`,
-    );
-  }
-  if (!res.ok) {
-    throw new DocmetaError(
-      `Failed to fetch schema "${ref}": HTTP ${res.status}.`,
-    );
+    if (!(err instanceof RetryableFetchError)) throw err;
+    await wait(RETRY_DELAY_MS);
+    // The second attempt is the last one. If it fails the same way, the error
+    // is already a `DocmetaError` and propagates as the operational failure it
+    // is.
+    res = await requestSchema(ref, timeoutMs, timedOut);
   }
 
   let raw: string;
@@ -324,9 +412,68 @@ async function fetchSchema(
     );
   }
 
-  const schema = assertFetchedSchema(ref, parsed, raw);
+  return assertFetchedSchema(ref, parsed, raw);
+}
+
+/**
+ * Resolve one remote ref: disk cache, then the network.
+ *
+ * Runs **inside** the in-flight promise the url branch stores, not beside it.
+ * Hoisting the cache read out would put an `await` between the miss and the
+ * `set`, which is the check-then-act race `urlInflight` exists to close — and
+ * it would also let `fill`'s worker pool race N writes onto one cache file.
+ */
+async function resolveRemote(
+  ref: string,
+  options: LoadSchemaOptions,
+): Promise<Record<string, unknown>> {
+  const cache = options.cacheDir
+    ? new SchemaCache(options.cacheDir, options.ttlHours ?? DEFAULT_TTL_HOURS)
+    : null;
+
+  if (cache) {
+    // Offline ignores the TTL: expiry exists to trigger a re-fetch, and there
+    // is none available, so a stale contract beats no contract at all.
+    const hit = await cache.read(ref, { ignoreTtl: options.offline === true });
+    if (hit) {
+      urlCache.set(ref, hit);
+      return hit;
+    }
+  }
+
+  if (options.offline === true) {
+    throw new DocmetaError(
+      `Cannot resolve schema "${ref}": --offline is set and it is not in the schema cache (${SCHEMA_CACHE_DIR}). Run once without --offline to populate the cache, or point the reference at a local file.`,
+    );
+  }
+
+  const schema = await fetchSchema(ref, options);
   urlCache.set(ref, schema);
+  if (cache) await cache.write(ref, schema);
   return schema;
+}
+
+/**
+ * Settle the remote-schema options for one run, from the config and the flag.
+ *
+ * Lives here rather than in a command core because all three commands need the
+ * same answer, and because "where does the cache live" is a property of schema
+ * loading, not of `validate`. `root` is the config's directory when a config
+ * governs the run, so a developer running from `docs/` shares the cache with
+ * CI running from the repo root instead of quietly keeping a second one.
+ */
+export function schemaLoadOptions(args: {
+  root: string;
+  /** Config `schemaCache.ttlHours`. */
+  ttlHours?: number;
+  /** `--offline`, else config `offline:`. */
+  offline?: boolean;
+}): LoadSchemaOptions {
+  return {
+    cacheDir: schemaCacheDir(args.root),
+    ...(args.ttlHours !== undefined ? { ttlHours: args.ttlHours } : {}),
+    ...(args.offline !== undefined ? { offline: args.offline } : {}),
+  };
 }
 
 /** Load and return the JSON Schema object for a reference. */
@@ -360,7 +507,7 @@ export async function loadSchema(
     // Synchronous by design: the `set` has to happen in the same tick as the
     // miss, or a second caller slips in before the entry exists and fetches
     // again.
-    const pending = fetchSchema(ref, options);
+    const pending = resolveRemote(ref, options);
     urlInflight.set(ref, pending);
     // Evict once settled, either way. This map exists only to collapse
     // *concurrent* callers onto one request; `urlCache` is the actual cache and

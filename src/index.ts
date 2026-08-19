@@ -23,12 +23,23 @@ export type {
   LoadedConfig,
   RunConfig,
   RunConfigOptions,
+  SchemaCacheConfig,
 } from "./core/config.js";
 export {
   listBuiltins,
   loadSchema,
   classifyRef,
+  schemaLoadOptions,
 } from "./core/schema-registry.js";
+export type { LoadSchemaOptions } from "./core/schema-registry.js";
+export {
+  SchemaCache,
+  SCHEMA_CACHE_DIR,
+  SCHEMA_CACHE_VERSION,
+  DEFAULT_TTL_HOURS,
+  schemaCacheDir,
+} from "./core/schema-cache.js";
+export type { SchemaCacheEntry } from "./core/schema-cache.js";
 export {
   REPORT_FORMATS,
   isReportFormat,
