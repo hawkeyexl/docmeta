@@ -67,7 +67,13 @@ describe("collectCandidates", () => {
     const okf = await loadSchema("google:okf:0.1");
     const data = { type: "concept", title: "Hello", timestamp: "not-a-date" };
     const errors = [
-      { schema: "google:okf:0.1", instancePath: "/timestamp", message: "bad" },
+      {
+        schema: "google:okf:0.1",
+        instancePath: "/timestamp",
+        message: "bad",
+        keyword: "format",
+        subject: "date-time",
+      },
     ];
     const keys = collectCandidates([okf], data, errors).map((c) => c.key);
 

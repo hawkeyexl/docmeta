@@ -1,29 +1,29 @@
 ---
 title: Roll out a new required field without breaking the build
-description: Add a new required metadata field in stages, validating it only when present, drive coverage across existing docs, then promote it to required once the repo is ready.
+description: Make a metadata field required today, record the existing backlog as a baseline so the build stays green, and let the debt shrink from there.
 ---
 
 import { Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
 Your metadata standard needs to grow. Maybe you want every doc to carry an `owner`, or you decided `description` should be mandatory rather than recommended. The risk is obvious: flip a field to required in one commit and the next CI run fails on every existing doc that predates the rule. On a large repo that is hundreds of red checks at once, and no contributor can merge until the backlog is cleared.
 
-There is a calmer path. Add the field in a **lenient** form first, validated for format whenever it appears but not required, then drive coverage across the repo, and only **promote** it to required once almost every doc already has it. The build stays green the whole way, and the day you make the field mandatory, there is nothing left to break.
+A **baseline** removes that trade-off. You record today's violations once, and from then on docmeta fails only on findings that are *new*. The rule is live immediately for everything anyone writes from now on, and the backlog stays visible instead of blocking the build.
 
 <Aside type="note" title="Why this works">
-A JSON Schema only fails a file for a missing field when that field is listed in `required`. A field that lives in `properties` but not `required` is checked for **format** when present and ignored when absent. That gap is the staging area: you get format enforcement immediately and defer the presence requirement until coverage catches up.
+A baseline is a file of violation fingerprints, keyed by document path. On each run docmeta fingerprints the findings it sees and subtracts the ones already recorded. A recorded violation is forgiven; anything else fails the run. Nothing about the schema is relaxed, so a new doc that omits the field fails on the pull request that adds it.
 </Aside>
 
 This guide assumes you already have a working `docmeta.config.yaml` and a schema you control. If you are still using the built-in OKF schema, [author your own schema first](/docmeta/schemas/) so you have a file to edit; you cannot add fields to a built-in.
 
-## Stage 1: Add the field as optional-but-validated
+## Step 1: Add the field as required
 
-Start by adding the new field to your schema's `properties`, with a `type` and any format constraint, but leave it out of `required`.
+Add the new field to your schema's `properties` **and** to `required`. No staging, no second lenient copy of the schema to keep in sync.
 
-```json title="schemas/doc.json" {10-13}
+```json title="schemas/doc.json" {4,10-13}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["type"],
+  "required": ["type", "owner"],
   "properties": {
     "type": {
       "type": "string",
@@ -37,105 +37,124 @@ Start by adding the new field to your schema's `properties`, with a `type` and a
 }
 ```
 
-A doc that omits `owner` still passes. A doc that includes it must give a non-empty string, so a fat-fingered `owner:` with no value fails right away. You are enforcing the format of the new field before a single doc is required to have it.
-
-Commit this and run a validation pass to confirm the build is still green:
+Run a pass to see the size of the backlog you are about to record:
 
 ```bash
 npx docmeta validate
 ```
 
-Nothing that passed yesterday fails today. The field is now part of the contract; it just is not mandatory yet.
+That run exits `1` and lists every doc missing `owner`. This is the wall of red the baseline exists to absorb — read it once, so you know what you are agreeing to forgive.
 
-## Stage 2: Find the docs that are missing it
+## Step 2: Record the backlog
 
-Before you can require the field, you need to know how far coverage already extends and which files still lack it. The `get` command reads a field's value from every matched file, which makes it a fast coverage probe.
+```bash
+npx docmeta validate --write-baseline
+```
 
-<Steps>
+```
+Baseline written to .docmeta-baseline.json
+  412 findings recorded (+412 new, -0 no longer occur)
+```
 
-1. **List the field across the repo.** Ask `get` for the new field in JSON so the result is easy to scan or pipe into other tooling.
+Commit `.docmeta-baseline.json` alongside the schema change. It is a source file: reviewers should see it grow or shrink in the diff, and a pull request that adds entries is a pull request that added violations.
 
-   ```bash
-   npx docmeta get owner "docs/**/*.md" -f json
-   ```
-
-   Every file appears in the output. Files that already carry `owner` report its value; files that do not report it as unset. That split is your coverage map.
-
-2. **Drive the count down.** Work through the unset files and add the field. As contributors and scripts fill it in, rerun the same command and watch the unset list shrink.
-
-</Steps>
-
-<Aside type="tip" title="Make the gap visible to everyone">
-You do not have to backfill every file yourself. Because Stage 1 already validates the field's format, you can publish the new field in your contributor guide, ask teams to add it as they touch their pages, and let coverage accrue. The `get` probe tells you when you are close enough to promote.
+<Aside type="caution" title="Read the two numbers, every time">
+`--write-baseline` replaces the file with what *this run* saw. If a narrowed glob or a mistyped `--exclude` means the run saw fewer files than you intended, the entries it did not see are silently forgiven — and `-N no longer occur` is the only thing that says so. A re-record that reports large `-N` you cannot explain should not be committed.
 </Aside>
 
-## Stage 3: Enforce it on new areas first (optional)
+## Step 3: Turn the baseline on
 
-If coverage will take a while to reach the whole repo, you do not have to wait for the slowest corner before getting any enforcement. Use a per-folder **override** to require the stricter rule where you *can* hold the line today, typically a new or actively maintained area, while the rest of the repo stays on the lenient schema.
+Point your config at the file so every run — yours and CI's — compares against it:
 
 ```yaml title="docmeta.config.yaml"
-# Lenient default: owner is validated when present, not required.
+paths:
+  - "docs/**/*.md"
+
 schemas:
   - ./schemas/doc.json
 
-# Strict rule for the new area: owner is mandatory here.
-overrides:
-  - files: "docs/platform/**/*.md"
-    schemas:
-      - ./schemas/doc-strict.json
+baseline: .docmeta-baseline.json
 ```
-
-Here `doc-strict.json` is the same schema with `owner` added to `required`. Files under `docs/platform/` must carry `owner`; everything else is held to the lenient default. New docs land already compliant, so the strict zone never accumulates a backlog, and you expand the override's glob as other areas reach full coverage.
-
-<Aside type="caution" title="A file with no frontmatter still gets checked">
-Promoting a field to required flags **every** non-compliant file, including any file with no frontmatter block at all. An empty or frontmatter-free doc has no `owner`, so a required-field rule fails it just as it fails a doc that has frontmatter but omits the field. Account for these files when you read your coverage probe; they will not show up as "almost there."
-</Aside>
-
-## Stage 4: Promote the field to required
-
-Once your coverage probe shows the unset list at or near zero, make the field mandatory for everyone. Add it to the schema's `required` array.
-
-```json title="schemas/doc.json" {4}
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "required": ["type", "owner"],
-  "properties": {
-    "type": { "type": "string", "minLength": 1 },
-    "owner": { "type": "string", "minLength": 1 }
-  }
-}
-```
-
-Run one final validation pass before you commit, so you catch any stragglers locally rather than in CI:
 
 ```bash
 npx docmeta validate
 ```
 
-If the run is green, the promotion is safe: every doc already satisfies the new rule, so flipping it to required changes nothing about the build except that future omissions now fail. If a few files still trip, your coverage probe missed them (frontmatter-free files are the usual suspects); fix those and rerun.
+```
+✓ docs/api/legacy.md  (2 baselined)
+✓ docs/guides/intro.md
+
+2 files checked, 2 passed, 0 failed, 0 errors
+412 baselined findings
+```
+
+Green build, live rule. Ship it.
+
+<Aside type="tip" title="The path is relative to the config file">
+`baseline:` resolves against the directory holding `docmeta.config.yaml`, not against wherever you happened to run the command. Running `docmeta validate` from a subdirectory finds the same baseline CI does.
+</Aside>
+
+## Step 4: Watch the debt shrink
+
+<Steps>
+
+1. **New violations fail immediately.** A doc that lands without `owner` produces a fingerprint that is not in the baseline, so the run exits `1` and names only that file. The rule you shipped in step 1 is doing its job from day one.
+
+2. **Fixed violations are reported, not forgotten.** When someone adds the missing field, its fingerprint stops occurring and the summary says so:
+
+   ```
+   412 baselined findings, 37 no longer occur — run --write-baseline to prune
+   ```
+
+3. **Prune when the number gets noisy.** Re-record to drop the entries that no longer apply:
+
+   ```bash
+   npx docmeta validate --write-baseline
+   ```
+
+   ```
+   Baseline written to .docmeta-baseline.json
+     375 findings recorded (+0 new, -37 no longer occur)
+   ```
+
+   The count in the summary is the debt, on every run. When it reaches zero, delete the file and drop the `baseline:` key — the ratchet is finished.
+
+</Steps>
+
+<Aside type="tip" title="Closing the backlog faster">
+The baseline makes the backlog safe to carry, not smaller. To actually work it down, [`docmeta fill`](/docmeta/reference/cli/#fill) infers the missing values from each page's content and writes back the ones it is confident about — and because the schema drives the prompt, the fields it proposes are exactly the ones you just made required.
+</Aside>
+
+## Two things a baseline does not forgive
+
+- **A renamed file.** Entries are keyed by path, so moving a document takes its findings to a key with no entry and every one of them reads as new. The fix is one `--write-baseline`; the stale-entry line in the summary is the hint that a rename, not a regression, is what happened.
+- **A re-pointed schema.** The schema reference is part of a violation's identity, so switching `./schemas/doc.json` to a URL serving identical bytes changes every fingerprint. Re-record when you move a schema.
+
+<Aside type="caution" title="A file with no frontmatter still gets checked">
+A required-field rule flags **every** non-compliant file, including files with no frontmatter block at all — a blank doc has no `owner` any more than a doc that simply omits it. These are recorded in the baseline like anything else, so they will not surprise the build; just do not read a green run as evidence that they have frontmatter.
+</Aside>
 
 ## What you have now
 
-A new required field that arrived without a wall of red checks. You enforced its format from day one, measured coverage with `get`, optionally held a strict line on new areas with an override, and promoted it to required only when the repo was ready. The same sequence works for making any existing recommended field mandatory: start by validating its format, then ratchet to required.
+A required field that went live the day you wrote it, a build that stayed green, and a single file that says exactly how much legacy debt is left — visible on every run, shrinking as contributors touch their pages. No parallel lenient schema, no hand-maintained list of which folders are clean, nothing to keep in sync.
 
 ## Where to go next
 
 <CardGrid>
   <LinkCard
-    title="Apply different schemas to different folders"
-    href="/docmeta/set-up/different-schemas-per-folder/"
-    description="The full mechanics of overrides and glob precedence, used here to enforce a strict schema on one area first."
-  />
-  <LinkCard
     title="Retrofit docmeta into an existing repo"
     href="/docmeta/set-up/retrofit/"
-    description="Adopting docmeta from scratch on a repo that has never had metadata validation: start permissive, then ratchet."
+    description="Adopting docmeta from scratch on a repo that has never had metadata validation, baseline included."
   />
   <LinkCard
-    title="Schema resolution reference"
-    href="/docmeta/reference/schema-resolution/"
-    description="How docmeta decides which schema set applies to each file, including override precedence."
+    title="Apply different schemas to different folders"
+    href="/docmeta/set-up/different-schemas-per-folder/"
+    description="Overrides and glob precedence, for when different areas need genuinely different rules rather than a staged rollout."
+  />
+  <LinkCard
+    title="CLI reference"
+    href="/docmeta/reference/cli/#validate"
+    description="Every flag, including --baseline, --write-baseline, and --no-baseline."
   />
 </CardGrid>
 
@@ -143,8 +162,9 @@ A new required field that arrived without a wall of red checks. You enforced its
     against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
     (see .github/workflows/doc-detective.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
-{/* test {"testId":"new-required-field","description":"Staged ratchet, demonstrated with optional-vs-required `owner` schema fixtures and the get probe."} */}
-{/* step {"description":"Stage 1 (optional-but-validated): a doc without `owner` still passes when `owner` is in properties but not required.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md -s ./test/fixtures/dd/owner-optional.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
-{/* step {"description":"Stage 2 (coverage probe): `get` reads the field across files for a coverage map.","runShell":{"command":"npx docmeta get owner test/fixtures/valid.md -f json","exitCodes":[0],"stdio":"test/fixtures/valid.md"}} */}
-{/* step {"description":"Stage 4 (promote to required): once `owner` is in `required`, a doc lacking it fails. (Stage 3 — enforce on new areas first via a per-folder override — is config-only, so it has no runnable command here.)","runShell":{"command":"npx docmeta validate test/fixtures/valid.md -s ./test/fixtures/dd/owner-required.schema.json","exitCodes":[1],"stdio":"must have required property 'owner'"}} */}
+{/* test {"testId":"new-required-field","description":"Required-from-day-one plus a baseline, demonstrated with the `owner` schema fixtures."} */}
+{/* step {"description":"Step 1 (make it required): a doc lacking `owner` fails once the field is in `required`.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md -s ./test/fixtures/dd/owner-required.schema.json","exitCodes":[1],"stdio":"must have required property 'owner'"}} */}
+{/* step {"description":"Step 2 (record the backlog): --write-baseline records that finding and exits 0, reporting the additions.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md -s ./test/fixtures/dd/owner-required.schema.json --write-baseline .dd-baseline.json","exitCodes":[0],"stdio":"1 finding recorded (+1 new, -0 no longer occur)"}} */}
+{/* step {"description":"Step 3 (turn it on): the same run now passes, with the forgiven finding still counted.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md -s ./test/fixtures/dd/owner-required.schema.json --baseline .dd-baseline.json","exitCodes":[0],"stdio":"1 baselined finding"}} */}
+{/* step {"description":"Step 4 (new violations still fail): a second file's finding is not in the baseline, so the run exits 1.","runShell":{"command":"npx docmeta validate test/fixtures/missing-type.md -s ./test/fixtures/dd/owner-required.schema.json --baseline .dd-baseline.json","exitCodes":[1],"stdio":"must have required property 'owner'"}} */}
 {/* test end */}

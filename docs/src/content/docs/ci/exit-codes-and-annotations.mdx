@@ -108,6 +108,8 @@ $ docmeta validate bad-timestamp.md --format json
           "schema": "google:okf:0.1",
           "instancePath": "/timestamp",
           "message": "must match format \"date-time\"",
+          "keyword": "format",
+          "subject": "date-time",
           "line": 4
         }
       ]
@@ -133,7 +135,16 @@ The shape is stable:
   - `schema`: the schema id that produced the error.
   - `instancePath`: a JSON Pointer to the offending field (`""` for the
     document root, `"/tags/0"` for the first item of `tags`).
-  - `message`: the human-readable reason.
+  - `message`: the human-readable reason. Generated prose — an Ajv release may
+    reword it, so match on `keyword` instead when you need stability.
+  - `keyword`: the JSON Schema keyword that failed (`required`, `format`,
+    `pattern`, `type`, …). docmeta's own errors use `parse` when a metadata
+    block could not be read and `schema` when a schema set could not be
+    resolved; both keep `schema: "(parse)"`.
+  - `subject`: the identifier within that keyword — the missing property, the
+    additional property, the format name, the expected type. Omitted for
+    keywords whose parameter is a schema-authored value, such as `pattern`'s
+    regex or `minLength`'s number.
   - `line`: 1-based source line, when docmeta can locate it. Omitted when
     unknown. For example, errors at the document root often have no specific
     line.

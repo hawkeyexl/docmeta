@@ -53,6 +53,8 @@ The object has a `summary` and a `results` array:
           "schema": "google:okf:0.1",
           "instancePath": "/timestamp",
           "message": "must match format \"date-time\"",
+          "keyword": "format",
+          "subject": "date-time",
           "line": 4
         }
       ]
@@ -69,8 +71,23 @@ The fields:
   `format` (the extractor that read it), `ok`, `schemas` (the resolved schema
   set), and `errors`.
 - **Each error**: `schema` (the schema id that produced it), `instancePath` (a
-  JSON Pointer to the field, `""` for the document root), `message`, and `line`
-  (1-based, when docmeta can locate it).
+  JSON Pointer to the field, `""` for the document root), `message`, `keyword`,
+  `subject`, and `line` (1-based, when docmeta can locate it).
+
+<Aside type="tip" title="Key on keyword, not on message">
+`message` is prose docmeta gets from Ajv, and an Ajv release can reword it.
+`keyword` — the JSON Schema keyword that failed (`required`, `format`,
+`pattern`, `type`, …) — is stable, as is `subject`, the identifier within it:
+the missing property, the additional property, the format name, the expected
+type. A script that counts "how many pages are missing `owner`" should match
+`keyword === "required" && subject === "owner"` rather than parse English.
+
+`subject` is omitted for keywords whose parameter is a schema-authored value
+rather than an identifier, such as `pattern`'s regex or `minLength`'s number.
+docmeta's own errors use `keyword` too: `parse` when a metadata block could not
+be read, `schema` when a schema set could not be resolved. Both keep
+`schema: "(parse)"`.
+</Aside>
 
 <Aside type="note" title="line and col are optional; col is absent today">
 `line` appears only when docmeta can map an error back to a source position, so

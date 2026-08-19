@@ -1,6 +1,6 @@
 # 0001 — Validation baseline (the ratchet)
 
-- **Status:** Proposed
+- **Status:** Implemented
 - **Serves:** Maya · M2 "Tighten the standard without breaking the build"
 - **Depends on:** the `FieldError` extension below (shared with [0003](0003-sarif-and-junit-reporters.md)); path resolution from [0004](0004-config-upward-discovery.md)
 - **Touches:** `src/core/validator.ts`, `src/commands/validate.ts`, `src/cli.ts`, `src/core/config.ts`, new `src/core/baseline.ts`
@@ -59,9 +59,13 @@ subject?: string;
 Both are additive. `keyword` is required-on-write, but every existing consumer
 ignores unknown fields and the JSON reporter simply gains two keys. This is the
 same change [0003](0003-sarif-and-junit-reporters.md) needs for a SARIF
-`ruleId`, and it closes the `col`-shaped complaint in
-[0013](0013-cleanup-dead-code-and-exit-codes.md) about declared-but-never-populated
-fields.
+`ruleId`.
+
+**As implemented, `col` was deliberately left alone** — it stays declared and
+never populated, and [0013](0013-cleanup-dead-code-and-exit-codes.md) still owns
+the decision about it. Scoping `col` into this change was considered and
+rejected with the user, to keep the baseline work tight; the sentence above
+about closing 0013's complaint therefore does *not* apply.
 
 ## Proposal
 
@@ -73,8 +77,14 @@ docmeta validate [paths...]
   --write-baseline [path]   record current findings and exit 0
 ```
 
-Both default to `.docmeta-baseline.json` when the value is omitted, so the
-common case is a bare `--baseline`. Config equivalent:
+`--baseline` defaults to `.docmeta-baseline.json` when the value is omitted, so
+the common case is a bare `--baseline`. **As implemented, a bare
+`--write-baseline` instead resolves to the configured `baseline:` path, falling
+back to `.docmeta-baseline.json` only when there is none.** The symmetric
+version of this — both flags defaulting to the literal path — was rejected during
+implementation: a repo that configured `baseline:` elsewhere would then record
+into a second file nothing ever reads, so the ratchet would silently do nothing.
+Read and write have to name the same file. Config equivalent:
 
 ```yaml
 baseline: .docmeta-baseline.json   # implies --baseline on every run
@@ -196,6 +206,18 @@ Switching a schema reference from `google:okf:0.1` to a URL serving the same
 schema changes every fingerprint. This is *correct* — it is a different contract
 as far as docmeta can tell — but it is surprising. It must be called out on the
 reference page, with `--write-baseline` as the remedy.
+
+**Found during implementation, and fixed rather than documented:** the same
+property makes the fingerprint depend on the *working directory*, because
+0004's `rebaseConfigSchemaRefs` rewrites a config's local file refs to absolute
+paths whenever the config directory is not `cwd`. A repo with
+`schemas: ["./schemas/doc.json"]` therefore produced one fingerprint set from
+the repo root and a different, machine-specific one from `docs/` — CI green
+while a developer in a subdirectory saw the entire baselined backlog as new.
+`src/core/baseline.ts` now canonicalizes a **local file** ref to its path
+relative to the config directory (posix separators) before hashing; built-in ids
+and URLs pass through untouched. Only the fingerprint input is canonicalized —
+reports and schema loading still use the ref exactly as written.
 
 ### 8. `--write-baseline` shrinkage is invisible — fixed by reporting it
 

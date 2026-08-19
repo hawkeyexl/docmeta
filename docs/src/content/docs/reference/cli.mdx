@@ -62,10 +62,95 @@ docmeta [paths...] [options]
 | `--no-config` | — | off | Ignore any discovered config file and run on the [built-in default schema set](/docmeta/reference/schema-resolution/#precedence). `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
 | `-q, --quiet` | — | off | In `pretty` output, hide passing files. Has no effect on `json` or `github`. |
 | `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
+| `--baseline` | `[path]` | `.docmeta-baseline.json` | Compare findings against a recorded [baseline](#baselines) and fail only on new ones. The value is optional. Config `baseline:` turns this on for every run. A named file that does not exist is an error (exit 2). |
+| `--write-baseline` | `[path]` | config `baseline:`, else `.docmeta-baseline.json` | Record this run's findings as the baseline and exit 0. The value is optional. Wins over `--baseline`. |
+| `--no-baseline` | — | off | Ignore a baseline supplied by config `baseline:` for this run. `--baseline` and `--no-baseline` set the same option, so the one written later on the command line wins. |
 
 <Aside type="note">
 Repeatable flags (`-s/--schema`, `--exclude`) accumulate; pass the flag once per
 value, for example `-s a -s b`.
+</Aside>
+
+### Baselines
+
+A baseline records the violations that exist today so that a run fails only on
+findings that are **new**. That is what lets a field become `required`
+immediately on a repo with a large backlog, instead of after a cleanup: the rule
+applies to everything written from now on, and the debt stays visible rather
+than blocking the build.
+
+```sh
+docmeta validate --write-baseline   # record today's findings, exit 0
+docmeta validate --baseline         # from now on, fail only on new ones
+```
+
+The file is JSON, path-keyed, with a sorted array of violation fingerprints per
+document, so it diffs and merges legibly:
+
+```json title=".docmeta-baseline.json"
+{
+  "version": 1,
+  "generatedWith": "3.4.2",
+  "entries": {
+    "docs/api/legacy.md": ["a1b2c3d4e5f60718", "9f8e7d6c5b4a3210"],
+    "docs/guides/old.md": ["1122334455667788"]
+  }
+}
+```
+
+Commit it. Reviewers should see it grow or shrink in a diff.
+
+A fingerprint is 16 hex characters of
+`sha256(schema + NUL + instancePath + NUL + keyword + NUL + subject)` — the four
+[machine-stable fields](/docmeta/reference/output-and-exit-codes/#json) of a
+violation. It deliberately excludes the **line number**, so editing a document
+does not invalidate it; the **message prose**, so an Ajv upgrade that rewords a
+message does not invalidate every entry at once; and the **file path**, which is
+already the key.
+
+Three things do change a fingerprint, and each is recovered with one
+`--write-baseline`:
+
+- **Renaming a document.** Entries are path-keyed, so a rename moves findings to
+  a key with no entry and every one of them reads as new. The
+  `N no longer occur` line in the summary is the hint that a rename, not a
+  regression, is what happened.
+- **Re-pointing a schema.** The schema reference is part of the identity, so
+  switching `google:okf:0.1` to a URL serving the same schema changes every
+  fingerprint. docmeta cannot tell it is the same contract.
+- **Editing a `pattern`, `enum`, or `minLength` rule.** Those keywords have no
+  stable `subject`, so a violation of the edited rule keeps its fingerprint —
+  but a violation that moves to a *different* keyword does not.
+
+A local file schema reference is measured **relative to the config file's
+directory**, and so is a `baseline:` path, so the same repo produces the same
+fingerprints whether the command runs from the repo root or from a
+subdirectory.
+
+Findings the baseline already holds do not fail the run and are reported
+instead:
+
+```
+✓ docs/api/legacy.md  (2 baselined)
+
+1 file checked, 1 passed, 0 failed, 0 errors
+3 baselined findings, 1 no longer occurs — run --write-baseline to prune
+```
+
+Entries that no longer occur are **never fatal** — they are only reported, so a
+run that fixes violations stays green. `--write-baseline` reports its change in
+both directions:
+
+```
+Baseline written to .docmeta-baseline.json
+  14 findings recorded (+2 new, -12 no longer occur)
+```
+
+<Aside type="caution">
+`--write-baseline` replaces the file with what *this run* saw, so a narrowed
+glob or a mistyped `--exclude` forgives every finding it did not reach. The
+`-12 no longer occur` count is the only thing that makes that visible; a
+re-record reporting a drop you cannot explain should not be committed.
 </Aside>
 
 ### Examples
@@ -75,6 +160,8 @@ docmeta validate docs/                          # walk a directory
 docmeta validate "**/*.md" -f github            # CI annotations
 docmeta validate page.md -s google:okf:0.1 -s ./my.schema.json
 cat page.md | docmeta validate - --as markdown  # read from stdin
+docmeta validate --write-baseline               # record today's backlog
+docmeta validate --baseline                     # fail only on new findings
 ```
 
 ## `get`

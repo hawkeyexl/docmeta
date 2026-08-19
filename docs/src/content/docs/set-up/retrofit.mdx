@@ -118,16 +118,31 @@ Files under `docs/guides/` are held to `guide.json` (which can require `type`, `
   description="The full mechanics of overrides: glob precedence, first-match-wins, and validating one file against multiple schemas."
 />
 
-## Step 5: Ratchet strictness over time
+## Step 5: Ratchet strictness with a baseline
 
-The permissive schema was only ever a starting line. Once an area is under the gate and contributors are keeping it clean, tighten the standard: add a recommended field, then make it required when coverage is high. Do this one field at a time so the build never takes a big hit.
+The permissive schema was only ever a starting line. Once the gate is wired, tighten the standard — but you do not have to wait for coverage before you do it. Add the field to `required`, record the existing violations once, and let docmeta fail only on new ones:
 
-The staged technique has its own guide: validate a field's format first, drive coverage, then promote it to `required`. Follow it each time you raise the bar.
+```bash
+npx docmeta validate --write-baseline
+```
+
+```
+Baseline written to .docmeta-baseline.json
+  412 findings recorded (+412 new, -0 no longer occur)
+```
+
+Commit that file and point your config at it:
+
+```yaml title="docmeta.config.yaml"
+baseline: .docmeta-baseline.json
+```
+
+From here the build is green, the stricter rule applies to everything anyone writes, and the summary reports the outstanding debt on every run. Raise the bar one field at a time; each promotion costs one re-record rather than a backlog sprint.
 
 <LinkCard
   title="Roll out a new required field without breaking the build"
   href="/docmeta/set-up/new-required-field/"
-  description="The staged ratchet: add a field as optional-but-validated, measure coverage with get, then promote it to required."
+  description="The full ratchet: make the field required today, record the backlog as a baseline, and watch it shrink."
 />
 
 ## Step 6: Close the backlog with `fill`
