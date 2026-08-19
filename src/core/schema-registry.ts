@@ -472,9 +472,14 @@ async function resolveRemote(
     // user to "run once without --offline to populate the cache" is advice that
     // can never work, which is the circular remedy this message was rewritten
     // to remove.
+    // Three cases, not two, because "no cache" and "cache switched off" have
+    // different remedies and naming the wrong one is what made the earlier
+    // versions of this message send people in circles.
     const remedy = cache?.enabled
       ? `Run once without --offline to populate ${options.cacheDir}, or point the reference at a local file.`
-      : "No schema cache is available for this run — `schemaCache.ttlHours: 0` disables it — so there is nothing for --offline to read. Set a non-zero `schemaCache.ttlHours`, or point the reference at a local file or a built-in id.";
+      : options.cacheDir !== undefined
+        ? "The schema cache is switched off (`schemaCache.ttlHours: 0`), so there is nothing for --offline to read. Set a non-zero `schemaCache.ttlHours`, or point the reference at a local file or a built-in id."
+        : "No schema cache is configured for this run, so there is nothing for --offline to read. Pass a `cacheDir`, or point the reference at a local file or a built-in id.";
     throw new DocmetaError(
       `Cannot resolve schema "${ref}": --offline is set and it could not be served from cache. ${remedy}`,
     );

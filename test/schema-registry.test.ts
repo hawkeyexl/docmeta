@@ -728,6 +728,18 @@ describe("loadSchema over http(s) — offline with the cache disabled", () => {
     }
   });
 
+  it("distinguishes no cache configured from a cache switched off", async () => {
+    // The library path: no `cacheDir` was ever passed, so blaming `ttlHours: 0`
+    // names a setting the caller never touched. Unreachable from the CLI, which
+    // always supplies a directory — which is exactly why it needs its own test.
+    const err = await loadSchema("http://127.0.0.1:9/nodir.json", {
+      offline: true,
+    }).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(DocmetaError);
+    expect(err.message).toMatch(/No schema cache is configured/);
+    expect(err.message).not.toMatch(/ttlHours: 0/);
+  });
+
   it("still advises populating a cache that is switched on", async () => {
     const dir = mkdtempSync(join(tmpdir(), "docmeta-off24-"));
     try {
