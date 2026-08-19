@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   BASELINE_VERSION,
   DEFAULT_BASELINE_PATH,
@@ -8,6 +10,7 @@ import {
   fingerprint,
   parseBaseline,
   serializeBaseline,
+  writeBaselineFile,
 } from "../src/core/baseline.js";
 import { DocmetaError, type FieldError, type ValidationResult } from "../src/types.js";
 
@@ -344,5 +347,22 @@ describe("parseBaseline: fingerprint shape", () => {
   it("accepts what fingerprint() actually emits", () => {
     const print = fingerprint(err());
     expect(() => parseBaseline(wrap(JSON.stringify(print)), "b.json")).not.toThrow();
+  });
+});
+
+describe("writeBaselineFile: failures name the baseline", () => {
+  it("wraps an I/O failure as a DocmetaError naming the path", async () => {
+    // A missing parent directory is the realistic case: `--write-baseline
+    // .meta/base.json` in a repo with no `.meta/`. Unwrapped, the CLI reports it
+    // through the "Unexpected error" branch with a bare ENOENT and no mention of
+    // the baseline — `readBaseline` already wraps its own failures this way.
+    const missing = join(tmpdir(), "docmeta-no-such-dir-9f8e7d", "base.json");
+    const baseline = buildBaseline([result("docs/a.md", [err()])], "3.4.2");
+    await expect(
+      writeBaselineFile(missing, baseline, ".meta/base.json"),
+    ).rejects.toThrow(DocmetaError);
+    await expect(
+      writeBaselineFile(missing, baseline, ".meta/base.json"),
+    ).rejects.toThrow(/Baseline ".meta\/base\.json" could not be written/);
   });
 });

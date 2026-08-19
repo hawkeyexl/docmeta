@@ -319,8 +319,13 @@ export async function runValidate(
  * Apply — or record — the baseline, and describe what it did.
  *
  * On a write, the freshly recorded baseline is then applied to the same
- * results, so `--write-baseline` naturally reports every file as clean and
+ * results, so `--write-baseline` reports the files it recorded as clean and
  * exits 0 without the exit code needing a special case anywhere.
+ *
+ * `<stdin>` is the one exception, and deliberately so: it is not a path anyone
+ * can look up on the next run, so it is never recorded, never matches, and its
+ * findings still fail the run. Reporting it clean would announce success for a
+ * violation that was neither fixed nor baselined.
  */
 async function settleBaseline(
   results: ValidationResult[],
@@ -337,7 +342,7 @@ async function settleBaseline(
     const recordable = results.filter((r) => r.file !== STDIN_LABEL);
     const next = buildBaseline(recordable, pkg.version, ctx);
     const { added, removed } = diffBaselines(previous, next);
-    await writeBaselineFile(request.absPath, next);
+    await writeBaselineFile(request.absPath, next, request.label);
     const applied = applyBaseline(results, next, ctx);
     return {
       results: applied.results,

@@ -247,12 +247,24 @@ export async function readBaseline(
  * truncated write is not merely lost work: the next run cannot parse it and
  * exits 2 until someone re-records. `writeFileAtomic` gives the same
  * temp-file-plus-rename guarantee `fill` relies on when it edits sources.
+ *
+ * Failures are wrapped the same way `readBaseline` wraps its own, so a missing
+ * parent directory or a read-only checkout names the baseline and reads as an
+ * operational error rather than surfacing a bare `ENOENT` through the CLI's
+ * "Unexpected error" branch.
  */
 export async function writeBaselineFile(
   absPath: string,
   baseline: Baseline,
+  source: string,
 ): Promise<void> {
-  await writeFileAtomic(absPath, serializeBaseline(baseline));
+  try {
+    await writeFileAtomic(absPath, serializeBaseline(baseline));
+  } catch (err) {
+    throw new DocmetaError(
+      `Baseline "${source}" could not be written: ${(err as Error).message}`,
+    );
+  }
 }
 
 /** Record every finding in `results` as a baseline. Clean files are omitted. */

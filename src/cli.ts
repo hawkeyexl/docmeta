@@ -222,7 +222,7 @@ export function buildProgram(): Command {
     .addOption(
       new Option(
         "--write-baseline [path]",
-        "record current findings as the baseline, then exit 0",
+        "record current findings as the baseline, then exit 0 (stdin findings are not recorded and still fail)",
       ),
     )
     .option("--no-baseline", "ignore a baseline configured by `baseline:`")
