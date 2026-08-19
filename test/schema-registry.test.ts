@@ -184,6 +184,18 @@ describe("loadSchema over http(s) — payload guard", () => {
       "/guard-array.json": { json: [{ type: "object" }] },
       "/guard-boolean.json": { body: "true" },
       "/guard-ref.json": { json: { $ref: "https://example.com/other.json" } },
+      // Schemas whose only root keyword is a conditional or an object-shape
+      // applicator. Ordinary, and rejected by a too-narrow allowlist.
+      "/guard-if-then.json": {
+        json: {
+          if: { properties: { type: { const: "blog" } } },
+          then: { required: ["category"] },
+        },
+      },
+      "/guard-pattern-props.json": {
+        json: { patternProperties: { "^x-": { type: "string" } } },
+      },
+      "/guard-additional.json": { json: { additionalProperties: false } },
     });
   });
 
@@ -196,8 +208,10 @@ describe("loadSchema over http(s) — payload guard", () => {
     // misconfigured bucket answers 200 with `{"error":"..."}`, which compiles
     // as a schema with no constraints and therefore passes every document.
     const ref = `${server.url}/guard-envelope.json`;
-    await expect(loadSchema(ref)).rejects.toBeInstanceOf(DocmetaError);
+    // One call, then assert on the captured error. A rejection deliberately
+    // stays retryable, so calling twice would make a second real round-trip.
     const err = await loadSchema(ref).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(DocmetaError);
     // Names the URL and shows what actually came back, so the operator can see
     // it is their gateway talking and not a schema at all.
     expect(err.message).toContain(ref);
@@ -367,4 +381,50 @@ describe("loadSchema over http(s) — in-flight dedup", () => {
     expect(server.hits("/settled.json")).toBe(1);
     expect(again[0]).toEqual(again[1]);
   });
+});
+
+describe("loadSchema over http(s) — the guard must not reject real schemas", () => {
+  let server: SchemaServer;
+
+  beforeAll(async () => {
+    server = await startSchemaServer({
+      "/real-if-then.json": {
+        json: {
+          if: { properties: { type: { const: "blog" } } },
+          then: { required: ["category"] },
+        },
+      },
+      "/real-pattern-props.json": {
+        json: { patternProperties: { "^x-": { type: "string" } } },
+      },
+      "/real-additional.json": { json: { additionalProperties: false } },
+      "/real-defs.json": {
+        json: { $defs: { name: { type: "string" } } },
+      },
+    });
+  });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  // The guard's two failure directions are not symmetric. Letting an odd
+  // payload through means it fails at compile time or behaves as the permissive
+  // schema it literally is; rejecting a real schema breaks a working setup
+  // outright. A schema whose only root keyword is a conditional or an
+  // object-shape applicator is perfectly ordinary.
+  const ordinary = [
+    "real-if-then",
+    "real-pattern-props",
+    "real-additional",
+    "real-defs",
+  ];
+
+  for (const name of ordinary) {
+    it(`accepts a schema whose only root keyword is in ${name}`, async () => {
+      await expect(
+        loadSchema(`${server.url}/${name}.json`),
+      ).resolves.toBeTypeOf("object");
+    });
+  }
 });

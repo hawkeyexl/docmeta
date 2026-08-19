@@ -106,21 +106,65 @@ const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
  * dialects, and schema quality is the author's business: a sparse but real
  * schema must keep working. The guard targets one specific failure — a
  * non-schema served as one — and nothing else.
+ *
+ * The list is therefore deliberately **generous**, covering the standard
+ * validation and applicator vocabularies across draft-04 through 2020-12. The
+ * two failure directions are not symmetric: letting an odd payload through
+ * means it fails at compile time or behaves as the permissive schema it
+ * literally is, while rejecting a real schema breaks a working setup outright.
+ * A schema whose only root keyword is `if`/`then` or `patternProperties` is
+ * perfectly ordinary, and an error envelope carries none of these.
  */
 const SCHEMA_KEYS = [
+  // Core identity and reference
   "$schema",
   "$id",
   "$ref",
-  "type",
-  "properties",
-  "required",
+  "$defs",
+  "definitions",
+  // Applicators
   "allOf",
   "anyOf",
   "oneOf",
   "not",
+  "if",
+  "then",
+  "else",
+  "dependentSchemas",
+  "dependencies",
+  // Object shape
+  "type",
+  "properties",
+  "required",
+  "additionalProperties",
+  "patternProperties",
+  "propertyNames",
+  "unevaluatedProperties",
+  "dependentRequired",
+  "minProperties",
+  "maxProperties",
+  // Array shape
+  "items",
+  "prefixItems",
+  "contains",
+  "unevaluatedItems",
+  "minItems",
+  "maxItems",
+  "uniqueItems",
+  "minContains",
+  "maxContains",
+  // Scalar constraints
   "enum",
   "const",
-  "items",
+  "format",
+  "pattern",
+  "minLength",
+  "maxLength",
+  "minimum",
+  "maximum",
+  "exclusiveMinimum",
+  "exclusiveMaximum",
+  "multipleOf",
 ] as const;
 
 export interface LoadSchemaOptions {
@@ -163,7 +207,9 @@ async function readCappedBody(
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      if (!value) continue;
+      // `Uint8Array` is always truthy, even at length 0, so this only ever
+      // means "no chunk this turn" — not "skip an empty chunk".
+      if (value === undefined) continue;
       total += value.byteLength;
       if (total > maxBytes) {
         throw new DocmetaError(
@@ -301,6 +347,11 @@ export async function loadSchema(
     const cached = urlCache.get(ref);
     if (cached) return cached;
     const inflight = urlInflight.get(ref);
+    // A caller joining an in-flight fetch inherits the first caller's
+    // `timeoutMs`/`maxBytes` — there is one request, so there is one set of
+    // limits. Every production call site uses the defaults, so this is only
+    // reachable from a library consumer passing custom options for a URL
+    // another call is already fetching.
     if (inflight) return inflight;
     // Synchronous by design: the `set` has to happen in the same tick as the
     // miss, or a second caller slips in before the entry exists and fetches
