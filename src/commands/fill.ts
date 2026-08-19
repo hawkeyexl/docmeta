@@ -37,7 +37,7 @@ import {
   type TokenUsage,
 } from "@hawkeyexl/inference";
 import { DocmetaError, type FieldError, type MetadataPatch } from "../types.js";
-import { loadConfig, type DocmetaConfig } from "../core/config.js";
+import { resolveRunConfig } from "../core/config.js";
 import {
   assertNonEmpty,
   resolveTargets,
@@ -100,10 +100,15 @@ interface CachedProposal {
 
 export async function runFill(opts: FillOptions): Promise<FillRun> {
   const cwd = opts.cwd ?? process.cwd();
-  const loaded = await loadConfig(opts.configPath, cwd);
-  const config: DocmetaConfig | null = loaded?.config ?? null;
-
-  const inputs = opts.inputs.length > 0 ? opts.inputs : (config?.paths ?? []);
+  // Explicit CLI inputs win, else config `paths:`; `base` is whichever of the
+  // two directories those inputs were written relative to.
+  const { config, inputs, base } = await resolveRunConfig({
+    cwd,
+    configPath: opts.configPath,
+    noConfig: opts.noConfig,
+    inputs: opts.inputs,
+    onConfigLoaded: opts.onConfigLoaded,
+  });
   const usingStdin = inputs.includes(STDIN_TOKEN);
   if (inputs.length === 0) {
     throw new DocmetaError(
@@ -177,7 +182,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
     inputs: fileInputs,
     exts: fillExts,
     exclude: fillExclude,
-    cwd,
+    cwd: base,
     allowEmpty,
   });
   assertNonEmpty({
@@ -494,7 +499,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
 
     const changed = next !== content;
     if (changed && !dryRun && label !== "<stdin>") {
-      await writeFileAtomic(resolve(cwd, label), next);
+      await writeFileAtomic(resolve(base, label), next);
     }
     return {
       file: label,
@@ -522,7 +527,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
   // large retrofit unusable in series — but collected by index so the report is
   // deterministic regardless of completion order.
   const fileResults = await mapConcurrent(files, concurrency, async (file) => {
-    const content = await readFile(resolve(cwd, file), "utf8");
+    const content = await readFile(resolve(base, file), "utf8");
     return processOne(file, content, extname(file));
   });
   results.push(...fileResults);

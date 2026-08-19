@@ -13,11 +13,13 @@ Every key is optional. This page covers where docmeta looks for the file, then e
 
 docmeta finds your config in one of two ways:
 
-- **Discovery.** With no `--config` flag, docmeta looks in the current working directory for `docmeta.config.yaml`, then `docmeta.config.yml`. The first one it finds wins.
+- **Discovery.** With no `--config` flag, docmeta looks in the current working directory for `docmeta.config.yaml`, then `docmeta.config.yml`, and then repeats that in each parent directory. The first file it finds wins, and the search stops at your repo root — the first directory containing `.git`. If no parent is a repository, only the current directory is checked.
 - **Explicit path.** Pass `-c <path>` (or `--config <path>`) to point at a specific file. If that file does not exist, docmeta exits with an error rather than falling back to discovery.
 
+Because the search walks up, `docmeta validate` gives the same verdict from your repo root as it does from `docs/` or from a package subdirectory. When a config governs a run, docmeta prints a line naming it, such as `Using docmeta.config.yaml (../..)`. To run against the built-in defaults instead, pass `--no-config`.
+
 <Aside type="note">
-Discovery only checks the current directory; docmeta does not walk up parent folders. Run `docmeta validate` from your repo root, or pass `--config` with an explicit path.
+Relative paths written **in** the config — `paths`, `exclude`, and any local `.json` schema file — resolve against the config file's own directory, not the directory you ran from. Paths you type on the command line stay relative to where you are. See the [configuration reference](/docmeta/reference/configuration/#what-relative-paths-are-relative-to).
 </Aside>
 
 ## The keys

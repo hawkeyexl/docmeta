@@ -78,8 +78,17 @@ different route.
 cwd, then each ancestor, until a boundary directory (inclusive), then give up.
 ```
 
-A directory is a **boundary** if it contains `.git`. If no ancestor has `.git`,
-stop after the user's home directory, and never search above it.
+A directory is a **boundary** if it contains `.git`. If **no** ancestor has
+`.git`, only `cwd` is considered — the walk does not happen at all.
+
+> **As implemented.** The original text said the walk should "stop after the
+> user's home directory" when no `.git` ancestor exists. That was changed to
+> requiring a `.git` ancestor. Searching home would let a stray
+> `~/docmeta.config.yaml` govern any run under it — including this repo's own
+> `fill.test.ts` and `cli.integration.test.ts`, which work in OS temp
+> directories beneath the user's home. A project-scoped config has no meaning
+> without a project boundary, so with no boundary the behavior stays exactly
+> what it is today: `cwd` only.
 
 Order within a directory stays `docmeta.config.yaml` then `docmeta.config.yml`.
 First file found wins; the walk stops there. No merging of multiple configs (see
@@ -102,6 +111,20 @@ changes cases that are currently broken.
 Positional CLI paths stay `cwd`-relative. They are typed by a human in a shell;
 the shell's directory is the right base, and shell completion depends on it.
 
+> **As implemented.** A run uses *either* positional paths *or* config `paths:`,
+> never both, so there is one resolution base per run:
+> `base = usedConfigPaths ? configDir : cwd`. `paths:`, `exclude:`, and every
+> file read go through it.
+>
+> Local-file schema refs from `schemas:`/`overrides[].schemas` are rebased to
+> **absolute** paths rather than to base-relative ones, and only when
+> `configDir !== cwd`. `loadSchema` reads a file ref relative to
+> `process.cwd()`, which a base-relative ref would not survive in the
+> config-`paths:` case (`configDir === base`, but neither equals `process.cwd()`),
+> and which a library caller passing an explicit `cwd` would not survive at all.
+> Guarding on `configDir !== cwd` keeps the ref string byte-identical for every
+> setup that works today, so no existing report changes.
+
 ### 3. Report which config was used
 
 `loadConfig` returns the resolved path; nothing surfaces it. Add a stderr
@@ -122,6 +145,15 @@ The naive version walks until `/` or `C:\`. That lets a stray
 `docmeta.config.yaml` in `$HOME`, or worse in `C:\`, silently govern every repo
 on the machine. It also makes behavior depend on files outside the repo, so CI
 and local disagree. The `.git` boundary keeps the search inside the project.
+
+Stopping at `$HOME` — the fallback this proposal originally specified for the
+no-`.git` case — was rejected for the same reason during implementation, and for
+a concrete one: this repo's own `fill.test.ts` and `cli.integration.test.ts`
+work in OS temp directories that live under the user's home on Windows and
+macOS, so a `~/docmeta.config.yaml` would have silently governed the test suite.
+**With no `.git` ancestor, only `cwd` is searched** — today's behavior,
+unchanged. That is also the honest answer: without a project boundary there is
+no project for a project-scoped config to scope.
 
 ### 2. No `.git` — the worktree case, verified relevant here
 

@@ -5,7 +5,7 @@
  * failures, 2 operational/usage errors).
  */
 import { existsSync, realpathSync } from "node:fs";
-import { resolve as resolvePath } from "node:path";
+import { basename, relative, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import picomatch from "picomatch";
@@ -104,6 +104,38 @@ function suggestCommand(token: string | undefined, cwd: string): void {
   );
 }
 
+/**
+ * Split the one commander attribute that `-c, --config <path>` and
+ * `--no-config` share. Verified by experiment: `opts.config` is `undefined`
+ * with neither flag, the string with `-c`, and `false` with `--no-config`.
+ */
+function configOption(value: unknown): {
+  configPath?: string;
+  noConfig?: boolean;
+} {
+  if (value === false) return { noConfig: true };
+  return typeof value === "string" ? { configPath: value } : {};
+}
+
+/**
+ * Say which config governed the run, and where it came from.
+ *
+ * Discovery now walks up to the project boundary, so the answer is no longer
+ * obvious from the working directory, and an unexpected ancestor config is the
+ * difference between a five-minute diagnosis and an hour of confusion. Goes to
+ * stderr for anything a machine reads, so structured output stays parseable.
+ */
+function reportConfig(
+  toStdout: boolean,
+  cwd: string,
+): (info: { path: string; dir: string }) => void {
+  return (info) => {
+    const where = (relative(cwd, info.dir) || ".").replace(/\\/g, "/");
+    const line = `Using ${basename(info.path)} (${where})\n`;
+    (toStdout ? process.stdout : process.stderr).write(line);
+  };
+}
+
 function splitList(value: string): string[] {
   return value
     .split(",")
@@ -159,6 +191,7 @@ export function buildProgram(): Command {
     .option("--as <format>", "force an input format (e.g. markdown, mdx)")
     .option("-f, --format <format>", "output: pretty | json | github", "pretty")
     .option("-c, --config <path>", "path to a docmeta config file")
+    .option("--no-config", "ignore any discovered config file")
     .option("-q, --quiet", "in pretty output, hide passing files")
     .option("--allow-empty", "treat zero matched files as success")
     .addHelpText(
@@ -199,7 +232,8 @@ export function buildProgram(): Command {
           exts,
           exclude: options.exclude,
           as: options.as,
-          configPath: options.config,
+          ...configOption(options.config),
+          onConfigLoaded: reportConfig(format === "pretty", process.cwd()),
           stdinContent,
           // `undefined` rather than `false` when the flag is absent, so config
           // `allowEmpty:` still wins (the cores do `opts ?? config`).
@@ -233,6 +267,7 @@ export function buildProgram(): Command {
     .option("--as <format>", "force an input format (e.g. markdown, mdx)")
     .option("-f, --format <format>", "output: pretty | json", "pretty")
     .option("-c, --config <path>", "path to a docmeta config file")
+    .option("--no-config", "ignore any discovered config file")
     .option("--allow-empty", "treat zero matched files as success")
     .addHelpText(
       "after",
@@ -273,7 +308,8 @@ export function buildProgram(): Command {
           as: options.as,
           exclude: options.exclude,
           exts,
-          configPath: options.config,
+          ...configOption(options.config),
+          onConfigLoaded: reportConfig(format === "pretty", process.cwd()),
           stdinContent,
           allowEmpty: options.allowEmpty ? true : undefined,
         });
@@ -330,6 +366,7 @@ export function buildProgram(): Command {
     .option("--concurrency <n>", "files inferred in parallel", parseFloat)
     .option("-f, --format <format>", "output: pretty | json", "pretty")
     .option("-c, --config <path>", "path to a docmeta config file")
+    .option("--no-config", "ignore any discovered config file")
     .option("--allow-empty", "treat zero matched files as success")
     .addHelpText(
       "after",
@@ -368,7 +405,13 @@ export function buildProgram(): Command {
           exts,
           exclude: options.exclude,
           as: options.as,
-          configPath: options.config,
+          ...configOption(options.config),
+          // With `-` the filled document owns stdout, so the notice is a
+          // diagnostic there just as the report is.
+          onConfigLoaded: reportConfig(
+            format === "pretty" && !usingStdin,
+            process.cwd(),
+          ),
           stdinContent,
           allowEmpty: options.allowEmpty ? true : undefined,
           fields: options.fields ? splitList(String(options.fields)) : undefined,

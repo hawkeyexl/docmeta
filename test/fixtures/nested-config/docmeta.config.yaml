@@ -1,0 +1,4 @@
+paths:
+  - "docs/**/*.md"
+schemas:
+  - ./strict.schema.json

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docmeta:test:nested-config-strict",
+  "title": "Nested-config strict schema",
+  "description": "Requires `owner`, which the built-in default set does not, so a run that falls back to the defaults passes a file this schema fails.",
+  "type": "object",
+  "required": ["type", "owner"],
+  "additionalProperties": true,
+  "properties": {
+    "type": { "type": "string", "minLength": 1 },
+    "owner": { "type": "string", "minLength": 1 }
+  }
+}

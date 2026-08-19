@@ -3,10 +3,12 @@
  * targets, excludes, the default schema set, and optional per-glob overrides,
  * so CI can run a bare `docmeta validate`.
  */
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { DocmetaError } from "../types.js";
+import { rebaseConfigSchemaRefs } from "./resolve-schema.js";
 
 export interface SchemaOverride {
   files: string;
@@ -153,32 +155,161 @@ function parseFill(value: unknown, source: string): FillConfig {
   return fill;
 }
 
+export interface LoadedConfig {
+  config: DocmetaConfig;
+  /** Absolute path to the file the config was read from. */
+  path: string;
+  /**
+   * Directory holding that file. Relative paths written *in* the config —
+   * `paths:`, `exclude:`, local-file schema refs — are meaningful relative to
+   * this, not to the directory the command happened to be invoked from.
+   */
+  dir: string;
+}
+
 /**
- * Load config from an explicit path (error if missing) or by discovery in cwd.
+ * The directories a discovery walk may look in, nearest first.
+ *
+ * The walk stops at a **project boundary**: a directory containing `.git`,
+ * which is included in the search. `existsSync` rather than `isDirectory()`,
+ * because a git *file* — what a worktree or a submodule carries — bounds a
+ * project just as a directory does, and this repo's own worktrees are exactly
+ * that case. `existsSync` never dereferences the `gitdir:` target, so one line
+ * covers Windows, Linux, submodules, and worktrees alike.
+ *
+ * With **no** boundary anywhere above cwd, only cwd is considered. A
+ * project-scoped config has no meaning without a project, and walking on would
+ * let a stray `docmeta.config.yaml` in a home or temp directory silently govern
+ * unrelated runs — including this repo's own tests, which work in OS temp
+ * directories under the user's home.
+ */
+function searchPath(cwd: string): string[] {
+  const chain: string[] = [];
+  let dir = resolve(cwd);
+  for (;;) {
+    chain.push(dir);
+    if (existsSync(join(dir, ".git"))) return chain;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return chain.slice(0, 1);
+}
+
+/**
+ * Load config from an explicit path (error if missing) or by discovery.
+ *
+ * Discovery checks cwd and then each ancestor up to and including the nearest
+ * `.git` boundary (see `searchPath`). Within a directory the order is
+ * `docmeta.config.yaml` then `docmeta.config.yml`. The **first file found
+ * wins** and the walk stops there — ancestor configs are never merged, because
+ * `schemas:` is a set a file must satisfy in full and `overrides:` is
+ * first-match-wins ordered, so a partial merge would silently redefine what
+ * "the contract" means.
+ *
  * Returns null when no config is found via discovery.
  */
 export async function loadConfig(
   explicitPath?: string,
   cwd: string = process.cwd(),
-): Promise<{ config: DocmetaConfig; path: string } | null> {
+): Promise<LoadedConfig | null> {
   if (explicitPath) {
+    // An explicit path never falls back to discovery: a `-c` pointing at a
+    // file that is not there is a mistake worth failing on, not a reason to
+    // quietly validate against something else.
+    const abs = resolve(cwd, explicitPath);
     let text: string;
     try {
-      text = await readFile(explicitPath, "utf8");
+      text = await readFile(abs, "utf8");
     } catch {
+      // Report the spelling the user typed, not the resolved absolute path.
       throw new DocmetaError(`Config file not found: "${explicitPath}".`);
     }
-    return { config: parseConfig(text, explicitPath), path: explicitPath };
+    return {
+      config: parseConfig(text, explicitPath),
+      path: abs,
+      dir: dirname(abs),
+    };
   }
 
-  for (const name of CONFIG_NAMES) {
-    const p = resolve(cwd, name);
-    try {
-      const text = await readFile(p, "utf8");
-      return { config: parseConfig(text, name), path: p };
-    } catch {
-      // not found; try next
+  for (const dir of searchPath(cwd)) {
+    for (const name of CONFIG_NAMES) {
+      const p = join(dir, name);
+      let text: string;
+      try {
+        text = await readFile(p, "utf8");
+      } catch {
+        continue; // not here; try the next name, then the next directory
+      }
+      // Name the file the way the user would have to type it, so a parse
+      // error from an ancestor config says which one.
+      const source = relative(cwd, p).replace(/\\/g, "/");
+      return { config: parseConfig(text, source), path: p, dir };
     }
   }
   return null;
+}
+
+/** Told to a caller once, when a run turns out to be governed by a config. */
+export interface ConfigNotice {
+  /** Absolute path to the config file. */
+  path: string;
+  /** Directory holding it. */
+  dir: string;
+}
+
+export interface RunConfigOptions {
+  /** Defaults to `process.cwd()`, matching `loadConfig`. */
+  cwd?: string;
+  /** `-c/--config`. */
+  configPath?: string;
+  /** `--no-config`: skip discovery and run on the built-in defaults. */
+  noConfig?: boolean;
+  /** Positional inputs; empty means fall back to the config's `paths:`. */
+  inputs: string[];
+  onConfigLoaded?: (info: ConfigNotice) => void;
+}
+
+export interface RunConfig {
+  /** The config, with its local file schema refs already rebased. */
+  config: DocmetaConfig | null;
+  /** What to resolve: the positional inputs, or the config's `paths:`. */
+  inputs: string[];
+  /**
+   * Directory those inputs — and so every resolved file path, and every file
+   * read — are relative to.
+   *
+   * A run uses *either* positional paths *or* config `paths:`, never both, so
+   * there is exactly one base per run and no ambiguity about which it is.
+   * Positional paths are typed by a person standing in a shell, so they stay
+   * relative to the working directory; `paths:` globs were written next to the
+   * config, so they resolve from there.
+   */
+  base: string;
+}
+
+/**
+ * Settle the three things every command core needs from config before it can
+ * touch the filesystem: which config governs the run, what to resolve, and
+ * what those relative paths are relative to.
+ */
+export async function resolveRunConfig(
+  opts: RunConfigOptions,
+): Promise<RunConfig> {
+  // `--no-config` wins over an explicit path. The CLI cannot supply both (they
+  // are one commander option), but the cores are public API.
+  const cwd = opts.cwd ?? process.cwd();
+
+  const loaded = opts.noConfig ? null : await loadConfig(opts.configPath, cwd);
+  if (loaded) opts.onConfigLoaded?.({ path: loaded.path, dir: loaded.dir });
+
+  const config = loaded
+    ? rebaseConfigSchemaRefs(loaded.config, loaded.dir, cwd)
+    : null;
+
+  const fromConfig = opts.inputs.length === 0;
+  const inputs = fromConfig ? (config?.paths ?? []) : opts.inputs;
+  const base = fromConfig && inputs.length > 0 && loaded ? loaded.dir : cwd;
+
+  return { config, inputs, base };
 }
