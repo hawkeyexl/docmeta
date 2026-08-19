@@ -1,3 +1,10 @@
+## [3.7.1](https://github.com/hawkeyexl/docmeta/compare/v3.7.0...v3.7.1) (2026-08-19)
+
+
+### Bug Fixes
+
+* **schemas:** reject a fetched payload that constrains nothing ([#80](https://github.com/hawkeyexl/docmeta/issues/80)) ([ad60b70](https://github.com/hawkeyexl/docmeta/commit/ad60b70b7add86f4be179d4e4abc443540e6a49e))
+
 # [3.7.0](https://github.com/hawkeyexl/docmeta/compare/v3.6.0...v3.7.0) (2026-08-19)
 
 
