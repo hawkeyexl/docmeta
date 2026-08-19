@@ -22,6 +22,9 @@ export const DEFAULT_BASELINE_PATH = ".docmeta-baseline.json";
 /** The only file format this version understands. */
 export const BASELINE_VERSION = 1;
 
+/** Exactly what `fingerprint` emits: 16 lowercase hex characters. */
+const FINGERPRINT_RE = /^[0-9a-f]{16}$/;
+
 export interface Baseline {
   version: number;
   /** docmeta version that produced the file, for diagnosis only. */
@@ -202,6 +205,17 @@ export function parseBaseline(text: string, source: string): Baseline {
   )) {
     if (!Array.isArray(value) || value.some((v) => typeof v !== "string")) {
       bad(source, `entries["${file}"] must be a list of fingerprint strings.`);
+    }
+    // A fingerprint that is not the shape this code writes can never match a
+    // real violation, so a typo in a hand-edited baseline would otherwise
+    // present as "that finding came back" with nothing to explain it. Reject it
+    // where the user can still see which entry is wrong.
+    const malformed = (value as string[]).find((v) => !FINGERPRINT_RE.test(v));
+    if (malformed !== undefined) {
+      bad(
+        source,
+        `entries["${file}"] contains ${JSON.stringify(malformed)}, which is not a fingerprint (16 lowercase hex characters).`,
+      );
     }
     entries[file] = value as string[];
   }

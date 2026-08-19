@@ -318,3 +318,31 @@ describe("parseBaseline: a hostile entry key", () => {
     expect(again.entries["__proto__"]).toEqual(["aaaaaaaaaaaaaaaa"]);
   });
 });
+
+describe("parseBaseline: fingerprint shape", () => {
+  const wrap = (prints: string) =>
+    `{"version":1,"generatedWith":"3.4.2","entries":{"docs/a.md":[${prints}]}}`;
+
+  it("rejects a fingerprint that is not 16 lowercase hex characters", () => {
+    // A hand-edited typo can never match a real violation, so without this the
+    // symptom is "a baselined finding came back" with nothing to explain it.
+    expect(() => parseBaseline(wrap('"nope"'), "b.json")).toThrow(DocmetaError);
+    expect(() => parseBaseline(wrap('"NOTHEXNOTHEXNOTH"'), "b.json")).toThrow(
+      /not a fingerprint/,
+    );
+    expect(() => parseBaseline(wrap('"aaaaaaaaaaaaaaa"'), "b.json")).toThrow(
+      /not a fingerprint/,
+    );
+  });
+
+  it("names the offending value and its file", () => {
+    expect(() => parseBaseline(wrap('"aaaaaaaaaaaaaaaa","zz"'), "b.json")).toThrow(
+      /entries\["docs\/a\.md"\] contains "zz"/,
+    );
+  });
+
+  it("accepts what fingerprint() actually emits", () => {
+    const print = fingerprint(err());
+    expect(() => parseBaseline(wrap(JSON.stringify(print)), "b.json")).not.toThrow();
+  });
+});
