@@ -125,7 +125,7 @@ a built-in is something you chose deliberately and can read:
 
 | Requirement | Why |
 |---|---|
-| The body must be a JSON **object** using at least one of `$schema`, `$id`, `$ref`, `type`, `properties`, `required`, `allOf`, `anyOf`, `oneOf`, `not`, `enum`, `const`, or `items`. | An object with none of these constrains nothing, so **every document passes it**. |
+| The body must be a JSON **object** carrying at least one standard JSON Schema keyword — any of the validation or applicator vocabularies from draft-04 through 2020-12, including `$ref`, `$defs`, `type`, `properties`, `required`, `allOf`/`anyOf`/`oneOf`/`not`, `if`/`then`/`else`, `additionalProperties`, `patternProperties`, `propertyNames`, `items`/`prefixItems`/`contains`, `enum`, `const`, `format`, and the numeric, string and array constraints. | An object with none of them constrains nothing, so **every document passes it**. |
 | The body must be at most **5 MB**. | `res.json()` would otherwise read an unbounded body into memory. The timeout catches a slow response but not a fast, enormous one. |
 
 The first check exists because of a specific, silent failure. An API gateway, a
@@ -146,6 +146,14 @@ This is intentionally **not** meta-schema validation. docmeta compiles [four
 dialects](#dialects), and how strict a schema is remains its author's business:
 a sparse but genuine schema such as `{"type": "object"}` is accepted. The check
 targets one failure — a non-schema served as one.
+
+The keyword list is deliberately generous, because the two ways this check can
+be wrong are not equally costly. Letting an unusual payload through means it
+either fails to compile or behaves as the permissive schema it literally is;
+rejecting a real schema stops a working setup outright. So a schema whose only
+root keyword is `if`/`then`, `patternProperties`, or `additionalProperties` is
+accepted — each is perfectly ordinary — while an error envelope carries none of
+them.
 
 <Aside type="note">
 A consequence worth stating: a fetched `{}` is rejected. It is a legal JSON

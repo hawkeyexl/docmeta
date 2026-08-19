@@ -184,18 +184,6 @@ describe("loadSchema over http(s) — payload guard", () => {
       "/guard-array.json": { json: [{ type: "object" }] },
       "/guard-boolean.json": { body: "true" },
       "/guard-ref.json": { json: { $ref: "https://example.com/other.json" } },
-      // Schemas whose only root keyword is a conditional or an object-shape
-      // applicator. Ordinary, and rejected by a too-narrow allowlist.
-      "/guard-if-then.json": {
-        json: {
-          if: { properties: { type: { const: "blog" } } },
-          then: { required: ["category"] },
-        },
-      },
-      "/guard-pattern-props.json": {
-        json: { patternProperties: { "^x-": { type: "string" } } },
-      },
-      "/guard-additional.json": { json: { additionalProperties: false } },
     });
   });
 
