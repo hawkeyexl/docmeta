@@ -375,7 +375,7 @@ a green one:
 
 | Situation | Message |
 |---|---|
-| The body parsed, but constrains nothing — most often a JSON error envelope served with `200 OK`. | `Schema "<url>" does not look like a JSON Schema: it constrains nothing, so every document would pass it. Expected an object using at least one of: … The server returned: {"error":"not found"…}` |
+| The body parsed, but constrains nothing — most often a JSON error envelope served with `200 OK`. | `Schema "<url>" does not look like a JSON Schema: it carries no JSON Schema keyword, so it constrains nothing and every document would pass it. The server returned: {"error":"not found","requestId":"abc123"}` |
 | The body exceeds the 5 MB response limit. | `Schema "<url>" is too large: the response exceeds the 5242880-byte limit.` |
 | The request, or the response body, did not finish inside the timeout. | `Failed to fetch schema "<url>": timed out after 10000ms.` |
 | A non-2xx status. | `Failed to fetch schema "<url>": HTTP 404.` |
