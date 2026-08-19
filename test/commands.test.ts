@@ -27,6 +27,11 @@ const CUSTOM_BASELINE_CONFIG = [
   "",
 ].join("\n");
 
+/** Escape a string (an ephemeral-port URL) for use inside a RegExp. */
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function byFile(results: { file: string; ok: boolean }[]) {
   return Object.fromEntries(
     results.map((r) => [r.file.split("/").pop(), r.ok]),
@@ -145,6 +150,31 @@ describe("runValidate", () => {
       expect(fail.results[0]?.ok).toBe(false);
       expect(fail.results[0]?.errors[0]?.schema).toBe(url);
       expect(fail.results[0]?.errors[0]?.message).toMatch(/type/);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("fails the run when a schema URL answers 200 with an error envelope", async () => {
+    // End to end, this is the false green the payload guard closes: a document
+    // that fails its real schema was reported as PASSING, exit 0, because an
+    // envelope compiles as a schema with no constraints. The assertion is about
+    // the verdict on the document, not just the wording of the error.
+    const server = await startSchemaServer({
+      "/envelope.json": { json: { error: "not found", requestId: "abc123" } },
+    });
+    try {
+      const url = `${server.url}/envelope.json`;
+      const run = runValidate({
+        inputs: ["-"],
+        as: "markdown",
+        stdinContent: NO_TYPE_PAGE,
+        cliSchemas: [url],
+        cwd: root,
+      });
+      // Operational error (exit 2), not a green run.
+      await expect(run).rejects.toBeInstanceOf(DocmetaError);
+      await expect(run).rejects.toThrow(new RegExp(escapeRe(url)));
     } finally {
       await server.close();
     }

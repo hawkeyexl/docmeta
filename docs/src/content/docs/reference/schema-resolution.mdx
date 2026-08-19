@@ -107,13 +107,64 @@ file a run actually loaded.
 
 A `url` reference is fetched with a default **10-second timeout**. Within a
 single run, fetched schemas are **cached per URL**, so the same URL is only
-retrieved once even when many files reference it. A timeout, a non-2xx HTTP
-status, or a response that is not valid JSON is an error (exit 2).
+retrieved once even when many files reference it — including when many files are
+processed concurrently, which shares the one in-flight request rather than
+opening one per file. A timeout, a non-2xx HTTP status, or a response that is
+not valid JSON is an error (exit 2).
 
 <Aside type="caution">
 The URL cache lives only for the duration of one run. Each invocation re-fetches
 remote schemas; docmeta does not persist a cross-run cache.
 </Aside>
+
+#### What docmeta requires of a fetched schema
+
+A URL is a live third party, and `200 OK` is not proof that what came back is a
+schema. Two checks apply to a fetched payload, and to it only — a local file or
+a built-in is something you chose deliberately and can read:
+
+| Requirement | Why |
+|---|---|
+| The body must be a JSON **object** carrying at least one standard JSON Schema keyword — any of the validation or applicator vocabularies from draft-04 through 2020-12, including `$ref`, `$defs`, `type`, `properties`, `required`, `allOf`/`anyOf`/`oneOf`/`not`, `if`/`then`/`else`, `additionalProperties`, `patternProperties`, `propertyNames`, `items`/`prefixItems`/`contains`, `enum`, `const`, `format`, and the numeric, string and array constraints. | An object with none of them constrains nothing, so **every document passes it**. |
+| The body must be at most **5 MB**. | `res.json()` would otherwise read an unbounded body into memory. The timeout catches a slow response but not a fast, enormous one. |
+
+The first check exists because of a specific, silent failure. An API gateway, a
+proxy, or a misconfigured bucket commonly answers a bad path with `200 OK` and a
+JSON *error envelope*:
+
+```json
+{ "error": "not found", "requestId": "abc123" }
+```
+
+That compiles as a perfectly valid schema with no constraints. Without the
+check, every document in the repo validates against it and the run is **green** —
+a gate that reports success precisely because it has stopped working. With it,
+the run stops with an exit-2 error naming the URL and quoting what the server
+actually sent.
+
+This is intentionally **not** meta-schema validation. docmeta compiles [four
+dialects](#dialects), and how strict a schema is remains its author's business:
+a sparse but genuine schema such as `{"type": "object"}` is accepted. The check
+targets one failure — a non-schema served as one.
+
+The keyword list is deliberately generous, because the two ways this check can
+be wrong are not equally costly. Letting an unusual payload through means it
+either fails to compile or behaves as the permissive schema it literally is;
+rejecting a real schema stops a working setup outright. So a schema whose only
+root keyword is `if`/`then`, `patternProperties`, or `additionalProperties` is
+accepted — each is perfectly ordinary — while an error envelope carries none of
+them.
+
+<Aside type="note">
+A consequence worth stating: a fetched `{}` is rejected. It is a legal JSON
+Schema, but over the wire nothing distinguishes a deliberate no-op contract from
+a body that lost its content, and both pass every document. A no-op schema is
+still expressible as a local file or in `$schema`-bearing form.
+</Aside>
+
+The size cap counts the bytes actually received. `content-length` is advisory —
+it is absent on a chunked response and can simply be wrong — so it is never
+trusted on its own.
 
 ## Dialects
 
