@@ -1,3 +1,10 @@
+# [3.5.0](https://github.com/hawkeyexl/docmeta/compare/v3.4.2...v3.5.0) (2026-08-19)
+
+
+### Features
+
+* **validate:** add a baseline so a standard can tighten today ([#76](https://github.com/hawkeyexl/docmeta/issues/76)) ([10421ac](https://github.com/hawkeyexl/docmeta/commit/10421ac7605208a4cb15e2933f50ed5abf7eb723))
+
 ## [3.4.2](https://github.com/hawkeyexl/docmeta/compare/v3.4.1...v3.4.2) (2026-08-19)
 
 
