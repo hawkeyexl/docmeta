@@ -197,7 +197,7 @@ export function render(
     case "sarif":
       return renderSarif(results, opts);
     case "junit":
-      return renderJunit(results);
+      return renderJunit(results, opts);
     case "pretty":
       return renderPretty(results, summary, opts);
     default: {

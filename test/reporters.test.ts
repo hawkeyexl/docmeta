@@ -620,3 +620,50 @@ describe("reporters: junit escaping", () => {
     );
   });
 });
+
+describe("junit and sarif agree on rule identity", () => {
+  // A consumer correlating a SARIF `ruleId` with a JUnit `<failure type>` for
+  // the same run must see the same string. Built-in ids are stable either way;
+  // a *local file* schema ref is the case that diverges, because the canonical
+  // form is measured against the config directory while the raw ref is relative
+  // to wherever the command was run.
+  const frame = {
+    cwd: "/repo/docs",
+    base: "/repo",
+    runBase: "/repo/docs",
+  };
+  const localRefResults: ValidationResult[] = [
+    {
+      file: "a.md",
+      format: "markdown",
+      ok: false,
+      schemas: ["../my.schema.json"],
+      errors: [
+        {
+          schema: "../my.schema.json",
+          instancePath: "",
+          message: "must have required property 'owner'",
+          keyword: "required",
+          subject: "owner",
+          line: 1,
+        },
+      ],
+    },
+  ];
+
+  it("uses the canonical schema ref in the JUnit failure type", () => {
+    const out = renderJunit(localRefResults, { frame });
+    expect(out).toContain('type="my.schema.json/required"');
+    expect(out).not.toContain('type="../my.schema.json/required"');
+  });
+
+  it("produces the same identity as the SARIF ruleId", () => {
+    const junit = renderJunit(localRefResults, { frame });
+    const sarif = JSON.parse(renderSarif(localRefResults, { frame })) as {
+      runs: { results: { ruleId: string }[] }[];
+    };
+    const ruleId = sarif.runs[0]?.results[0]?.ruleId ?? "";
+    expect(ruleId).toBe("my.schema.json/required");
+    expect(junit).toContain(`type="${ruleId}"`);
+  });
+});

@@ -18,6 +18,7 @@
  * paths can hold `&`. Every attribute value goes through `xmlEscape`; nothing
  * is interpolated raw.
  */
+import type { FingerprintContext } from "../core/baseline.js";
 import type { ValidationResult } from "../types.js";
 import { fieldLabel, ruleIdFor } from "./rule-id.js";
 
@@ -58,7 +59,24 @@ export function xmlEscape(value: string): string {
 const attr = (name: string, value: string): string =>
   ` ${name}="${xmlEscape(value)}"`;
 
-export function renderJunit(results: ValidationResult[]): string {
+export interface JunitOptions {
+  /**
+   * The run's path frame, used only to canonicalize a local-file schema ref in
+   * `<failure type>`.
+   *
+   * Without it the attribute carries the ref exactly as the run received it —
+   * `./my.schema.json` from the repo root, `../my.schema.json` from a
+   * subdirectory, or a machine-absolute path once config discovery has rebased
+   * it. SARIF's `ruleId` is already canonical, so a consumer correlating the two
+   * for one run would find them disagreeing on the same violation.
+   */
+  frame?: FingerprintContext;
+}
+
+export function renderJunit(
+  results: ValidationResult[],
+  opts: JunitOptions = {},
+): string {
   const tests = results.length;
   const failures = results.filter((r) => r.errors.length > 0).length;
 
@@ -89,7 +107,7 @@ export function renderJunit(results: ValidationResult[]): string {
     for (const e of r.errors) {
       const where = e.line != null ? ` (line ${e.line})` : "";
       lines.push(
-        `      <failure${attr("type", ruleIdFor(e))}${attr(
+        `      <failure${attr("type", ruleIdFor(e, opts.frame))}${attr(
           "message",
           `${fieldLabel(e.instancePath)} ${e.message}${where}`,
         )}/>`,
