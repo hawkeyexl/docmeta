@@ -1,3 +1,10 @@
+# [3.7.0](https://github.com/hawkeyexl/docmeta/compare/v3.6.0...v3.7.0) (2026-08-19)
+
+
+### Features
+
+* **reporters:** add SARIF and JUnit output ([#79](https://github.com/hawkeyexl/docmeta/issues/79)) ([bc01a59](https://github.com/hawkeyexl/docmeta/commit/bc01a59e737705b876bbbd2b155ba55179b1321f))
+
 # [3.6.0](https://github.com/hawkeyexl/docmeta/compare/v3.5.0...v3.6.0) (2026-08-19)
 
 
