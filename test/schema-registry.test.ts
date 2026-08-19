@@ -658,3 +658,49 @@ describe("loadSchema over http(s) — the guard must not reject real schemas", (
     });
   }
 });
+
+describe("loadSchema over http(s) — offline is not satisfied by a warm memo", () => {
+  let server: SchemaServer;
+
+  beforeAll(async () => {
+    server = await startSchemaServer({
+      "/memo-nocache.json": { json: URL_SCHEMA },
+      "/memo-disk.json": { json: URL_SCHEMA },
+    });
+  });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  it("refuses an offline call for a ref this process fetched over the network", async () => {
+    // `urlCache` is a memo, so an entry warmed by an earlier online call would
+    // otherwise satisfy a later offline one — the guard short-circuits before it
+    // ever runs. Unreachable from the CLI, where every invocation is a fresh
+    // process, but `loadSchema` is public API and a long-lived consumer would
+    // see offline "work" here and then fail in an air-gapped process.
+    //
+    // No `cacheDir` at all, so there is genuinely nothing legal to serve.
+    const ref = `${server.url}/memo-nocache.json`;
+    await expect(loadSchema(ref)).resolves.toBeTypeOf("object");
+    await expect(loadSchema(ref, { offline: true })).rejects.toBeInstanceOf(
+      DocmetaError,
+    );
+  });
+
+  it("does serve an offline call once the ref is on disk", async () => {
+    // The other half: provenance, not blanket refusal. Once the schema has been
+    // written to the disk cache, an offline call is legitimate — that is exactly
+    // what a fresh process would find.
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-memo-"));
+    try {
+      const ref = `${server.url}/memo-disk.json`;
+      await loadSchema(ref, { cacheDir: dir });
+      await expect(
+        loadSchema(ref, { cacheDir: dir, offline: true }),
+      ).resolves.toBeTypeOf("object");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

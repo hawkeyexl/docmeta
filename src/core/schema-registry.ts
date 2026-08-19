@@ -73,6 +73,24 @@ export function classifyRef(ref: string): { kind: RefKind; ref: string } {
 const urlCache = new Map<string, Record<string, unknown>>();
 
 /**
+ * Refs whose `urlCache` entry came off the **network** in this process.
+ *
+ * `urlCache` is a memo, so an entry warmed by an earlier online call would
+ * satisfy a later `offline` one — the guard never runs, because the short
+ * circuit happens before it. For the CLI that is unreachable (each invocation
+ * is a fresh process), but `loadSchema` is public API, and a long-lived
+ * consumer doing `loadSchema(url)` then `loadSchema(url, { offline: true })`
+ * would see offline "work" and then fail in an air-gapped process. Worse, it
+ * holds even with no disk cache configured at all, so the run has nothing
+ * legal to serve.
+ *
+ * Tracking provenance keeps the memo for entries an offline run may legally
+ * use — anything read from the disk cache — while sending network-sourced refs
+ * back through `resolveRemote`, which applies the guard.
+ */
+const urlFromNetwork = new Set<string>();
+
+/**
  * In-flight fetches, keyed on the *promise* rather than the resolved schema.
  *
  * `urlCache` only populates once the response has been read, so it collapses
@@ -437,19 +455,37 @@ async function resolveRemote(
     const hit = await cache.read(ref, { ignoreTtl: options.offline === true });
     if (hit) {
       urlCache.set(ref, hit);
+      // Served from disk, so an offline call may use this memo from now on.
+      urlFromNetwork.delete(ref);
       return hit;
     }
   }
 
   if (options.offline === true) {
+    // The remedy depends on the configuration, and the old wording named a
+    // hard-coded directory while advising a re-run that could never help. With
+    // no cache configured, or with the TTL set to 0, running online populates
+    // nothing — so saying "run once online" there sends the operator in a
+    // circle.
+    const remedy = cache
+      ? `Run once without --offline to populate ${options.cacheDir}, or point the reference at a local file.`
+      : "No schema cache is configured for this run (`schemaCache.ttlHours: 0` disables it), so there is nothing for --offline to read. Enable the cache, or point the reference at a local file or a built-in id.";
     throw new DocmetaError(
-      `Cannot resolve schema "${ref}": --offline is set and it is not in the schema cache (${SCHEMA_CACHE_DIR}). Run once without --offline to populate the cache, or point the reference at a local file.`,
+      `Cannot resolve schema "${ref}": --offline is set and it could not be served from cache. ${remedy}`,
     );
   }
 
   const schema = await fetchSchema(ref, options);
   urlCache.set(ref, schema);
-  if (cache) await cache.write(ref, schema);
+  urlFromNetwork.add(ref);
+  if (cache && (await cache.write(ref, schema))) {
+    // Only once the entry really landed. `write` swallows its failures by
+    // design — a read-only checkout must not fail the run — so clearing the
+    // mark unconditionally would tell a later offline call it may use the memo
+    // for a schema that never reached disk: the same false pass, one step
+    // narrower.
+    urlFromNetwork.delete(ref);
+  }
   return schema;
 }
 
@@ -496,7 +532,12 @@ export async function loadSchema(
 
   if (kind === "url") {
     const cached = urlCache.get(ref);
-    if (cached) return cached;
+    // An offline call must not be satisfied by something this process pulled
+    // over the network; it goes back through `resolveRemote` so the disk cache
+    // and the guard both apply, exactly as they would in a fresh process.
+    if (cached && !(options.offline === true && urlFromNetwork.has(ref))) {
+      return cached;
+    }
     const inflight = urlInflight.get(ref);
     // A caller joining an in-flight fetch inherits the first caller's
     // `timeoutMs`/`maxBytes` — there is one request, so there is one set of

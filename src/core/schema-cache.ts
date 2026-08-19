@@ -144,9 +144,12 @@ export class SchemaCache {
    * A failure to write is swallowed. A read-only checkout, a full disk, or a
    * sandbox with no write access must cost the *next* run one fetch, not this
    * run its result.
+   *
+   * Returns whether the entry actually landed on disk, which is a different
+   * question from whether the run should continue.
    */
-  async write(url: string, schema: Record<string, unknown>): Promise<void> {
-    if (!this.enabled) return;
+  async write(url: string, schema: Record<string, unknown>): Promise<boolean> {
+    if (!this.enabled) return false;
     const entry: SchemaCacheEntry = {
       version: SCHEMA_CACHE_VERSION,
       url,
@@ -159,8 +162,13 @@ export class SchemaCache {
         this.entryPath(url),
         `${JSON.stringify(entry, null, 2)}\n`,
       );
+      return true;
     } catch {
-      // Intentionally silent: see the doc comment.
+      // Intentionally silent: see the doc comment. The boolean is how a caller
+      // learns the entry is not on disk without the failure becoming fatal —
+      // `schema-registry` needs exactly that to know an offline call cannot
+      // legally be served from the in-process memo.
+      return false;
     }
   }
 }

@@ -163,7 +163,11 @@ describe("schema cache", () => {
     // cache is an optimization, and validation must not depend on it.
     const cache = new SchemaCache(join(dir, "file-in-the-way", "sub"), 24);
     writeFileSync(join(dir, "file-in-the-way"), "not a directory");
-    await expect(cache.write(URL_A, SCHEMA)).resolves.toBeUndefined();
+    // Reports that nothing landed, without throwing. The caller needs both
+    // facts: the run continues, and the entry is not on disk — the second is
+    // what stops an offline call being served from the in-process memo for a
+    // schema that was never persisted.
+    await expect(cache.write(URL_A, SCHEMA)).resolves.toBe(false);
     expect(await cache.read(URL_A)).toBeNull();
   });
 
@@ -183,5 +187,18 @@ describe("schema cache", () => {
     expect(schemaCacheDir(join(dir, "root"))).toBe(
       join(dir, "root", ".docmeta", "schema-cache"),
     );
+  });
+});
+
+describe("schema cache: write reports whether the entry landed", () => {
+  it("returns true on a successful write and false when disabled", async () => {
+    // `ttlHours: 0` disables the cache in both directions, so a write is a
+    // no-op — and must say so, rather than reporting a success that leaves
+    // nothing behind.
+    const ok = new SchemaCache(mkdtempSync(join(tmpdir(), "docmeta-w-")), 24);
+    expect(await ok.write(URL_A, SCHEMA)).toBe(true);
+
+    const off = new SchemaCache(mkdtempSync(join(tmpdir(), "docmeta-w0-")), 0);
+    expect(await off.write(URL_A, SCHEMA)).toBe(false);
   });
 });

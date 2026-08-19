@@ -95,9 +95,16 @@ export function compileWithFormats(
 export class Validator {
   /**
    * How this validator's schemas are loaded: the disk cache location, its TTL,
-   * and `--offline`. Held per instance rather than read from module state so a
-   * library caller can run two differently-configured validations in one
-   * process without them interfering.
+   * and `--offline`. Held per instance rather than read from module state, so
+   * two differently-configured validations in one process each get their own
+   * settings.
+   *
+   * That is not full isolation, and the difference matters to a library
+   * caller: `schema-registry` keeps a process-wide memo of fetched schemas, so
+   * one validator's successful fetch is visible to another. `offline` is
+   * excluded from that sharing on purpose — an offline validator will not be
+   * served something this process pulled over the network — but the memo is
+   * still shared, so a URL fetched once is not re-fetched per instance.
    */
   constructor(private readonly schemaOptions: LoadSchemaOptions = {}) {}
 
