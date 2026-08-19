@@ -14,7 +14,7 @@
  * One subprocess per run, fed the whole candidate list on stdin. Measured at
  * 5,000 candidates: 0.111 s with none ignored, 0.260 s with half ignored.
  */
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 
 export interface GitignoreAnswer {
   /** Ignored paths, spelled exactly as they were handed in. */
@@ -59,7 +59,9 @@ export function gitIgnored(
       settle(answer);
     };
 
-    let child;
+    // Explicitly typed rather than relying on evolving-`let` inference, so
+    // the stream handles below are checked rather than merely assumed.
+    let child: ChildProcessWithoutNullStreams;
     try {
       // -z: NUL-delimited in *and* out. Newline delimiting would corrupt a
       // filename containing a newline, for no benefit.

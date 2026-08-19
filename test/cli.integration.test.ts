@@ -941,6 +941,28 @@ describe("docmeta CLI: .gitignore-aware discovery", () => {
     expect(r.stdout).not.toContain("build/generated.md");
   });
 
+  it("fill honors .gitignore too", () => {
+    // The third command sharing the input model, so the three cannot drift.
+    // `--dry-run` keeps this away from any provider: filtering happens during
+    // target resolution, long before a proposal would be requested, so the file
+    // list is observable without inference running.
+    repo = makeTempRepo({ files: tree() });
+    const r = runIn(
+      withSchema("fill", "**/*.md", "--dry-run", "--no-cache", "-f", "json"),
+      repo,
+    );
+    const parsed = JSON.parse(r.stdout) as {
+      results: { file: string }[];
+    };
+    const seen = parsed.results.map((x) => x.file);
+    expect(seen).toContain("docs/real.md");
+    expect(seen).not.toContain("build/generated.md");
+    // 60s like the other `fill` cases: it pulls in the inference package and
+    // resolves a provider identity, which costs seconds on a cold run even
+    // though `--dry-run` means no proposal is ever requested. A warm run
+    // finishes well inside the 5s default, so the shortfall only shows on CI.
+  }, 60000);
+
   it("names .gitignore when it is why nothing matched", () => {
     repo = makeTempRepo({
       files: {
