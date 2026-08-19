@@ -995,3 +995,113 @@ describe("docmeta CLI: .gitignore-aware discovery", () => {
     expect(r.stderr).toContain("git could not answer");
   });
 });
+
+// The two standard formats (0003). What unit tests cannot show is the CLI's
+// side of the contract: the clean-run envelope, and stdout staying parseable.
+describe("docmeta CLI: sarif and junit output (built bin)", () => {
+  let repo: string | undefined;
+
+  afterEach(() => {
+    removeTempRepo(repo);
+    repo = undefined;
+  });
+
+  /** stderr is invisible to `run()` on a zero exit; these tests need both. */
+  const runIn = (args: string[], cwd: string): Run => {
+    const r = spawnSync("node", [bin, ...args], { cwd, encoding: "utf8" });
+    return {
+      stdout: r.stdout ?? "",
+      stderr: r.stderr ?? "",
+      status: r.status ?? 1,
+    };
+  };
+
+  it("emits parseable SARIF for a failing run and still exits 1", () => {
+    const r = run(["validate", "test/fixtures/missing-type.md", "-f", "sarif"]);
+    expect(r.status).toBe(1);
+    const log = JSON.parse(r.stdout) as {
+      version: string;
+      runs: {
+        tool: { driver: { name: string } };
+        results: {
+          ruleId: string;
+          locations: {
+            physicalLocation: { artifactLocation: { uri: string } };
+          }[];
+        }[];
+      }[];
+    };
+    expect(log.version).toBe("2.1.0");
+    expect(log.runs[0]?.tool.driver.name).toBe("docmeta");
+    expect(log.runs[0]?.results[0]?.ruleId).toContain("/required");
+    expect(
+      log.runs[0]?.results[0]?.locations[0]?.physicalLocation.artifactLocation
+        .uri,
+    ).toBe("test/fixtures/missing-type.md");
+  });
+
+  it("emits a full SARIF envelope on a clean run rather than nothing at all", () => {
+    const r = run(["validate", "test/fixtures/valid.md", "-f", "sarif"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout.trim().length).toBeGreaterThan(0);
+    const log = JSON.parse(r.stdout) as { runs: { results: unknown[] }[] };
+    expect(log.runs[0]?.results).toEqual([]);
+  });
+
+  it("emits JUnit XML whose counts match the pretty summary", () => {
+    const r = run([
+      "validate",
+      "test/fixtures/valid.md",
+      "test/fixtures/missing-type.md",
+      "-f",
+      "junit",
+    ]);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain('<testsuites name="docmeta" tests="2" failures="1"');
+    expect(r.stdout).toContain('<testcase name="test/fixtures/valid.md"');
+    expect(r.stdout).toContain("<failure ");
+  });
+
+  it("emits a full JUnit envelope on a clean run rather than nothing at all", () => {
+    const r = run(["validate", "test/fixtures/valid.md", "-f", "junit"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain('failures="0"');
+    expect(r.stdout).not.toContain("<failure");
+  });
+
+  it("keeps the config notice off stdout so SARIF stays parseable", () => {
+    const r = runIn(
+      ["validate", "-f", "sarif"],
+      resolve(root, "test/fixtures/nested-config"),
+    );
+    expect(() => JSON.parse(r.stdout)).not.toThrow();
+    expect(r.stdout).not.toContain("Using docmeta.config");
+  });
+
+  it("says on stderr when SARIF paths could not be rebased onto a repository root", () => {
+    repo = makeTempRepo({
+      init: false,
+      files: {
+        "permissive.schema.json": `${JSON.stringify({
+          type: "object",
+          required: ["nope"],
+        })}\n`,
+        "docs/real.md": DOC,
+      },
+    });
+    const r = runIn(
+      ["validate", "docs/real.md", "-f", "sarif", "-s", "./permissive.schema.json"],
+      repo,
+    );
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("repository-root-relative");
+    expect(() => JSON.parse(r.stdout)).not.toThrow();
+  });
+
+  it("names every accepted format when --format is wrong", () => {
+    const r = run(["validate", "test/fixtures/valid.md", "-f", "toml"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("Unknown --format");
+    expect(r.stderr).toContain("pretty, json, github, sarif, or junit");
+  });
+});

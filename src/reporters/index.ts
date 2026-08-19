@@ -2,24 +2,90 @@
  * Reporters render validation results to a string. The command layer writes
  * the result to stdout; diagnostics go to stderr separately.
  */
-import type {
-  BaselineSummary,
-  RunSummary,
-  ValidationResult,
+import {
+  DocmetaError,
+  type BaselineSummary,
+  type RunSummary,
+  type ValidationResult,
 } from "../types.js";
+import type { FingerprintContext } from "../core/baseline.js";
 import { palette } from "./color.js";
+import { fieldLabel } from "./rule-id.js";
+import { renderSarif, type SarifOptions } from "./sarif.js";
+import { renderJunit } from "./junit.js";
 
-export type ReportFormat = "pretty" | "json" | "github";
+export { renderSarif, SARIF_NO_GIT_ROOT } from "./sarif.js";
+export type { SarifOptions } from "./sarif.js";
+export { renderJunit, xmlEscape } from "./junit.js";
+export {
+  PARSE_ERROR_RULE,
+  SCHEMA_ERROR_RULE,
+  ruleIdFor,
+} from "./rule-id.js";
 
-export interface ReportOptions {
+/**
+ * Every value `--format` accepts, in the order help and error messages list
+ * them.
+ *
+ * The list is stated **once**. It used to live in five unlinked places — this
+ * union, a separate `Set<string>` in the CLI, the error message, the option
+ * description, and the docs — and the `Set` was not tied to the union at all,
+ * so widening the union alone type-checked and still rejected the new value at
+ * runtime. Deriving the union from the array makes that drift impossible.
+ */
+export const REPORT_FORMATS = [
+  "pretty",
+  "json",
+  "github",
+  "sarif",
+  "junit",
+] as const;
+
+export type ReportFormat = (typeof REPORT_FORMATS)[number];
+
+/** `"pretty, json, github, sarif, or junit"`, for messages and help text. */
+export const REPORT_FORMAT_LIST = REPORT_FORMATS.map((format, i) =>
+  i === REPORT_FORMATS.length - 1 ? `or ${format}` : format,
+).join(", ");
+
+export function isReportFormat(value: string): value is ReportFormat {
+  return (REPORT_FORMATS as readonly string[]).includes(value);
+}
+
+/**
+ * Formats something other than a person reads.
+ *
+ * These own stdout completely: a diagnostic printed alongside them (which
+ * config governed the run, say) would corrupt the parse. Colored escape codes
+ * would too, which is why the same predicate answers both questions.
+ */
+export const MACHINE_FORMATS: ReadonlySet<ReportFormat> = new Set<ReportFormat>(
+  ["json", "github", "sarif", "junit"],
+);
+
+export const isMachineFormat = (format: ReportFormat): boolean =>
+  MACHINE_FORMATS.has(format);
+
+/**
+ * Formats whose output may legitimately be empty.
+ *
+ * `github` prints one annotation per finding, so a clean run has nothing to
+ * say. Every other format has an **envelope** that must arrive even when it
+ * holds nothing: a zero-byte SARIF file makes `upload-sarif` fail outright, and
+ * a zero-byte JUnit file reads as a lost report rather than a passing one. So
+ * emptiness is a property of the format, not of the text — which is what the
+ * CLI's old bare `if (text.length > 0)` guard got wrong.
+ */
+export const OMITTED_WHEN_CLEAN: ReadonlySet<ReportFormat> =
+  new Set<ReportFormat>(["github"]);
+
+export interface ReportOptions extends SarifOptions {
   color?: boolean;
   /** In pretty output, omit passing files. */
   quiet?: boolean;
 }
 
-function fieldLabel(instancePath: string): string {
-  return instancePath === "" ? "(root)" : instancePath;
-}
+export type { FingerprintContext };
 
 const plural = (n: number, one: string, many: string): string =>
   `${n} ${n === 1 ? one : many}`;
@@ -128,8 +194,21 @@ export function render(
       return renderJson(results, summary);
     case "github":
       return renderGithub(results);
+    case "sarif":
+      return renderSarif(results, opts);
+    case "junit":
+      return renderJunit(results);
     case "pretty":
-    default:
       return renderPretty(results, summary, opts);
+    default: {
+      // Exhaustive: adding a format to `REPORT_FORMATS` without a case here is
+      // a compile error. The throw is for the runtime half — `render` is public
+      // API, and before this existed a caller passing "sarif" fell through to
+      // `pretty` and got a human report where it asked for a machine one.
+      const unreachable: never = format;
+      throw new DocmetaError(
+        `Unknown report format ${JSON.stringify(unreachable)}. Use ${REPORT_FORMAT_LIST}.`,
+      );
+    }
   }
 }

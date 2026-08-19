@@ -57,10 +57,10 @@ docmeta [paths...] [options]
 | `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
 | `--exclude` | `<glob>` | — | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
 | `--as` | `<format>` | — | Force an input [format](/docmeta/reference/formats/) (extractor name, e.g. `markdown`). Required when reading from stdin. |
-| `-f, --format` | `<pretty\|json\|github>` | `pretty` | [Output format](/docmeta/reference/output-and-exit-codes/). An unknown value is an error (exit 2). |
+| `-f, --format` | `<pretty\|json\|github\|sarif\|junit>` | `pretty` | [Output format](/docmeta/reference/output-and-exit-codes/). An unknown value is an error (exit 2). |
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). When set, the file must exist or docmeta exits 2. |
 | `--no-config` | — | off | Ignore any discovered config file and run on the [built-in default schema set](/docmeta/reference/schema-resolution/#precedence). `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
-| `-q, --quiet` | — | off | In `pretty` output, hide passing files. Has no effect on `json` or `github`. |
+| `-q, --quiet` | — | off | In `pretty` output, hide passing files. Has no effect on `json`, `github`, `sarif`, or `junit`. |
 | `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
 | `--no-gitignore` | — | on | Validate files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
 | `--baseline` | `[path]` | config `baseline:`, else `.docmeta-baseline.json` | Compare findings against a recorded [baseline](#baselines) and fail only on new ones. The value is optional, and omitting it means *this project's* baseline: the configured `baseline:` path when there is one, resolved against the config file, otherwise `.docmeta-baseline.json`. Config `baseline:` turns this on for every run. A named file that does not exist is an error (exit 2). |
@@ -159,6 +159,8 @@ re-record reporting a drop you cannot explain should not be committed.
 ```sh
 docmeta validate docs/                          # walk a directory
 docmeta validate "**/*.md" -f github            # CI annotations
+docmeta validate "**/*.md" -f sarif > out.sarif # code scanning
+docmeta validate "**/*.md" -f junit > junit.xml # the CI "Tests" tab
 docmeta validate page.md -s google:okf:0.1 -s ./my.schema.json
 cat page.md | docmeta validate - --as markdown  # read from stdin
 docmeta validate --write-baseline               # record today's backlog
@@ -213,7 +215,7 @@ unaffected.
 | `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
 | `--exclude` | `<glob>` | — | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
 | `--as` | `<format>` | — | Force an input [format](/docmeta/reference/formats/) (extractor name). Required when reading from stdin. |
-| `-f, --format` | `<pretty\|json>` | `pretty` | Output format. `get` has no `github` format. An unknown value is an error (exit 2). |
+| `-f, --format` | `<pretty\|json>` | `pretty` | Output format. `github`, `sarif`, and `junit` are `validate`-only. An unknown value is an error (exit 2). |
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). When set, the file must exist or docmeta exits 2. |
 | `--no-config` | — | off | Ignore any discovered config file and run on the [built-in default schema set](/docmeta/reference/schema-resolution/#precedence). `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
 | `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
@@ -297,7 +299,7 @@ used, in both output formats.
 | `--no-cache` | — | cache on | Bypass the proposal cache in `.docmeta/cache`. |
 | `--max-cost-usd` | `<usd>` | — | Stop scheduling new files once this much has been spent. |
 | `--concurrency` | `<n>` | `4` | Files inferred in parallel. |
-| `-f, --format` | `<pretty\|json>` | `pretty` | Output format. `fill` has no `github` format. An unknown value is an error (exit 2). |
+| `-f, --format` | `<pretty\|json>` | `pretty` | Output format. `github`, `sarif`, and `junit` are `validate`-only: they describe *findings in files*, and `fill`'s output is *proposals with confidence scores*. An unknown value is an error (exit 2). |
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). |
 | `--no-config` | — | off | Ignore any discovered config file and run on the [built-in default schema set](/docmeta/reference/schema-resolution/#precedence). `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
 | `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |

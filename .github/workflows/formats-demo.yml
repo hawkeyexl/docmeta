@@ -1,0 +1,116 @@
+# Proves the SARIF and JUnit reporters against the real consumers, not just
+# against unit tests.
+#
+# Green tests show the writers emit what we *think* the specs say. They cannot
+# show GitHub accepting the upload, rendering the alerts, or — the one that
+# matters — resolving `artifactLocation.uri` against the repository root. That
+# last failure is silent: a wrong URI means the upload succeeds and code
+# scanning shows **zero alerts**, with every job step green. Only a real upload
+# catches it, which is why this workflow exists.
+#
+# It runs over `test/fixtures/`, which already holds deliberately-invalid
+# documents (missing-type.md, bad-timestamp.md, dd/malformed-yaml.md, …). Those
+# are committed, reproducible, and already the material the docs' worked
+# examples use — better than synthesised failures, because every alert here is
+# explainable.
+#
+# Deliberately NOT on every push. It runs when the reporters change and on
+# demand, so it stays a live demonstration and a regression check without
+# accumulating standing alerts in the Security tab.
+name: Formats demo
+
+on:
+  pull_request:
+    paths:
+      - "src/reporters/**"
+      - "src/core/baseline.ts"
+      - ".github/workflows/formats-demo.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Required by upload-sarif. Nothing here needs write access to anything else.
+  security-events: write
+
+jobs:
+  formats-demo:
+    name: SARIF to code scanning, JUnit to the run summary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+      # `continue-on-error`, because validate exits 1 when there are findings
+      # and the findings ARE the point. Without it the upload step never runs,
+      # precisely in the case worth uploading.
+      - name: Validate fixtures as SARIF
+        id: sarif
+        continue-on-error: true
+        run: |
+          node dist/cli.js validate "test/fixtures/**/*.md" \
+            --allow-empty -f sarif > docmeta.sarif
+          echo "results=$(jq '.runs[0].results | length' docmeta.sarif)" >> "$GITHUB_OUTPUT"
+
+      # stdout must be pure JSON: docmeta sends diagnostics to stderr for every
+      # machine format, and a single leaked line here would make the upload
+      # below reject the file while this job stayed green.
+      - name: Check the SARIF is well-formed before uploading
+        run: |
+          jq -e '.version == "2.1.0" and (.runs | length) > 0' docmeta.sarif > /dev/null
+          echo "SARIF is valid JSON with ${{ steps.sarif.outputs.results }} result(s)."
+          echo "Artifact URIs (must be repository-root-relative, or code scanning silently drops them):"
+          jq -r '.runs[0].results[].locations[0].physicalLocation.artifactLocation.uri' docmeta.sarif | sort -u
+
+      - name: Upload SARIF to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: docmeta.sarif
+          # Namespaces these alerts so they are plainly a fixture demonstration
+          # and cannot be mistaken for a scan of the shipped source.
+          category: docmeta-fixtures
+
+      - name: Validate fixtures as JUnit
+        continue-on-error: true
+        run: |
+          node dist/cli.js validate "test/fixtures/**/*.md" \
+            --allow-empty -f junit > docmeta-junit.xml
+
+      # GitHub renders no JUnit natively. A third-party reporter action would be
+      # prettier; a step summary costs no new supply-chain surface in a repo
+      # whose release pipeline already runs with elevated permissions.
+      - name: Render JUnit to the run summary
+        if: always()
+        run: |
+          {
+            echo "## docmeta JUnit output"
+            echo
+            echo "| Metric | Value |"
+            echo "|---|---|"
+            for k in tests failures errors; do
+              v=$(sed -n "s/.*<testsuites[^>]*$k=\"\([0-9]*\)\".*/\1/p" docmeta-junit.xml | head -1)
+              echo "| $k | ${v:-0} |"
+            done
+            echo
+            echo "<details><summary>Failing test cases</summary>"
+            echo
+            echo '```xml'
+            grep -B 1 "<failure" docmeta-junit.xml | head -40
+            echo '```'
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload both reports as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docmeta-formats
+          path: |
+            docmeta.sarif
+            docmeta-junit.xml

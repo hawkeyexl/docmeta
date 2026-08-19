@@ -1,13 +1,15 @@
 ---
-title: 'CI recipes: GitLab CI, Jenkins, pre-commit'
-description: Copy-paste recipes that add a docmeta metadata gate to GitLab CI, Jenkins, and pre-commit, each wired to the exit-code contract.
+title: 'CI recipes: code scanning, GitLab CI, Jenkins, pre-commit'
+description: Copy-paste recipes that add a docmeta metadata gate to GitHub code scanning, GitLab CI, Jenkins, and pre-commit, each wired to the exit-code contract.
 ---
 
 import { Tabs, TabItem, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
 docmeta is a plain CLI with a stable exit-code contract, so it drops into any CI
 system that can run a Node.js command and read its exit code. This page gives
-complete, runnable recipes for three common setups beyond GitHub Actions.
+complete, runnable recipes for four common setups. The
+[GitHub Actions gate](/docmeta/ci/) is on its own page; the first recipe here
+adds persistence on top of it.
 
 Every recipe relies on the same contract: docmeta exits `0` when all files are
 valid, `1` when one or more files fail validation, and `2` on an operational or
@@ -18,10 +20,81 @@ enforced without extra scripting. For the full definition, see
 <Aside type="note" title="The github format is GitHub-specific">
 `--format github` emits GitHub Actions workflow commands (`::error ...`). On
 GitLab, Jenkins, and pre-commit it has no special effect; the lines print as
-plain text. Use the default `pretty` output (or `--format json` to feed another
-tool) on these platforms. The annotation format is documented in
+plain text. Use the default `pretty` output there, `--format junit` to feed the
+platform's test reporter, or `--format json` to feed a tool of your own. The
+annotation format is documented in
 [Exit codes & PR annotations](/docmeta/ci/exit-codes-and-annotations/).
 </Aside>
+
+## GitHub code scanning (upload-sarif)
+
+`--format github` renders annotations on the pull request and then loses them
+with the job log. `--format sarif` turns the same findings into **tracked
+alerts** in the Security tab, with state across commits — which is what makes
+"when did this regress" and "is our metadata debt going down" answerable.
+
+```yaml title=".github/workflows/docmeta-sarif.yml"
+name: docmeta code scanning
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required by upload-sarif. Without it the upload fails with a 403.
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # continue-on-error is load-bearing: validate exits 1 when there are
+      # findings, and the findings are precisely what is worth uploading.
+      - name: Validate metadata
+        id: docmeta
+        continue-on-error: true
+        run: npx -y docmeta validate "docs/**/*.md" -f sarif > docmeta.sarif
+
+      # if: always() so the upload still runs when the step above reported
+      # findings. Without both of these, nothing is ever uploaded.
+      - name: Upload to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: docmeta.sarif
+          category: docmeta
+
+      # Optional: keep the job red so the gate still blocks the merge. Drop
+      # this step to make code scanning purely informational.
+      - name: Fail on findings
+        if: steps.docmeta.outcome == 'failure'
+        run: exit 1
+```
+
+<Aside type="caution" title="continue-on-error is not optional here">
+This is the trap the recipe exists to avoid. `validate` exits `1` when it finds
+anything, so without `continue-on-error: true` on the docmeta step and
+`if: always()` on the upload, the job stops at the first finding and **the
+Security tab stays empty forever** — the failing case is exactly the case with
+something to upload.
+</Aside>
+
+<Aside type="caution" title="Run docmeta from the repository root">
+GitHub resolves each `artifactLocation.uri` against the **repository root** and
+silently drops results that do not resolve, so a bad path uploads successfully
+with zero alerts. docmeta rebases paths onto the git root to prevent that, but
+it needs the checkout to *be* a git repository — which `actions/checkout` gives
+you. If docmeta warns on stderr that it could not make paths
+repository-root-relative, the upload will report nothing.
+</Aside>
+
+A distinct `category:` namespaces the alerts, so docmeta's findings never merge
+with another tool's. Give each SARIF-producing job its own.
 
 ## GitLab CI
 
@@ -78,6 +151,24 @@ validate-metadata:
 the job still fails on validation errors. `when: always` keeps the artifact even
 when the job fails.
 
+For the merge request's **Tests** widget rather than a raw artifact, emit JUnit
+XML and hand it to `artifacts:reports:junit`:
+
+```yaml title=".gitlab-ci.yml"
+validate-metadata:
+  stage: test
+  image: node:20
+  script:
+    - npx -y docmeta validate "docs/**/*.md" --format junit | tee docmeta-junit.xml
+  artifacts:
+    when: always
+    reports:
+      junit: docmeta-junit.xml
+```
+
+Each file becomes one test, so the widget's count matches docmeta's
+`N files checked, M failed` summary.
+
 ## Jenkins
 
 Use a declarative `Jenkinsfile` stage. A `sh` step fails the stage when the
@@ -133,6 +224,25 @@ stage('Validate metadata') {
   }
 }
 ```
+
+To get docmeta into Jenkins' own **Test Result** page instead, emit JUnit XML
+and pass it to the `junit` step:
+
+```groovy title="Jenkinsfile"
+stage('Validate metadata') {
+  steps {
+    sh 'npx -y docmeta validate "docs/**/*.md" --format junit | tee docmeta-junit.xml'
+  }
+  post {
+    always {
+      junit 'docmeta-junit.xml'
+    }
+  }
+}
+```
+
+`post { always { ... } }` matters for the same reason `if: always()` does in the
+SARIF recipe: the run worth reporting is the one that failed.
 
 ## pre-commit
 
@@ -212,7 +322,7 @@ repository, which is why the pre-commit framework above is usually preferable.
   <LinkCard
     title="Exit codes & PR annotations"
     href="/docmeta/ci/exit-codes-and-annotations/"
-    description="The exact 0/1/2 contract and the pretty, json, and github output shapes."
+    description="The exact 0/1/2 contract and the pretty, json, github, sarif, and junit output shapes."
   />
   <LinkCard
     title="GitHub Actions recipe"

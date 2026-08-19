@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.test/xml-hostile.schema.json",
+  "title": "A schema whose messages carry every XML metacharacter",
+  "type": "object",
+  "properties": {
+    "tag": {
+      "type": "string",
+      "description": "The pattern holds <, &, and a double quote on purpose: Ajv quotes the regex into the violation message verbatim, so this is what reaches a hand-rolled XML writer.",
+      "pattern": "^<a href=\"x\">&amp;</a>$"
+    }
+  },
+  "required": ["tag"]
+}

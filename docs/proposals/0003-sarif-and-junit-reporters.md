@@ -1,6 +1,6 @@
 # 0003 — SARIF and JUnit reporters
 
-- **Status:** Proposed
+- **Status:** Implemented
 - **Serves:** Devin · D3 "Feed results into our tooling", D1 (PR surfacing)
 - **Depends on:** the `FieldError` extension from [0001 § Prerequisite](0001-validation-baseline.md#prerequisite-fielderror-needs-a-machine-identity); repo-root-relative paths (see stress test 2, couples to [0004](0004-config-upward-discovery.md))
 - **Touches:** `src/reporters/index.ts`, new `src/reporters/sarif.ts` and `src/reporters/junit.ts`, `src/cli.ts`
@@ -223,3 +223,50 @@ file while debugging schema resolution. Nothing to fix; flagged for the docs.
 Then `reference/output-and-exit-codes.mdx` (two new format sections),
 `reference/cli.mdx` (`npm run docs:check-cli` enforces the `--format` value list),
 and the GitLab/Jenkins recipes plus the `upload-sarif` recipe in `ci/recipes.mdx`.
+
+## What implementation corrected
+
+Two things research found after this was written, recorded here rather than
+edited into the text above so the change is visible.
+
+### The fingerprint caveat needed documenting, not fixing
+
+Stress test notes that `partialFingerprints` reuses the baseline fingerprint
+verbatim; what it does not say is that the fingerprint **deliberately excludes
+the file path**, so *two files with the same violation share one fingerprint*.
+That is correct in both consumers — the path sits beside the fingerprint in each
+(the baseline's entry key, SARIF's `artifactLocation.uri`), and GitHub derives
+alert identity from fingerprint **plus rule plus location**, exactly as
+`applyBaseline` combines key and fingerprint. So the two files still track as
+separate alerts. But it means the fingerprint alone is not an alert key, which a
+consumer could easily assume, so the reference page states it outright.
+
+### The SARIF meta-schema had to be vendored, and it is draft-04
+
+The sketch says "Ajv is already a dependency", implying the conformance check
+just works. It does not. Two corrections:
+
+- **Tests must not reach the network**, so the meta-schema is committed as
+  `test/fixtures/sarif-2.1.0.schema.json` rather than fetched.
+- **It is a draft-04 schema.** The OASIS TC published SARIF 2.1.0's meta-schema
+  against `http://json-schema.org/draft-04/schema#`, and stock Ajv 8 refuses to
+  compile it. The already-present `ajv-draft-04` is the exact compiler needed —
+  no new dependency, but not the obvious import either. (The schemastore mirror
+  at `json.schemastore.org` has been converted to draft-07; the OASIS original
+  is the authoritative one and is what is vendored.)
+
+### Three sharp edges the proposal did not name
+
+- **`ValidationResult.file` had to be threaded to the reporter with its frame.**
+  `render()` received only `(results, summary, opts)`, and `runValidate` built
+  its `FingerprintContext` inline and threw it away — so nothing downstream
+  could rebase a path or reproduce a fingerprint. `ValidateRun` now returns it.
+- **`searchPath` in `src/core/config.ts` already walked for `.git`, but its
+  return type erased the answer**: a one-element chain meant *either* "cwd is
+  the repository root" *or* "there is no repository". Extracted as
+  `findGitRoot(cwd): string | null`.
+- **The CLI's `if (text.length > 0)` output guard was wrong for these formats.**
+  It existed because `renderGithub` returns `""` on a clean run, and it would
+  have made a clean SARIF run write nothing — which `upload-sarif` rejects
+  outright. Emptiness is now a property of the format (`OMITTED_WHEN_CLEAN`),
+  not of the text.
