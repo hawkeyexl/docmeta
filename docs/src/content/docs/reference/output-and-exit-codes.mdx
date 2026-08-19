@@ -68,6 +68,8 @@ Machine-readable. Prints a single JSON object with a run `summary` and a
           "schema": "google:okf:0.1",
           "instancePath": "",
           "message": "must have required property 'type'",
+          "keyword": "required",
+          "subject": "type",
           "line": 2
         }
       ]
@@ -81,16 +83,24 @@ Machine-readable. Prints a single JSON object with a run `summary` and a
 | `summary.files` | number | Files checked. |
 | `summary.passed` | number | Files that passed. |
 | `summary.failed` | number | Files that failed. |
-| `summary.errors` | number | Total errors across all files. |
+| `summary.errors` | number | Errors reported across all files. Findings a [baseline](/docmeta/reference/cli/#baselines) forgave are **not** counted here. |
+| `summary.baseline` | object | Present only when a baseline governed the run. See [baseline fields](#baseline-fields). |
 | `results[].file` | string | File path. |
 | `results[].format` | string | Extractor that read the file. |
 | `results[].ok` | boolean | Whether the file passed every schema in its set. |
 | `results[].schemas` | string[] | The schema set the file was validated against. |
+| `results[].baselined` | number | Findings a baseline forgave for this file. Omitted when none were. |
 | `results[].errors[].schema` | string | Schema that produced the error. |
 | `results[].errors[].instancePath` | string | JSON Pointer to the field (`""` for the root). |
-| `results[].errors[].message` | string | Human-readable message. |
+| `results[].errors[].message` | string | Human-readable message. Generated prose — an Ajv upgrade may reword it, so match on `keyword` instead. |
+| `results[].errors[].keyword` | string | The JSON Schema keyword that failed (`required`, `format`, `pattern`, `type`, …), or `parse` / `schema` for docmeta's own errors. |
+| `results[].errors[].subject` | string | The identifier within that keyword: the missing property, the additional property, the format name, the expected type. Omitted for keywords whose parameter is a schema-authored *value*, such as `pattern`'s regex or `minLength`'s number. |
 | `results[].errors[].line` | number | 1-based source line. Omitted when unknown. |
 | `results[].errors[].col` | number | 1-based column. Omitted when unknown. |
+
+`keyword` and `subject` are the machine-stable half of a violation's identity.
+They are what a script should key on when it needs to recognize "the same
+violation" across runs or across docmeta versions; `message` is for humans.
 
 </TabItem>
 <TabItem label="github">
@@ -118,8 +128,25 @@ Each line has the form:
 <Aside type="note">
 A file that cannot be parsed (such as malformed YAML, TOML, or JSON frontmatter)
 becomes a failing result with a single error whose `schema` is `(parse)` and
-whose `schemas` set is empty. The rest of the run continues.
+whose `schemas` set is empty. The rest of the run continues. Its `keyword` is
+`parse`; a file whose *schema set* could not be resolved uses the same `(parse)`
+label with `keyword` set to `schema`.
 </Aside>
+
+### Baseline fields
+
+`summary.baseline` appears only when a [baseline](/docmeta/reference/cli/#baselines)
+governed the run.
+
+| Field | Type | Description |
+|---|---|---|
+| `path` | string | The baseline file, spelled as the run referred to it. |
+| `written` | boolean | `true` on `--write-baseline`, `false` when the baseline was only read. |
+| `recorded` | number | Fingerprints the baseline holds. On a read this counts only the files the run checked, so validating one file does not report the rest of the repo as prunable. |
+| `suppressed` | number | Findings the baseline forgave this run. |
+| `stale` | number | Recorded fingerprints for checked files that no longer occur. Never fatal. |
+| `added` | number | Fingerprints this write added. Write only. |
+| `removed` | number | Fingerprints this write dropped. Write only. |
 
 ## Exit codes
 
@@ -127,11 +154,28 @@ whose `schemas` set is empty. The rest of the run continues.
 |---|---|
 | `0` | All files passed (or nothing failed). |
 | `1` | One or more files failed validation. |
-| `2` | Operational or usage error (a `DocmetaError`) — for example, no inputs, **no files matched**, an unknown `--format`, a missing config file, or an unresolvable schema. |
+| `2` | Operational or usage error (a `DocmetaError`) — for example, no inputs, **no files matched**, an unknown `--format`, a missing config file, a missing `--baseline` file, or an unresolvable schema. |
 
 Exit code `1` reflects validation failures in the documents. Exit code `2`
 reflects a problem running docmeta itself, and means no validation verdict was
 produced.
+
+### Exit codes with a baseline
+
+A baseline changes which findings count toward exit `1`; it does not relax any
+schema.
+
+- A finding the baseline **already records** does not fail the run. It is
+  subtracted from `summary.errors` and counted in `results[].baselined`, so exit
+  `0` here means "nothing new", not "nothing wrong". The
+  `N baselined findings` line reports the outstanding debt on every run.
+- A finding the baseline **does not record** fails the run as usual (exit `1`),
+  including every finding in a file that has no entry at all — a renamed
+  document, for instance.
+- A recorded fingerprint that **no longer occurs** is reported and never fails.
+- `--write-baseline` records what it saw and exits `0`, so it always succeeds
+  regardless of how many violations there were.
+- A `--baseline` file that does not exist is exit `2`, not a silent pass.
 
 ### Exit 2 when nothing was checked
 

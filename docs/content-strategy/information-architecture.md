@@ -60,8 +60,8 @@ Home — "What do you want to do?" router + 30-second proof
 | Stand up validation for your repo | M1 | ★ | Anchor guide threading install → config → schema → CI. |
 | Create your `docmeta.config.yaml` | M1 | ★ | paths, exclude, schemas, discovery keys with types and defaults. |
 | Apply different schemas to different folders | M3 | ★ | Overrides, glob precedence, multi-schema per file. |
-| Roll out a new required field without breaking the build | M2 | | Incremental ratchet, staged rollout across a large repo. |
-| Retrofit docmeta into an existing docs repo | M1/M2 | | Start lenient, tighten over time. Cross-cutting guide. |
+| Roll out a new required field without breaking the build | M2 | | Tool-supported ratchet (0001): the field goes `required` immediately and `--write-baseline` records the backlog. Rewritten from the four-stage manual rollout, whose hand-maintained `overrides:` glob list the baseline replaces. |
+| Retrofit docmeta into an existing docs repo | M1/M2 | | Start lenient, tighten over time. Cross-cutting guide. Step 5 now ratchets via the baseline, in step with the M2 page. |
 
 ### Run it in CI (Devin)
 

@@ -62,6 +62,23 @@ export interface FieldError {
   instancePath: string;
   /** Human-readable message. */
   message: string;
+  /**
+   * Ajv keyword that failed (e.g. "required", "format", "pattern"), or
+   * "parse"/"schema" for the synthetic errors the command layer raises.
+   *
+   * This and `subject` are the machine-stable half of a violation's identity:
+   * `message` is generated prose that an Ajv upgrade may reword, so nothing
+   * durable — a baseline fingerprint, a SARIF `ruleId` — may be built from it.
+   */
+  keyword: string;
+  /**
+   * Discriminator within that keyword, when it is a stable identifier: the
+   * missing property, the additional property, the format name, the expected
+   * type. Deliberately unset for keywords whose parameter is a schema-authored
+   * *value* (`pattern`'s regex, `enum`'s list, `minLength`'s number), which
+   * changes whenever the schema is edited.
+   */
+  subject?: string;
   /** 1-based source line, when known. */
   line?: number;
   /** 1-based column, when known. */
@@ -80,6 +97,32 @@ export interface ValidationResult {
   schemas: string[];
   /** All violations, across every schema in the set. */
   errors: FieldError[];
+  /**
+   * Findings a baseline suppressed for this file. Absent when no baseline
+   * governed the run, or when it forgave nothing here.
+   */
+  baselined?: number;
+}
+
+/** How a baseline shaped the run. Present only when one governed it. */
+export interface BaselineSummary {
+  /** Baseline file path, spelled the way the user would type it. */
+  path: string;
+  /** Whether this run wrote the file (`--write-baseline`) or only read it. */
+  written: boolean;
+  /**
+   * Fingerprints the baseline holds. On a read this counts only the files the
+   * run checked, so validating one file does not report the rest as prunable.
+   */
+  recorded: number;
+  /** Findings the baseline suppressed. */
+  suppressed: number;
+  /** Recorded fingerprints for checked files that no longer occur. */
+  stale: number;
+  /** Fingerprints this write added. Write only. */
+  added?: number;
+  /** Fingerprints this write dropped. Write only. */
+  removed?: number;
 }
 
 /** Aggregate run summary. */
@@ -87,7 +130,9 @@ export interface RunSummary {
   files: number;
   passed: number;
   failed: number;
+  /** Violations reported. Baselined ones are excluded — see `baseline`. */
   errors: number;
+  baseline?: BaselineSummary;
 }
 
 /** An operational/usage failure that should map to exit code 2. */

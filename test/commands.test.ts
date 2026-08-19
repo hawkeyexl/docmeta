@@ -1,7 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { existsSync } from "node:fs";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { dirname, join, resolve } from "node:path";
-import { runValidate } from "../src/commands/validate.js";
+import { dirname, join, relative, resolve } from "node:path";
+import { parseBaseline } from "../src/core/baseline.js";
+import { runValidate, type ValidateOptions } from "../src/commands/validate.js";
 import { runGet } from "../src/commands/get.js";
 import { getSchemasInfo } from "../src/commands/schemas.js";
 import { DEFAULT_SCHEMAS } from "../src/core/resolve-schema.js";
@@ -11,6 +15,17 @@ import { startSchemaServer, type SchemaServer } from "./helpers/schema-server.js
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
 const extra = join(here, "fixtures", "extra.schema.json");
+/** A page that fails the default schema set on `required: type`. */
+const NO_TYPE_PAGE = "---\ntitle: No type\n---\n";
+/** A config whose `baseline:` deliberately is not the default path. */
+const CUSTOM_BASELINE_CONFIG = [
+  "paths:",
+  '  - "*.md"',
+  "schemas:",
+  "  - google:okf:0.1",
+  "baseline: recorded.json",
+  "",
+].join("\n");
 
 function byFile(results: { file: string; ok: boolean }[]) {
   return Object.fromEntries(
@@ -482,5 +497,188 @@ describe("config discovery and resolution base (0004)", () => {
     });
     expect(seen).toEqual([]);
     expect(results[0]?.schemas).toEqual([...DEFAULT_SCHEMAS]);
+  });
+});
+
+describe("runValidate with a baseline", () => {
+  const dir = join(here, "fixtures", "baseline");
+  const schema = "test/fixtures/baseline/keywords.schema.json";
+  const inputs = ["test/fixtures/baseline/*.md"];
+  const rel = (name: string) =>
+    relative(root, join(dir, name)).replace(/\\/g, "/");
+
+  const runWith = (over: Partial<ValidateOptions> = {}) =>
+    runValidate({ inputs, cliSchemas: [schema], cwd: root, ...over });
+
+  it("fails without a baseline — the fixtures really do violate the schema", async () => {
+    // Anchors every assertion below: if this ever passes, the "baseline
+    // suppressed it" tests would pass for the wrong reason.
+    const { summary } = await runWith();
+    expect(summary.failed).toBe(2);
+    expect(summary.errors).toBe(3);
+  });
+
+  it("suppresses every baselined finding and exits clean", async () => {
+    const { results, summary } = await runWith({
+      baseline: rel("baseline.json"),
+    });
+    expect(summary.failed).toBe(0);
+    expect(summary.errors).toBe(0);
+    expect(summary.baseline).toMatchObject({
+      written: false,
+      recorded: 3,
+      suppressed: 3,
+      stale: 0,
+    });
+    const twoViolations = results.find((r) => r.file.endsWith("two-violations.md"));
+    expect(twoViolations?.baselined).toBe(2);
+  });
+
+  it("fails on a finding the baseline does not hold, and reports only that one", async () => {
+    const { results, summary } = await runWith({
+      baseline: rel("baseline-partial.json"),
+    });
+    expect(summary.failed).toBe(1);
+    const failing = results.filter((r) => !r.ok);
+    expect(failing.map((r) => r.file.split("/").pop())).toEqual([
+      "one-violation.md",
+    ]);
+    expect(failing[0]?.errors.map((e) => e.keyword)).toEqual(["format"]);
+  });
+
+  it("reports a stale entry without failing the run", async () => {
+    const { summary } = await runWith({
+      baseline: rel("baseline-stale.json"),
+    });
+    expect(summary.failed).toBe(0);
+    expect(summary.baseline).toMatchObject({ recorded: 4, suppressed: 3, stale: 1 });
+  });
+
+  it("errors when the named baseline does not exist, naming the remedy", async () => {
+    await expect(runWith({ baseline: rel("nope.json") })).rejects.toThrow(
+      /--write-baseline/,
+    );
+  });
+
+  it("--no-baseline suppresses a configured baseline", async () => {
+    const configured = join(here, "fixtures", "baseline-config");
+    const clean = await runValidate({ inputs: [], cwd: configured });
+    expect(clean.summary.failed).toBe(0);
+
+    const raw = await runValidate({ inputs: [], cwd: configured, baseline: false });
+    expect(raw.summary.failed).toBe(1);
+    expect(raw.summary.baseline).toBeUndefined();
+  });
+
+  it("resolves a configured baseline against the config file, not cwd", async () => {
+    // Run from the docs/ subdirectory: `.docmeta-baseline.json` sits next to
+    // the config one level up. Resolving against cwd would find nothing and
+    // report the known violation as new.
+    const fromSubdir = await runValidate({
+      inputs: [],
+      cwd: join(here, "fixtures", "baseline-config", "docs"),
+    });
+    expect(fromSubdir.summary.failed).toBe(0);
+    expect(fromSubdir.summary.baseline).toMatchObject({ suppressed: 1, stale: 0 });
+  });
+});
+
+describe("runValidate --write-baseline", () => {
+  const schema = "test/fixtures/baseline/keywords.schema.json";
+  const inputs = ["test/fixtures/baseline/*.md"];
+  let tmp: string;
+
+  beforeEach(async () => {
+    tmp = await mkdtemp(join(tmpdir(), "docmeta-baseline-"));
+  });
+  afterEach(async () => {
+    await rm(tmp, { recursive: true, force: true });
+  });
+
+  it("records every finding, exits clean, and reports the additions", async () => {
+    const path = join(tmp, "b.json");
+    const { summary } = await runValidate({
+      inputs,
+      cliSchemas: [schema],
+      cwd: root,
+      writeBaseline: path,
+    });
+    expect(summary.failed).toBe(0);
+    expect(summary.baseline).toMatchObject({
+      written: true,
+      recorded: 3,
+      added: 3,
+      removed: 0,
+    });
+    const written = parseBaseline(await readFile(path, "utf8"), "b.json");
+    expect(Object.keys(written.entries).sort()).toEqual([
+      "test/fixtures/baseline/one-violation.md",
+      "test/fixtures/baseline/two-violations.md",
+    ]);
+  });
+
+  it("reports what a narrowed re-record drops — the number that catches the mistake", async () => {
+    const path = join(tmp, "b.json");
+    await runValidate({ inputs, cliSchemas: [schema], cwd: root, writeBaseline: path });
+
+    // A narrowed glob sees only one of the two failing files, so re-recording
+    // silently forgives the other. `removed` is the only thing that says so.
+    const narrowed = await runValidate({
+      inputs: ["test/fixtures/baseline/one-violation.md"],
+      cliSchemas: [schema],
+      cwd: root,
+      writeBaseline: path,
+    });
+    expect(narrowed.summary.baseline).toMatchObject({
+      recorded: 1,
+      added: 0,
+      removed: 2,
+    });
+  });
+
+  it("with the value omitted writes the path the config configured", async () => {
+    // Read and write must agree on one file. If a bare --write-baseline always
+    // used the built-in default, a repo that configured `baseline:` elsewhere
+    // would record into a second file nothing ever reads, and the ratchet would
+    // quietly do nothing.
+    await writeFile(
+      join(tmp, "docmeta.config.yaml"),
+      CUSTOM_BASELINE_CONFIG,
+      "utf8",
+    );
+    await writeFile(join(tmp, "page.md"), NO_TYPE_PAGE, "utf8");
+    const { summary } = await runValidate({
+      inputs: [],
+      cwd: tmp,
+      configPath: join(tmp, "docmeta.config.yaml"),
+      writeBaseline: true,
+    });
+    expect(summary.baseline).toMatchObject({ written: true, path: "recorded.json" });
+    expect(existsSync(join(tmp, "recorded.json"))).toBe(true);
+    expect(existsSync(join(tmp, ".docmeta-baseline.json"))).toBe(false);
+  });
+
+  it("with the value omitted and no config, falls back to the default path", async () => {
+    await writeFile(join(tmp, "page.md"), "---\ntitle: No type\n---\n", "utf8");
+    const { summary } = await runValidate({
+      inputs: ["page.md"],
+      cwd: tmp,
+      noConfig: true,
+      writeBaseline: true,
+    });
+    expect(summary.baseline?.path).toBe(".docmeta-baseline.json");
+    expect(existsSync(join(tmp, ".docmeta-baseline.json"))).toBe(true);
+  });
+
+  it("wins over --baseline, so recording never depends on the old file", async () => {
+    const path = join(tmp, "b.json");
+    const { summary } = await runValidate({
+      inputs,
+      cliSchemas: [schema],
+      cwd: root,
+      baseline: join(tmp, "absent.json"),
+      writeBaseline: path,
+    });
+    expect(summary.baseline?.written).toBe(true);
   });
 });

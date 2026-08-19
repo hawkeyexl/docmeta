@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Every keyword the FieldError identity has to distinguish",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title"],
+  "properties": {
+    "title": { "type": "string" },
+    "slug": { "type": "string", "minLength": 5, "pattern": "^[a-z]+$" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "count": { "type": "number" }
+  }
+}

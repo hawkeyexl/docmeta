@@ -16,3 +16,7 @@ coverage/
 # Feature demo videos (see CLAUDE.md). Generated per feature, handed to the
 # user or attached to the PR — never committed, since binaries bloat history.
 media/
+
+# Baseline written by the Doc Detective steps in set-up/new-required-field.mdx.
+# Run output, not a source file.
+.dd-baseline.json

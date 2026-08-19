@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -580,5 +581,257 @@ describe("config discovery walks up (0004)", () => {
     const r = run(["validate", "docs/*.md"], undefined, undefined, join(sandbox, "wt"));
     expect(r.status).toBe(0);
     expect(r.stdout).not.toContain("Using docmeta.config.yaml");
+  });
+});
+
+describe("docmeta CLI baseline flags (built bin)", () => {
+  let dir: string;
+
+  const write = (rel: string, content: string): void => {
+    const abs = join(dir, rel);
+    mkdirSync(dirname(abs), { recursive: true });
+    writeFileSync(abs, content, "utf8");
+  };
+  const here = (args: string[], cwd = dir) => run(args, undefined, undefined, cwd);
+
+  const CONFIG = 'paths:\n  - "docs/**/*.md"\nschemas:\n  - google:okf:0.1\n';
+
+  beforeEach(() => {
+    dir = realpathSync(mkdtempSync(join(tmpdir(), "docmeta-baseline-cli-")));
+    // Config discovery walks up only as far as a project boundary, so the
+    // scratch project needs one for the run-from-a-subdirectory case.
+    write(".git", "gitdir: nowhere\n");
+    write("docmeta.config.yaml", CONFIG);
+    write("docs/legacy.md", "---\ntitle: No type here\n---\n");
+    write("docs/clean.md", "---\ntype: concept\n---\n");
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("fails before a baseline exists — the anchor for everything below", () => {
+    const r = here(["validate"]);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("required property 'type'");
+  });
+
+  it("--write-baseline with the value omitted uses the default path", () => {
+    // The omitted-value form: commander must reach for the option's preset
+    // rather than handing the core a bare `true`.
+    const r = here(["validate", "--write-baseline"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("Baseline written to .docmeta-baseline.json");
+    expect(r.stdout).toContain("1 finding recorded (+1 new, -0 no longer occur)");
+    expect(existsSync(join(dir, ".docmeta-baseline.json"))).toBe(true);
+  });
+
+  it("--baseline with the value omitted reads that same default path", () => {
+    here(["validate", "--write-baseline"]);
+    const r = here(["validate", "--baseline"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("1 baselined finding");
+    expect(r.stdout).toContain("(1 baselined)");
+  });
+
+  it("--baseline takes an explicit path", () => {
+    here(["validate", "--write-baseline", "custom.json"]);
+    expect(existsSync(join(dir, "custom.json"))).toBe(true);
+    expect(here(["validate", "--baseline", "custom.json"]).status).toBe(0);
+  });
+
+  it("fails on a new violation and names only that one", () => {
+    here(["validate", "--write-baseline"]);
+    write("docs/fresh.md", "---\ntitle: Also missing its type\n---\n");
+    const r = here(["validate", "--baseline"]);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("fresh.md");
+    expect(r.stdout).toContain("✗ docs/fresh.md");
+    expect(r.stdout).toContain("✓ docs/legacy.md");
+  });
+
+  it("reports a fixed violation as stale without failing", () => {
+    here(["validate", "--write-baseline"]);
+    write("docs/legacy.md", "---\ntype: concept\ntitle: Fixed\n---\n");
+    const r = here(["validate", "--baseline"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain(
+      "1 baselined finding, 1 no longer occurs — run --write-baseline to prune",
+    );
+  });
+
+  it("a configured `baseline:` implies --baseline on every run", () => {
+    here(["validate", "--write-baseline"]);
+    write("docmeta.config.yaml", `${CONFIG}baseline: .docmeta-baseline.json\n`);
+    const r = here(["validate"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("1 baselined finding");
+  });
+
+  it("--no-baseline ignores a configured baseline for one run", () => {
+    here(["validate", "--write-baseline"]);
+    write("docmeta.config.yaml", `${CONFIG}baseline: .docmeta-baseline.json\n`);
+    const r = here(["validate", "--no-baseline"]);
+    expect(r.status).toBe(1);
+    expect(r.stdout).not.toContain("baselined finding");
+  });
+
+  it("resolves a configured baseline against the config file, not the cwd", () => {
+    here(["validate", "--write-baseline"]);
+    write("docmeta.config.yaml", `${CONFIG}baseline: .docmeta-baseline.json\n`);
+    const r = here(["validate"], join(dir, "docs"));
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("1 baselined finding");
+  });
+
+  it("--write-baseline with the value omitted honours a configured path", () => {
+    // No preset on --write-baseline: bare means "the file the config names",
+    // so a repo whose baseline lives elsewhere cannot record into a second file
+    // that nothing ever reads.
+    mkdirSync(join(dir, ".meta"), { recursive: true });
+    write("docmeta.config.yaml", `${CONFIG}baseline: .meta/base.json\n`);
+    const r = here(["validate", "--write-baseline"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("Baseline written to .meta/base.json");
+    expect(existsSync(join(dir, ".meta", "base.json"))).toBe(true);
+    expect(existsSync(join(dir, ".docmeta-baseline.json"))).toBe(false);
+    // And the very next run reads that same file back.
+    expect(here(["validate"]).status).toBe(0);
+  });
+
+  it("exits 2 naming the remedy when the baseline is missing", () => {
+    const r = here(["validate", "--baseline", "absent.json"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("--write-baseline");
+  });
+
+  it("carries the baseline into JSON output for machine consumers", () => {
+    here(["validate", "--write-baseline"]);
+    const r = here(["validate", "--baseline", "-f", "json"]);
+    const parsed = JSON.parse(r.stdout) as {
+      summary: { baseline?: { recorded: number; stale: number } };
+      results: { file: string; baselined?: number }[];
+    };
+    expect(parsed.summary.baseline).toMatchObject({ recorded: 1, stale: 0 });
+    expect(parsed.results.find((x) => x.file.endsWith("legacy.md"))?.baselined).toBe(1);
+  });
+});
+
+describe("docmeta CLI baseline portability across working directories (built bin)", () => {
+  // The fixture config points at a LOCAL FILE schema (`./strict.schema.json`),
+  // which 0004 rebases to an absolute path whenever the config directory is not
+  // the working directory. Run through the real binary so `process.cwd()` moves
+  // with the run, which is the only way to exercise the config-dir case.
+  const project = resolve(root, "test", "fixtures", "baseline-refs");
+
+  it("forgives the recorded finding from the config directory", () => {
+    const r = run(["validate"], undefined, undefined, project);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("1 baselined finding");
+  });
+
+  it("forgives it from a subdirectory too, where the ref arrives absolute", () => {
+    const r = run(["validate"], undefined, undefined, join(project, "docs"));
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("1 baselined finding");
+  });
+
+  it("records byte-identical baselines from both directories", () => {
+    // Stronger than "both pass": a re-record from either place must produce the
+    // same file, so the committed baseline is not churned by where CI stands.
+    const out = realpathSync(mkdtempSync(join(tmpdir(), "docmeta-refs-")));
+    try {
+      const a = join(out, "root.json");
+      const b = join(out, "subdir.json");
+      run(["validate", "--write-baseline", a], undefined, undefined, project);
+      run(
+        ["validate", "--write-baseline", b],
+        undefined,
+        undefined,
+        join(project, "docs"),
+      );
+      expect(readFileSync(b, "utf8")).toBe(readFileSync(a, "utf8"));
+      // And that shared value is the one the committed fixture baseline holds,
+      // so the canonical ref really is `strict.schema.json` rather than either
+      // machine-specific absolute path.
+      expect(readFileSync(a, "utf8")).toContain("75c4810568b9d102");
+    } finally {
+      rmSync(out, { recursive: true, force: true });
+    }
+  });
+
+  it("keys entries by a path that is stable across working directories", () => {
+    // Canonicalizing the schema ref (above) is not enough on its own: entries
+    // are keyed by file, and the label is relative to whatever the run resolved
+    // against. Recorded from the root a page is `docs/legacy.md`; addressed from
+    // `docs/` it is `legacy.md`, so the lookup misses entirely and every
+    // baselined finding reads as new. The ref never even gets compared.
+    const out = realpathSync(mkdtempSync(join(tmpdir(), "docmeta-keys-")));
+    try {
+      const b = join(out, "keys.json");
+      run(["validate", "--write-baseline", b], undefined, undefined, project);
+      const keys = Object.keys(
+        JSON.parse(readFileSync(b, "utf8")).entries as Record<string, string[]>,
+      );
+      // Relative to the config, not to wherever the command happened to run.
+      expect(keys).toEqual(["docs/legacy.md"]);
+
+      // And the same baseline forgives when the files are addressed from inside
+      // `docs/`, where the labels are bare filenames.
+      const sub = run(
+        ["validate", "*.md", "--baseline", b],
+        undefined,
+        undefined,
+        join(project, "docs"),
+      );
+      expect(sub.status).toBe(0);
+      expect(sub.stdout).toContain("1 baselined finding");
+    } finally {
+      rmSync(out, { recursive: true, force: true });
+    }
+  });
+
+  it("finds the default baseline from a subdirectory", () => {
+    // The cases above all pass an explicit path, which is rightly relative to
+    // where the user is standing. The *implied* default is a different thing: a
+    // project artifact that belongs beside the config, exactly like a configured
+    // `baseline:` value. Resolving it against cwd instead means `cd docs` breaks
+    // the ratchet — the subdirectory workflow 0004 exists to make work — or, if
+    // one is later written there, gives the project a second baseline nothing
+    // reads.
+    const fromRoot = run(["validate", "--baseline"], undefined, undefined, project);
+    expect(fromRoot.status).toBe(0);
+
+    const fromSubdir = run(
+      ["validate", "--baseline"],
+      undefined,
+      undefined,
+      join(project, "docs"),
+    );
+    expect(fromSubdir.status).toBe(0);
+    expect(fromSubdir.stderr).not.toContain("not found");
+  });
+});
+
+describe("docmeta CLI violation identity (built bin)", () => {
+  it("emits keyword and subject in JSON output", () => {
+    const r = run(["validate", "test/fixtures/missing-type.md", "-f", "json"]);
+    const parsed = JSON.parse(r.stdout) as {
+      results: { errors: { keyword: string; subject?: string }[] }[];
+    };
+    const errors = parsed.results[0]?.errors ?? [];
+    expect(errors[0]).toMatchObject({ keyword: "required", subject: "type" });
+  });
+
+  it("tags an unreadable metadata block as a parse failure, keeping the (parse) label", () => {
+    const r = run(["validate", "test/fixtures/dd/malformed-yaml.md", "-f", "json"]);
+    const parsed = JSON.parse(r.stdout) as {
+      results: { errors: { schema: string; keyword: string }[] }[];
+    };
+    // The `(parse)` literal is what documented machine consumers match on, so
+    // the new `keyword` sits alongside it rather than replacing it.
+    expect(parsed.results[0]?.errors[0]).toMatchObject({
+      schema: "(parse)",
+      keyword: "parse",
+    });
   });
 });

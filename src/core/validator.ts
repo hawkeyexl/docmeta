@@ -9,7 +9,11 @@ import * as Ajv2020Ns from "ajv/dist/2020.js";
 import * as AjvDraft04Ns from "ajv-draft-04";
 import * as addFormatsNs from "ajv-formats";
 import { createRequire } from "node:module";
-import type { ErrorObject, ValidateFunction } from "ajv/dist/2020.js";
+import type {
+  DefinedError,
+  ErrorObject,
+  ValidateFunction,
+} from "ajv/dist/2020.js";
 import { DocmetaError, type FieldError } from "../types.js";
 
 // ajv ships its meta-schema refs as JSON. A static JSON import survives
@@ -187,23 +191,61 @@ export class Validator {
   }
 }
 
+/**
+ * The stable identifier inside a violation's `params`, when there is one.
+ *
+ * Only keywords whose parameter names a *thing* qualify. `pattern` carries the
+ * regex source and `enum`/`minLength`/`minimum` carry schema-authored values:
+ * including those would change a violation's identity every time the schema
+ * author edited the rule, which is exactly what a baseline must survive.
+ *
+ * `DefinedError` is Ajv's own discriminated union over `keyword`, so each arm
+ * below is type-checked against the real `params` shape rather than duck-typed.
+ */
+function subjectOf(e: DefinedError): string | undefined {
+  switch (e.keyword) {
+    case "required":
+      return e.params.missingProperty;
+    case "additionalProperties":
+      return e.params.additionalProperty;
+    case "format":
+      return e.params.format;
+    case "type":
+      // A union schema (`"type": ["string", "null"]`) yields the comma-joined
+      // `"string,null"` rather than a single name. That is stable, so it
+      // fingerprints correctly — but anyone matching on `subject` downstream
+      // should not assume one type per value.
+      return e.params.type;
+    default:
+      return undefined;
+  }
+}
+
 function toFieldError(
   schema: string,
   e: ErrorObject,
   lineFor: (pointer: string) => number | undefined,
 ): FieldError {
+  // Ajv's documented way to narrow: every error it raises for a built-in
+  // vocabulary is a member of `DefinedError`, but `ValidateFunction.errors` is
+  // typed as the open `ErrorObject` to leave room for custom keywords.
+  const defined = e as DefinedError;
   const instancePath = e.instancePath;
+  const subject = subjectOf(defined);
   // For `required`, point at the parent object but name the missing property.
   let message = e.message ?? "is invalid";
-  if (e.keyword === "required" && e.params && "missingProperty" in e.params) {
-    message = `must have required property '${String(e.params.missingProperty)}'`;
-  } else if (
-    e.keyword === "additionalProperties" &&
-    e.params &&
-    "additionalProperty" in e.params
-  ) {
-    message = `must NOT have additional property '${String(e.params.additionalProperty)}'`;
+  if (defined.keyword === "required") {
+    message = `must have required property '${defined.params.missingProperty}'`;
+  } else if (defined.keyword === "additionalProperties") {
+    message = `must NOT have additional property '${defined.params.additionalProperty}'`;
   }
   const line = lineFor(instancePath);
-  return { schema, instancePath, message, ...(line != null ? { line } : {}) };
+  return {
+    schema,
+    instancePath,
+    message,
+    keyword: e.keyword,
+    ...(subject != null ? { subject } : {}),
+    ...(line != null ? { line } : {}),
+  };
 }

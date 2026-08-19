@@ -32,6 +32,11 @@ export interface DocmetaConfig {
   overrides?: SchemaOverride[];
   fill?: FillConfig;
   /**
+   * Path to a validation baseline, relative to **this config file**. Setting it
+   * implies `--baseline` on every run; `--no-baseline` suppresses it for one.
+   */
+  baseline?: string;
+  /**
    * Treat an input set that resolves to zero files as success rather than an
    * operational error. Off by default: a glob that stops matching would
    * otherwise leave a permanently green gate that checks nothing.
@@ -92,6 +97,15 @@ export function parseConfig(text: string, source: string): DocmetaConfig {
         schemas: asStringList(e.schemas, `overrides[${i}].schemas`, source),
       };
     });
+  }
+
+  if (obj.baseline !== undefined) {
+    if (typeof obj.baseline !== "string" || obj.baseline.trim() === "") {
+      throw new DocmetaError(
+        `${source}: "baseline" must be a path to a baseline file.`,
+      );
+    }
+    config.baseline = obj.baseline;
   }
 
   if (obj.allowEmpty !== undefined) {
@@ -286,6 +300,16 @@ export interface RunConfig {
    * config, so they resolve from there.
    */
   base: string;
+  /**
+   * Directory holding the config that governed the run, when one did.
+   *
+   * Distinct from `base`: `base` follows *the inputs*, so it is the working
+   * directory whenever positional paths were given. Anything written **in** the
+   * config — the `baseline:` path — is relative to the config itself no matter
+   * where the command was run from, which is the whole point of discovering an
+   * ancestor config in the first place.
+   */
+  configDir?: string;
 }
 
 /**
@@ -311,5 +335,5 @@ export async function resolveRunConfig(
   const inputs = fromConfig ? (config?.paths ?? []) : opts.inputs;
   const base = fromConfig && inputs.length > 0 && loaded ? loaded.dir : cwd;
 
-  return { config, inputs, base };
+  return { config, inputs, base, ...(loaded ? { configDir: loaded.dir } : {}) };
 }

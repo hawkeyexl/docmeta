@@ -19,6 +19,7 @@ the command line.
 | `exclude` | `string[]` | none | Globs to exclude from directory and glob walks. Merged with `--exclude` and the [default ignores](/docmeta/reference/cli/#default-ignores). |
 | `schemas` | `string[]` | none | Default [schema set](/docmeta/reference/schema-resolution/) applied to every file that no higher-precedence rule matches. |
 | `overrides` | `Override[]` | none | Per-glob schema overrides. The first matching entry wins. See [Overrides](#overrides). |
+| `baseline` | `string` | none | Path to a [validation baseline](/docmeta/reference/cli/#baselines). Setting it turns on `--baseline` for every run; `--no-baseline` suppresses it for one. A bare `--write-baseline` records into this same file. |
 | `allowEmpty` | `boolean` | `false` | Treat an input set that resolves to zero files as success instead of an error (exit 2). Equivalent to `--allow-empty`. See [empty input sets](/docmeta/reference/cli/#empty-input-sets). |
 | `fill` | `Fill` | none | Defaults for [`docmeta fill`](/docmeta/reference/cli/#fill). See [Fill](#fill). |
 
@@ -139,9 +140,16 @@ command. The line goes to stdout in `pretty` output and to stderr for `json` and
 A config's relative paths mean what they look like they mean to whoever is
 editing the config: they resolve against **the config file's own directory**,
 not the directory you happened to run from. That applies to `paths`, `exclude`,
-and any local `.json` schema file named in `schemas` or `overrides`. So a config
-means the same thing whether you run from the repo root, from `docs/`, or from a
-monorepo package script.
+`baseline`, and any local `.json` schema file named in `schemas` or `overrides`.
+So a config means the same thing whether you run from the repo root, from
+`docs/`, or from a monorepo package script.
+
+This matters most for `baseline`. Resolving it against the working directory
+instead would mean a run from a subdirectory quietly found no baseline and
+reported the entire recorded backlog as new. For the same reason, the schema
+reference inside a [violation fingerprint](/docmeta/reference/cli/#baselines) is
+measured against the config's directory too, so a baseline recorded from the
+repo root matches one recorded from `docs/`, byte for byte.
 
 Two things stay relative to the **current working directory** instead, because
 a person standing in a shell typed them there:

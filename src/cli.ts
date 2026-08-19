@@ -7,7 +7,7 @@
 import { existsSync, realpathSync } from "node:fs";
 import { basename, relative, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import picomatch from "picomatch";
 import pkg from "../package.json" with { type: "json" };
 import { DocmetaError } from "./types.js";
@@ -194,6 +194,38 @@ export function buildProgram(): Command {
     .option("--no-config", "ignore any discovered config file")
     .option("-q, --quiet", "in pretty output, hide passing files")
     .option("--allow-empty", "treat zero matched files as success")
+    // Neither flag carries `.preset()`, and neither carries a `defaultValue`.
+    //
+    // No `defaultValue`, because that would make the baseline active on runs
+    // where the flag was never typed — semantically wrong, and it would oblige
+    // the docs to carry a matching Default cell.
+    //
+    // No `.preset()` either, which is subtler. A preset hands the core the
+    // default path as a *string*, making a bare `--baseline` indistinguishable
+    // from an explicitly typed `--baseline .docmeta-baseline.json`. A typed path
+    // is rightly relative to where the user is standing; an omitted one has to
+    // mean "the file this project's baseline lives in" — `baseline:` from config
+    // when there is one, resolved against the config's directory. Collapsing the
+    // two made `--baseline` from a subdirectory look for the file beside the
+    // user instead of beside the config, so the ratchet broke the moment anyone
+    // ran from `docs/`, and a bare `--write-baseline` in a repo with a custom
+    // `baseline:` recorded into a second file nothing reads.
+    //
+    // Commander hands the core `true` for an omitted value, which is exactly the
+    // signal needed to tell the two cases apart.
+    .addOption(
+      new Option(
+        "--baseline [path]",
+        "compare against a baseline; fail only on new findings",
+      ),
+    )
+    .addOption(
+      new Option(
+        "--write-baseline [path]",
+        "record current findings as the baseline, then exit 0 (stdin findings are not recorded and still fail)",
+      ),
+    )
+    .option("--no-baseline", "ignore a baseline configured by `baseline:`")
     .addHelpText(
       "after",
       [
@@ -203,6 +235,8 @@ export function buildProgram(): Command {
         '  docmeta validate "**/*.md" -f github         # CI annotations',
         "  docmeta validate page.md -s google:okf:0.1 -s ./my.schema.json",
         "  cat page.md | docmeta validate - --as markdown",
+        "  docmeta validate --write-baseline            # record today's backlog",
+        "  docmeta validate --baseline                  # fail only on new findings",
       ].join("\n"),
     )
     .action(async (paths: string[], options, command: Command) => {
@@ -238,6 +272,12 @@ export function buildProgram(): Command {
           // `undefined` rather than `false` when the flag is absent, so config
           // `allowEmpty:` still wins (the cores do `opts ?? config`).
           allowEmpty: options.allowEmpty ? true : undefined,
+          // `--baseline` and `--no-baseline` share one commander attribute, the
+          // same three-state `undefined | string | false` split as `-c` /
+          // `--no-config`: absent leaves the config in charge, a string names a
+          // file, `false` suppresses a configured one for this run.
+          baseline: options.baseline as string | boolean | undefined,
+          writeBaseline: options.writeBaseline as string | boolean | undefined,
         });
 
         const color = resolveColor(command.parent ?? command);

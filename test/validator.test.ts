@@ -11,6 +11,7 @@ const extra = join(here, "fixtures", "extra.schema.json");
 const withId = join(here, "fixtures", "with-id.schema.json");
 const withIdAlias = join(here, "fixtures", "with-id-alias.schema.json");
 const withIdDivergent = join(here, "fixtures", "with-id-divergent.schema.json");
+const keywords = join(here, "fixtures", "baseline", "keywords.schema.json");
 
 const lineFor = (ptr: string) => (ptr === "/timestamp" ? 9 : 1);
 
@@ -76,6 +77,68 @@ describe("Validator", () => {
     const schemas = errors.map((e) => e.schema);
     expect(schemas).toContain("google:okf:0.1");
     expect(schemas).toContain(extra);
+  });
+});
+
+describe("FieldError machine identity", () => {
+  /**
+   * One document that trips six different keywords, so the identity fields can
+   * be asserted keyword by keyword against a single run.
+   */
+  const subject = {
+    slug: "A1",
+    timestamp: "not-a-date",
+    count: "three",
+    stray: 1,
+  };
+
+  const errorsByKeyword = async () => {
+    const v = new Validator();
+    const errors = await v.validate(subject, [keywords], lineFor);
+    return new Map(errors.map((e) => [e.keyword, e]));
+  };
+
+  it("records the Ajv keyword on every violation", async () => {
+    const found = await errorsByKeyword();
+    expect([...found.keys()].sort()).toEqual([
+      "additionalProperties",
+      "format",
+      "minLength",
+      "pattern",
+      "required",
+      "type",
+    ]);
+  });
+
+  it.each([
+    ["required", "title"],
+    ["additionalProperties", "stray"],
+    ["format", "date-time"],
+    ["type", "number"],
+  ])("sets subject for %s to a stable identifier", async (keyword, expected) => {
+    const found = await errorsByKeyword();
+    expect(found.get(keyword)?.subject).toBe(expected);
+  });
+
+  it("leaves subject unset for pattern — the regex source is schema-authored", async () => {
+    // Including it would invalidate every fingerprint the moment the schema
+    // author touched the regex, which is the opposite of a ratchet.
+    const found = await errorsByKeyword();
+    expect(found.get("pattern")?.subject).toBeUndefined();
+  });
+
+  it("leaves subject unset for keywords whose params are values, not identifiers", async () => {
+    const found = await errorsByKeyword();
+    expect(found.get("minLength")?.subject).toBeUndefined();
+  });
+
+  it("distinguishes two violations that differ only by keyword", async () => {
+    // minLength and pattern both fire at /slug under the same schema. Without
+    // `keyword` they are indistinguishable once the prose is dropped.
+    const v = new Validator();
+    const errors = await v.validate({ title: "Hi", slug: "A1" }, [keywords], lineFor);
+    expect(errors.map((e) => e.instancePath)).toEqual(["/slug", "/slug"]);
+    expect(errors.map((e) => e.keyword).sort()).toEqual(["minLength", "pattern"]);
   });
 });
 
