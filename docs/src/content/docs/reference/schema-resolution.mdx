@@ -76,7 +76,7 @@ narrows level 2. It changes nothing else in the chain:
 | `schemaTrust.documentRefs` | Effect on level 2 |
 |---|---|
 | `any` (default) | Unchanged. All three kinds, from any host unless `schemaTrust.hosts` is set. |
-| `local` | Built-in ids and repository files resolve; a URL is refused. |
+| `local` | Built-in ids and repository files resolve; a URL is refused, except a [published built-in URL](/docmeta/reference/built-in-schemas/#the-published-urls), which is a built-in under a second name. |
 | `none` | Level 2 is skipped entirely, so resolution continues at level 3. The dropped reference is reported on stderr. |
 
 Two things hold in **every** mode, including the default:
@@ -101,7 +101,7 @@ classified into one of three kinds by its shape:
 |---|---|---|
 | **builtin** | `vendor:name:version`, e.g. `google:okf:0.1` | A schema shipped with docmeta. |
 | **file** | A `.json` path or any path containing a separator, e.g. `./my.schema.json` | The local filesystem. |
-| **url** | An `http://` or `https://` URL | Fetched over the network. |
+| **url** | An `http://` or `https://` URL | Fetched over the network — except a [published built-in URL](/docmeta/reference/built-in-schemas/#the-published-urls), which docmeta answers from its own bundle. |
 
 How a reference is classified:
 

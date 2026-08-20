@@ -22,6 +22,13 @@ registry](/docmeta/reference/built-in-schemas/).
 | Dialect | [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects) |
 | Additional properties | Allowed (`additionalProperties: true`) |
 | Reference kind | [builtin](/docmeta/reference/schema-resolution/#reference-kinds) |
+| JSON | [`schemas/okf/0.1.json`](/docmeta/schemas/okf/0.1.json) |
+
+The JSON above is the schema itself, served at a
+[permanent, version-pinned URL](/docmeta/reference/built-in-schemas/#the-published-urls).
+Read it, `$ref` it from a schema of your own, or hand it to a JSON Schema tool
+that is not docmeta. Naming that URL inside docmeta costs no network call: it
+resolves to the same bundled copy `google:okf:0.1` does.
 
 OKF requires only `type`. Every other field is recommended, and unknown keys are
 explicitly tolerated, so a file may carry extra metadata without failing.
