@@ -362,3 +362,96 @@ describe("schemaTrust · what a document may name", () => {
     }
   });
 });
+
+describe("schemaTrust · containing a document-supplied local path", () => {
+  const PKG = resolve(REPO, "packages", "docs");
+
+  it("refuses a path that escapes the repository, in every mode that honors the ref", () => {
+    for (const mode of ["any", "local"] as const) {
+      expect(() =>
+        resolveSchemaSet({
+          filePath: "a.md",
+          fileSchema: "../../../../etc/passwd",
+          fileBase: PKG,
+          trustRoot: ROOT,
+          config: trust(mode),
+        }),
+      ).toThrow(/outside/);
+    }
+  });
+
+  it("refuses an absolute path outside the repository too", () => {
+    expect(() =>
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: resolve("/elsewhere/x.json"),
+        fileBase: PKG,
+        trustRoot: ROOT,
+        config: trust("any"),
+      }),
+    ).toThrow(/outside/);
+  });
+
+  // The reason the boundary is the git root and not the config directory: a
+  // monorepo package whose documents reference a schema one level up is still
+  // referencing a schema in this project.
+  it("allows a sibling package's schema inside the same repository", () => {
+    expect(
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: "../shared/house.json",
+        fileBase: PKG,
+        trustRoot: ROOT,
+        config: trust("any"),
+      }),
+    ).toEqual(["../shared/house.json"]);
+  });
+
+  it("says which boundary it applied when there is no git repository", () => {
+    let message = "";
+    try {
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: "../outside.json",
+        fileBase: REPO,
+        trustRoot: { dir: REPO, fromGit: false },
+        config: trust("any"),
+      });
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toMatch(/outside/);
+    expect(message).toMatch(/no git repository/i);
+  });
+
+  it("names the git root as the repository when there is one", () => {
+    let message = "";
+    try {
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: "../outside.json",
+        fileBase: REPO,
+        trustRoot: ROOT,
+        config: trust("any"),
+      });
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toMatch(/repository root/i);
+    expect(message).not.toMatch(/no git repository/i);
+  });
+
+  // The resolver is synchronous and pure; finding a git root is a filesystem
+  // walk, so the root is settled once per run by the caller. A caller that
+  // supplies none gets no containment — the command cores always do, and
+  // test/commands.test.ts proves it end to end.
+  it("skips containment when no trustRoot is supplied", () => {
+    expect(
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: "../outside.json",
+        config: trust("any"),
+      }),
+    ).toEqual(["../outside.json"]);
+  });
+});

@@ -1323,3 +1323,70 @@ describe("0015 · Ajv does not chase a $ref out of a fetched schema", () => {
     }
   });
 });
+
+describe("0015 · a document-supplied path reaching out of the repository", () => {
+  let outer: string | undefined;
+  let inner: string | undefined;
+
+  /**
+   * A project with a file **outside** it, and no git repository anywhere above
+   * — so the boundary is the config's directory and the reach is one `../`.
+   * The same reach with a git root above resolves to the repository instead,
+   * which is the monorepo case `test/resolve-schema.test.ts` pins.
+   */
+  const build = async (trust: string): Promise<void> => {
+    outer = await realpath(await mkdtemp(join(tmpdir(), "docmeta-outside-")));
+    inner = join(outer, "project");
+    await mkdir(inner);
+    await writeFile(
+      join(outer, "outside.schema.json"),
+      JSON.stringify({ type: "object" }),
+      "utf8",
+    );
+    await writeFile(
+      join(inner, "docmeta.config.yaml"),
+      `schemas:\n  - google:okf:0.1\n${trust}`,
+      "utf8",
+    );
+    await writeFile(
+      join(inner, "reaching.md"),
+      "---\ntitle: Reaching page\n$schema: ../outside.schema.json\n---\n",
+      "utf8",
+    );
+  };
+
+  afterEach(async () => {
+    if (outer) await rm(outer, { recursive: true, force: true });
+    outer = undefined;
+    inner = undefined;
+  });
+
+  it("is refused, and the refusal names the boundary it applied", async () => {
+    await build("");
+    const { results } = await runValidate({ inputs: ["*.md"], cwd: inner! });
+    expect(results[0]?.ok).toBe(false);
+    expect(results[0]?.errors[0]?.keyword).toBe("schema");
+    expect(results[0]?.errors[0]?.message).toMatch(/outside/);
+    // No git repository above a temp directory, so the fallback boundary
+    // applies — and the message has to say which one, or an operator cannot
+    // tell "outside the repo" from "outside where I happen to be standing".
+    expect(results[0]?.errors[0]?.message).toMatch(/no git repository/i);
+  });
+
+  it("leaves a config-supplied path outside the project alone", async () => {
+    // Stress test 5's other half: an operator wrote this one, and reaching a
+    // schema kept beside the project is a real setup, not an attack.
+    await build("");
+    await writeFile(
+      join(inner!, "docmeta.config.yaml"),
+      "schemas:\n  - ../outside.schema.json\n",
+      "utf8",
+    );
+    await writeFile(join(inner!, "plain.md"), "---\ntitle: Plain\n---\n", "utf8");
+    const { results } = await runValidate({ inputs: ["plain.md"], cwd: inner! });
+    expect(results[0]?.ok).toBe(true);
+    // Spelled as the config wrote it: the config sits in the run's own
+    // directory, so nothing is rebased, and nothing is contained either.
+    expect(results[0]?.schemas).toEqual(["../outside.schema.json"]);
+  });
+});

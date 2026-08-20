@@ -4,8 +4,13 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { loadConfig, parseConfig } from "../src/core/config.js";
+import {
+  loadConfig,
+  parseConfig,
+  schemaTrustRoot,
+} from "../src/core/config.js";
 import { DocmetaError } from "../src/types.js";
+import { DOC, makeTempRepo, removeTempRepo } from "./helpers/temp-repo.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -607,5 +612,38 @@ describe("config: schemaTrust", () => {
     expect(() =>
       parseConfig("schemaTrust:\n  documentRefs: strict\n", "c.yaml"),
     ).toThrow(/documentRefs: any/);
+  });
+});
+
+describe("schemaTrustRoot", () => {
+  let dir: string | undefined;
+  afterEach(() => {
+    removeTempRepo(dir);
+    dir = undefined;
+  });
+
+  it("reports the git root, from anywhere inside it", () => {
+    dir = makeTempRepo({ files: { "packages/docs/a.md": DOC } });
+    expect(schemaTrustRoot(dir)).toEqual({ dir, fromGit: true });
+    // The monorepo case: a package deep inside still gets the repository, so a
+    // document referencing `../shared/x.json` stays inside the boundary.
+    expect(schemaTrustRoot(join(dir, "packages", "docs"))).toEqual({
+      dir,
+      fromGit: true,
+    });
+  });
+
+  it("falls back to the config directory when there is no repository", () => {
+    dir = makeTempRepo({ files: { "pkg/a.md": DOC }, init: false });
+    const configDir = join(dir, "pkg");
+    expect(schemaTrustRoot(dir, configDir)).toEqual({
+      dir: configDir,
+      fromGit: false,
+    });
+  });
+
+  it("falls back to cwd when there is neither a repository nor a config", () => {
+    dir = makeTempRepo({ files: { "a.md": DOC }, init: false });
+    expect(schemaTrustRoot(dir)).toEqual({ dir, fromGit: false });
   });
 });

@@ -269,6 +269,27 @@ function assertDocumentRefAllowed(
     }
     return;
   }
+
+  // A local path. "A schema in this project" is what a document naming one
+  // reasonably means — not any file the CI process happens to be able to open.
+  // Applies in `any` as well as `local`: containment costs no existing setup a
+  // feature, so it is not something a repo should have to opt into.
+  //
+  // No `trustRoot` means the caller did not settle a boundary; see the field's
+  // documentation for why that is the caller's job and not this function's.
+  const root = params.trustRoot;
+  if (!root) return;
+  const abs = resolve(params.fileBase ?? process.cwd(), ref);
+  const within = relative(root.dir, abs);
+  // `""` is the root directory itself, which is not a file either way.
+  // `path.relative` compares case-insensitively on Windows, so a differently
+  // cased spelling of an in-repo path is still recognized as inside.
+  if (within !== "" && !within.startsWith("..") && !isAbsolute(within)) return;
+  throw new DocmetaError(
+    root.fromGit
+      ? `Refusing the "${FILE_SCHEMA_KEY}" path "${ref}": it resolves outside the repository root (${root.dir}). A document may only name a schema inside the repository; a path in \`schemas:\` or on \`--schema\` is not restricted this way.`
+      : `Refusing the "${FILE_SCHEMA_KEY}" path "${ref}": it resolves outside ${root.dir} — no git repository was found here, so the config's own directory is the boundary. A document may only name a schema inside the project; a path in \`schemas:\` or on \`--schema\` is not restricted this way.`,
+  );
 }
 
 export function resolveSchemaSet(params: ResolveParams): string[] {
