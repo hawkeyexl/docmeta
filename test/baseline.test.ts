@@ -174,7 +174,7 @@ describe("baseline file", () => {
       generatedWith: "3.4.2",
       entries: { "docs/a.md": ["a1b2c3d4e5f60718"] },
     };
-    const withBom = "﻿" + serializeBaseline(baseline);
+    const withBom = "\u{FEFF}" + serializeBaseline(baseline);
     expect(parseBaseline(withBom, DEFAULT_BASELINE_PATH)).toEqual(baseline);
   });
 

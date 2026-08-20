@@ -793,7 +793,7 @@ describe("a schema file saved with a UTF-8 BOM", () => {
   // `JSON.parse` rejects it, so a file every other tool reads happily failed
   // with "unexpected token at line 1 column 1" — which reads as an empty or
   // corrupt file and points the operator nowhere near the real cause.
-  const BOM = "﻿";
+  const BOM = "\u{FEFF}";
   const fixture = join(here, "fixtures", "bom.schema.json");
 
   it("has a real BOM on disk, or this whole block proves nothing", () => {
