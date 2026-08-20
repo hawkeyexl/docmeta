@@ -1,3 +1,10 @@
+# [3.9.0](https://github.com/hawkeyexl/docmeta/compare/v3.8.0...v3.9.0) (2026-08-20)
+
+
+### Features
+
+* **schemas:** vendor a remote schema into the repository and pin it ([#82](https://github.com/hawkeyexl/docmeta/issues/82)) ([ee70724](https://github.com/hawkeyexl/docmeta/commit/ee70724e9cb78c0b99b52baf499c019f2bd70d53))
+
 # [3.8.0](https://github.com/hawkeyexl/docmeta/compare/v3.7.1...v3.8.0) (2026-08-20)
 
 
