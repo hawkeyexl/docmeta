@@ -1,3 +1,10 @@
+# [3.11.0](https://github.com/hawkeyexl/docmeta/compare/v3.10.0...v3.11.0) (2026-08-20)
+
+
+### Features
+
+* **schemas:** let a repo constrain what a document's `$schema` may name ([#88](https://github.com/hawkeyexl/docmeta/issues/88)) ([214bbaa](https://github.com/hawkeyexl/docmeta/commit/214bbaa05498b4a802734c27d14d1677200b3242)), closes [#74](https://github.com/hawkeyexl/docmeta/issues/74) [#73](https://github.com/hawkeyexl/docmeta/issues/73)
+
 # [3.10.0](https://github.com/hawkeyexl/docmeta/compare/v3.9.1...v3.10.0) (2026-08-20)
 
 
