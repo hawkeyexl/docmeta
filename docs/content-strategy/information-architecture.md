@@ -70,7 +70,7 @@ Home — "What do you want to do?" router + 30-second proof
 | Add docmeta to CI — GitHub Actions recipe | D1 | ★ | From `examples/`. |
 | CI recipes: GitLab CI, Jenkins, pre-commit | D1 | ★ | Fills current GitHub-only gap. |
 | Exit codes & PR annotations contract | D1 | ★ | 0/1/2 semantics, `--format github` annotation output. |
-| Govern a shared schema across repos | D2 | | Vendoring (`schemas vendor`, integrity pins), and the URL form with its tradeoff: remote `$schema`, 10 s timeout, caching, versioning. |
+| Govern a shared schema across repos | D2 | | Vendoring (`schemas pull`, integrity pins), and the URL form with its tradeoff: remote `$schema`, 10 s timeout, caching, versioning. |
 | Consume results programmatically | D3 | | `--format json`, `get` command, TypeScript API. |
 
 ### Define & evolve schemas (Sara)

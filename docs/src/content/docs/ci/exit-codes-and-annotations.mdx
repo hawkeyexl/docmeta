@@ -353,7 +353,7 @@ which need no flag.
 {/* step {"description":"Exit 1: one or more files failed validation.","runShell":{"command":"docmeta validate test/fixtures/missing-type.md","exitCodes":[1]}} */}
 {/* step {"description":"Exit 2: an operational/usage error (unknown --format).","runShell":{"command":"docmeta validate test/fixtures/valid.md -f xml","exitCodes":[2],"stdio":"Unknown --format"}} */}
 {/* step {"description":"Exit 2: an unknown flag is a usage error, not a validation failure.","runShell":{"command":"docmeta validate --nope test/fixtures/valid.md","exitCodes":[2],"stdio":"unknown option"}} */}
-{/* step {"description":"Exit 2: a missing required argument is a usage error.","runShell":{"command":"docmeta schemas vendor","exitCodes":[2],"stdio":"missing required argument"}} */}
+{/* step {"description":"Exit 2: a missing required argument is a usage error.","runShell":{"command":"docmeta schemas pull","exitCodes":[2],"stdio":"missing required argument"}} */}
 {/* step {"description":"Exit 2: get with no field list is an operational error, not an empty report.","runShell":{"command":"docmeta get","exitCodes":[2],"stdio":"Specify at least one field"}} */}
 {/* step {"description":"github annotation line carries file= and line= for an error with a known line.","runShell":{"command":"docmeta validate test/fixtures/bad-timestamp.md --format github","exitCodes":[1],"stdio":"/::error file=test/fixtures/bad-timestamp.md,line=4::/"}} */}
 {/* step {"description":"get has no github output: it reports values, not findings (exit 2).","runShell":{"command":"docmeta get type test/fixtures/valid.md --format github","exitCodes":[2],"stdio":"Unknown --format"}} */}

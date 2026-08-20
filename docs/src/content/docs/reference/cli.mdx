@@ -442,7 +442,7 @@ cat page.md | docmeta fill - --as markdown   # filled document to stdout
 ## `schemas`
 
 List the built-in schemas and the supported input formats. On its own it takes
-no positional arguments and reads no files. Its [`vendor`](#schemas-vendor)
+no positional arguments and reads no files. Its [`pull`](#schemas-pull)
 subcommand is the one that reaches the network and writes to the repository.
 
 ```sh
@@ -467,14 +467,23 @@ docmeta schemas
 docmeta schemas -f json
 ```
 
-## `schemas vendor`
+## `schemas pull`
 
 Download a remote schema into this repository and pin it in config, so the
 contract lives in your own history instead of depending on a host staying up.
 
 ```sh
-docmeta schemas vendor <url> [options]
+docmeta schemas pull <url> [options]
 ```
+
+<Aside type="note" title="Also spelled `schemas vendor`">
+`vendor` was the original name and still works — it is the term of art for this
+operation (`go mod vendor`, `cargo vendor`), and nothing that already calls it
+needs to change. Note that despite the name, `pull` does **not** populate the
+[schema cache](/docmeta/reference/schema-resolution/#the-cross-run-cache): it
+writes a file you commit. The cache is a separate thing, filled automatically
+by any run that fetches a URL.
+</Aside>
 
 ### Arguments
 
@@ -489,7 +498,7 @@ docmeta schemas vendor <url> [options]
 | `--dir` | `<path>` | `./schema` | Directory for the committed copy. Must be a path the repository tracks — see below. |
 | `-c, --config` | `<path>` | discovered | Path to the [config file](/docmeta/reference/configuration/) to rewrite. |
 
-Vendoring writes two things: the schema file itself, and a `schemas:` entry
+Pulling writes two things: the schema file itself, and a `schemas:` entry
 naming it, where it came from, and the digest of the bytes that were fetched.
 
 ```yaml
@@ -505,10 +514,10 @@ bytes is an [integrity failure](/docmeta/reference/schema-resolution/) rather
 than a contract that shifted without anyone noticing.
 
 <Aside type="caution" title="The target directory must be tracked">
-`vendor` refuses to write into a directory `.gitignore` covers, and checks
-before it downloads. An ignored copy validates on the machine that created it
-and is simply absent in CI, where the failure reads as a schema nobody changed —
-which is the failure vendoring exists to remove.
+`pull` refuses to write into a directory `.gitignore` covers, and checks before
+it downloads. An ignored copy validates on the machine that created it and is
+simply absent in CI, where the failure reads as a schema nobody changed — which
+is the failure this command exists to remove.
 </Aside>
 
 ## Shared input model

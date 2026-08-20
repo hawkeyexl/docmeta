@@ -1289,10 +1289,10 @@ describe("docmeta CLI: --offline and the cross-run schema cache (built bin)", ()
 });
 
 // ---------------------------------------------------------------------------
-// 0008 — `schemas vendor`, end to end against the built binary
+// 0008 — `schemas pull`, end to end against the built binary
 // ---------------------------------------------------------------------------
 
-describe("docmeta CLI: schemas vendor (built bin)", () => {
+describe("docmeta CLI: schemas pull (built bin)", () => {
   let repo: string | undefined;
 
   /**
@@ -1339,7 +1339,7 @@ describe("docmeta CLI: schemas vendor (built bin)", () => {
     repo = makeTempRepo({ files: { "ok.md": OK, "bad.md": MISSING_OWNER } });
     const url = `${server.url}/house/2.1.json`;
 
-    const vendored = await runInAsync(["schemas", "vendor", url], repo);
+    const vendored = await runInAsync(["schemas", "pull", url], repo);
     expect(vendored.status).toBe(0);
     expect(vendored.stdout).toContain("schema/2.1.json");
     expect(vendored.stdout).toMatch(/integrity\s+sha256-[0-9a-f]{64}/);
@@ -1364,11 +1364,30 @@ describe("docmeta CLI: schemas vendor (built bin)", () => {
     expect(tampered.stderr).toContain(url);
   });
 
+  it("still answers to its old name, `schemas vendor`", async () => {
+    // Renaming the command to `pull` is non-breaking only if the alias really
+    // resolves to the same command — a released docs page and whatever scripts
+    // already call it both say `vendor`. Asserting on the *effect*, not on the
+    // help text, because an alias that parses and then does nothing would pass
+    // a help-only check.
+    const server = await startSchemaServer({ "/alias.json": { body: HOUSE } });
+    repo = makeTempRepo({ files: {} });
+    const r = await runInAsync(
+      ["schemas", "vendor", `${server.url}/alias.json`],
+      repo,
+    );
+    await server.close();
+
+    expect(r.status).toBe(0);
+    expect(existsSync(join(repo, "schema", "alias.json"))).toBe(true);
+    expect(r.stdout).toMatch(/integrity\s+sha256-[0-9a-f]{64}/);
+  });
+
   it("refuses a gitignored target and leaves the tree untouched", async () => {
     const server = await startSchemaServer({ "/g.json": { body: HOUSE } });
     repo = makeTempRepo({ files: { ".gitignore": ".docmeta/\n" } });
     const r = await runInAsync(
-      ["schemas", "vendor", `${server.url}/g.json`, "--dir", ".docmeta/schemas"],
+      ["schemas", "pull", `${server.url}/g.json`, "--dir", ".docmeta/schemas"],
       repo,
     );
     await server.close();
@@ -1388,7 +1407,7 @@ describe("docmeta CLI: schemas vendor (built bin)", () => {
         "docmeta.config.yaml": `paths:\n  - "*.md"\nschemas:\n  - ${url}\n`,
       },
     });
-    const r = await runInAsync(["schemas", "vendor", url], repo);
+    const r = await runInAsync(["schemas", "pull", url], repo);
     await server.close();
 
     expect(r.status).toBe(0);
@@ -1445,11 +1464,11 @@ describe("usage errors exit 2 (0005 §4)", () => {
     expect(r.status).toBe(2);
   });
 
-  // `schemas vendor <url>`, not `get`: `get`'s field list became `[fields]`
+  // `schemas pull <url>`, not `get`: `get`'s field list became `[fields]`
   // under 0005 §1, so commander no longer rejects a bare `get` — the CLI's own
   // guard does, and it is covered with the rest of that rule.
   it("a missing required argument exits 2", () => {
-    const r = runSync(["schemas", "vendor"]);
+    const r = runSync(["schemas", "pull"]);
     expect(r.status).toBe(2);
     expect(r.stderr).toMatch(/missing required argument/i);
   });

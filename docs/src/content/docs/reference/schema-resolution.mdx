@@ -105,7 +105,7 @@ file a run actually loaded.
 
 #### Vendored references
 
-[`docmeta schemas vendor`](/docmeta/reference/cli/#schemas-vendor) turns a URL
+[`docmeta schemas pull`](/docmeta/reference/cli/#schemas-pull) turns a URL
 reference into a file reference that keeps a record of where it came from:
 
 ```yaml title="docmeta.config.yaml"
@@ -131,7 +131,7 @@ docmeta: Schema "./schema/2.1.json" does not match its recorded integrity.
   expected sha256-c12b1cfe…7341
   found    sha256-9091a816…46cb
 The file's contents have changed since it was vendored. Re-download it with
-`docmeta schemas vendor https://schemas.example.com/house/2.1.json`, or update
+`docmeta schemas pull https://schemas.example.com/house/2.1.json`, or update
 the recorded integrity if the change was intended.
 ```
 
@@ -148,7 +148,7 @@ what actually happened:
 | The file is **missing** | `Schema file not found: "…". It was vendored from <source>; commit the file, or re-download it…`. Usually a copy that was never committed. |
 | The pin is on a **built-in or URL** ref | Rejected when the config is parsed: neither can be verified, so a pin there would be decorative. |
 
-The hash is taken over the raw bytes, and `schemas vendor` writes exactly what
+The hash is taken over the raw bytes, and `schemas pull` writes exactly what
 the server sent, so the pin also attests to the upstream file: re-downloading
 the URL and hashing it reproduces the same value.
 
@@ -222,7 +222,7 @@ build then validates against a rule nobody is looking at.
 
 Treat the cache as a developer and pre-commit convenience. For CI durability,
 [vendor the schema](#vendored-references) into the consuming repository with
-`docmeta schemas vendor`, so the contract is a reviewable artifact in your own
+`docmeta schemas pull`, so the contract is a reviewable artifact in your own
 history rather than a request that has to succeed.
 </Aside>
 

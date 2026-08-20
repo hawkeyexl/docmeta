@@ -1,6 +1,6 @@
 ---
 title: Govern a shared schema across repos
-description: Vendor one canonical JSON Schema into each consuming repository with docmeta schemas vendor, so CI validates against a committed, hash-pinned copy instead of a live URL, and keep the plain URL form where its tradeoff is acceptable.
+description: Vendor one canonical JSON Schema into each consuming repository with docmeta schemas pull, so CI validates against a committed, hash-pinned copy instead of a live URL, and keep the plain URL form where its tradeoff is acceptable.
 ---
 
 import { Steps, Tabs, TabItem, Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
@@ -35,10 +35,10 @@ form for the cases described in [When the URL form is enough](#when-the-url-form
    is still worth doing when consumers vendor: the URL is what they vendor
    *from*, and what a re-vendor points at.
 
-2. **In each consuming repo, run `schemas vendor`.**
+2. **In each consuming repo, run `schemas pull`.**
 
    ```sh
-   npx -y docmeta schemas vendor https://schemas.example.com/house/2.1.json
+   npx -y docmeta schemas pull https://schemas.example.com/house/2.1.json
    ```
 
    docmeta downloads the schema, writes it to `./schema/2.1.json`, and records
@@ -76,7 +76,7 @@ form for the cases described in [When the URL form is enough](#when-the-url-form
    with the new URL:
 
    ```sh
-   npx -y docmeta schemas vendor https://schemas.example.com/house/2.2.json
+   npx -y docmeta schemas pull https://schemas.example.com/house/2.2.json
    ```
 
    The existing entry is replaced rather than duplicated, and the result is a
@@ -88,7 +88,7 @@ form for the cases described in [When the URL form is enough](#when-the-url-form
 <Aside type="caution" title="A vendored schema git ignores is worse than no schema">
 An ignored copy validates perfectly on the machine that downloaded it and is
 simply *absent* in CI, where the failure arrives as a missing schema file in a
-repository nobody changed. So `schemas vendor` asks `git check-ignore` about the
+repository nobody changed. So `schemas pull` asks `git check-ignore` about the
 target **before** it downloads anything and refuses (exit 2) if the answer is
 yes — which is also why the default is `./schema` and not `.docmeta/`, a
 directory docmeta expects you to ignore wholesale.
@@ -103,7 +103,7 @@ If a repo already carries the URL form, vendoring converts it in place. Run the
 command with the same URL it already references:
 
 ```sh
-npx -y docmeta schemas vendor https://schemas.example.com/house/2.1.json
+npx -y docmeta schemas pull https://schemas.example.com/house/2.1.json
 ```
 
 The bare-URL entry is **replaced**, not appended to, so the URL survives as
@@ -121,12 +121,12 @@ docmeta: Schema "./schema/2.1.json" does not match its recorded integrity.
   expected sha256-c12b1cfe…7341
   found    sha256-9091a816…46cb
 The file's contents have changed since it was vendored. Re-download it with
-`docmeta schemas vendor https://schemas.example.com/house/2.1.json`, or update
+`docmeta schemas pull https://schemas.example.com/house/2.1.json`, or update
 the recorded integrity if the change was intended.
 ```
 
 That is the cost, stated plainly: an edit to the vendored file that does not go
-through `schemas vendor` — including a well-meant local tweak — breaks the build
+through `schemas pull` — including a well-meant local tweak — breaks the build
 until the pin is updated. In exchange, no copy of the shared standard can drift
 without a reviewer seeing it. If you want the local file without the pin, delete
 the `integrity:` line; `ref` and `source` keep working on their own.
@@ -192,7 +192,7 @@ schemas:
   - https://schemas.example.com/house/2.1.json
 ```
 
-This is the form `schemas vendor` replaces. You can also scope a URL schema to a
+This is the form `schemas pull` replaces. You can also scope a URL schema to a
 subtree with an `overrides` entry — see the [configuration
 reference](/docmeta/reference/configuration/).
 
@@ -278,8 +278,8 @@ nothing in the run touches it) and confirm the gate still passes.
     description="The precedence chain, the three reference kinds, pinned references, and supported dialects."
   />
   <LinkCard
-    title="CLI reference: schemas vendor"
-    href="/docmeta/reference/cli/#schemas-vendor"
+    title="CLI reference: schemas pull"
+    href="/docmeta/reference/cli/#schemas-pull"
     description="Every flag, the default directory, and what the command refuses to do."
   />
   <LinkCard
@@ -293,8 +293,8 @@ nothing in the run touches it) and confirm the gate still passes.
     against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
     (see .github/workflows/doc-detective.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
-{/* test {"testId":"govern-shared-schema","description":"URL-reference classification, the fetch-failure contract, and what `schemas vendor` refuses, exercised against the local build."} */}
+{/* test {"testId":"govern-shared-schema","description":"URL-reference classification, the fetch-failure contract, and what `schemas pull` refuses, exercised against the local build."} */}
 {/* step {"description":"A reference starting with https:// is treated as a URL and fetched; an unreachable host fails the run as an operational error (exit 2), distinct from a validation failure. Uses a closed loopback port so the failure is instant and needs no external network.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md -s https://127.0.0.1:1/article/1.json","exitCodes":[2],"stdio":"Failed to fetch schema"}} */}
 {/* step {"description":"By contrast, a clean run against a resolvable (built-in) schema exits 0 — the URL path is the only difference.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md -s google:okf:0.1","exitCodes":[0],"stdio":"1 passed"}} */}
-{/* step {"description":"`schemas vendor` takes an http(s) URL to download. A built-in id is already bundled, so it is refused as a usage error (exit 2) before anything is written.","runShell":{"command":"npx docmeta schemas vendor google:okf:0.1","exitCodes":[2],"stdio":"http(s) URL"}} */}
+{/* step {"description":"`schemas pull` takes an http(s) URL to download. A built-in id is already bundled, so it is refused as a usage error (exit 2) before anything is written.","runShell":{"command":"npx docmeta schemas pull google:okf:0.1","exitCodes":[2],"stdio":"http(s) URL"}} */}
 {/* test end */}

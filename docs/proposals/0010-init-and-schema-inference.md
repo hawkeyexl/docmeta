@@ -166,7 +166,7 @@ bit of it to be documented. Worth it for the naming (`infer` is about schemas), 
 it should be scoped as a subcommand from the start rather than retrofitted.
 
 Note this also collides with [0008](0008-remote-schema-durability.md)'s proposed
-`schemas vendor`. Both want `schemas` to become a group; they should land in a
+`schemas pull`. Both want `schemas` to become a group; they should land in a
 consistent order, and whichever is first pays the restructuring cost.
 
 ### 10. `init` and `infer` are two commands, not one — deliberately

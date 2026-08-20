@@ -54,7 +54,7 @@ schemas:
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `ref` | `string` | yes | What is loaded: a built-in id, a local `.json` path, or a URL. Identical in meaning to the string form. |
-| `source` | `string` | no | Where `ref` came from. Recorded by [`schemas vendor`](/docmeta/reference/cli/#schemas-vendor) so a re-vendor knows the URL, and so an error about the file can name it. |
+| `source` | `string` | no | Where `ref` came from. Recorded by [`schemas pull`](/docmeta/reference/cli/#schemas-pull) so a re-vendor knows the URL, and so an error about the file can name it. |
 | `integrity` | `string` | no | `sha256-<64 hex characters>` over the file's bytes. A mismatch is an operational error (exit 2). |
 
 The two forms mean exactly the same thing to schema resolution: the `ref` string
@@ -70,7 +70,7 @@ Rules, all of them exit 2 when broken:
   pinned and is not.
 - `integrity` must match `sha256-<64 hex characters>`. There is one algorithm
   and one encoding; write them with [`schemas
-  vendor`](/docmeta/reference/cli/#schemas-vendor) rather than by hand.
+  vendor`](/docmeta/reference/cli/#schemas-pull) rather than by hand.
 - `integrity` is only accepted on a **local file** reference. A built-in has no
   bytes to check, and a URL may be served from the [schema
   cache](#schema-cache), which stores the parsed schema rather than what the

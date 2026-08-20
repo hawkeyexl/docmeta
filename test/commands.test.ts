@@ -784,7 +784,7 @@ const failure = (p: Promise<unknown>): Promise<Error> =>
     (e: Error) => e,
   );
 
-// 0008 — `docmeta schemas vendor`
+// 0008 — `docmeta schemas pull`
 // ---------------------------------------------------------------------------
 
 /** A real, minimal schema, served byte-for-byte so the pin is checkable. */

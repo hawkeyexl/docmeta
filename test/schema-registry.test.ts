@@ -833,7 +833,7 @@ describe("integrity pins (0008)", () => {
     expect(err.message).toContain(pinFor(BODY));
     expect(err.message).toContain(pinFor('{"type":"object"}'));
     expect(err.message).toMatch(/contents have changed/);
-    expect(err.message).toContain("docmeta schemas vendor https://e.example/house.json");
+    expect(err.message).toContain("docmeta schemas pull https://e.example/house.json");
   });
 
   // A committed schema plus `core.autocrlf` is a mismatch on a file nobody

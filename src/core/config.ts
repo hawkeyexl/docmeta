@@ -21,7 +21,7 @@ export interface SchemaOverride {
  * A `schemas:` entry in its long form: a reference plus where it came from and
  * what it must hash to.
  *
- * Written by `docmeta schemas vendor`, which downloads a remote schema into the
+ * Written by `docmeta schemas pull`, which downloads a remote schema into the
  * repository and records both. `source` keeps the provenance the URL used to
  * carry, so a re-vendor knows where to look and an error can say what to
  * re-download; `integrity` makes an edited or corrupted copy a loud failure
@@ -187,7 +187,7 @@ function parseSchemaEntry(
   if (raw.integrity !== undefined) {
     if (typeof raw.integrity !== "string" || !isIntegrity(raw.integrity)) {
       throw new DocmetaError(
-        `${source}: ${where}.integrity must look like "${INTEGRITY_SHAPE}". Record one with \`docmeta schemas vendor\`.`,
+        `${source}: ${where}.integrity must look like "${INTEGRITY_SHAPE}". Record one with \`docmeta schemas pull\`.`,
       );
     }
     // A pin is checked against bytes on disk. On a built-in id there are no
@@ -198,7 +198,7 @@ function parseSchemaEntry(
     const kind = classifyRef(parsed.ref).kind;
     if (kind !== "file") {
       throw new DocmetaError(
-        `${source}: ${where}.integrity applies to a vendored local file, but "${parsed.ref}" is a ${kind === "url" ? "URL" : "built-in id"}. Vendor it first with \`docmeta schemas vendor\`, or drop the pin.`,
+        `${source}: ${where}.integrity applies to a vendored local file, but "${parsed.ref}" is a ${kind === "url" ? "URL" : "built-in id"}. Vendor it first with \`docmeta schemas pull\`, or drop the pin.`,
       );
     }
     parsed.integrity = raw.integrity;

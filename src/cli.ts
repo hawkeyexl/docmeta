@@ -795,11 +795,21 @@ export function buildProgram(): Command {
     });
 
   schemas
-    .command("vendor")
+    .command("pull")
+    // `vendor` was the original name and still works. It is the term of art for
+    // what this does — `go mod vendor`, `cargo vendor` — but it is jargon, and
+    // the operation reads as a download to most people. Kept as an alias rather
+    // than removed: it is in released docs and in whatever scripts already call
+    // it, and an alias costs one line.
+    //
+    // The alias is invisible to `scripts/check-cli-reference.mjs`, which keys on
+    // `cmd.name()`, so the reference page documents `pull` and mentions `vendor`
+    // in prose. That is the right way round.
+    .alias("vendor")
     .description(
       "Download a remote schema into this repository and pin it in config",
     )
-    .argument("<url>", "http(s) URL of the schema to vendor")
+    .argument("<url>", "http(s) URL of the schema to pull")
     .option(
       "--dir <path>",
       "directory for the committed copy",
@@ -811,11 +821,13 @@ export function buildProgram(): Command {
       [
         "",
         "Examples:",
-        "  docmeta schemas vendor https://schemas.example.com/house/2.1.json",
-        "  docmeta schemas vendor https://schemas.example.com/house/2.1.json --dir ./contracts",
+        "  docmeta schemas pull https://schemas.example.com/house/2.1.json",
+        "  docmeta schemas pull https://schemas.example.com/house/2.1.json --dir ./contracts",
         "",
-        "Commit both the downloaded file and the config change: the point of",
-        "vendoring is that CI validates against a copy in your own history.",
+        "Commit both the downloaded file and the config change: the point is",
+        "that CI validates against a copy in your own history, not a live URL.",
+        "",
+        "Aliased as `schemas vendor`, which is what this used to be called.",
       ].join("\n"),
     )
     .action(async (url: string, options) => {
@@ -839,7 +851,7 @@ export function buildProgram(): Command {
             : "reference added";
         process.stdout.write(
           [
-            `Vendored ${result.url}`,
+            `Pulled ${result.url}`,
             `  file       ${result.file} (${result.bytes} bytes${result.unchanged ? ", unchanged" : ""})`,
             `  integrity  ${result.integrity}`,
             `  config     ${result.config} (${configNote})`,

@@ -375,7 +375,7 @@ async function readCappedBody(
   // straddle a chunk boundary. `total` is already exact, so passing it spares
   // `concat` a second pass to re-derive the same length.
   //
-  // Returned as **bytes**. `schemas vendor` hashes and writes exactly what the
+  // Returned as **bytes**. `schemas pull` hashes and writes exactly what the
   // server sent, and a decode/re-encode round trip through a UTF-8 string is
   // lossy for a payload that is not valid UTF-8 — which would make an integrity
   // pin wrong in precisely the case it exists to catch.
@@ -472,7 +472,7 @@ export interface FetchedSchema {
 /**
  * Fetch, size-cap, parse, and guard a remote schema. At most two requests.
  *
- * Exported for `schemas vendor`, which needs the raw bytes to write and to
+ * Exported for `schemas pull`, which needs the raw bytes to write and to
  * hash. Sharing this path rather than fetching separately is what keeps
  * vendoring subject to the same size cap, retry policy, and payload guard as
  * validation — a vendored error envelope would otherwise be committed to the
@@ -646,8 +646,8 @@ export function schemaLoadOptions(args: {
  */
 function repinAdvice(ref: string, pin: SchemaPin): string {
   return pin.source !== undefined
-    ? `Re-download it with \`docmeta schemas vendor ${pin.source}\`, or update the recorded integrity if the change was intended.`
-    : `Restore the file from version control, or record the new bytes by re-running \`docmeta schemas vendor\` with the URL this copy came from. (No \`source:\` is recorded for "${ref}", so docmeta cannot say where that is.)`;
+    ? `Re-download it with \`docmeta schemas pull ${pin.source}\`, or update the recorded integrity if the change was intended.`
+    : `Restore the file from version control, or record the new bytes by re-running \`docmeta schemas pull\` with the URL this copy came from. (No \`source:\` is recorded for "${ref}", so docmeta cannot say where that is.)`;
 }
 
 /**
@@ -704,7 +704,7 @@ export async function loadSchema(
   // with a better message; this catches a library caller.
   if (pin?.integrity !== undefined && kind !== "file") {
     throw new DocmetaError(
-      `Schema "${ref}" carries an integrity pin, but a pin can only be verified against a local file (this is a ${kind === "url" ? "URL" : "built-in id"}). Vendor it with \`docmeta schemas vendor\`, or drop the pin.`,
+      `Schema "${ref}" carries an integrity pin, but a pin can only be verified against a local file (this is a ${kind === "url" ? "URL" : "built-in id"}). Vendor it with \`docmeta schemas pull\`, or drop the pin.`,
     );
   }
 
@@ -787,7 +787,7 @@ export async function loadSchema(
     // message uses for it.
     throw new DocmetaError(
       pin?.source !== undefined
-        ? `Schema file not found: "${ref}". It was vendored from ${pin.source}; commit the file, or re-download it with \`docmeta schemas vendor ${pin.source}\`.`
+        ? `Schema file not found: "${ref}". It was vendored from ${pin.source}; commit the file, or re-download it with \`docmeta schemas pull ${pin.source}\`.`
         : `Schema file not found: "${ref}".`,
     );
   }

@@ -256,7 +256,7 @@ export async function runVendorSchema(
 
   if (!/^https?:\/\//i.test(url)) {
     throw new DocmetaError(
-      `\`docmeta schemas vendor\` takes an http(s) URL to download; "${url}" is ${/^[a-z0-9][a-z0-9._-]*:/i.test(url) && !url.includes("/") ? "a built-in id, which is already bundled" : "a local reference, which is already in your repository"}.`,
+      `\`docmeta schemas pull\` takes an http(s) URL to download; "${url}" is ${/^[a-z0-9][a-z0-9._-]*:/i.test(url) && !url.includes("/") ? "a built-in id, which is already bundled" : "a local reference, which is already in your repository"}.`,
     );
   }
 

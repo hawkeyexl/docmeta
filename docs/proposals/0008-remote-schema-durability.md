@@ -1,6 +1,13 @@
 # 0008 — Remote schema durability: vendoring, integrity, offline
 
 - **Status:** Implemented
+- **Renamed since:** the command shipped as `schemas vendor` and is now
+  `schemas pull`, with `vendor` kept as an alias. `vendor` is the accurate
+  term of art and `pull` is the more familiar word; the risk the alias note
+  in `reference/cli.mdx` has to carry is that `pull` reads like it fills the
+  schema *cache*, which is a different feature in this same proposal. The
+  body below still says `vendor` throughout, as the record of what was
+  designed.
 - **Serves:** Devin · D2 "Govern one schema across many repos"
 - **Touches:** `src/core/schema-registry.ts`, `src/core/config.ts`, `src/cli.ts`, new `docmeta schemas vendor`
 - **Relates to:** [0009](0009-publish-builtin-schemas.md) (which creates more URL refs to be durable about)
