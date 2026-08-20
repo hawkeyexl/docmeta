@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { Validator } from "../src/core/validator.js";
+import { PUBLISHED_BASE } from "../src/core/schema-registry.js";
 import { startSchemaServer, type SchemaServer } from "./helpers/schema-server.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -12,6 +13,17 @@ const withId = join(here, "fixtures", "with-id.schema.json");
 const withIdAlias = join(here, "fixtures", "with-id-alias.schema.json");
 const withIdDivergent = join(here, "fixtures", "with-id-divergent.schema.json");
 const keywords = join(here, "fixtures", "baseline", "keywords.schema.json");
+const extendsPublishedUrl = join(
+  here,
+  "fixtures",
+  "extends-published-url.schema.json",
+);
+const extendsBuiltinId = join(here, "fixtures", "extends-builtin-id.schema.json");
+const extendsPublishedDraft07 = join(
+  here,
+  "fixtures",
+  "extends-published-draft07.schema.json",
+);
 
 const lineFor = (ptr: string) => (ptr === "/timestamp" ? 9 : 1);
 
@@ -187,16 +199,17 @@ describe("Validator compile cache under concurrency", () => {
     expect(errors.map((e) => e.schema)).toEqual([withId, withIdAlias]);
   });
 
-  it("silently checks a divergent schema against the first one under the same $id", async () => {
-    // The cost the reuse above buys, pinned rather than left to a comment.
-    // Ajv can hold only one schema per `$id`, so when two refs disagree about
-    // the rules, the first compile wins and the second ref is answered from it.
-    // Nothing errors — the run just gives the wrong answer.
+  it("judges a divergent schema by its own rules, not by the one that took the $id first", async () => {
+    // This used to assert the opposite, and the opposite was a documented
+    // silent wrong answer: Ajv holds one schema per `$id`, so when two refs
+    // disagreed about the rules the first compile won and the second ref was
+    // answered from it. Nothing errored; the run just gave the wrong result.
     //
-    // This is why the schema-authoring guide tells readers to change the `$id`
-    // when they copy a built-in: a local copy that keeps `google:okf:0.1` is
-    // this case exactly, and the symptom is a check that passes when it should
-    // have failed.
+    // Reuse is now conditional on the registration being *the same object*, so
+    // a ref naming different content gets its own compile with the contested id
+    // dropped. That mattered once `registerBuiltins` began pre-loading the
+    // built-ins: the collision stopped being an ordering race and became
+    // certain, and a vendored-then-edited built-in would always have lost.
     const data = { title: "Hi", stray: 1 };
 
     // Alone, the divergent schema rejects the stray key.
@@ -204,14 +217,15 @@ describe("Validator compile cache under concurrency", () => {
       await new Validator().validate(data, [withIdDivergent], lineFor),
     ).toHaveLength(1);
 
-    // Behind a permissive schema wearing the same `$id`, it does not — the
-    // second ref reports clean because it never got its own compile.
-    const shadowed = await new Validator().validate(
+    // And behind a permissive schema wearing the same `$id`, it still does.
+    const alongside = await new Validator().validate(
       data,
       [withId, withIdDivergent],
       lineFor,
     );
-    expect(shadowed).toEqual([]);
+    expect(alongside).toHaveLength(1);
+    expect(alongside[0]?.schema).toBe(withIdDivergent);
+    expect(alongside[0]?.subject).toBe("stray");
   });
 
   it("does not cache a failed load, so a later attempt can still succeed", async () => {
@@ -294,5 +308,161 @@ describe("Validator with remote schemas of different dialects", () => {
     expect(errors).toHaveLength(1);
     expect(errors[0]?.schema).toBe(ref);
     expect(errors[0]?.message).toMatch(/type/);
+  });
+});
+
+describe("a local schema that claims a built-in's $id (0009)", () => {
+  it("is judged by its own contents, not by the built-in it shadows", async () => {
+    // `schemas vendor` writes a copy of a built-in carrying its `$id`, and 0009
+    // encourages vendoring the published URL — so an edited vendored copy is a
+    // normal thing to have. Pre-registering the built-ins put one under that
+    // `$id` in every Ajv up front, and `compileUncached`'s id short-circuit then
+    // handed back the *bundled* schema for a ref naming the local file: the
+    // house rule silently did not apply, while the report went on naming the
+    // local path. Before the fix this reported 'type' — the bundled OKF's
+    // requirement — for a schema that does not mention it.
+    const dir = await mkdtemp(join(tmpdir(), "docmeta-idshadow-"));
+    try {
+      const mine = join(dir, "my-okf.json");
+      await writeFile(
+        mine,
+        JSON.stringify({
+          $schema: "https://json-schema.org/draft/2020-12/schema",
+          $id: "google:okf:0.1",
+          type: "object",
+          required: ["owner"],
+        }),
+      );
+      const errors = await new Validator().validate(
+        { title: "t" },
+        [mine],
+        () => undefined,
+      );
+      const said = errors.map((e) => e.message).join();
+      expect(said).toMatch(/'owner'/);
+      expect(said).not.toMatch(/'type'/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("still shares one validator when the object really is the same", async () => {
+    // The dedup the short-circuit exists for has to survive the fix: the id and
+    // the published URL are two names for one bundled object, so compiling both
+    // must not trip Ajv's duplicate-id error.
+    const errors = await new Validator().validate(
+      { title: "t" },
+      ["google:okf:0.1", `${PUBLISHED_BASE}okf/0.1.json`],
+      () => undefined,
+    );
+    expect(errors.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0009 stress test 5 — $ref-ing a built-in, by either of its two names
+// ---------------------------------------------------------------------------
+
+describe("a user schema $ref-ing a built-in (0009)", () => {
+  let realFetch: typeof globalThis.fetch;
+  let attempted: string[];
+
+  /**
+   * Ajv is built with no `loadSchema`, so an unresolved `$ref` throws rather
+   * than fetching — but that is a property of today's construction, not a
+   * promise. Failing the test on *any* request makes "no network" the assertion
+   * instead of a side effect.
+   */
+  beforeAll(() => {
+    realFetch = globalThis.fetch;
+    attempted = [];
+    globalThis.fetch = ((input: Parameters<typeof fetch>[0]) => {
+      attempted.push(String(input));
+      return Promise.reject(new Error("the network is not available here"));
+    }) as typeof globalThis.fetch;
+  });
+
+  afterAll(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  it.each([
+    ["its published URL", extendsPublishedUrl],
+    ["its docmeta id", extendsBuiltinId],
+    ["its published URL, from a draft-07 schema", extendsPublishedDraft07],
+  ])("compiles and applies a schema extending OKF by %s", async (_n, ref) => {
+    const v = new Validator();
+    // The built-in's own rule still applies through the `$ref` …
+    const missingType = await v.validate({ title: "Hi" }, [ref], lineFor);
+    expect(missingType).toHaveLength(1);
+    expect(missingType[0]?.message).toMatch(/type/);
+    // … and so does the extending schema's own.
+    const missingTitle = await v.validate({ type: "concept" }, [ref], lineFor);
+    expect(missingTitle).toHaveLength(1);
+    expect(missingTitle[0]?.message).toMatch(/title/);
+    // Both satisfied.
+    expect(
+      await v.validate({ type: "concept", title: "Hi" }, [ref], lineFor),
+    ).toEqual([]);
+    expect(attempted).toEqual([]);
+  });
+
+  it("leaves a top-level built-in ref behaving exactly as before", async () => {
+    // Pre-registering the built-ins makes `compileUncached`'s existing
+    // `ajv.getSchema($id)` short circuit hit for `-s google:okf:0.1`, which is
+    // the hottest path in the tool. It must be the same validator, not a
+    // permissive one that quietly passes everything.
+    const v = new Validator();
+    expect(
+      await v.validate({ type: "concept" }, ["google:okf:0.1"], lineFor),
+    ).toEqual([]);
+    const errors = await v.validate({ title: "Hi" }, ["google:okf:0.1"], lineFor);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.schema).toBe("google:okf:0.1");
+    expect(errors[0]?.keyword).toBe("required");
+    expect(errors[0]?.subject).toBe("type");
+    // A format rule from deeper in the built-in still fires, so the
+    // registration is the real schema rather than a shell.
+    const bad = await v.validate(
+      { type: "concept", timestamp: "not-a-date" },
+      ["google:okf:0.1"],
+      lineFor,
+    );
+    expect(bad).toHaveLength(1);
+    expect(bad[0]?.keyword).toBe("format");
+    expect(attempted).toEqual([]);
+  });
+
+  it("compiles the same built-in through its published URL as a top-level ref", async () => {
+    const v = new Validator();
+    const url = "https://hawkeyexl.github.io/docmeta/schemas/okf/0.1.json";
+    const errors = await v.validate({ title: "Hi" }, [url], lineFor);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.schema).toBe(url);
+    expect(attempted).toEqual([]);
+  });
+
+  it("still fails an unregistered remote $ref rather than silently passing", async () => {
+    // The counterpart: pre-registration must not be mistaken for a general
+    // `loadSchema` hook. A `$ref` to a URL docmeta does not publish is still
+    // unresolvable, and that has to stay a loud compile error.
+    const dir = await mkdtemp(join(tmpdir(), "docmeta-ref-"));
+    try {
+      const ref = join(dir, "extends-elsewhere.schema.json");
+      await writeFile(
+        ref,
+        JSON.stringify({
+          $schema: "https://json-schema.org/draft/2020-12/schema",
+          type: "object",
+          allOf: [{ $ref: "https://schemas.example.com/house/2.1.json" }],
+        }),
+        "utf8",
+      );
+      await expect(
+        new Validator().validate({}, [ref], lineFor),
+      ).rejects.toThrow(/failed to compile|resolve reference/i);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

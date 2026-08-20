@@ -21,6 +21,12 @@ jobs:
       - run: npm run build
       - run: npm test
       - run: npm run docs:check-cli
+      # A published schema URL is a promise: its content never changes. This
+      # fails if an already-published `src/schemas/<dir>/<version>.json` was
+      # edited in place, or if the copies the docs site serves have drifted
+      # from it. A genuine fix ships as a new version file.
+      - name: Check the published built-in schemas are immutable and in sync
+        run: npm run schemas:check
       # Same dogfood check the Docs workflow gates the deploy on. It only ran
       # on main before, so a docs frontmatter break could pass PR CI and then
       # fail the deploy after merge — which is exactly what happened in #52.

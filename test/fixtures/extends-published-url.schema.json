@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Extends the built-in OKF schema by its published URL",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "https://hawkeyexl.github.io/docmeta/schemas/okf/0.1.json"
+    }
+  ],
+  "required": ["title"]
+}

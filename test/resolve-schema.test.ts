@@ -6,6 +6,7 @@ import {
   resolveSchemaSet,
   DEFAULT_SCHEMAS,
 } from "../src/core/resolve-schema.js";
+import { publishedBuiltins } from "../src/core/schema-registry.js";
 
 describe("resolveSchemaSet", () => {
   it("CLI override wins over everything", () => {
@@ -475,5 +476,88 @@ describe("schemaTrust · containing a document-supplied local path", () => {
         config: trust("any"),
       }),
     ).toEqual(["../outside.json"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0009 — a published built-in URL is a built-in in everything but spelling
+// ---------------------------------------------------------------------------
+
+describe("schemaTrust · a published built-in URL (0009)", () => {
+  const PUBLISHED = publishedBuiltins().map((b) => b.url);
+
+  it("is allowed under `local`, which otherwise refuses every URL", () => {
+    // It names no host that anyone can answer for: `loadSchema` serves it from
+    // the bundle without a request. Refusing it would make the *advertised*
+    // spelling of a built-in unusable in the safest mode, which is the one
+    // repos are steered towards.
+    for (const url of PUBLISHED) {
+      expect(
+        resolveSchemaSet({
+          filePath: "a.md",
+          fileSchema: url,
+          fileBase: REPO,
+          trustRoot: ROOT,
+          config: { ...trust("local"), schemas: ["x:y:1"] },
+        }),
+        url,
+      ).toEqual([url]);
+    }
+  });
+
+  it("is allowed under `any` with a hosts list that omits the docs host", () => {
+    // The second refusal, and the one an exemption placed inside the url branch
+    // would fix on its own while leaving `local` broken.
+    for (const url of PUBLISHED) {
+      expect(
+        resolveSchemaSet({
+          filePath: "a.md",
+          fileSchema: url,
+          fileBase: REPO,
+          trustRoot: ROOT,
+          config: trust("any", ["schemas.example.com"]),
+        }),
+        url,
+      ).toEqual([url]);
+    }
+  });
+
+  it("does not exempt a neighbouring URL on the same host", () => {
+    // The exemption is a table lookup, not a host or prefix rule: a URL on
+    // hawkeyexl.github.io that is not a published built-in is fetched over the
+    // network like any other, so it stays subject to both checks.
+    const neighbour = "https://hawkeyexl.github.io/docmeta/schemas/okf/9.9.json";
+    expect(() =>
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: neighbour,
+        fileBase: REPO,
+        trustRoot: ROOT,
+        config: trust("local"),
+      }),
+    ).toThrow(/documentRefs/);
+    expect(() =>
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: neighbour,
+        fileBase: REPO,
+        trustRoot: ROOT,
+        config: trust("any", ["schemas.example.com"]),
+      }),
+    ).toThrow(/schemaTrust\.hosts/);
+  });
+
+  it("is still dropped by `none`, like every other document-supplied ref", () => {
+    // `none` is not a trust judgement about the ref; it says the config decides
+    // the schema set. A built-in id is dropped there too.
+    expect(
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: PUBLISHED[0] ?? "",
+        fileBase: REPO,
+        trustRoot: ROOT,
+        config: { ...trust("none"), schemas: ["x:y:1"] },
+      }),
+    ).toEqual(["x:y:1"]);
   });
 });

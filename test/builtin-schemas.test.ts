@@ -5,10 +5,17 @@
  */
 import { describe, it, expect } from "vitest";
 import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
+import { createHash } from "node:crypto";
+import { readFileSync, readdirSync } from "node:fs";
+import { Buffer } from "node:buffer";
+import { dirname, join, resolve } from "node:path";
 import { runValidate } from "../src/commands/validate.js";
 import { DEFAULT_SCHEMAS } from "../src/core/resolve-schema.js";
-import { loadSchema } from "../src/core/schema-registry.js";
+import {
+  loadSchema,
+  publishedBuiltins,
+  PUBLISHED_BASE,
+} from "../src/core/schema-registry.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
@@ -315,5 +322,103 @@ describe("the default schema set", () => {
     });
     expect(results[0]?.ok).toBe(false);
     expect(results[0]?.errors[0]?.schema).toBe(SEVEN_ACTION);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0009 — publishing the built-ins is a promise, so it needs enforcement
+// ---------------------------------------------------------------------------
+
+/** `<dir>/<version>.json` for every built-in, posix, relative to src/schemas. */
+function sourceFiles(): string[] {
+  const base = join(root, "src", "schemas");
+  const out: string[] = [];
+  for (const dir of readdirSync(base, { withFileTypes: true })) {
+    if (!dir.isDirectory()) continue;
+    for (const file of readdirSync(join(base, dir.name))) {
+      if (file.endsWith(".json")) out.push(`${dir.name}/${file}`);
+    }
+  }
+  return out.sort();
+}
+
+const sha256 = (bytes: Buffer): string =>
+  `sha256-${createHash("sha256").update(bytes).digest("hex")}`;
+
+describe("0009 · the immutability manifest", () => {
+  const manifestPath = join(root, "src", "schemas", "manifest.json");
+
+  it("records a hash for every built-in file", () => {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      version: number;
+      schemas: Record<string, string>;
+    };
+    expect(manifest.version).toBe(1);
+    expect(Object.keys(manifest.schemas).sort()).toEqual(sourceFiles());
+  });
+
+  it("matches the exact bytes of every file it records", () => {
+    // Over the bytes, with no JSON canonicalization: the published artifact is
+    // the bytes, so that is what a consumer pinning this URL depends on.
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      schemas: Record<string, string>;
+    };
+    for (const [key, recorded] of Object.entries(manifest.schemas)) {
+      const bytes = readFileSync(join(root, "src", "schemas", ...key.split("/")));
+      expect(sha256(bytes), key).toBe(recorded);
+    }
+  });
+
+  it("keeps its keys sorted, so a change is one line of diff", () => {
+    const keys = Object.keys(
+      (JSON.parse(readFileSync(manifestPath, "utf8")) as {
+        schemas: Record<string, string>;
+      }).schemas,
+    );
+    expect(keys).toEqual([...keys].sort());
+  });
+});
+
+describe("0009 · the published copies under docs/public", () => {
+  it("exist for every built-in, byte-identical to src/schemas", () => {
+    // The two copies are what makes the URL work without coupling the docs
+    // build to a path outside docs/. This runs in `npm test` rather than only
+    // in the docs workflow, so a PR that touches neither still cannot drift
+    // them apart — and it has to, because the docs build is a separate checkout
+    // that never sees the repo root's node_modules.
+    for (const key of sourceFiles()) {
+      const segments = key.split("/");
+      const src = readFileSync(join(root, "src", "schemas", ...segments));
+      const published = readFileSync(
+        join(root, "docs", "public", "schemas", ...segments),
+      );
+      expect(published.equals(src), key).toBe(true);
+    }
+  });
+
+  it("publishes nothing that src/schemas does not have", () => {
+    const base = join(root, "docs", "public", "schemas");
+    const found: string[] = [];
+    for (const dir of readdirSync(base, { withFileTypes: true })) {
+      if (!dir.isDirectory()) continue;
+      for (const file of readdirSync(join(base, dir.name))) {
+        found.push(`${dir.name}/${file}`);
+      }
+    }
+    expect(found.sort()).toEqual(sourceFiles());
+  });
+
+  it("serves each built-in at the URL the registry aliases", () => {
+    // Ties the three together: the alias table, the file on disk, and the URL
+    // the docs advertise. A file moved without the table (or the other way
+    // round) fails here rather than in production.
+    for (const { id, url, schema } of publishedBuiltins()) {
+      const rel = url.slice(PUBLISHED_BASE.length);
+      const published = JSON.parse(
+        readFileSync(join(root, "docs", "public", "schemas", ...rel.split("/")), "utf8"),
+      ) as { $id?: string };
+      expect(published.$id, url).toBe(id);
+      expect(published, url).toEqual(schema);
+    }
   });
 });

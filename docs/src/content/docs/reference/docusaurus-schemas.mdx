@@ -8,11 +8,17 @@ import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 docmeta ships the front matter contract of **Docusaurus 3.10** as three built-in
 schemas, one per content plugin:
 
-| Id | Plugin | Fields | Upstream reference |
-|---|---|---|---|
-| `docusaurus:docs:3.10` | `@docusaurus/plugin-content-docs` | 25 | [Docs front matter](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-docs#markdown-front-matter) |
-| `docusaurus:blog:3.10` | `@docusaurus/plugin-content-blog` | 20 | [Blog front matter](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-blog#markdown-front-matter) |
-| `docusaurus:pages:3.10` | `@docusaurus/plugin-content-pages` | 9 | [Pages front matter](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-pages#markdown-front-matter) |
+| Id | Plugin | Fields | Upstream reference | JSON |
+|---|---|---|---|---|
+| `docusaurus:docs:3.10` | `@docusaurus/plugin-content-docs` | 25 | [Docs front matter](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-docs#markdown-front-matter) | [`docusaurus-docs/3.10.json`](/docmeta/schemas/docusaurus-docs/3.10.json) |
+| `docusaurus:blog:3.10` | `@docusaurus/plugin-content-blog` | 20 | [Blog front matter](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-blog#markdown-front-matter) | [`docusaurus-blog/3.10.json`](/docmeta/schemas/docusaurus-blog/3.10.json) |
+| `docusaurus:pages:3.10` | `@docusaurus/plugin-content-pages` | 9 | [Pages front matter](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-pages#markdown-front-matter) | [`docusaurus-pages/3.10.json`](/docmeta/schemas/docusaurus-pages/3.10.json) |
+
+Each **JSON** link is the schema itself, at a [permanent, version-pinned
+URL](/docmeta/reference/built-in-schemas/#the-published-urls). Because a
+Docusaurus site's front matter contract is the thing most likely to be checked
+by something other than docmeta, these are the three worth handing to another
+tool directly.
 
 | Property | Value |
 |---|---|

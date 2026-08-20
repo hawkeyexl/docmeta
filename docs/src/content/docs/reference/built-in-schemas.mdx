@@ -15,20 +15,105 @@ installed.
 
 ## The registry
 
-| Id | Constrains | Requires | On by default | Details |
-|---|---|---|---|---|
-| `google:okf:0.1` | `type`, `title`, `description`, `resource`, `tags`, `timestamp` | `type` | **Yes** | [OKF schema](/docmeta/reference/okf-schema/) |
-| `passo-uno:seven-action:1.0` | `action` | nothing | **Yes** | [Taxonomy schemas](/docmeta/reference/taxonomy-schemas/) |
-| `diataxis:diataxis:1.0` | `type` | `type` | No | [Taxonomy schemas](/docmeta/reference/taxonomy-schemas/) |
-| `tgdp:templates:1.0` | `type` | `type` | No | [Taxonomy schemas](/docmeta/reference/taxonomy-schemas/) |
-| `docusaurus:docs:3.10` | 25 Docusaurus docs fields | nothing | No | [Docusaurus schemas](/docmeta/reference/docusaurus-schemas/) |
-| `docusaurus:blog:3.10` | 20 Docusaurus blog fields | nothing | No | [Docusaurus schemas](/docmeta/reference/docusaurus-schemas/) |
-| `docusaurus:pages:3.10` | 9 Docusaurus pages fields | nothing | No | [Docusaurus schemas](/docmeta/reference/docusaurus-schemas/) |
+| Id | Constrains | Requires | On by default | JSON | Details |
+|---|---|---|---|---|---|
+| `google:okf:0.1` | `type`, `title`, `description`, `resource`, `tags`, `timestamp` | `type` | **Yes** | [`okf/0.1.json`](/docmeta/schemas/okf/0.1.json) | [OKF schema](/docmeta/reference/okf-schema/) |
+| `passo-uno:seven-action:1.0` | `action` | nothing | **Yes** | [`seven-action/1.0.json`](/docmeta/schemas/seven-action/1.0.json) | [Taxonomy schemas](/docmeta/reference/taxonomy-schemas/) |
+| `diataxis:diataxis:1.0` | `type` | `type` | No | [`diataxis/1.0.json`](/docmeta/schemas/diataxis/1.0.json) | [Taxonomy schemas](/docmeta/reference/taxonomy-schemas/) |
+| `tgdp:templates:1.0` | `type` | `type` | No | [`tgdp/1.0.json`](/docmeta/schemas/tgdp/1.0.json) | [Taxonomy schemas](/docmeta/reference/taxonomy-schemas/) |
+| `docusaurus:docs:3.10` | 25 Docusaurus docs fields | nothing | No | [`docusaurus-docs/3.10.json`](/docmeta/schemas/docusaurus-docs/3.10.json) | [Docusaurus schemas](/docmeta/reference/docusaurus-schemas/) |
+| `docusaurus:blog:3.10` | 20 Docusaurus blog fields | nothing | No | [`docusaurus-blog/3.10.json`](/docmeta/schemas/docusaurus-blog/3.10.json) | [Docusaurus schemas](/docmeta/reference/docusaurus-schemas/) |
+| `docusaurus:pages:3.10` | 9 Docusaurus pages fields | nothing | No | [`docusaurus-pages/3.10.json`](/docmeta/schemas/docusaurus-pages/3.10.json) | [Docusaurus schemas](/docmeta/reference/docusaurus-schemas/) |
 
 All seven use [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects),
 allow additional properties, and are [built-in
 references](/docmeta/reference/schema-resolution/#reference-kinds), so a typo in
 an id is reported as an unknown built-in rather than a missing file.
+
+## The published URLs
+
+Every built-in is also served as plain JSON, at a version-pinned path under
+`https://hawkeyexl.github.io/docmeta/schemas/`:
+
+```text
+https://hawkeyexl.github.io/docmeta/schemas/okf/0.1.json
+https://hawkeyexl.github.io/docmeta/schemas/seven-action/1.0.json
+https://hawkeyexl.github.io/docmeta/schemas/diataxis/1.0.json
+https://hawkeyexl.github.io/docmeta/schemas/tgdp/1.0.json
+https://hawkeyexl.github.io/docmeta/schemas/docusaurus-docs/3.10.json
+https://hawkeyexl.github.io/docmeta/schemas/docusaurus-blog/3.10.json
+https://hawkeyexl.github.io/docmeta/schemas/docusaurus-pages/3.10.json
+```
+
+They exist for three jobs: `$ref`-ing a built-in from a schema of your own,
+using one with a JSON Schema tool that is not docmeta, and reading the actual
+JSON instead of a description of it.
+
+**Inside docmeta, a published URL costs nothing.** docmeta recognises its own
+URLs and answers them from the copy bundled in the package — no request, no
+timeout, and no dependence on GitHub Pages being up. `--offline` and an
+air-gapped build work exactly as they do with the id, and a
+[`schemaTrust`](/docmeta/reference/configuration/) policy that refuses URLs
+still accepts these, because they reach nothing. The two spellings are
+interchangeable:
+
+```markdown
+---
+$schema: https://hawkeyexl.github.io/docmeta/schemas/okf/0.1.json
+type: how-to
+---
+```
+
+<Aside type="note" title="Each schema's `$id` is not its URL, on purpose">
+Open one of the files and you will see `"$id": "google:okf:0.1"` rather than the
+`https://…` address you fetched it from. Some strict JSON Schema tooling warns
+about that mismatch. The warning is expected and the file is not broken.
+
+The `$id` is docmeta's reference for the schema: it is what a document's
+`$schema` names, what Ajv de-duplicates registrations on, and what appears in
+every report. Changing it to the URL would move all three at once and would
+break every document already carrying `$schema: google:okf:0.1`. The retrieval
+URI and the identifier are simply two different names for one schema, and both
+resolve.
+</Aside>
+
+### Extend a built-in with `$ref`
+
+The reason a URL beats a copy-paste. Reference a built-in from your own schema
+and add to it, by either name — the id and the URL both work, and neither
+touches the network:
+
+```json title="house.schema.json"
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "allOf": [{ "$ref": "google:okf:0.1" }],
+  "required": ["title", "owner"],
+  "properties": {
+    "owner": { "type": "string", "minLength": 1 }
+  }
+}
+```
+
+Every rule the built-in carries still applies, and yours are added on top. This
+is composition *inside* one schema, which is different from listing two schemas
+in a set — a set applies each schema whole and attributes failures separately,
+while a `$ref` lets you narrow or extend what the built-in said.
+
+<Aside type="caution" title="A published URL never changes — that is the point">
+Each of these paths is immutable. The bytes served at
+`schemas/okf/0.1.json` today are the bytes served there for good; a fix to a
+built-in ships as a *new* version file rather than an edit to a published one.
+A CI check hashes every schema against a committed manifest and fails the build
+if an already-published version is altered, so this is enforced rather than
+promised.
+
+Two hosting caveats for anything load-bearing outside docmeta: GitHub Pages can
+return 404 briefly during a deploy, and its `Access-Control-Allow-Origin: *` is
+current behaviour rather than a contract. If a build must not depend on either,
+[vendor the file](/docmeta/reference/configuration/) into your own repository
+and reference the local copy.
+</Aside>
 
 ## Two kinds of built-in
 
@@ -211,4 +296,6 @@ and editing it is usually faster than starting from nothing.
 {/* step {"description":"The default set applies when no flag is given, and does not include a Docusaurus schema.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 passed"}} */}
 {/* step {"description":"The documented `tags` overlap: OKF allows string tags only, so a Docusaurus tag object fails against OKF.","runShell":{"command":"npx docmeta validate test/fixtures/docusaurus/docs-okf-tag-conflict.md -s google:okf:0.1 -s docusaurus:docs:3.10","exitCodes":[1],"stdio":"/tags/0  must be string"}} */}
 {/* step {"description":"Pairing the platform schema with a vocabulary instead of OKF avoids that overlap.","runShell":{"command":"npx docmeta validate test/fixtures/docusaurus/docs-okf-tag-conflict.md -s docusaurus:docs:3.10 -s diataxis:diataxis:1.0","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"A document naming a built-in by its published URL validates with no network, as the published-URLs section claims.","runShell":{"command":"npx docmeta validate test/fixtures/published-url-schema.md --offline","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"The published URL resolves to the real OKF schema, not a permissive stand-in: a document missing `type` still fails.","runShell":{"command":"npx docmeta validate test/fixtures/missing-type.md -s https://hawkeyexl.github.io/docmeta/schemas/okf/0.1.json --offline","exitCodes":[1],"stdio":"type"}} */}
 {/* test end */}

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tgdp:templates:1.0",
+  "title": "The Good Docs Project template types v1.0",
+  "description": "Requires `type` and constrains it to the 25 template slugs published by The Good Docs Project (upstream templates repo, main as of 2026-08-09). Unlike passo-uno:seven-action:1.0, which checks a value only if one is present, this schema also demands the key: adopting it is a statement that every page is one of the templates, so an untyped page is a gap. Like Diataxis it classifies what a page *is*, so both claim the same key: stacking them is not an error, but it narrows `type` to the intersection of the two vocabularies, so pick one. It composes freely with a schema keyed on a different field, such as passo-uno:seven-action:1.0. See https://www.thegooddocsproject.dev/template",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["type"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "api-getting-started",
+        "api-reference",
+        "bug-report",
+        "changelog",
+        "code-of-conduct",
+        "code-of-conduct-incident-record",
+        "code-of-conduct-remediation-record",
+        "code-of-conduct-response-plan",
+        "concept",
+        "contact-support",
+        "contributing-guide",
+        "glossary",
+        "how-to",
+        "installation-guide",
+        "our-team",
+        "quickstart",
+        "readme",
+        "reference",
+        "release-notes",
+        "sdk-overview",
+        "style-guide",
+        "terminology-system",
+        "troubleshooting",
+        "tutorial",
+        "user-personas"
+      ],
+      "description": "Which Good Docs Project template this page follows, as the template's slug. The Core pack is `concept`, `how-to`, `readme`, `reference`, `release-notes`, `troubleshooting`, and `tutorial`; the rest come from the Community and Misc packs."
+    }
+  }
+}
