@@ -22,6 +22,8 @@ the command line.
 | `baseline` | `string` | none | Path to a [validation baseline](/docmeta/reference/cli/#baselines). Setting it turns on `--baseline` for every run; `--no-baseline` suppresses it for one. A bare `--write-baseline` records into this same file. |
 | `allowEmpty` | `boolean` | `false` | Treat an input set that resolves to zero files as success instead of an error (exit 2). Equivalent to `--allow-empty`. See [empty input sets](/docmeta/reference/cli/#empty-input-sets). |
 | `respectGitignore` | `boolean` | `true` | Skip files `.gitignore` covers when expanding directories and globs. `--no-gitignore` overrides it for one run. See [`.gitignore`](/docmeta/reference/cli/#gitignore). |
+| `offline` | `boolean` | `false` | Never fetch a remote schema. `--offline` turns it on for one run. See [Offline](#offline). |
+| `schemaCache` | `SchemaCache` | none | Settings for the [cross-run schema cache](/docmeta/reference/schema-resolution/#the-cross-run-cache). See [Schema cache](#schema-cache). |
 | `fill` | `Fill` | none | Defaults for [`docmeta fill`](/docmeta/reference/cli/#fill). See [Fill](#fill). |
 
 The top level must be a YAML mapping. Each of `paths`, `exclude`, and `schemas`
@@ -49,6 +51,50 @@ Setting it to `true` says the same thing as the default, with one addition: it
 records that you *asked*, so a run where git could not answer — no repository,
 or no `git` on `PATH` — prints one line to stderr instead of silently checking
 everything. Worth doing in a CI image you do not control.
+
+### Offline
+
+`offline: true` stops docmeta fetching a schema over the network at all. A `url`
+reference is served from the [schema cache](#schema-cache); one that is not
+cached is an operational error (exit 2) naming the URL. Built-in ids and local
+`.json` files are unaffected — neither touches the network — so an air-gapped
+build against the default schema set works with nothing else configured.
+
+```yaml title="docmeta.config.yaml"
+offline: true
+```
+
+`--offline` sets it for a single run. There is no flag to turn it back off, so
+leave it out of config unless the whole project is meant to run that way.
+
+### Schema cache
+
+`schemaCache` is a mapping of settings for the [cross-run
+cache](/docmeta/reference/schema-resolution/#the-cross-run-cache) of schemas
+fetched over `http(s)`.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `ttlHours` | `number` | `24` | Hours a cached schema is served before it is re-fetched. `0` disables the cache entirely, in both directions; the maximum is `8760` (one year). |
+
+```yaml title="docmeta.config.yaml"
+schemaCache:
+  ttlHours: 1
+```
+
+`ttlHours` must be a number between 0 and 8760 (one year); a negative value, a
+non-number, YAML's `1e999`, or anything past the upper bound is an error
+(exit 2). Both bounds are rejected rather than clamped, and for symmetric
+reasons: a negative TTL makes every entry read as stale, while a value large
+enough to overflow the internal millisecond arithmetic makes no entry ever read
+as stale. Each gives a cache that silently stops doing its job — in opposite
+directions — which is the failure this key exists to prevent.
+
+<Aside type="note">
+The cache lives in `.docmeta/schema-cache/`, alongside the proposal cache
+`fill` keeps in `.docmeta/cache/`. Add `.docmeta/` to your `.gitignore`; neither
+directory should be committed.
+</Aside>
 
 ### Fill
 
@@ -192,6 +238,7 @@ corresponding config value; others merge with it.
 | Config discovery | `--no-config` | — | `--no-config` skips discovery entirely, so no config value applies. It sets the same option as `-c/--config`, so if you pass both, whichever comes later on the command line wins. |
 | Empty input sets | `--allow-empty` | `allowEmpty` | The flag **overrides** the config key, and only in the permissive direction: passing it turns the check off. Omitting it falls back to config, then to off. |
 | Fill settings | `--confidence`, `--provider`, `--model`, `--max-cost-usd`, `--concurrency` | `fill.*` | Each flag **overrides** its matching `fill` key. An unset flag falls back to config, then to the built-in default. |
+| Offline | `--offline` | `offline` | The flag **overrides** the config key, and only in the restrictive direction: passing it turns fetching off. Omitting it falls back to config, then to off. |
 
 <Aside type="caution">
 `--schema` is all-or-nothing: passing it once makes that schema set apply to

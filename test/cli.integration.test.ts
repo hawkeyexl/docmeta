@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
-import { execFileSync, execSync, spawnSync } from "node:child_process";
+import { execFile, execFileSync, execSync, spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { DOC, makeTempRepo, removeTempRepo } from "./helpers/temp-repo.js";
+import { startSchemaServer } from "./helpers/schema-server.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
@@ -1103,5 +1104,183 @@ describe("docmeta CLI: sarif and junit output (built bin)", () => {
     expect(r.status).toBe(2);
     expect(r.stderr).toContain("Unknown --format");
     expect(r.stderr).toContain("pretty, json, github, sarif, or junit");
+  });
+});
+
+describe("docmeta CLI: --offline and the cross-run schema cache (built bin)", () => {
+  let repo: string | undefined;
+
+  const runIn = (args: string[], cwd: string): Run => {
+    const r = spawnSync("node", [bin, ...args], { cwd, encoding: "utf8" });
+    return {
+      stdout: r.stdout ?? "",
+      stderr: r.stderr ?? "",
+      status: r.status ?? 1,
+    };
+  };
+
+  /**
+   * The async runner, for the tests backed by `startSchemaServer`.
+   *
+   * `spawnSync` blocks this process's event loop, and the schema server lives
+   * *in* this process — so a synchronous child would sit waiting for a reply
+   * that cannot be sent until it exits, and every request would time out.
+   */
+  const runInAsync = (args: string[], cwd: string): Promise<Run> =>
+    new Promise((done) => {
+      execFile(
+        "node",
+        [bin, ...args],
+        { cwd, encoding: "utf8" },
+        (err, stdout, stderr) => {
+          done({
+            stdout: stdout ?? "",
+            stderr: stderr ?? "",
+            status: err ? ((err as { code?: number }).code ?? 1) : 0,
+          });
+        },
+      );
+    });
+
+  afterEach(() => {
+    removeTempRepo(repo);
+    repo = undefined;
+  });
+
+  it("--offline validates against the default built-in schema set", () => {
+    // Built-ins are bundled JSON imports, so nothing about them touches the
+    // network. Asserted explicitly so nobody later "optimizes" a built-in into
+    // a URL fetch and breaks every air-gapped build at once.
+    const r = run(["validate", "test/fixtures/valid.md", "--offline"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("1 passed");
+    // And no cache directory was created for a run that fetched nothing.
+    expect(existsSync(join(root, ".docmeta", "schema-cache"))).toBe(false);
+  });
+
+  it("--offline reads a local schema file", () => {
+    const r = run([
+      "validate",
+      "test/fixtures/valid.md",
+      "-s",
+      "./test/fixtures/extra.schema.json",
+      "--offline",
+    ]);
+    expect(r.status).toBe(0);
+  });
+
+  it("--offline is accepted by get", () => {
+    const r = run(["get", "type", "test/fixtures/valid.md", "--offline"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("type=");
+  });
+
+  it("--offline is accepted by fill", () => {
+    const r = run(["fill", "--help"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("--offline");
+  });
+
+  it("--offline fails on an uncached URL, naming it, without a request", () => {
+    repo = makeTempRepo({ files: { "doc.md": DOC } });
+    // A closed loopback port: reaching the network at all would produce the
+    // *fetch* error instead, which is what tells the two paths apart.
+    const url = "https://127.0.0.1:1/house.json";
+    const offline = runIn(
+      ["validate", "doc.md", "-s", url, "--offline", "--no-config"],
+      repo,
+    );
+    expect(offline.status).toBe(2);
+    expect(offline.stderr).toContain(url);
+    expect(offline.stderr).toMatch(/offline/i);
+    expect(offline.stderr).not.toMatch(/Failed to fetch/);
+
+    const online = runIn(
+      ["validate", "doc.md", "-s", url, "--no-config"],
+      repo,
+    );
+    expect(online.status).toBe(2);
+    expect(online.stderr).toMatch(/Failed to fetch/);
+  });
+
+  it("serves a schema from the disk cache after the host is gone", async () => {
+    // The whole point of the cross-run cache, end to end: fetch once, take the
+    // server away, and the next process still validates.
+    const server = await startSchemaServer({
+      "/house.json": { json: { type: "object", required: ["title"] } },
+    });
+    repo = makeTempRepo({ files: { "doc.md": DOC } });
+    const url = `${server.url}/house.json`;
+
+    const first = await runInAsync(
+      ["validate", "doc.md", "-s", url, "--no-config"],
+      repo,
+    );
+    expect(first.status).toBe(0);
+    expect(server.hits("/house.json")).toBe(1);
+    expect(existsSync(join(repo, ".docmeta", "schema-cache"))).toBe(true);
+
+    await server.close();
+
+    const second = await runInAsync(
+      ["validate", "doc.md", "-s", url, "--no-config"],
+      repo,
+    );
+    expect(second.status).toBe(0);
+    expect(second.stdout).toContain("1 passed");
+
+    // The control, and the reason this test proves anything: a *different*
+    // checkout has no cache, so the same command against the same dead host
+    // fails. Without it, a pass above could mean the server never really shut
+    // down.
+    const cold = makeTempRepo({ files: { "doc.md": DOC } });
+    try {
+      const r = await runInAsync(
+        ["validate", "doc.md", "-s", url, "--no-config"],
+        cold,
+      );
+      expect(r.status).toBe(2);
+      expect(r.stderr).toMatch(/Failed to fetch/);
+    } finally {
+      removeTempRepo(cold);
+    }
+  });
+
+  it("schemaCache.ttlHours: 0 turns the disk cache off", async () => {
+    const server = await startSchemaServer({
+      "/off.json": { json: { type: "object" } },
+    });
+    repo = makeTempRepo({
+      files: {
+        "doc.md": DOC,
+        "docmeta.config.yaml": "schemaCache:\n  ttlHours: 0\n",
+      },
+    });
+    const url = `${server.url}/off.json`;
+    expect((await runInAsync(["validate", "doc.md", "-s", url], repo)).status).toBe(
+      0,
+    );
+    expect(existsSync(join(repo, ".docmeta", "schema-cache"))).toBe(false);
+
+    await server.close();
+    // Nothing was recorded, so the next run has nowhere to fall back to.
+    const second = await runInAsync(["validate", "doc.md", "-s", url], repo);
+    expect(second.status).toBe(2);
+    expect(second.stderr).toMatch(/Failed to fetch/);
+  });
+
+  it("offline: true in config needs no flag", async () => {
+    const server = await startSchemaServer({
+      "/cfg.json": { json: { type: "object" } },
+    });
+    repo = makeTempRepo({
+      files: { "doc.md": DOC, "docmeta.config.yaml": "offline: true\n" },
+    });
+    const url = `${server.url}/cfg.json`;
+    const r = await runInAsync(["validate", "doc.md", "-s", url], repo);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/offline/i);
+    expect(server.hits("/cfg.json")).toBe(0);
+    await server.close();
   });
 });

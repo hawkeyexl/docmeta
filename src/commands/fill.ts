@@ -51,7 +51,7 @@ import {
   supportedExtensions,
 } from "../extractors/index.js";
 import { resolveSchemaSet, FILE_SCHEMA_KEY } from "../core/resolve-schema.js";
-import { loadSchema } from "../core/schema-registry.js";
+import { loadSchema, schemaLoadOptions } from "../core/schema-registry.js";
 import { Validator, compileWithFormats } from "../core/validator.js";
 import { writeFileAtomic } from "../core/write-file.js";
 import {
@@ -103,12 +103,20 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
   const cwd = opts.cwd ?? process.cwd();
   // Explicit CLI inputs win, else config `paths:`; `base` is whichever of the
   // two directories those inputs were written relative to.
-  const { config, inputs, base } = await resolveRunConfig({
+  const { config, inputs, base, configDir } = await resolveRunConfig({
     cwd,
     configPath: opts.configPath,
     noConfig: opts.noConfig,
     inputs: opts.inputs,
     onConfigLoaded: opts.onConfigLoaded,
+  });
+  // How every schema in this run is loaded: the cross-run cache and
+  // `--offline`. `fill` calls `loadSchema` directly as well as through the
+  // validator, so both have to be handed the same settings.
+  const schemaOptions = schemaLoadOptions({
+    root: configDir ?? cwd,
+    ttlHours: config?.schemaCache?.ttlHours,
+    offline: opts.offline ?? config?.offline,
   });
   const usingStdin = inputs.includes(STDIN_TOKEN);
   if (inputs.length === 0) {
@@ -256,7 +264,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
       : new JsonCache<CachedProposal>(join(cwd, CACHE_DIR), true, "docmeta");
   const pricing = pricingFor(identity.model);
 
-  const validator = new Validator();
+  const validator = new Validator(schemaOptions);
   let costUsd = 0;
   let cachedCount = 0;
   let budgetExhausted = false;
@@ -340,7 +348,9 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
       return errorResult(label, extractor.name, (err as Error).message);
     }
 
-    const schemas = await Promise.all(schemaSet.map((ref) => loadSchema(ref)));
+    const schemas = await Promise.all(
+      schemaSet.map((ref) => loadSchema(ref, schemaOptions)),
+    );
     const existingErrors = await validator.validate(
       extracted.data,
       schemaSet,

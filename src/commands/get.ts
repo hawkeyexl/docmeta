@@ -43,6 +43,16 @@ export interface GetOptions {
   onNotice?: (message: string) => void;
   /** Called once when a config governs the run, so the CLI can report it. */
   onConfigLoaded?: (info: ConfigNotice) => void;
+  /**
+   * `--offline`, accepted for surface parity with `validate` and `fill`.
+   *
+   * It has **no effect here**, and that is a property of the command rather
+   * than an omission: `get` prints extracted field values and never resolves or
+   * loads a schema, so it has no network dependency to suppress. Accepting it
+   * keeps one flag set across the three commands, so a script can pass
+   * `--offline` uniformly without knowing which subcommand needs it.
+   */
+  offline?: boolean;
 }
 
 export interface GetFileResult {

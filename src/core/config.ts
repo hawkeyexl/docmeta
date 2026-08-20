@@ -25,6 +25,25 @@ export interface FillConfig {
   concurrency?: number;
 }
 
+/** Settings for the cross-run cache of schemas fetched over `http(s)`. */
+export interface SchemaCacheConfig {
+  /**
+   * Hours a cached schema is served before it is re-fetched. `0` disables the
+   * cache entirely, in both directions.
+   */
+  ttlHours?: number;
+}
+
+/**
+ * Upper bound on `schemaCache.ttlHours` — one year.
+ *
+ * Not tidiness: freshness compares elapsed time against `ttlHours * 3_600_000`,
+ * and a finite-but-enormous value overflows that product to `Infinity`, so no
+ * entry is ever older than the limit and the cache silently stops expiring.
+ * `Number.isFinite` alone does not catch it, because `1e308` is finite.
+ */
+const MAX_TTL_HOURS = 8760;
+
 export interface DocmetaConfig {
   paths?: string[];
   exclude?: string[];
@@ -49,6 +68,14 @@ export interface DocmetaConfig {
    * cannot answer — see `GITIGNORE_UNAVAILABLE`.
    */
   respectGitignore?: boolean;
+  /** Defaults for the cross-run schema cache. See `SchemaCacheConfig`. */
+  schemaCache?: SchemaCacheConfig;
+  /**
+   * Never fetch a remote schema. A URL reference resolves from the schema
+   * cache; an uncached one is an operational error naming the URL. Built-in and
+   * local-file references are unaffected — neither touches the network.
+   */
+  offline?: boolean;
 }
 
 const CONFIG_NAMES = ["docmeta.config.yaml", "docmeta.config.yml"];
@@ -129,9 +156,55 @@ export function parseConfig(text: string, source: string): DocmetaConfig {
     config.respectGitignore = obj.respectGitignore;
   }
 
+  if (obj.offline !== undefined) {
+    if (typeof obj.offline !== "boolean") {
+      throw new DocmetaError(`${source}: "offline" must be a boolean.`);
+    }
+    config.offline = obj.offline;
+  }
+
+  if (obj.schemaCache !== undefined) {
+    config.schemaCache = parseSchemaCache(obj.schemaCache, source);
+  }
+
   if (obj.fill !== undefined) config.fill = parseFill(obj.fill, source);
 
   return config;
+}
+
+function parseSchemaCache(value: unknown, source: string): SchemaCacheConfig {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new DocmetaError(`${source}: "schemaCache" must be a mapping.`);
+  }
+  const raw = value as Record<string, unknown>;
+  const schemaCache: SchemaCacheConfig = {};
+
+  const ttl = raw.ttlHours;
+  if (ttl !== undefined) {
+    // A YAML `1e999` parses to Infinity, and a bare range check would accept
+    // it. A negative TTL is worse than useless: every entry would read as
+    // stale, so the cache would silently do nothing at all.
+    //
+    // The upper bound is not tidiness. Freshness compares against
+    // `ttlHours * 3_600_000`, and a finite-but-huge value overflows that
+    // product to Infinity, so `elapsed >= Infinity` is never true and every
+    // entry is served forever — a cache that silently stops expiring, which is
+    // the opposite of what a TTL is for. One year is well past any real
+    // setting, and anyone wanting "never expire" has a clearer way to say it.
+    if (
+      typeof ttl !== "number" ||
+      !Number.isFinite(ttl) ||
+      ttl < 0 ||
+      ttl > MAX_TTL_HOURS
+    ) {
+      throw new DocmetaError(
+        `${source}: "schemaCache.ttlHours" must be a number of hours between 0 and ${MAX_TTL_HOURS} (0 disables the cache).`,
+      );
+    }
+    schemaCache.ttlHours = ttl;
+  }
+
+  return schemaCache;
 }
 
 function parseFill(value: unknown, source: string): FillConfig {

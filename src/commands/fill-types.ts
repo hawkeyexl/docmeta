@@ -108,6 +108,15 @@ export interface FillOptions {
   onNotice?: (message: string) => void;
   /** Called once when a config governs the run, so the CLI can report it. */
   onConfigLoaded?: (info: ConfigNotice) => void;
+  /**
+   * `--offline`: never fetch a remote **schema**. Absent leaves config
+   * `offline:` in charge.
+   *
+   * Scoped to schema loading only. It says nothing about the inference
+   * provider, which is a separate network dependency with its own controls
+   * (`--provider mock`, `--dry-run`).
+   */
+  offline?: boolean;
   /** Restrict proposals to these top-level fields. */
   fields?: string[];
   /** Minimum self-reported confidence to write (0-1). Default 0.7. */

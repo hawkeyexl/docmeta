@@ -30,23 +30,51 @@ export interface Route {
    * advisory and may be absent or a lie.
    */
   streamChunks?: { text: string; count: number };
+  /**
+   * Destroy the socket without answering, producing a genuine **network**
+   * error in the client rather than an HTTP status. That is the other half of
+   * what the retry policy covers, and a status code cannot simulate it.
+   */
+  resetSocket?: boolean;
+}
+
+/**
+ * A route that varies with how many times it has been asked.
+ *
+ * A static table cannot express "fail once, then succeed", which is exactly the
+ * shape a retry has to be tested against: with a fixed 500 the second attempt is
+ * indistinguishable from the first, so the test cannot tell a retry that healed
+ * from one that never happened. `hit` is 1-based.
+ */
+export type RouteFn = (hit: number) => Route;
+
+export interface RecordedRequest {
+  path: string;
+  method: string;
+  headers: Record<string, string | string[] | undefined>;
 }
 
 export interface SchemaServer {
   url: string;
   hits: (path: string) => number;
+  /** Every request received, in order. */
+  requests: () => RecordedRequest[];
   close: () => Promise<void>;
 }
 
 export async function startSchemaServer(
-  routes: Record<string, Route>,
+  routes: Record<string, Route | RouteFn>,
 ): Promise<SchemaServer> {
   const counts = new Map<string, number>();
+  const log: RecordedRequest[] = [];
   const server: Server = createServer((req, res) => {
     const path = (req.url ?? "").split("?")[0] ?? "";
-    counts.set(path, (counts.get(path) ?? 0) + 1);
+    const hit = (counts.get(path) ?? 0) + 1;
+    counts.set(path, hit);
+    log.push({ path, method: req.method ?? "GET", headers: { ...req.headers } });
     res.on("error", () => {});
-    const route = routes[path];
+    const entry = routes[path];
+    const route = typeof entry === "function" ? entry(hit) : entry;
     if (!route) {
       res.statusCode = 404;
       res.end("not found");
@@ -71,6 +99,10 @@ export async function startSchemaServer(
     };
     const send = () => {
       if (res.writableEnded || res.destroyed) return;
+      if (route.resetSocket) {
+        req.socket.destroy();
+        return;
+      }
       try {
         res.statusCode = route.status ?? 200;
         res.setHeader("content-type", route.contentType ?? "application/json");
@@ -97,6 +129,7 @@ export async function startSchemaServer(
   return {
     url: `http://127.0.0.1:${port}`,
     hits: (path) => counts.get(path) ?? 0,
+    requests: () => [...log],
     close: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections?.();

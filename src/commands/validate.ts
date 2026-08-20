@@ -38,6 +38,7 @@ import {
 import { resolveRunConfig, type ConfigNotice } from "../core/config.js";
 import { resolveSchemaSet, FILE_SCHEMA_KEY } from "../core/resolve-schema.js";
 import { Validator } from "../core/validator.js";
+import { schemaLoadOptions } from "../core/schema-registry.js";
 
 export interface ValidateOptions {
   inputs: string[];
@@ -75,6 +76,11 @@ export interface ValidateOptions {
   writeBaseline?: string | boolean;
   /** Called once when a config governs the run, so the CLI can report it. */
   onConfigLoaded?: (info: ConfigNotice) => void;
+  /**
+   * `--offline`: never fetch a remote schema. Absent leaves config `offline:`
+   * in charge, which itself defaults to off.
+   */
+  offline?: boolean;
 }
 
 export interface ValidateRun {
@@ -249,7 +255,15 @@ export async function runValidate(
     action: "validated",
   });
 
-  const validator = new Validator();
+  const validator = new Validator(
+    schemaLoadOptions({
+      // The config's directory when a config governs the run, so one project
+      // keeps one cache no matter which directory the command was run from.
+      root: configDir ?? cwd,
+      ttlHours: config?.schemaCache?.ttlHours,
+      offline: opts.offline ?? config?.offline,
+    }),
+  );
   const results: ValidationResult[] = [];
 
   const processOne = async (

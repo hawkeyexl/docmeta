@@ -130,13 +130,17 @@ describe("runValidate", () => {
         },
       },
     });
+    // A throwaway cwd, not `root`: a *successful* remote fetch now persists a
+    // cross-run cache entry under the run's `.docmeta/schema-cache/`, and a test
+    // must not leave one in this repository.
+    const cwd = await mkdtemp(join(tmpdir(), "docmeta-url-schema-"));
     try {
       const url = `${server.url}/draft07.json`;
       const pass = await runValidate({
         inputs: ["-"],
         as: "markdown",
         stdinContent: `---\n$schema: ${url}\ntype: note\n---\n# Hi\n`,
-        cwd: root,
+        cwd,
       });
       expect(pass.results[0]?.ok).toBe(true);
       expect(pass.results[0]?.schemas).toEqual([url]);
@@ -145,13 +149,14 @@ describe("runValidate", () => {
         inputs: ["-"],
         as: "markdown",
         stdinContent: `---\n$schema: ${url}\ntitle: no type\n---\n# Hi\n`,
-        cwd: root,
+        cwd,
       });
       expect(fail.results[0]?.ok).toBe(false);
       expect(fail.results[0]?.errors[0]?.schema).toBe(url);
       expect(fail.results[0]?.errors[0]?.message).toMatch(/type/);
     } finally {
       await server.close();
+      await rm(cwd, { recursive: true, force: true });
     }
   });
 

@@ -1,11 +1,28 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  afterEach,
+} from "vitest";
 import { fileURLToPath } from "node:url";
+import {
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   listBuiltins,
   classifyRef,
   loadSchema,
 } from "../src/core/schema-registry.js";
+import { SchemaCache } from "../src/core/schema-cache.js";
 import { DocmetaError } from "../src/types.js";
 import { startSchemaServer, type SchemaServer } from "./helpers/schema-server.js";
 
@@ -340,15 +357,6 @@ describe("loadSchema over http(s) — in-flight dedup", () => {
     for (const schema of schemas) expect(schema).toEqual(schemas[0]);
   });
 
-  it("keeps a failed fetch retryable rather than caching the rejection", async () => {
-    const ref = `${server.url}/dedup-fail.json`;
-    await expect(loadSchema(ref)).rejects.toBeInstanceOf(DocmetaError);
-    await expect(loadSchema(ref)).rejects.toBeInstanceOf(DocmetaError);
-    // A transient failure must not poison the ref for the life of the process:
-    // the second call has to reach the server again.
-    expect(server.hits("/dedup-fail.json")).toBe(2);
-  });
-
   it("does not retain a settled entry once the fetch has resolved", async () => {
     // The in-flight map exists only to collapse *concurrent* callers; `urlCache`
     // is the real cache. A resolved entry left behind would accumulate one per
@@ -369,6 +377,238 @@ describe("loadSchema over http(s) — in-flight dedup", () => {
     expect(server.hits("/settled.json")).toBe(1);
     expect(again[0]).toEqual(again[1]);
   });
+
+  it("keeps a failed fetch retryable rather than caching the rejection", async () => {
+    const ref = `${server.url}/dedup-fail.json`;
+    await expect(loadSchema(ref)).rejects.toBeInstanceOf(DocmetaError);
+    await expect(loadSchema(ref)).rejects.toBeInstanceOf(DocmetaError);
+    // A transient failure must not poison the ref for the life of the process:
+    // the second call has to reach the server again.
+    //
+    // Four requests, not two: a 5xx is retried once within each call, so two
+    // calls make two attempts each. That the count is 4 rather than 2 is itself
+    // the proof the retry fired on a route that never heals.
+    expect(server.hits("/dedup-fail.json")).toBe(4);
+  });
+});
+
+/**
+ * One retry, on network errors and 5xx only.
+ *
+ * Every route here is dynamic — a static table cannot express "fail once, then
+ * succeed", and against a permanently-failing route a retry that fired is
+ * indistinguishable from one that did not.
+ */
+describe("loadSchema over http(s) — retry", () => {
+  let server: SchemaServer;
+
+  beforeAll(async () => {
+    server = await startSchemaServer({
+      "/retry-5xx.json": (hit) =>
+        hit === 1 ? { status: 503, json: { error: "unavailable" } } : { json: URL_SCHEMA },
+      "/retry-network.json": (hit) =>
+        hit === 1 ? { resetSocket: true } : { json: URL_SCHEMA },
+      "/retry-404.json": () => ({ status: 404, json: { error: "gone" } }),
+      "/retry-400.json": () => ({ status: 400, json: { error: "bad" } }),
+      "/retry-timeout.json": () => ({ json: URL_SCHEMA, delayMs: 500 }),
+      "/retry-guard.json": () => ({ json: { error: "not found" } }),
+    });
+  });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  it("retries once after a 5xx and succeeds on the second attempt", async () => {
+    const schema = await loadSchema(`${server.url}/retry-5xx.json`);
+    expect((schema as { required?: string[] }).required).toEqual(["type"]);
+    expect(server.hits("/retry-5xx.json")).toBe(2);
+  });
+
+  it("retries once after a network-level failure", async () => {
+    const schema = await loadSchema(`${server.url}/retry-network.json`);
+    expect((schema as { required?: string[] }).required).toEqual(["type"]);
+    expect(server.hits("/retry-network.json")).toBe(2);
+  });
+
+  it("does not retry a 404 — it will not heal", async () => {
+    await expect(
+      loadSchema(`${server.url}/retry-404.json`),
+    ).rejects.toThrow(/HTTP 404/);
+    expect(server.hits("/retry-404.json")).toBe(1);
+  });
+
+  it("does not retry any other 4xx", async () => {
+    await expect(
+      loadSchema(`${server.url}/retry-400.json`),
+    ).rejects.toThrow(/HTTP 400/);
+    expect(server.hits("/retry-400.json")).toBe(1);
+  });
+
+  it("does not retry a timeout — a hung host would cost double", async () => {
+    // The timeout is already the budget for a host that is not answering.
+    // Retrying it turns a 10 s ceiling into 20 s per URL for no new information.
+    await expect(
+      loadSchema(`${server.url}/retry-timeout.json`, { timeoutMs: 50 }),
+    ).rejects.toThrow(/timed out/i);
+    expect(server.hits("/retry-timeout.json")).toBe(1);
+  });
+
+  it("does not retry a payload the guard rejected", async () => {
+    // A 200 that is not a schema is a configuration fact about the server, not
+    // a transient one, and the request already succeeded.
+    await expect(
+      loadSchema(`${server.url}/retry-guard.json`),
+    ).rejects.toBeInstanceOf(DocmetaError);
+    expect(server.hits("/retry-guard.json")).toBe(1);
+  });
+});
+
+/**
+ * The cross-run disk cache.
+ *
+ * Two hazards shape every test here. `urlCache` is module-global and has no
+ * reset hook, so each test needs a **fresh URL path** or it silently replays an
+ * earlier entry — and it would also mask the disk read this suite exists to
+ * prove. And the cache writes real files, so each test gets its own temp
+ * directory.
+ */
+describe("loadSchema over http(s) — cross-run cache", () => {
+  let server: SchemaServer;
+  let dir: string;
+
+  beforeAll(async () => {
+    server = await startSchemaServer({
+      "/xcache-write.json": { json: URL_SCHEMA },
+      "/xcache-fresh.json": { json: URL_SCHEMA },
+      "/xcache-stale.json": { json: URL_SCHEMA },
+      "/xcache-off.json": { json: URL_SCHEMA },
+      "/xcache-corrupt.json": { json: URL_SCHEMA },
+      "/xcache-fail.json": { status: 500, json: { error: "boom" } },
+      "/offline-hit.json": { json: URL_SCHEMA },
+      "/offline-stale.json": { json: URL_SCHEMA },
+      "/offline-cold.json": { json: URL_SCHEMA },
+    });
+  });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "docmeta-registry-cache-"));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** Age an entry past any TTL, which is measured on the file's mtime. */
+  const backdate = (path: string, hours: number): void => {
+    const when = new Date(Date.now() - hours * 3_600_000);
+    utimesSync(path, when, when);
+  };
+
+  it("writes a successful fetch to disk", async () => {
+    const ref = `${server.url}/xcache-write.json`;
+    await loadSchema(ref, { cacheDir: dir });
+    // Read the file back through a separate cache instance: this is what the
+    // *next process* would see, which is the whole point of the feature.
+    expect(await new SchemaCache(dir, 24).read(ref)).toEqual(URL_SCHEMA);
+  });
+
+  it("serves a fresh entry without touching the network", async () => {
+    const ref = `${server.url}/xcache-fresh.json`;
+    await new SchemaCache(dir, 24).write(ref, URL_SCHEMA);
+    const schema = await loadSchema(ref, { cacheDir: dir });
+    expect(schema).toEqual(URL_SCHEMA);
+    expect(server.hits("/xcache-fresh.json")).toBe(0);
+  });
+
+  it("refetches once the entry is past the TTL", async () => {
+    const ref = `${server.url}/xcache-stale.json`;
+    const cache = new SchemaCache(dir, 24);
+    // A *different* body, so a stale hit would be visible in the result rather
+    // than merely in the request count.
+    await cache.write(ref, { type: "object", title: "stale copy" });
+    backdate(cache.entryPath(ref), 25);
+    const schema = await loadSchema(ref, { cacheDir: dir });
+    expect(schema).toEqual(URL_SCHEMA);
+    expect(server.hits("/xcache-stale.json")).toBe(1);
+  });
+
+  it("ttlHours: 0 disables the cache entirely", async () => {
+    const ref = `${server.url}/xcache-off.json`;
+    await new SchemaCache(dir, 24).write(ref, { type: "object", title: "cached" });
+    const schema = await loadSchema(ref, { cacheDir: dir, ttlHours: 0 });
+    expect(schema).toEqual(URL_SCHEMA);
+    expect(server.hits("/xcache-off.json")).toBe(1);
+    // Nothing new was recorded either.
+    expect(readdirSync(dir)).toHaveLength(1);
+  });
+
+  it("treats a corrupt entry as a miss rather than failing the run", async () => {
+    const ref = `${server.url}/xcache-corrupt.json`;
+    const cache = new SchemaCache(dir, 24);
+    await cache.write(ref, URL_SCHEMA);
+    writeFileSync(cache.entryPath(ref), "{ this is not json");
+    const schema = await loadSchema(ref, { cacheDir: dir });
+    expect(schema).toEqual(URL_SCHEMA);
+    expect(server.hits("/xcache-corrupt.json")).toBe(1);
+  });
+
+  it("does not cache a failed fetch", async () => {
+    const ref = `${server.url}/xcache-fail.json`;
+    await expect(loadSchema(ref, { cacheDir: dir })).rejects.toBeInstanceOf(
+      DocmetaError,
+    );
+    expect(readdirSync(dir)).toHaveLength(0);
+  });
+
+  it("--offline serves a cached URL without touching the network", async () => {
+    const ref = `${server.url}/offline-hit.json`;
+    await new SchemaCache(dir, 24).write(ref, URL_SCHEMA);
+    const schema = await loadSchema(ref, { cacheDir: dir, offline: true });
+    expect(schema).toEqual(URL_SCHEMA);
+    expect(server.hits("/offline-hit.json")).toBe(0);
+  });
+
+  it("--offline ignores the TTL — a stale copy beats no answer", async () => {
+    const ref = `${server.url}/offline-stale.json`;
+    const cache = new SchemaCache(dir, 24);
+    await cache.write(ref, URL_SCHEMA);
+    backdate(cache.entryPath(ref), 500);
+    expect(await loadSchema(ref, { cacheDir: dir, offline: true })).toEqual(
+      URL_SCHEMA,
+    );
+    expect(server.hits("/offline-stale.json")).toBe(0);
+  });
+
+  it("--offline fails naming the URL when it is not cached", async () => {
+    const ref = `${server.url}/offline-cold.json`;
+    const err = await loadSchema(ref, { cacheDir: dir, offline: true }).catch(
+      (e: Error) => e,
+    );
+    expect(err).toBeInstanceOf(DocmetaError);
+    expect(err.message).toContain(ref);
+    expect(err.message).toMatch(/offline/i);
+    // The point of the flag: no request was made, even to a reachable host.
+    expect(server.hits("/offline-cold.json")).toBe(0);
+  });
+
+  it("--offline leaves built-ins and local files alone", async () => {
+    // Built-ins are bundled imports and file refs are `readFile`; neither
+    // touches the network, so `--offline` must not constrain them. Asserted so
+    // nobody later "optimizes" a built-in into a fetch and breaks air-gapped
+    // users.
+    const builtin = await loadSchema("google:okf:0.1", { offline: true });
+    expect((builtin as { required?: string[] }).required).toEqual(["type"]);
+    const file = await loadSchema(join(here, "fixtures", "extra.schema.json"), {
+      offline: true,
+    });
+    expect(file).toBeTypeOf("object");
+  });
+
 });
 
 describe("loadSchema over http(s) — the guard must not reject real schemas", () => {
@@ -417,4 +657,101 @@ describe("loadSchema over http(s) — the guard must not reject real schemas", (
       ).resolves.toBeTypeOf("object");
     });
   }
+});
+
+describe("loadSchema over http(s) — offline is not satisfied by a warm memo", () => {
+  let server: SchemaServer;
+
+  beforeAll(async () => {
+    server = await startSchemaServer({
+      "/memo-nocache.json": { json: URL_SCHEMA },
+      "/memo-disk.json": { json: URL_SCHEMA },
+    });
+  });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  it("refuses an offline call for a ref this process fetched over the network", async () => {
+    // `urlCache` is a memo, so an entry warmed by an earlier online call would
+    // otherwise satisfy a later offline one — the guard short-circuits before it
+    // ever runs. Unreachable from the CLI, where every invocation is a fresh
+    // process, but `loadSchema` is public API and a long-lived consumer would
+    // see offline "work" here and then fail in an air-gapped process.
+    //
+    // No `cacheDir` at all, so there is genuinely nothing legal to serve.
+    const ref = `${server.url}/memo-nocache.json`;
+    await expect(loadSchema(ref)).resolves.toBeTypeOf("object");
+    await expect(loadSchema(ref, { offline: true })).rejects.toBeInstanceOf(
+      DocmetaError,
+    );
+  });
+
+  it("does serve an offline call once the ref is on disk", async () => {
+    // The other half: provenance, not blanket refusal. Once the schema has been
+    // written to the disk cache, an offline call is legitimate — that is exactly
+    // what a fresh process would find.
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-memo-"));
+    try {
+      const ref = `${server.url}/memo-disk.json`;
+      await loadSchema(ref, { cacheDir: dir });
+      await expect(
+        loadSchema(ref, { cacheDir: dir, offline: true }),
+      ).resolves.toBeTypeOf("object");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("loadSchema over http(s) — offline with the cache disabled", () => {
+  // The CLI always supplies a `cacheDir`, so `schemaCache.ttlHours: 0` yields a
+  // cache object that exists but reads and writes nothing. Branching on the
+  // object rather than on `enabled` told that user to "run once without
+  // --offline to populate the cache" — advice that cannot work, because the
+  // write is a no-op too. Neither existing test covered the combination: one
+  // uses a working cacheDir with an empty cache, the other uses no cacheDir.
+  it("does not advise populating a cache that is switched off", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-off0-"));
+    try {
+      const err = await loadSchema("http://127.0.0.1:9/disabled.json", {
+        cacheDir: dir,
+        ttlHours: 0,
+        offline: true,
+      }).catch((e: Error) => e);
+      expect(err).toBeInstanceOf(DocmetaError);
+      expect(err.message).toMatch(/ttlHours: 0/);
+      expect(err.message).not.toMatch(/Run once without --offline/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("distinguishes no cache configured from a cache switched off", async () => {
+    // The library path: no `cacheDir` was ever passed, so blaming `ttlHours: 0`
+    // names a setting the caller never touched. Unreachable from the CLI, which
+    // always supplies a directory — which is exactly why it needs its own test.
+    const err = await loadSchema("http://127.0.0.1:9/nodir.json", {
+      offline: true,
+    }).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(DocmetaError);
+    expect(err.message).toMatch(/No schema cache is configured/);
+    expect(err.message).not.toMatch(/ttlHours: 0/);
+  });
+
+  it("still advises populating a cache that is switched on", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-off24-"));
+    try {
+      const err = await loadSchema("http://127.0.0.1:9/enabled.json", {
+        cacheDir: dir,
+        ttlHours: 24,
+        offline: true,
+      }).catch((e: Error) => e);
+      expect(err).toBeInstanceOf(DocmetaError);
+      expect(err.message).toMatch(/Run once without --offline/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

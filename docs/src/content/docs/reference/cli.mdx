@@ -63,6 +63,7 @@ docmeta [paths...] [options]
 | `-q, --quiet` | — | off | In `pretty` output, hide passing files. Has no effect on `json`, `github`, `sarif`, or `junit`. |
 | `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
 | `--no-gitignore` | — | on | Validate files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
+| `--offline` | — | off | Never fetch a remote schema. A `url` reference is served from the [schema cache](/docmeta/reference/schema-resolution/#the-cross-run-cache); one that is not cached is an error (exit 2) naming the URL. Built-in and local-file references are unaffected. Overrides config `offline:`. |
 | `--baseline` | `[path]` | config `baseline:`, else `.docmeta-baseline.json` | Compare findings against a recorded [baseline](#baselines) and fail only on new ones. The value is optional, and omitting it means *this project's* baseline: the configured `baseline:` path when there is one, resolved against the config file, otherwise `.docmeta-baseline.json`. Config `baseline:` turns this on for every run. A named file that does not exist is an error (exit 2). |
 | `--write-baseline` | `[path]` | config `baseline:`, else `.docmeta-baseline.json` | Record this run's findings as the baseline, then exit 0. The value is optional. Wins over `--baseline`. Findings from `-` (stdin) are the one exception: they cannot be recorded, so they still fail the run. |
 | `--no-baseline` | — | off | Ignore a baseline supplied by config `baseline:` for this run. `--baseline` and `--no-baseline` set the same option, so the one written later on the command line wins. |
@@ -220,6 +221,7 @@ unaffected.
 | `--no-config` | — | off | Ignore any discovered config file and run on the [built-in default schema set](/docmeta/reference/schema-resolution/#precedence). `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
 | `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
 | `--no-gitignore` | — | on | Read files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
+| `--offline` | — | off | Accepted for parity with `validate` and `fill`. It has no effect here: `get` prints extracted values and never loads a schema, so it makes no network requests to suppress. |
 
 ### Output
 
@@ -304,6 +306,7 @@ used, in both output formats.
 | `--no-config` | — | off | Ignore any discovered config file and run on the [built-in default schema set](/docmeta/reference/schema-resolution/#precedence). `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
 | `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
 | `--no-gitignore` | — | on | Fill files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
+| `--offline` | — | off | Never fetch a remote schema, exactly as on [`validate`](#validate). It governs schema loading only — the inference provider is a separate network dependency, controlled by `--provider` and `--dry-run`. Overrides config `offline:`. |
 
 ### Which properties get filled
 

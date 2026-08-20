@@ -34,7 +34,7 @@ const Ajv2020 = Ajv2020Ns.default as unknown as AjvCtor;
 const AjvDraft04 = AjvDraft04Ns.default as unknown as AjvCtor;
 const addFormats =
   addFormatsNs.default as unknown as typeof import("ajv-formats").default;
-import { loadSchema } from "./schema-registry.js";
+import { loadSchema, type LoadSchemaOptions } from "./schema-registry.js";
 import { FILE_SCHEMA_KEY } from "./resolve-schema.js";
 
 type Dialect = "2020" | "2019" | "draft7" | "draft4";
@@ -93,6 +93,21 @@ export function compileWithFormats(
 }
 
 export class Validator {
+  /**
+   * How this validator's schemas are loaded: the disk cache location, its TTL,
+   * and `--offline`. Held per instance rather than read from module state, so
+   * two differently-configured validations in one process each get their own
+   * settings.
+   *
+   * That is not full isolation, and the difference matters to a library
+   * caller: `schema-registry` keeps a process-wide memo of fetched schemas, so
+   * one validator's successful fetch is visible to another. `offline` is
+   * excluded from that sharing on purpose — an offline validator will not be
+   * served something this process pulled over the network — but the memo is
+   * still shared, so a URL fetched once is not re-fetched per instance.
+   */
+  constructor(private readonly schemaOptions: LoadSchemaOptions = {}) {}
+
   private ajvByDialect = new Map<Dialect, InstanceType<AjvCtor>>();
   /**
    * Keyed on the in-flight *promise*, not the resolved validator. Caching the
@@ -135,7 +150,7 @@ export class Validator {
   }
 
   private async compileUncached(ref: string): Promise<ValidateFunction> {
-    const schema = await loadSchema(ref);
+    const schema = await loadSchema(ref, this.schemaOptions);
     try {
       const ajv = this.ajvFor(dialectOf(schema));
       // This cache is keyed on the ref string, but Ajv's registry is keyed on
