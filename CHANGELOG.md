@@ -1,3 +1,15 @@
+# [3.8.0](https://github.com/hawkeyexl/docmeta/compare/v3.7.1...v3.8.0) (2026-08-20)
+
+
+### Bug Fixes
+
+* **schemas:** three schema-loading fixes — relative config refs, --offline dedup, future cache mtime ([#83](https://github.com/hawkeyexl/docmeta/issues/83)) ([92fc048](https://github.com/hawkeyexl/docmeta/commit/92fc048e39795a5f46d7df3f6635c208500127fa))
+
+
+### Features
+
+* **schemas:** cache fetched schemas across runs, and add --offline ([#81](https://github.com/hawkeyexl/docmeta/issues/81)) ([0b9a6d3](https://github.com/hawkeyexl/docmeta/commit/0b9a6d39bfc7aefca50e882cf038d2d4f552168f))
+
 ## [3.7.1](https://github.com/hawkeyexl/docmeta/compare/v3.7.0...v3.7.1) (2026-08-19)
 
 

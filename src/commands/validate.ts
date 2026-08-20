@@ -264,6 +264,8 @@ export async function runValidate(
       // The config's directory when a config governs the run, so one project
       // keeps one cache no matter which directory the command was run from.
       root: configDir ?? cwd,
+      // A relative file ref belongs to the run's directory, not the cache root.
+      fileBase: cwd,
       ttlHours: config?.schemaCache?.ttlHours,
       offline: opts.offline ?? config?.offline,
       // Built from the rebased config, so a pinned local ref is keyed by the

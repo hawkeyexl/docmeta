@@ -119,6 +119,8 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
   // validator, so both have to be handed the same settings.
   const schemaOptions = schemaLoadOptions({
     root: configDir ?? cwd,
+    // A relative file ref belongs to the run's directory, not the cache root.
+    fileBase: cwd,
     ttlHours: config?.schemaCache?.ttlHours,
     offline: opts.offline ?? config?.offline,
     pins: collectSchemaPins(config),

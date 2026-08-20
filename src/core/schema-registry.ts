@@ -4,6 +4,7 @@
  * a built-in id, a local `.json` path, or an `http(s)` URL.
  */
 import { readFile } from "node:fs/promises";
+import { resolve as resolvePath } from "node:path";
 import { Buffer } from "node:buffer";
 import { DocmetaError } from "../types.js";
 import {
@@ -107,8 +108,34 @@ const urlFromNetwork = new Set<string>();
  * Mirrors `Validator.compile`, including its two disciplines: the entry is
  * stored before the first await, and a rejection evicts it through a detached
  * `.catch()`. See the comments at the `set` below for why each matters.
+ *
+ * Keyed on `offline` as well as the ref, via {@link inflightKey}. Sharing one
+ * entry across both modes let an offline caller join an online caller's open
+ * fetch and receive the network result — the very thing `urlFromNetwork`
+ * refuses one step earlier, undone by arriving a moment sooner.
  */
 const urlInflight = new Map<string, Promise<Record<string, unknown>>>();
+
+/**
+ * The `urlInflight` key for one call.
+ *
+ * Offline and online resolves of the same URL are different requests with
+ * different answers, so they must not share an entry — in *either* direction.
+ * An offline caller joining an online fetch is served over the network. An
+ * online caller joining an offline resolve inherits its rejection when nothing
+ * is cached, failing a run that had a working network the whole time.
+ *
+ * The cost is one extra resolve when a single process runs both modes against
+ * one URL concurrently, which no CLI invocation does — every run has one
+ * `offline` setting.
+ *
+ * `false` and `undefined` deliberately collapse to the same key: only `true`
+ * means offline, and an absent flag is an online call, so the two must share an
+ * entry or an ordinary run would dedup against nothing.
+ */
+function inflightKey(ref: string, offline: boolean | undefined): string {
+  return `${offline === true ? "offline" : "online"}:${ref}`;
+}
 
 /** Default network timeout for fetching a remote (`http(s)`) schema. */
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -230,6 +257,25 @@ export interface SchemaPin {
 }
 
 export interface LoadSchemaOptions {
+  /**
+   * Directory a **relative local-file** ref is resolved against.
+   *
+   * Omitted means `process.cwd()`, which is what the CLI wants and what this
+   * always did. A library caller passing `cwd` to a command core needs the
+   * ref measured from *that* directory instead: `rebaseConfigSchemaRefs`
+   * deliberately leaves refs untouched when the config already sits in the
+   * run's `cwd`, so `./schema/house.json` arrives here exactly as written and
+   * was then read against the wrong directory.
+   *
+   * Resolved at read time rather than by rewriting the ref, and that choice is
+   * load-bearing: the ref string is what reports name, what `Validator` keys
+   * its compile cache on, and what every baseline fingerprint is taken over.
+   * Rewriting it to an absolute path would silently move every recorded
+   * baseline. `canonicalSchemaRef` in `baseline.ts` already measures a relative
+   * ref from the run's `cwd`, so this makes loading agree with fingerprinting
+   * rather than introducing a new convention.
+   */
+  fileBase?: string;
   /** Abort a remote fetch after this many ms (default 10_000). */
   timeoutMs?: number;
   /** Reject a remote schema whose body exceeds this many bytes (default 5 MB). */
@@ -564,6 +610,13 @@ async function resolveRemote(
  */
 export function schemaLoadOptions(args: {
   root: string;
+  /**
+   * Where a relative local-file schema ref is measured from — the run's `cwd`,
+   * not `root`. The two differ when a config was discovered in an ancestor, and
+   * a `--schema ./x.json` typed on the command line belongs to the directory
+   * the user was standing in, not to the config's.
+   */
+  fileBase?: string;
   /** Config `schemaCache.ttlHours`. */
   ttlHours?: number;
   /** `--offline`, else config `offline:`. */
@@ -573,11 +626,14 @@ export function schemaLoadOptions(args: {
 }): LoadSchemaOptions {
   return {
     cacheDir: schemaCacheDir(args.root),
+    ...(args.fileBase !== undefined ? { fileBase: args.fileBase } : {}),
     ...(args.ttlHours !== undefined ? { ttlHours: args.ttlHours } : {}),
     ...(args.offline !== undefined ? { offline: args.offline } : {}),
     // An empty map is dropped so a config with no mapping-form entries produces
     // exactly the options object it produced before 0008.
-    ...(args.pins !== undefined && args.pins.size > 0 ? { pins: args.pins } : {}),
+    ...(args.pins !== undefined && args.pins.size > 0
+      ? { pins: args.pins }
+      : {}),
   };
 }
 
@@ -671,7 +727,8 @@ export async function loadSchema(
     if (cached && !(options.offline === true && urlFromNetwork.has(ref))) {
       return cached;
     }
-    const inflight = urlInflight.get(ref);
+    const key = inflightKey(ref, options.offline);
+    const inflight = urlInflight.get(key);
     // A caller joining an in-flight fetch inherits the first caller's
     // `timeoutMs`/`maxBytes` — there is one request, so there is one set of
     // limits. Every production call site uses the defaults, so this is only
@@ -682,7 +739,7 @@ export async function loadSchema(
     // miss, or a second caller slips in before the entry exists and fetches
     // again.
     const pending = resolveRemote(ref, options);
-    urlInflight.set(ref, pending);
+    urlInflight.set(key, pending);
     // Evict once settled, either way. This map exists only to collapse
     // *concurrent* callers onto one request; `urlCache` is the actual cache and
     // is consulted first, so a resolved entry left here is a duplicate handle
@@ -699,23 +756,35 @@ export async function loadSchema(
     void pending
       .catch(() => {})
       .finally(() => {
-        if (urlInflight.get(ref) === pending) urlInflight.delete(ref);
+        if (urlInflight.get(key) === pending) urlInflight.delete(key);
       });
     return pending;
   }
 
   // file
+  //
+  // `resolve` is a no-op on an already-absolute ref, which is the shape
+  // `rebaseConfigSchemaRefs` produces when the config lives somewhere other
+  // than the run's `cwd`. So both paths land here correctly: an absolute ref
+  // passes through, and a relative one is measured from the run's directory.
+  // The pin is checked against that same resolved file, so a vendored schema
+  // verifies from a library caller's `cwd` as well as from the CLI's.
+  const file = resolvePath(options.fileBase ?? process.cwd(), ref);
   let bytes: Buffer;
   try {
     // Bytes, not a decoded string: the pin below is taken over what is actually
     // on disk, and a UTF-8 round trip would silently repair a payload that is
     // not valid UTF-8 into one that hashes differently from the vendored copy.
-    bytes = await readFile(ref);
+    bytes = await readFile(file);
   } catch {
     // A vendored schema that is missing is a different problem from a mistyped
     // path — the file is supposed to be committed, so it is either not checked
     // in or the checkout is partial. Say where it came from when the config
     // recorded that.
+    //
+    // Either way it names the ref as written rather than the resolved path:
+    // that is the string the user put in their config, and the one every other
+    // message uses for it.
     throw new DocmetaError(
       pin?.source !== undefined
         ? `Schema file not found: "${ref}". It was vendored from ${pin.source}; commit the file, or re-download it with \`docmeta schemas vendor ${pin.source}\`.`

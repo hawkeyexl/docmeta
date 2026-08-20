@@ -95,6 +95,36 @@ describe("schema cache", () => {
     expect(await cache.read(URL_A)).toEqual(SCHEMA);
   });
 
+  it("still serves an entry a moment ahead of the clock", async () => {
+    // The other side of the future-mtime rule, and the one that bites first: a
+    // file's timestamp and `Date.now()` are not the same clock, so an entry the
+    // current run just wrote can read as a millisecond or two in the future.
+    // Rejecting on any negative age at all turned that into an immediate miss
+    // and quietly switched the cache off — it surfaced as a *fetch* in a test
+    // asserting the network was never touched, which is how a disabled cache
+    // shows up rather than as an error.
+    const cache = new SchemaCache(dir, 24);
+    await cache.write(URL_A, SCHEMA);
+    ageEntry(cache.entryPath(URL_A), -1 / 3_600); // one second ahead
+    expect(await cache.read(URL_A)).toEqual(SCHEMA);
+  });
+
+  it("treats a future mtime as stale rather than as forever-fresh", async () => {
+    // Freshness is `Date.now() - mtimeMs >= ttl`, so an mtime ahead of now
+    // makes the left side negative and the entry passes the check for as long
+    // as the clock takes to catch up — a schema pinned for years, not hours.
+    //
+    // Not hypothetical: a cache restored from an archive keeps the mtimes it
+    // was packed with, and a machine whose clock ran fast and was corrected
+    // leaves every entry it wrote in the future. Choosing mtime over the
+    // embedded `fetchedAt` was meant to make freshness unforgeable; this is the
+    // one direction in which it still is.
+    const cache = new SchemaCache(dir, 24);
+    await cache.write(URL_A, SCHEMA);
+    ageEntry(cache.entryPath(URL_A), -240);
+    expect(await cache.read(URL_A)).toBeNull();
+  });
+
   it("serves a stale entry when the TTL is ignored", async () => {
     // What `--offline` needs: there is no refetch available, so a stale entry
     // beats failing the run.

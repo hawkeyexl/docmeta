@@ -1,12 +1,21 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative, resolve } from "node:path";
 import { parseBaseline } from "../src/core/baseline.js";
 import { runValidate, type ValidateOptions } from "../src/commands/validate.js";
 import { runGet } from "../src/commands/get.js";
+import { runFill } from "../src/commands/fill.js";
+import { MockProvider } from "@hawkeyexl/inference";
 import {
   getSchemasInfo,
   runVendorSchema,
@@ -16,7 +25,10 @@ import { DEFAULT_SCHEMAS } from "../src/core/resolve-schema.js";
 import { parseConfig } from "../src/core/config.js";
 import { makeTempRepo, removeTempRepo } from "./helpers/temp-repo.js";
 import { DocmetaError } from "../src/types.js";
-import { startSchemaServer, type SchemaServer } from "./helpers/schema-server.js";
+import {
+  startSchemaServer,
+  type SchemaServer,
+} from "./helpers/schema-server.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
@@ -371,9 +383,9 @@ describe("an empty input set is not success (0014)", () => {
   });
 
   it("names the patterns it tried", async () => {
-    await expect(
-      runValidate({ inputs: [nomatch], cwd: root }),
-    ).rejects.toThrow(/\*\.nomatch/);
+    await expect(runValidate({ inputs: [nomatch], cwd: root })).rejects.toThrow(
+      /\*\.nomatch/,
+    );
   });
 
   it("runGet errors when a glob matches nothing", async () => {
@@ -448,11 +460,21 @@ describe("config discovery and resolution base (0004)", () => {
   const ownerError = (results: { errors: { message: string }[] }[]): boolean =>
     results.some((r) => r.errors.some((e) => /'owner'/.test(e.message)));
 
-  // The matching "run from the repo root" control lives in
-  // cli.integration.test.ts, not here: `loadSchema` reads a local schema ref
-  // relative to `process.cwd()` rather than the core's `cwd`, so a run whose
-  // config directory already *is* its `cwd` can only be exercised honestly by
-  // a child process actually started in that directory.
+  // The repo-root control now lives here too. It could not before: `loadSchema`
+  // read a local schema ref against `process.cwd()` rather than the core's
+  // `cwd`, so the case where a config's directory already *is* the run's `cwd`
+  // was only reachable from a child process started in that directory. That is
+  // fixed, and this is the assertion that would have caught it.
+  it("applies the same config when run from the config's own directory", async () => {
+    const { results } = await runValidate({
+      inputs: ["docs/api/page.md"],
+      cwd: nested,
+    });
+    expect(ownerError(results)).toBe(true);
+    // Still the ref exactly as the config wrote it — the fix resolves at read
+    // time rather than rewriting refs, so nothing a baseline recorded moves.
+    expect(results[0]?.schemas).toEqual(["./strict.schema.json"]);
+  });
 
   it("applies the same config when run from a subdirectory (defect 1)", async () => {
     const { results, summary } = await runValidate({
@@ -571,7 +593,9 @@ describe("runValidate with a baseline", () => {
       suppressed: 3,
       stale: 0,
     });
-    const twoViolations = results.find((r) => r.file.endsWith("two-violations.md"));
+    const twoViolations = results.find((r) =>
+      r.file.endsWith("two-violations.md"),
+    );
     expect(twoViolations?.baselined).toBe(2);
   });
 
@@ -592,7 +616,11 @@ describe("runValidate with a baseline", () => {
       baseline: rel("baseline-stale.json"),
     });
     expect(summary.failed).toBe(0);
-    expect(summary.baseline).toMatchObject({ recorded: 4, suppressed: 3, stale: 1 });
+    expect(summary.baseline).toMatchObject({
+      recorded: 4,
+      suppressed: 3,
+      stale: 1,
+    });
   });
 
   it("errors when the named baseline does not exist, naming the remedy", async () => {
@@ -606,7 +634,11 @@ describe("runValidate with a baseline", () => {
     const clean = await runValidate({ inputs: [], cwd: configured });
     expect(clean.summary.failed).toBe(0);
 
-    const raw = await runValidate({ inputs: [], cwd: configured, baseline: false });
+    const raw = await runValidate({
+      inputs: [],
+      cwd: configured,
+      baseline: false,
+    });
     expect(raw.summary.failed).toBe(1);
     expect(raw.summary.baseline).toBeUndefined();
   });
@@ -620,7 +652,10 @@ describe("runValidate with a baseline", () => {
       cwd: join(here, "fixtures", "baseline-config", "docs"),
     });
     expect(fromSubdir.summary.failed).toBe(0);
-    expect(fromSubdir.summary.baseline).toMatchObject({ suppressed: 1, stale: 0 });
+    expect(fromSubdir.summary.baseline).toMatchObject({
+      suppressed: 1,
+      stale: 0,
+    });
   });
 });
 
@@ -660,7 +695,12 @@ describe("runValidate --write-baseline", () => {
 
   it("reports what a narrowed re-record drops — the number that catches the mistake", async () => {
     const path = join(tmp, "b.json");
-    await runValidate({ inputs, cliSchemas: [schema], cwd: root, writeBaseline: path });
+    await runValidate({
+      inputs,
+      cliSchemas: [schema],
+      cwd: root,
+      writeBaseline: path,
+    });
 
     // A narrowed glob sees only one of the two failing files, so re-recording
     // silently forgives the other. `removed` is the only thing that says so.
@@ -694,7 +734,10 @@ describe("runValidate --write-baseline", () => {
       configPath: join(tmp, "docmeta.config.yaml"),
       writeBaseline: true,
     });
-    expect(summary.baseline).toMatchObject({ written: true, path: "recorded.json" });
+    expect(summary.baseline).toMatchObject({
+      written: true,
+      path: "recorded.json",
+    });
     expect(existsSync(join(tmp, "recorded.json"))).toBe(true);
     expect(existsSync(join(tmp, ".docmeta-baseline.json"))).toBe(false);
   });
@@ -799,7 +842,9 @@ describe("runVendorSchema (0008)", () => {
     expect(result.configCreated).toBe(true);
     // Byte-for-byte: the pin is over what the server sent, so any reformatting
     // here would make the recorded integrity unverifiable.
-    expect(await readFile(join(dir, "schema", "2.1.json"), "utf8")).toBe(VENDORED);
+    expect(await readFile(join(dir, "schema", "2.1.json"), "utf8")).toBe(
+      VENDORED,
+    );
     expect(result.integrity).toMatch(/^sha256-[0-9a-f]{64}$/);
 
     const written = await readFile(join(dir, "docmeta.config.yaml"), "utf8");
@@ -816,7 +861,14 @@ describe("runVendorSchema (0008)", () => {
   it("replaces a bare-URL entry rather than appending beside it", async () => {
     await writeFile(
       join(dir, "docmeta.config.yaml"),
-      ["# keep me", "paths:", '  - "*.md"', "schemas:", `  - ${url()}`, ""].join("\n"),
+      [
+        "# keep me",
+        "paths:",
+        '  - "*.md"',
+        "schemas:",
+        `  - ${url()}`,
+        "",
+      ].join("\n"),
     );
     const result = await runVendorSchema({ url: url(), cwd: dir });
     expect(result.replaced).toBe(true);
@@ -864,11 +916,13 @@ describe("runVendorSchema (0008)", () => {
   it("refuses to write into a gitignored directory, and writes nothing", async () => {
     const repo = makeTempRepo({ files: { ".gitignore": "vendor/\n" } });
     try {
-      const err = await failure(runVendorSchema({
-        url: url(),
-        dir: "./vendor",
-        cwd: repo,
-      }));
+      const err = await failure(
+        runVendorSchema({
+          url: url(),
+          dir: "./vendor",
+          cwd: repo,
+        }),
+      );
       expect(err).toBeInstanceOf(DocmetaError);
       expect(err.message).toMatch(/ignored/i);
       expect(err.message).toContain("vendor");
@@ -927,21 +981,25 @@ describe("runVendorSchema (0008)", () => {
   // Vendoring an error envelope would commit a contract that passes every
   // document — the exact false green PR 1 closed, made permanent.
   it("refuses to vendor a payload that is not a schema", async () => {
-    const err = await failure(runVendorSchema({
-      url: `${server.url}/envelope.json`,
-      cwd: dir,
-    }));
+    const err = await failure(
+      runVendorSchema({
+        url: `${server.url}/envelope.json`,
+        cwd: dir,
+      }),
+    );
     expect(err).toBeInstanceOf(DocmetaError);
     expect(err.message).toMatch(/does not look like a JSON Schema/);
     expect(existsSync(join(dir, "schema"))).toBe(false);
   });
 
   it("errors when an explicit config path does not exist", async () => {
-    const err = await failure(runVendorSchema({
-      url: url(),
-      cwd: dir,
-      configPath: "nope.yaml",
-    }));
+    const err = await failure(
+      runVendorSchema({
+        url: url(),
+        cwd: dir,
+        configPath: "nope.yaml",
+      }),
+    );
     expect(err).toBeInstanceOf(DocmetaError);
     expect(err.message).toMatch(/nope\.yaml/);
   });
@@ -964,7 +1022,9 @@ describe("runVendorSchema (0008)", () => {
       "docmeta.config.yaml",
     );
     const entry = cfg.schemas?.[1];
-    expect(typeof entry === "object" && entry.ref).toBe("./docs/schema/2.1.json");
+    expect(typeof entry === "object" && entry.ref).toBe(
+      "./docs/schema/2.1.json",
+    );
   });
   // A config can name the same schema twice — the bare URL from before
   // vendoring, and a hand-written local ref. Replacing only the first would
@@ -995,5 +1055,90 @@ describe("runVendorSchema (0008)", () => {
     const written = await readFile(join(dir, "docmeta.config.yaml"), "utf8");
     expect(written).toContain("# why this exists");
     expect(parseConfig(written, "docmeta.config.yaml").schemas).toHaveLength(1);
+  });
+});
+
+describe("a relative config schema ref, for a library caller", () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "docmeta-libref-"));
+    await mkdir(join(dir, "schema"), { recursive: true });
+    await writeFile(
+      join(dir, "docmeta.config.yaml"),
+      "schemas:\n  - ./schema/house.json\n",
+    );
+    await writeFile(
+      join(dir, "schema", "house.json"),
+      JSON.stringify({
+        $schema: "https://json-schema.org/draft/2020-12/schema",
+        type: "object",
+        // `properties` as well as `required`, because `fill` proposes against a
+        // property's own subschema and has nothing to offer without one. The
+        // validate cases below turn on `required` alone and are unaffected.
+        properties: { owner: { type: "string" } },
+        required: ["owner"],
+      }),
+    );
+    await writeFile(join(dir, "a.md"), "---\ntitle: no owner\n---\n");
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("resolves against the passed cwd, not the process's", async () => {
+    // `rebaseConfigSchemaRefs` leaves refs alone when the config's directory
+    // already is the run's `cwd`, which is right — but `loadSchema` then read
+    // the relative ref against `process.cwd()`. For the CLI those are the same
+    // directory so nothing showed; a library caller passing `cwd` got
+    // `Schema file not found`, naming a path that exists.
+    //
+    // A core test cannot move `process.cwd()`, which is exactly why this case
+    // had no coverage: it is only reachable when the two differ.
+    expect(resolve(dir)).not.toBe(resolve(process.cwd()));
+
+    const { results } = await runValidate({ inputs: ["a.md"], cwd: dir });
+    expect(results[0]?.errors.map((e) => e.message).join()).toMatch(/'owner'/);
+  });
+
+  it("resolves the same ref for runFill, which loads schemas on its own path", async () => {
+    // `fill` does not go through `Validator` for everything: it calls
+    // `loadSchema` directly to collect a schema's property subschemas, so it
+    // gets its own `fileBase` and needs its own proof that the wiring is
+    // there. The code path is the same one `runValidate` exercises above,
+    // which is the point — the two hand `schemaLoadOptions` the same `cwd`,
+    // and a regression in either call site is invisible from the other.
+    //
+    // `/owner` is a candidate only because the config's schema was read and
+    // its `required` was seen. A ref that failed to resolve throws
+    // `Schema file not found` outright, and one that resolved to nothing would
+    // leave no candidate to propose against — so the field appearing at all
+    // is what proves the path.
+    const { results } = await runFill({
+      inputs: ["a.md"],
+      cwd: dir,
+      cache: false,
+      inferenceProvider: new MockProvider([
+        {
+          json: {
+            owner: { value: "Docs", confidence: 0.9, reasoning: "stated" },
+          },
+        },
+      ]),
+    });
+    expect(results).toHaveLength(1);
+    expect(results[0]?.fields.map((f) => f.field)).toContain("/owner");
+  });
+
+  it("keeps the ref string exactly as the config wrote it", async () => {
+    // The deciding constraint on the fix. The ref string is what reports name,
+    // what `Validator` keys its compile cache on, and what every baseline
+    // fingerprint is taken over — so resolving at read time is correct where
+    // rewriting the ref to an absolute path would silently move every recorded
+    // baseline in every consuming repo.
+    const { results } = await runValidate({ inputs: ["a.md"], cwd: dir });
+    expect(results[0]?.schemas).toEqual(["./schema/house.json"]);
+    expect(results[0]?.errors[0]?.schema).toBe("./schema/house.json");
   });
 });
