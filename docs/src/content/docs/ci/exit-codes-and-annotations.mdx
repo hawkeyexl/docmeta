@@ -53,18 +53,20 @@ The default is `pretty`.
 
 | Format   | Audience | Machine-readable | Available on |
 |----------|----------|------------------|--------------|
-| `pretty` | Humans, local runs | No | `validate`, `get`, `schemas` |
-| `json`   | Dashboards, scripts, tooling | Yes | `validate`, `get`, `schemas` |
-| `github` | GitHub Actions PR annotations | Yes (one line per error) | `validate` only |
+| `pretty` | Humans, local runs | No | `validate`, `get`, `fill`, `schemas` |
+| `json`   | Dashboards, scripts, tooling | Yes | `validate`, `get`, `fill`, `schemas` |
+| `github` | GitHub Actions PR annotations | Yes (one line per finding) | `validate`, `fill` |
 | `sarif`  | Code scanning, security dashboards | Yes (SARIF 2.1.0) | `validate` only |
 | `junit`  | The CI "Tests" tab | Yes (JUnit XML) | `validate` only |
 
-<Aside type="caution" title="github, sarif, and junit are validate-only">
-Only `validate` accepts those three. The `get` and `schemas` subcommands accept
-`pretty` and `json` only, and `fill` the same — `fill`'s output is *proposals
-with confidence scores*, a different thing from *findings in files*, and
-encoding a skipped optional property as a SARIF result would misrepresent it.
-Passing an unsupported format is a usage error and exits `2`.
+<Aside type="caution" title="sarif and junit are validate-only">
+Only `validate` accepts those two. `get` and `schemas` accept `pretty` and
+`json`; `fill` adds [`github`](#github-annotations-from-fill), because a
+required property it could not fill is a thing a reviewer needs pointed at. It
+stops there: `sarif` and `junit` describe *findings in files*, and a skipped
+*optional* property is a proposal with a confidence score, so encoding one as a
+SARIF result would misrepresent it. Passing an unsupported format is a usage
+error and exits `2`.
 </Aside>
 
 <Aside type="tip" title="Pick by what you need to survive the job">
@@ -224,6 +226,37 @@ text with no annotation behavior. Use `pretty`, `json`, `sarif`, or `junit`
 there; see [CI recipes](/docmeta/ci/recipes/).
 </Aside>
 
+#### github annotations from fill
+
+[`fill`](/docmeta/reference/cli/#fill) emits the same workflow command, for the
+work it could **not** do: one `::error` per property the schema lists as
+`required` that was not filled confidently — exactly the set that makes `fill`
+exit `1`. Skipped *optional* properties are a normal outcome and stay silent,
+matching the exit-code rule.
+
+```text
+::error file=docs/api/legacy.md::[fill] /description is required and was not filled (confidence 0.42 is below the 0.7 threshold)
+```
+
+Two differences from `validate`'s annotations:
+
+- **No `line=`.** A `validate` finding is a violation *in* the document, so it
+  has a position. A `fill` report is about a property that is **missing** from
+  the document, so there is nothing to point at; GitHub anchors a file-only
+  annotation to line 1.
+- **`[fill]` in place of the schema id**, because the annotation is about the
+  fill run rather than about one schema's verdict.
+
+The message is escaped exactly as above — `%` → `%25`, CR → `%0D`, LF → `%0A`.
+
+<Aside type="caution" title="Not available with stdin">
+`docmeta fill - -f github` is a usage error (exit `2`). With `-`, the filled
+document owns stdout and the report goes to stderr, where GitHub never reads
+`::error`. Rather than emit annotations nothing will render — a failing run that
+looks clean on the pull request — docmeta refuses the combination. Pass file
+paths instead.
+</Aside>
+
 ### sarif
 
 A [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html)
@@ -320,7 +353,10 @@ which need no flag.
 {/* step {"description":"Exit 1: one or more files failed validation.","runShell":{"command":"docmeta validate test/fixtures/missing-type.md","exitCodes":[1]}} */}
 {/* step {"description":"Exit 2: an operational/usage error (unknown --format).","runShell":{"command":"docmeta validate test/fixtures/valid.md -f xml","exitCodes":[2],"stdio":"Unknown --format"}} */}
 {/* step {"description":"Exit 2: an unknown flag is a usage error, not a validation failure.","runShell":{"command":"docmeta validate --nope test/fixtures/valid.md","exitCodes":[2],"stdio":"unknown option"}} */}
-{/* step {"description":"Exit 2: a missing required argument is a usage error.","runShell":{"command":"docmeta get","exitCodes":[2],"stdio":"missing required argument"}} */}
+{/* step {"description":"Exit 2: a missing required argument is a usage error.","runShell":{"command":"docmeta schemas vendor","exitCodes":[2],"stdio":"missing required argument"}} */}
+{/* step {"description":"Exit 2: get with no field list is an operational error, not an empty report.","runShell":{"command":"docmeta get","exitCodes":[2],"stdio":"Specify at least one field"}} */}
 {/* step {"description":"github annotation line carries file= and line= for an error with a known line.","runShell":{"command":"docmeta validate test/fixtures/bad-timestamp.md --format github","exitCodes":[1],"stdio":"/::error file=test/fixtures/bad-timestamp.md,line=4::/"}} */}
-{/* step {"description":"github is validate-only: get rejects --format github as a usage error (exit 2).","runShell":{"command":"docmeta get type test/fixtures/valid.md --format github","exitCodes":[2],"stdio":"Unknown --format"}} */}
+{/* step {"description":"get has no github output: it reports values, not findings (exit 2).","runShell":{"command":"docmeta get type test/fixtures/valid.md --format github","exitCodes":[2],"stdio":"Unknown --format"}} */}
+{/* step {"description":"fill does accept github, for the required properties it could not fill. --provider mock --dry-run keeps this away from a real provider and from writing to the fixture.","runShell":{"command":"docmeta fill test/fixtures/valid.md --format github --provider mock --dry-run --no-cache","exitCodes":[0]}} */}
+{/* step {"description":"junit stays validate-only on fill (exit 2), and so does sarif.","runShell":{"command":"docmeta fill test/fixtures/valid.md --format junit --provider mock --dry-run --no-cache","exitCodes":[2],"stdio":"Unknown --format"}} */}
 {/* test end */}
