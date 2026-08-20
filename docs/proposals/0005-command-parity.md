@@ -17,7 +17,7 @@ built CLI at 3.4.0:
 | `get` takes fields **positionally**; `fill` takes `--fields` | `get <fields> [paths...]` vs `fill --fields <list>` in `src/cli.ts` |
 | `--quiet` only on `validate` | `get title docs/a.md --quiet` → `error: unknown option '--quiet'` (exit 1) |
 | `--format github` only on `validate` | `fill docs/a.md -f github --dry-run` → `Unknown --format "github". Use pretty or json.` (exit 2) |
-| Unknown-flag errors exit **1**, contract says **2** | `validate --nope x.md` → `error: unknown option '--nope'`, exit 1 |
+| Unknown-flag errors exit **1**, contract says **2** — fixed separately in #84, see [§ 4](#4-usage-errors-exit-2) | `validate --nope x.md` → `error: unknown option '--nope'`, exit 1 |
 
 The `--fields` divergence is the one CLAUDE.md calls out by name, and it has a
 user-visible cost today. Because `<fields>` is a *required* positional, a user who
@@ -92,10 +92,21 @@ frontmatter line. Optional skips stay silent, matching the exit-code rule.
 
 ### 4. Usage errors exit 2
 
+**Shipped in #84**, ahead of the rest of this proposal, which landed in #86.
+Recorded here because the item is described as open above and this is the only
+part of 0005 that did not ship with the others.
+
 Call `program.exitOverride()` and route commander's `CommanderError` through the
 existing `fail()` helper, mapping parse/usage failures to exit 2. Commander's own
 `exitCode` for help (`0`) and version (`0`) must be preserved — those are
 successful invocations, not errors.
+
+As built, the `CommanderError` is **not** routed through `fail()`:
+`Command.error()` has already printed the message, so `fail()` would prefix it a
+second time. `main()` branches on `err.exitCode` rather than a list of code
+strings, because there are three success codes and not two — `docmeta help get`
+raises `commander.help` alongside `commander.helpDisplayed` and
+`commander.version`.
 
 ## Stress test
 
