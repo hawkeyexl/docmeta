@@ -34,7 +34,11 @@ const Ajv2020 = Ajv2020Ns.default as unknown as AjvCtor;
 const AjvDraft04 = AjvDraft04Ns.default as unknown as AjvCtor;
 const addFormats =
   addFormatsNs.default as unknown as typeof import("ajv-formats").default;
-import { loadSchema, type LoadSchemaOptions } from "./schema-registry.js";
+import {
+  loadSchema,
+  publishedBuiltins,
+  type LoadSchemaOptions,
+} from "./schema-registry.js";
 import { FILE_SCHEMA_KEY } from "./resolve-schema.js";
 
 type Dialect = "2020" | "2019" | "draft7" | "draft4";
@@ -76,7 +80,54 @@ function buildAjv(dialect: Dialect): InstanceType<AjvCtor> {
   // draft-06 shares the draft-07 build; register its meta-schema so draft-06
   // schemas compile too rather than erroring on an unknown `$schema`.
   if (dialect === "draft7") ajv.addMetaSchema(draft06MetaSchema);
+  registerBuiltins(ajv, dialect);
   return ajv;
+}
+
+/**
+ * Make every built-in resolvable as a `$ref` target, under both of its names.
+ *
+ * Ajv is constructed with no `loadSchema`, so before this a user's schema could
+ * not `$ref` a built-in by **any** route — not the published URL (nothing to
+ * fetch it with) and not the docmeta id either, even though the schema was
+ * bundled and would later be compiled into this very instance. Both failed with
+ * "can't resolve reference … from id #", which reads like the published file is
+ * broken. Proposal 0009 stress test 5.
+ *
+ * Three mechanics that are easy to get wrong:
+ *
+ * - **One call per built-in.** `addSchema(schema, url)` registers under the key
+ *   *and* under the schema's own `$id`, so the id form comes for free. Calling
+ *   it a second time under the id throws "schema with key or id … already
+ *   exists".
+ * - **Meta-schema validation is off for these seven.** All the built-ins are
+ *   2020-12, and the 2019/draft-07/draft-04 instances do not carry that
+ *   meta-schema — `addSchema` would throw `no schema with key or ref
+ *   "https://json-schema.org/draft/2020-12/schema"` and take out every Ajv but
+ *   one. These are docmeta's own files, covered by their own tests, so skipping
+ *   the check costs nothing. The flag is per call: a *user's* schema is still
+ *   validated normally.
+ * - **All four dialects, not just 2020.** `dialectOf` picks the instance from
+ *   the *user's* `$schema`, so a draft-07 house schema extending OKF compiles in
+ *   the draft-07 Ajv and needs the built-ins registered there too.
+ *
+ * Registration is lazy — Ajv compiles a stored schema only when something
+ * references it — so this costs a map insert per built-in, not seven compiles.
+ *
+ * Called from `buildAjv` rather than from `Validator`, deliberately:
+ * `compileWithFormats` builds its own throwaway instance for `fill`'s proposal
+ * envelope, which lifts subschemas out of the user's schemas and would
+ * otherwise lose every `$ref` into a built-in.
+ */
+function registerBuiltins(ajv: InstanceType<AjvCtor>, dialect: Dialect): void {
+  for (const { id, url, schema } of publishedBuiltins()) {
+    ajv.addSchema(schema, url, undefined, false);
+    // draft-04 predates `$id` — `ajv-draft-04` reads `id` instead — so the URL
+    // key is the only registration the call above produces there, and the id
+    // form has to be added explicitly. It does not throw as a duplicate for the
+    // same reason: `$id` was never registered.
+    if (dialect === "draft4") ajv.addSchema(schema, id, undefined, false);
+  }
 }
 
 /**

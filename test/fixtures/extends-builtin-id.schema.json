@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Extends the built-in OKF schema by its docmeta id",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "google:okf:0.1"
+    }
+  ],
+  "required": ["title"]
+}

@@ -12,6 +12,17 @@ const withId = join(here, "fixtures", "with-id.schema.json");
 const withIdAlias = join(here, "fixtures", "with-id-alias.schema.json");
 const withIdDivergent = join(here, "fixtures", "with-id-divergent.schema.json");
 const keywords = join(here, "fixtures", "baseline", "keywords.schema.json");
+const extendsPublishedUrl = join(
+  here,
+  "fixtures",
+  "extends-published-url.schema.json",
+);
+const extendsBuiltinId = join(here, "fixtures", "extends-builtin-id.schema.json");
+const extendsPublishedDraft07 = join(
+  here,
+  "fixtures",
+  "extends-published-draft07.schema.json",
+);
 
 const lineFor = (ptr: string) => (ptr === "/timestamp" ? 9 : 1);
 
@@ -294,5 +305,113 @@ describe("Validator with remote schemas of different dialects", () => {
     expect(errors).toHaveLength(1);
     expect(errors[0]?.schema).toBe(ref);
     expect(errors[0]?.message).toMatch(/type/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0009 stress test 5 — $ref-ing a built-in, by either of its two names
+// ---------------------------------------------------------------------------
+
+describe("a user schema $ref-ing a built-in (0009)", () => {
+  let realFetch: typeof globalThis.fetch;
+  let attempted: string[];
+
+  /**
+   * Ajv is built with no `loadSchema`, so an unresolved `$ref` throws rather
+   * than fetching — but that is a property of today's construction, not a
+   * promise. Failing the test on *any* request makes "no network" the assertion
+   * instead of a side effect.
+   */
+  beforeAll(() => {
+    realFetch = globalThis.fetch;
+    attempted = [];
+    globalThis.fetch = ((input: Parameters<typeof fetch>[0]) => {
+      attempted.push(String(input));
+      return Promise.reject(new Error("the network is not available here"));
+    }) as typeof globalThis.fetch;
+  });
+
+  afterAll(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  it.each([
+    ["its published URL", extendsPublishedUrl],
+    ["its docmeta id", extendsBuiltinId],
+    ["its published URL, from a draft-07 schema", extendsPublishedDraft07],
+  ])("compiles and applies a schema extending OKF by %s", async (_n, ref) => {
+    const v = new Validator();
+    // The built-in's own rule still applies through the `$ref` …
+    const missingType = await v.validate({ title: "Hi" }, [ref], lineFor);
+    expect(missingType).toHaveLength(1);
+    expect(missingType[0]?.message).toMatch(/type/);
+    // … and so does the extending schema's own.
+    const missingTitle = await v.validate({ type: "concept" }, [ref], lineFor);
+    expect(missingTitle).toHaveLength(1);
+    expect(missingTitle[0]?.message).toMatch(/title/);
+    // Both satisfied.
+    expect(
+      await v.validate({ type: "concept", title: "Hi" }, [ref], lineFor),
+    ).toEqual([]);
+    expect(attempted).toEqual([]);
+  });
+
+  it("leaves a top-level built-in ref behaving exactly as before", async () => {
+    // Pre-registering the built-ins makes `compileUncached`'s existing
+    // `ajv.getSchema($id)` short circuit hit for `-s google:okf:0.1`, which is
+    // the hottest path in the tool. It must be the same validator, not a
+    // permissive one that quietly passes everything.
+    const v = new Validator();
+    expect(
+      await v.validate({ type: "concept" }, ["google:okf:0.1"], lineFor),
+    ).toEqual([]);
+    const errors = await v.validate({ title: "Hi" }, ["google:okf:0.1"], lineFor);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.schema).toBe("google:okf:0.1");
+    expect(errors[0]?.keyword).toBe("required");
+    expect(errors[0]?.subject).toBe("type");
+    // A format rule from deeper in the built-in still fires, so the
+    // registration is the real schema rather than a shell.
+    const bad = await v.validate(
+      { type: "concept", timestamp: "not-a-date" },
+      ["google:okf:0.1"],
+      lineFor,
+    );
+    expect(bad).toHaveLength(1);
+    expect(bad[0]?.keyword).toBe("format");
+    expect(attempted).toEqual([]);
+  });
+
+  it("compiles the same built-in through its published URL as a top-level ref", async () => {
+    const v = new Validator();
+    const url = "https://hawkeyexl.github.io/docmeta/schemas/okf/0.1.json";
+    const errors = await v.validate({ title: "Hi" }, [url], lineFor);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.schema).toBe(url);
+    expect(attempted).toEqual([]);
+  });
+
+  it("still fails an unregistered remote $ref rather than silently passing", async () => {
+    // The counterpart: pre-registration must not be mistaken for a general
+    // `loadSchema` hook. A `$ref` to a URL docmeta does not publish is still
+    // unresolvable, and that has to stay a loud compile error.
+    const dir = await mkdtemp(join(tmpdir(), "docmeta-ref-"));
+    try {
+      const ref = join(dir, "extends-elsewhere.schema.json");
+      await writeFile(
+        ref,
+        JSON.stringify({
+          $schema: "https://json-schema.org/draft/2020-12/schema",
+          type: "object",
+          allOf: [{ $ref: "https://schemas.example.com/house/2.1.json" }],
+        }),
+        "utf8",
+      );
+      await expect(
+        new Validator().validate({}, [ref], lineFor),
+      ).rejects.toThrow(/failed to compile|resolve reference/i);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
