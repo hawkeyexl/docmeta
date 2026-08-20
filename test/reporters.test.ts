@@ -14,6 +14,7 @@ import {
   renderPretty,
   renderJson,
   renderGithub,
+  escapeWorkflowCommandMessage,
   renderJunit,
   renderSarif,
   type ReportFormat,
@@ -754,5 +755,74 @@ describe("junit: the XML 1.0 Char production", () => {
     // A surrogate *pair* is one code point >= U+10000 and perfectly valid XML.
     const out = renderJunit(withChar("\u{1F600}"));
     expect(out).toContain("\u{1F600}");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GitHub workflow commands need their message escaped
+// ---------------------------------------------------------------------------
+
+/**
+ * `::error ...::<message>` is a line-oriented protocol. A literal newline ends
+ * the command, and `%` introduces the escape sequences, so an unescaped message
+ * either truncates the annotation or corrupts it. An Ajv `pattern` message
+ * quotes the schema's regex verbatim, which is where the `%` comes from in
+ * practice.
+ */
+describe("reporters: github message escaping", () => {
+  const withMessage = (message: string): ValidationResult[] => [
+    {
+      file: "bad.md",
+      format: "markdown",
+      ok: false,
+      schemas: ["house:1.0"],
+      errors: [
+        {
+          schema: "house:1.0",
+          instancePath: "/slug",
+          message,
+          keyword: "pattern",
+          line: 3,
+        },
+      ],
+    },
+  ];
+
+  it("escapes % in the message", () => {
+    const out = renderGithub(withMessage('must match pattern "^%[a-z]+$"'));
+    expect(out).toContain('must match pattern "^%25[a-z]+$"');
+    expect(out).not.toContain('"^%[');
+  });
+
+  it("escapes CR and LF so the annotation is not truncated", () => {
+    const out = renderGithub(withMessage("first\r\nsecond\nthird"));
+    expect(out).toContain("first%0D%0Asecond%0Athird");
+    expect(out.split("\n")).toHaveLength(1);
+  });
+
+  it("escapes % before the newlines, so nothing is double-escaped", () => {
+    // Escaping CR/LF first would turn the literal LF into "%0A" and then the
+    // % pass would rewrite it to "%250A" -- an annotation showing the escape
+    // sequence as text.
+    const out = renderGithub(withMessage("50% off\nline two"));
+    expect(out).toContain("50%25 off%0Aline two");
+    expect(out).not.toContain("%250A");
+  });
+
+  it("leaves a message with none of them unchanged", () => {
+    const out = renderGithub(withMessage("must have required property 'type'"));
+    expect(out).toBe(
+      "::error file=bad.md,line=3::[house:1.0] /slug must have required property 'type'",
+    );
+  });
+
+  /**
+   * Exported because a follow-up adds a `github` renderer for `fill`, which
+   * must escape identically rather than re-derive the rule and get the
+   * ordering wrong.
+   */
+  it("exposes the escaping as a reusable helper", () => {
+    expect(escapeWorkflowCommandMessage("100%\r\n")).toBe("100%25%0D%0A");
+    expect(escapeWorkflowCommandMessage("plain")).toBe("plain");
   });
 });

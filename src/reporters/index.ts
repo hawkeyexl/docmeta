@@ -13,10 +13,12 @@ import { palette } from "./color.js";
 import { fieldLabel } from "./rule-id.js";
 import { renderSarif, type SarifOptions } from "./sarif.js";
 import { renderJunit } from "./junit.js";
+import { escapeWorkflowCommandMessage } from "./github.js";
 
 export { renderSarif, SARIF_NO_GIT_ROOT } from "./sarif.js";
 export type { SarifOptions } from "./sarif.js";
 export { renderJunit, xmlEscape } from "./junit.js";
+export { escapeWorkflowCommandMessage } from "./github.js";
 export {
   PARSE_ERROR_RULE,
   SCHEMA_ERROR_RULE,
@@ -176,7 +178,11 @@ export function renderGithub(results: ValidationResult[]): string {
       const params = [`file=${r.file}`];
       if (e.line != null) params.push(`line=${e.line}`);
       if (e.col != null) params.push(`col=${e.col}`);
-      const msg = `[${e.schema}] ${fieldLabel(e.instancePath)} ${e.message}`;
+      // Escaped as one string, after assembly: the schema id and the field
+      // label are as capable of carrying a `%` as the message is.
+      const msg = escapeWorkflowCommandMessage(
+        `[${e.schema}] ${fieldLabel(e.instancePath)} ${e.message}`,
+      );
       lines.push(`::error ${params.join(",")}::${msg}`);
     }
   }

@@ -19,13 +19,17 @@ non-zero exit as a failed step, so the gate is enforced without extra scripting.
 |------|---------|-----------------|
 | `0`  | Success | Every validated file satisfies its schema set. |
 | `1`  | Validation failures | One or more files failed validation. The run completed; the documents are non-conformant. |
-| `2`  | Operational or usage error | docmeta could not complete the run — for example, no inputs and no config, **no files matched**, an unknown `--format`, an unreadable config file, or an unexpected internal error. |
+| `2`  | Operational or usage error | docmeta could not complete the run — for example, an **unknown flag**, an **unknown subcommand**, a **missing required argument**, no inputs and no config, **no files matched**, an unknown `--format`, an unreadable config file, or an unexpected internal error. |
 
 The distinction between `1` and `2` matters in a pipeline. Exit `1` is a *result*:
 docmeta ran and found problems your authors must fix. Exit `2` is a *failure of
 the run itself*: a misconfiguration or environment problem you must fix. A gate
 that treats every non-zero exit the same will still block bad metadata, but
 separating the two lets you tell "the docs are wrong" from "the check is broken."
+
+A mistyped flag or subcommand belongs to the second group. `docmeta validate
+--nope docs/` exits `2`, not `1`: nothing was validated, so the run produced no
+verdict about your documents at all.
 
 <Aside type="note" title="The default command is validate">
 `docmeta` with no subcommand runs `validate`, so `docmeta "**/*.md"` and
@@ -206,6 +210,14 @@ required-property error at the document root reports the field as `(root)`:
 ::error file=missing-type.md::[google:okf:0.1] (root) must have required property 'type'
 ```
 
+`<message>` is escaped as the workflow-command protocol requires: `%` becomes
+`%25`, a carriage return `%0D`, and a newline `%0A`. GitHub decodes them when it
+renders the annotation. Without it a schema `pattern` containing `%` — Ajv
+quotes the regex into the message verbatim — would corrupt the annotation, and a
+multi-line message would truncate it at the first newline. Do not decode these
+yourself if you post-process the lines; treat the message as
+percent-escaped-on-those-three.
+
 <Aside type="tip" title="github output outside GitHub">
 The `::error` lines are GitHub-specific. On other CI systems they print as plain
 text with no annotation behavior. Use `pretty`, `json`, `sarif`, or `junit`
@@ -307,6 +319,8 @@ which need no flag.
 {/* step {"description":"Exit 0: every validated file satisfies its schema set.","runShell":{"command":"docmeta validate test/fixtures/valid.md","exitCodes":[0]}} */}
 {/* step {"description":"Exit 1: one or more files failed validation.","runShell":{"command":"docmeta validate test/fixtures/missing-type.md","exitCodes":[1]}} */}
 {/* step {"description":"Exit 2: an operational/usage error (unknown --format).","runShell":{"command":"docmeta validate test/fixtures/valid.md -f xml","exitCodes":[2],"stdio":"Unknown --format"}} */}
+{/* step {"description":"Exit 2: an unknown flag is a usage error, not a validation failure.","runShell":{"command":"docmeta validate --nope test/fixtures/valid.md","exitCodes":[2],"stdio":"unknown option"}} */}
+{/* step {"description":"Exit 2: a missing required argument is a usage error.","runShell":{"command":"docmeta get","exitCodes":[2],"stdio":"missing required argument"}} */}
 {/* step {"description":"github annotation line carries file= and line= for an error with a known line.","runShell":{"command":"docmeta validate test/fixtures/bad-timestamp.md --format github","exitCodes":[1],"stdio":"/::error file=test/fixtures/bad-timestamp.md,line=4::/"}} */}
 {/* step {"description":"github is validate-only: get rejects --format github as a usage error (exit 2).","runShell":{"command":"docmeta get type test/fixtures/valid.md --format github","exitCodes":[2],"stdio":"Unknown --format"}} */}
 {/* test end */}
