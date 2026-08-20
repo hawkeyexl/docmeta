@@ -294,12 +294,12 @@ export interface LoadSchemaOptions {
    * the TTL, since there is no re-fetch to fall back on — and an uncached one
    * fails naming the URL. Built-ins and local files are unaffected.
    *
-   * NOTE for whoever implements the remote-schema allowlist (proposal 0015): a
-   * document's own `$schema` sits *above* config in the precedence chain, so a
-   * document can name any URL and trigger a fetch, bypassing `schemas:`
-   * entirely. `offline` blocks that **by accident** rather than by design. It
-   * is not the guard, but it is currently the only thing standing there, so do
-   * not remove it while "simplifying" until the real allowlist exists.
+   * This is a *durability* control, not a trust boundary, and it never was:
+   * whether a document may name a URL at all is decided upstream by
+   * `schemaTrust` in `resolveSchemaSet`, which is the last place that still
+   * knows a ref came from a document rather than from an operator (proposal
+   * 0015). `offline` used to block that case by accident and was the only thing
+   * standing there; it is now free to mean only what it says.
    */
   offline?: boolean;
   /**
@@ -326,6 +326,58 @@ class RetryableFetchError extends DocmetaError {}
 function isAbort(err: unknown): boolean {
   const name = (err as { name?: unknown } | null)?.name;
   return name === "TimeoutError" || name === "AbortError";
+}
+
+/**
+ * The `JSON.parse` messages that splice a prefix of the parsed text into
+ * themselves: `Unexpected token 'r', "root:x:0:0"... is not valid JSON`, with
+ * an optional leading `...` when the failure is mid-document.
+ *
+ * The other family — `Expected ':' after property name in JSON at position 4
+ * (line 1 column 5)` — quotes nothing back and is left exactly as V8 wrote it.
+ */
+const JSON_PARSE_EXCERPT =
+  /^Unexpected token '[\s\S]', (?:\.\.\.)?"([\s\S]*)"(?:\.\.\.)? is not valid JSON$/;
+
+/** 1-based position of `index` in `text`, for an error message. */
+function lineColumn(text: string, index: number): string {
+  let line = 1;
+  let column = 1;
+  const stop = Math.min(index, text.length);
+  for (let i = 0; i < stop; i++) {
+    if (text.charCodeAt(i) === 10) {
+      line += 1;
+      column = 1;
+    } else {
+      column += 1;
+    }
+  }
+  return `line ${line} column ${column}`;
+}
+
+/**
+ * A parse failure for a **file** ref, with the file's own bytes taken out.
+ *
+ * The excerpt V8 embeds is content off the operator's disk, and this message
+ * reaches stderr *and* the `json`/`sarif` reports the formats workflow uploads
+ * to code scanning — so before proposal 0015 it was readable by whoever opened
+ * the pull request, roughly ten bytes per run and repeatable with a different
+ * path each time.
+ *
+ * Position is what the operator actually needs, and it survives: the excerpt is
+ * located in the text we just tried to parse, and its line and column are
+ * reported instead of the excerpt itself. "Where", without the "what".
+ *
+ * Deliberately **not** applied to the remote-response excerpt above. `73c625f`
+ * put that in front of the operator on purpose, and a response body from a URL
+ * the operator configured is a different thing from bytes off their disk.
+ */
+function withoutFileExcerpt(message: string, text: string): string {
+  const match = JSON_PARSE_EXCERPT.exec(message);
+  if (!match) return message;
+  const quoted = match[1];
+  const at = quoted === undefined || quoted === "" ? -1 : text.indexOf(quoted);
+  return at < 0 ? "unexpected token" : `unexpected token at ${lineColumn(text, at)}`;
 }
 
 /** A short, single-line sample of a response body, for an error message. */
@@ -769,6 +821,9 @@ export async function loadSchema(
   // passes through, and a relative one is measured from the run's directory.
   // The pin is checked against that same resolved file, so a vendored schema
   // verifies from a library caller's `cwd` as well as from the CLI's.
+  // A local file ref. `resolveSchemaSet` has already refused this one if a
+  // *document* named it and it pointed outside the repository (proposal 0015);
+  // by here the ref is just a string and that provenance is gone.
   const file = resolvePath(options.fileBase ?? process.cwd(), ref);
   let bytes: Buffer;
   try {
@@ -794,11 +849,12 @@ export async function loadSchema(
   if (pin?.integrity !== undefined) {
     assertIntegrity(ref, bytes, pin, pin.integrity);
   }
+  const text = bytes.toString("utf8");
   try {
-    return JSON.parse(bytes.toString("utf8")) as Record<string, unknown>;
+    return JSON.parse(text) as Record<string, unknown>;
   } catch (err) {
     throw new DocmetaError(
-      `Schema file "${ref}" is not valid JSON: ${(err as Error).message}`,
+      `Schema file "${ref}" is not valid JSON: ${withoutFileExcerpt((err as Error).message, text)}`,
     );
   }
 }
