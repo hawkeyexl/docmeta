@@ -5,7 +5,7 @@
  * failures, 2 operational/usage errors).
  */
 import { existsSync, realpathSync } from "node:fs";
-import { basename, relative, resolve as resolvePath } from "node:path";
+import { basename, extname, relative, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command, CommanderError, Option } from "commander";
 import picomatch from "picomatch";
@@ -19,16 +19,27 @@ import {
   runVendorSchema,
 } from "./commands/schemas.js";
 import { runFill } from "./commands/fill.js";
+import { supportedExtensions } from "./extractors/index.js";
 import {
+  COMMON_FORMATS,
+  COMMON_FORMAT_LIST,
   OMITTED_WHEN_CLEAN,
   REPORT_FORMATS,
   REPORT_FORMAT_LIST,
+  isCommonFormat,
   isMachineFormat,
   isReportFormat,
   render,
+  type CommonFormat,
   type ReportFormat,
 } from "./reporters/index.js";
-import { renderFill } from "./reporters/fill.js";
+import {
+  FILL_FORMATS,
+  FILL_FORMAT_LIST,
+  isFillFormat,
+  renderFill,
+} from "./reporters/fill.js";
+import { renderGet } from "./reporters/get.js";
 import { shouldColor, palette } from "./reporters/color.js";
 
 function collect(value: string, prev: string[]): string[] {
@@ -56,10 +67,93 @@ function resolveColor(program: Command): boolean {
   return shouldColor({ noColor, isTTY: Boolean(process.stdout.isTTY) });
 }
 
-function stringifyValue(v: unknown): string {
-  if (v === undefined) return "(unset)";
-  if (typeof v === "string") return v;
-  return JSON.stringify(v);
+/** A `--format` value one of the two-format commands (`get`, `schemas`) rejects. */
+function assertCommonFormat(value: unknown): CommonFormat {
+  const format = String(value);
+  if (!isCommonFormat(format)) {
+    throw new DocmetaError(
+      `Unknown --format "${format}". Use ${COMMON_FORMAT_LIST}.`,
+    );
+  }
+  return format;
+}
+
+/** The one input token that is neither a path nor a field: stdin. */
+const STDIN = "-";
+
+/**
+ * Does this token name a path rather than a field list?
+ *
+ * `get`'s field list is positional, so a user who forgets it has their *path*
+ * bound to `[fields]`. Since the argument became optional the CLI can say so
+ * outright instead of reporting the paths that are left as missing.
+ *
+ * The four positive tests mirror `suggestCommand`'s, `existsSync` included —
+ * that leg is the one that catches a bare directory name (`docmeta get docs`),
+ * which has neither a dot, a separator, nor a glob character.
+ *
+ * The two negative tests come first and matter more, because a false positive
+ * would reject a legal field list:
+ *
+ * - a **comma** makes it a list, and a path holding one is vanishingly rare
+ *   (and still caught by `existsSync` when it is real);
+ * - a **leading `/`** is a JSON Pointer, the documented way to address a nested
+ *   or dotted key — `docmeta get /author/email page.md` is exactly the usage
+ *   the separator test would otherwise refuse.
+ */
+function looksLikePath(token: string, cwd: string): boolean {
+  if (token === STDIN) return false;
+  if (existsSync(resolvePath(cwd, token))) return true;
+  if (token.includes(",") || token.startsWith("/")) return false;
+  if (picomatch.scan(token).isGlob) return true;
+  const ext = extname(token).toLowerCase();
+  if (ext !== "" && supportedExtensions().includes(ext)) return true;
+  return /[\\/]/.test(token);
+}
+
+/**
+ * `get`'s one input rule: **if `--fields` is present, every positional is a
+ * path.** Otherwise the first positional is the field list, exactly as before.
+ *
+ * The missing-field-list case is handled *here* rather than left to `runGet`.
+ * `options.fields ?? fieldsArg` is `undefined` when neither was given, and
+ * `String(undefined).split(",")` is `["undefined"]` — a field list of length
+ * one, so `runGet`'s `fields.length === 0` guard never fires and a bare
+ * `docmeta get` in a repo with config `paths:` prints `undefined=(unset)` per
+ * file and exits 0. A successful-looking report for a field nobody named is
+ * worse than the error it replaced.
+ *
+ * The positional is folded in on `fieldsArg !== undefined`, not with
+ * `.filter(Boolean)`: an empty-string path is a mistake worth reporting, and
+ * filtering it would silently drop it instead.
+ */
+export function resolveGetInputs(
+  fieldsArg: string | undefined,
+  pathsArg: string[],
+  fieldsOption: unknown,
+  cwd: string,
+): { fields: string[]; paths: string[] } {
+  const flag = typeof fieldsOption === "string" ? fieldsOption : undefined;
+
+  if (flag === undefined && fieldsArg !== undefined && looksLikePath(fieldsArg, cwd)) {
+    throw new DocmetaError(
+      `"${fieldsArg}" looks like a path, not a field list. Pass fields first (docmeta get title ${fieldsArg}) or use --fields.`,
+    );
+  }
+
+  const source = flag ?? fieldsArg;
+  const fields = source === undefined ? [] : splitList(source);
+  if (fields.length === 0) {
+    throw new DocmetaError(
+      "Specify at least one field to get. Pass fields first (docmeta get title docs/a.md) or use --fields.",
+    );
+  }
+
+  const paths =
+    flag !== undefined && fieldsArg !== undefined
+      ? [fieldsArg, ...pathsArg]
+      : pathsArg;
+  return { fields, paths };
 }
 
 const COMMAND_NAMES = ["validate", "get", "fill", "schemas"];
@@ -357,17 +451,35 @@ export function buildProgram(): Command {
     .description(
       "Print metadata field values from the given files/dirs/globs",
     )
-    .argument("<fields>", "comma-separated metadata fields to print")
+    // Optional, and the flag below is the unambiguous spelling. A required
+    // positional ate the user's *path* when the field list was forgotten, and
+    // reported the paths — which were never the problem — as missing.
+    .argument(
+      "[fields]",
+      "comma-separated metadata fields to print, unless --fields is given",
+    )
     .argument(
       "[paths...]",
       "files, directories, or globs to read (use - for stdin)",
     )
+    .option(
+      "--fields <list>",
+      "comma-separated metadata fields to print; every positional is then a path",
+    )
     .option("--ext <list>", "comma-separated extensions for directory walks")
     .option("--exclude <glob>", "glob to exclude; repeatable", collect, [])
     .option("--as <format>", "force an input format (e.g. markdown, mdx)")
-    .option("-f, --format <format>", "output: pretty | json", "pretty")
+    .option(
+      "-f, --format <format>",
+      `output: ${COMMON_FORMATS.join(" | ")}`,
+      "pretty",
+    )
     .option("-c, --config <path>", "path to a docmeta config file")
     .option("--no-config", "ignore any discovered config file")
+    .option(
+      "-q, --quiet",
+      "in pretty output, hide files where every requested field is unset",
+    )
     .option("--allow-empty", "treat zero matched files as success")
     .option("--no-gitignore", "read files .gitignore covers")
     .option(
@@ -380,23 +492,26 @@ export function buildProgram(): Command {
         "",
         "Examples:",
         "  docmeta get title,type docs/intro.md",
+        "  docmeta get --fields title,type docs/intro.md",
         "  docmeta get author.name,/author/email docs/intro.md",
         '  docmeta get type "**/*.md" -f json',
         "  cat page.md | docmeta get title - --as markdown",
       ].join("\n"),
     )
-    .action(async (fieldsArg: string, paths: string[], options, command: Command) => {
+    .action(async (
+      fieldsArg: string | undefined,
+      pathsArg: string[],
+      options,
+      command: Command,
+    ) => {
       try {
-        const format = options.format as string;
-        if (format !== "pretty" && format !== "json") {
-          throw new DocmetaError(
-            `Unknown --format "${format}". Use pretty or json.`,
-          );
-        }
-        const fields = String(fieldsArg)
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
+        const format = assertCommonFormat(options.format);
+        const { fields, paths } = resolveGetInputs(
+          fieldsArg,
+          pathsArg,
+          options.fields,
+          process.cwd(),
+        );
         const exts: string[] | undefined = options.ext
           ? String(options.ext)
               .split(",")
@@ -421,16 +536,25 @@ export function buildProgram(): Command {
           offline: options.offline ? true : undefined,
           onNotice: notice,
         });
-        if (format === "json") {
-          process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
-        } else {
-          const c = palette(resolveColor(command.parent ?? command));
-          for (const r of results) {
-            for (const f of fields) {
-              process.stdout.write(
-                `${c.dim(`${r.file}:`)} ${f}=${stringifyValue(r.values[f])}\n`,
-              );
-            }
+        switch (format) {
+          case "json":
+            // `--quiet` is a pretty-output affordance; a filtered array would
+            // be indistinguishable from an empty run to whatever parses this.
+            process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
+            break;
+          case "pretty": {
+            const text = renderGet(results, fields, {
+              color: resolveColor(command.parent ?? command),
+              quiet: Boolean(options.quiet),
+            });
+            if (text.length > 0) process.stdout.write(`${text}\n`);
+            break;
+          }
+          default: {
+            const unreachable: never = format;
+            throw new DocmetaError(
+              `Unknown --format ${JSON.stringify(unreachable)}. Use ${COMMON_FORMAT_LIST}.`,
+            );
           }
         }
       } catch (err) {
@@ -472,9 +596,17 @@ export function buildProgram(): Command {
     // parseFloat, not parseInt: parseInt("3.5") silently yields 3, which would
     // defeat runFill's integer check and hide the mistake from the user.
     .option("--concurrency <n>", "files inferred in parallel", parseFloat)
-    .option("-f, --format <format>", "output: pretty | json", "pretty")
+    .option(
+      "-f, --format <format>",
+      `output: ${FILL_FORMATS.join(" | ")}`,
+      "pretty",
+    )
     .option("-c, --config <path>", "path to a docmeta config file")
     .option("--no-config", "ignore any discovered config file")
+    .option(
+      "-q, --quiet",
+      "in pretty output, hide files with nothing written and nothing required left undone",
+    )
     .option("--allow-empty", "treat zero matched files as success")
     .option("--no-gitignore", "fill files .gitignore covers")
     .option(
@@ -489,15 +621,16 @@ export function buildProgram(): Command {
         "  docmeta fill docs/ --dry-run                 # preview proposals",
         "  docmeta fill docs/ --confidence 0.9          # only near-certain values",
         "  docmeta fill page.md --fields description",
+        "  docmeta fill docs/ -f github                 # CI annotations",
         "  cat page.md | docmeta fill - --as markdown   # filled doc to stdout",
       ].join("\n"),
     )
     .action(async (paths: string[], options, command: Command) => {
       try {
-        const format = options.format as string;
-        if (format !== "pretty" && format !== "json") {
+        const format = String(options.format);
+        if (!isFillFormat(format)) {
           throw new DocmetaError(
-            `Unknown --format "${format}". Use pretty or json.`,
+            `Unknown --format "${format}". Use ${FILL_FORMAT_LIST}.`,
           );
         }
         // parseFloat("abc") is NaN, and every comparison against NaN is false,
@@ -509,7 +642,17 @@ export function buildProgram(): Command {
         const exts: string[] | undefined = options.ext
           ? splitList(String(options.ext))
           : undefined;
-        const usingStdin = paths.includes("-");
+        const usingStdin = paths.includes(STDIN);
+        // With `-` the filled document owns stdout and the report is a
+        // diagnostic on stderr — where GitHub never reads `::error`. The
+        // annotations would be produced, and nothing would ever render them.
+        // Refuse the combination rather than degrade to a silent no-op, which
+        // is the exact false green this parity work exists to remove.
+        if (usingStdin && format === "github") {
+          throw new DocmetaError(
+            'Cannot use --format github with stdin ("-"): the filled document owns stdout, so the annotations would go to stderr, where GitHub ignores them. Pass file paths instead.',
+          );
+        }
         const stdinContent = usingStdin ? await readStdin() : undefined;
 
         const run = await runFill({
@@ -542,7 +685,10 @@ export function buildProgram(): Command {
         });
 
         const color = resolveColor(command.parent ?? command);
-        const report = renderFill(format, run, { color });
+        const report = renderFill(format, run, {
+          color,
+          quiet: Boolean(options.quiet),
+        });
         if (usingStdin) {
           // The filled document owns stdout here; the report is a diagnostic.
           const filled = run.results[0]?.content;
@@ -567,7 +713,11 @@ export function buildProgram(): Command {
   const schemas = program
     .command("schemas")
     .description("List built-in schemas and supported input formats")
-    .option("-f, --format <format>", "output: pretty | json", "pretty")
+    .option(
+      "-f, --format <format>",
+      `output: ${COMMON_FORMATS.join(" | ")}`,
+      "pretty",
+    )
     .action((options, command: Command) => {
       try {
         // A closed set, checked like every other command's --format. This used
@@ -576,12 +726,7 @@ export function buildProgram(): Command {
         // honor, answered with success in a different format. `github` is the
         // case that matters: it is a real docmeta format, just not one this
         // command produces, so nothing about the invocation looked wrong.
-        const format = options.format as string;
-        if (format !== "pretty" && format !== "json") {
-          throw new DocmetaError(
-            `Unknown --format "${format}". Use pretty or json.`,
-          );
-        }
+        const format = assertCommonFormat(options.format);
         const info = getSchemasInfo();
         if (format === "json") {
           process.stdout.write(`${JSON.stringify(info, null, 2)}\n`);

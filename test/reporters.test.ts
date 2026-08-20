@@ -9,7 +9,11 @@ import {
   type Element as XmlElement,
 } from "@xmldom/xmldom";
 import {
+  COMMON_FORMATS,
+  COMMON_FORMAT_LIST,
+  REPORT_FORMAT_LIST,
   SARIF_NO_GIT_ROOT,
+  isCommonFormat,
   render,
   renderPretty,
   renderJson,
@@ -19,6 +23,23 @@ import {
   renderSarif,
   type ReportFormat,
 } from "../src/reporters/index.js";
+import { renderGet } from "../src/reporters/get.js";
+import {
+  FILL_FORMATS,
+  FILL_FORMAT_LIST,
+  isFillFormat,
+  renderFill,
+  renderFillGithub,
+  renderFillJson,
+  renderFillPretty,
+  type FillReportFormat,
+} from "../src/reporters/fill.js";
+import type { GetFileResult } from "../src/commands/get.js";
+import type {
+  FillFileResult,
+  FilledField,
+  FillRun,
+} from "../src/commands/fill-types.js";
 import { fingerprint, type FingerprintContext } from "../src/core/baseline.js";
 import { runValidate } from "../src/commands/validate.js";
 import { makeTempRepo, removeTempRepo } from "./helpers/temp-repo.js";
@@ -824,5 +845,264 @@ describe("reporters: github message escaping", () => {
   it("exposes the escaping as a reusable helper", () => {
     expect(escapeWorkflowCommandMessage("100%\r\n")).toBe("100%25%0D%0A");
     expect(escapeWorkflowCommandMessage("plain")).toBe("plain");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// `get` renders behind a reporter, like every other command (0005 §2)
+// ---------------------------------------------------------------------------
+
+describe("reporters: get", () => {
+  const getResults: GetFileResult[] = [
+    {
+      file: "both.md",
+      present: true,
+      values: { title: "A title", owner: "docs-team" },
+    },
+    // One set, one unset: the case `--quiet` must NOT hide.
+    { file: "partial.md", present: true, values: { title: "Only a title" } },
+    { file: "neither.md", present: false, values: {} },
+  ];
+  const fields = ["title", "owner"];
+
+  it("prints one file:field=value line per requested field", () => {
+    const out = renderGet(getResults, fields, { color: false });
+    expect(out.split("\n")).toEqual([
+      "both.md: title=A title",
+      "both.md: owner=docs-team",
+      "partial.md: title=Only a title",
+      "partial.md: owner=(unset)",
+      "neither.md: title=(unset)",
+      "neither.md: owner=(unset)",
+    ]);
+  });
+
+  it("renders a non-string value as JSON, and no ANSI when color is off", () => {
+    const out = renderGet(
+      [{ file: "x.md", present: true, values: { tags: ["a", "b"] } }],
+      ["tags"],
+      { color: false },
+    );
+    expect(out).toBe('x.md: tags=["a","b"]');
+    expect(out).not.toContain(ESC);
+  });
+
+  it("quiet hides a file where every requested field is unset", () => {
+    const out = renderGet(getResults, fields, { color: false, quiet: true });
+    expect(out).not.toContain("neither.md");
+  });
+
+  it("quiet never hides a value: a partially set file still prints", () => {
+    const out = renderGet(getResults, fields, { color: false, quiet: true });
+    expect(out).toContain("partial.md: title=Only a title");
+    expect(out).toContain("partial.md: owner=(unset)");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// `fill`: --quiet, and the github reporter (0005 §2, §3)
+// ---------------------------------------------------------------------------
+
+describe("reporters: fill", () => {
+  const field = (over: Partial<FilledField>): FilledField => ({
+    field: "/title",
+    required: false,
+    confidence: 0.9,
+    reasoning: "because",
+    written: true,
+    ...over,
+  });
+
+  const results: FillFileResult[] = [
+    {
+      file: "written.md",
+      format: "markdown",
+      schemas: ["house:1.0"],
+      changed: true,
+      fields: [field({ field: "/title", value: "A title" })],
+    },
+    {
+      // Nothing written, and nothing required left undone: the only file
+      // `--quiet` may drop.
+      file: "optional-skip.md",
+      format: "markdown",
+      schemas: ["house:1.0"],
+      changed: false,
+      fields: [
+        field({
+          field: "/description",
+          required: false,
+          written: false,
+          confidence: 0.4,
+          skipReason: "low-confidence",
+        }),
+      ],
+    },
+    {
+      // A required field left unfilled is what drives exit 1 — hiding it would
+      // hide the reason for the run's own failure.
+      file: "required-skip.md",
+      format: "markdown",
+      schemas: ["house:1.0"],
+      changed: false,
+      fields: [
+        field({
+          field: "/type",
+          required: true,
+          written: false,
+          confidence: 0.3,
+          skipReason: "low-confidence",
+        }),
+      ],
+    },
+    {
+      file: "broken.md",
+      format: "markdown",
+      schemas: [],
+      changed: false,
+      fields: [],
+      error: "Invalid YAML frontmatter",
+    },
+  ];
+
+  const run: FillRun = {
+    results,
+    summary: {
+      files: 4,
+      changed: 1,
+      written: 1,
+      skipped: 2,
+      requiredSkipped: 1,
+      errors: 1,
+      costUsd: 0,
+      cached: 0,
+    },
+    threshold: 0.7,
+    dryRun: true,
+    provider: "mock",
+    model: "mock-1",
+    budgetExhausted: false,
+  };
+
+  it("pretty prints every file when quiet is off", () => {
+    const out = renderFillPretty(run, { color: false });
+    for (const f of ["written.md", "optional-skip.md", "required-skip.md", "broken.md"]) {
+      expect(out).toContain(f);
+    }
+  });
+
+  it("quiet drops only the file with nothing written and nothing required left", () => {
+    const out = renderFillPretty(run, { color: false, quiet: true });
+    expect(out).not.toContain("optional-skip.md");
+    expect(out).toContain("written.md");
+  });
+
+  it("quiet keeps a file whose required field could not be filled", () => {
+    // renderFillPretty already skips files with zero proposals, so "drop files
+    // with no proposals" would be a no-op; the only files left to drop are the
+    // ones that carry the failure. This is the assertion that pins that.
+    const out = renderFillPretty(run, { color: false, quiet: true });
+    expect(out).toContain("required-skip.md");
+    expect(out).toContain("/type");
+  });
+
+  it("quiet keeps a file that errored", () => {
+    const out = renderFillPretty(run, { color: false, quiet: true });
+    expect(out).toContain("broken.md");
+    expect(out).toContain("Invalid YAML frontmatter");
+  });
+
+  it("quiet still prints the summary and the required-skip warning", () => {
+    const out = renderFillPretty(run, { color: false, quiet: true });
+    expect(out).toContain("1 required field could not be filled confidently");
+    expect(out).toContain("Threshold 0.7");
+  });
+
+  it("github annotates required-and-unfilled fields only", () => {
+    const out = renderFillGithub(run);
+    const lines = out.split("\n").filter(Boolean);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("::error file=required-skip.md::");
+    expect(lines[0]).toContain("/type");
+    expect(out).not.toContain("optional-skip.md");
+    expect(out).not.toContain("written.md");
+  });
+
+  it("github carries no line=, because a proposal has no location", () => {
+    // FilledField has no line/col (unlike a ValidationResult error), so the
+    // annotation names the file only and GitHub anchors it to line 1.
+    expect(renderFillGithub(run)).not.toContain("line=");
+  });
+
+  it("github says nothing when every required field was filled", () => {
+    const clean: FillRun = {
+      ...run,
+      results: [results[0] as FillFileResult],
+      summary: { ...run.summary, requiredSkipped: 0, errors: 0 },
+    };
+    expect(renderFillGithub(clean)).toBe("");
+  });
+
+  it("github escapes the message it assembles", () => {
+    const hostile: FillRun = {
+      ...run,
+      results: [
+        {
+          file: "pct.md",
+          format: "markdown",
+          schemas: ["house:1.0"],
+          changed: false,
+          fields: [
+            field({
+              field: "/100%\nrate",
+              required: true,
+              written: false,
+              confidence: 0.1,
+              skipReason: "low-confidence",
+            }),
+          ],
+        },
+      ],
+    };
+    const out = renderFillGithub(hostile);
+    expect(out).toContain("/100%25%0Arate");
+    expect(out.split("\n")).toHaveLength(1);
+  });
+
+  it("routes every fill format to its own renderer, and rejects the rest", () => {
+    expect(renderFill("json", run)).toBe(renderFillJson(run));
+    expect(renderFill("github", run)).toBe(renderFillGithub(run));
+    expect(renderFill("pretty", run, { color: false })).toBe(
+      renderFillPretty(run, { color: false }),
+    );
+    expect(() => renderFill("sarif" as FillReportFormat, run)).toThrow(
+      /Unknown report format/,
+    );
+  });
+
+  it("states its format list once", () => {
+    expect([...FILL_FORMATS]).toEqual(["pretty", "json", "github"]);
+    expect(isFillFormat("github")).toBe(true);
+    expect(isFillFormat("sarif")).toBe(false);
+    expect(FILL_FORMAT_LIST).toBe("pretty, json, or github");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The formats every command produces, stated once (0005 §5)
+// ---------------------------------------------------------------------------
+
+describe("reporters: the common format pair", () => {
+  it("is pretty and json, with a list that reads as a sentence", () => {
+    expect([...COMMON_FORMATS]).toEqual(["pretty", "json"]);
+    expect(isCommonFormat("json")).toBe(true);
+    expect(isCommonFormat("github")).toBe(false);
+    // Two values take "a or b", not "a, or b" — the message has said
+    // "Use pretty or json." since before the list was shared.
+    expect(COMMON_FORMAT_LIST).toBe("pretty or json");
+  });
+
+  it("leaves the five-value validate list reading as it always did", () => {
+    expect(REPORT_FORMAT_LIST).toBe("pretty, json, github, sarif, or junit");
   });
 });
