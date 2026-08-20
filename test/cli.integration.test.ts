@@ -1161,6 +1161,36 @@ describe("docmeta CLI: --offline and the cross-run schema cache (built bin)", ()
     expect(existsSync(join(root, ".docmeta", "schema-cache"))).toBe(false);
   });
 
+  it("--offline validates a document whose $schema is a published URL", () => {
+    // Proposal 0009 stress test 1, end to end. `classifyRef` calls this a URL,
+    // so without the alias the run would try to fetch docmeta's own built-in —
+    // and fail outright under --offline with nothing in the cache.
+    const r = run([
+      "validate",
+      "test/fixtures/published-url-schema.md",
+      "--offline",
+    ]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("1 passed");
+    // Nothing was fetched, so nothing was cached.
+    expect(existsSync(join(root, ".docmeta", "schema-cache"))).toBe(false);
+  });
+
+  it("still applies the schema a published URL names, offline", () => {
+    // The pass above would also be produced by an alias that resolved to
+    // something permissive. `-s` with the URL against a document missing `type`
+    // has to fail on OKF's own rule.
+    const r = run([
+      "validate",
+      "test/fixtures/missing-type.md",
+      "-s",
+      "https://hawkeyexl.github.io/docmeta/schemas/okf/0.1.json",
+      "--offline",
+    ]);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toMatch(/type/);
+  });
+
   it("--offline reads a local schema file", () => {
     const r = run([
       "validate",
@@ -1950,4 +1980,30 @@ describe("docmeta CLI: schemaTrust (built bin)", () => {
       await server.close();
     }
   }, 60000);
+
+  it("lets `local` keep a published built-in URL, which reaches nothing (0009)", () => {
+    // The docs advertise these URLs, so refusing them in the strictest mode
+    // would make docmeta's own recommended spelling unusable there. They are
+    // served from the bundle — no host answers for them — so `local` has no
+    // reason to refuse, and neither does a `hosts` allowlist that omits the
+    // docs site.
+    repo = makeTempRepo({
+      files: {
+        "docmeta.config.yaml":
+          "schemas:\n  - diataxis:diataxis:1.0\nschemaTrust:\n  documentRefs: local\n  hosts:\n    - schemas.example.com\n",
+        "page.md":
+          "---\ntitle: t\ntype: guide\n$schema: https://hawkeyexl.github.io/docmeta/schemas/okf/0.1.json\n---\n",
+      },
+    });
+    const r = spawnSync("node", [bin, "validate", "*.md", "--offline"], {
+      cwd: repo,
+      encoding: "utf8",
+    });
+    // Exit 0: the document's own URL won, and OKF accepts `type: guide`. Under
+    // the config's diataxis schema `guide` is not a member, so a pass here also
+    // proves the document's ref was honored rather than dropped.
+    expect(r.stderr).toBe("");
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("1 passed");
+  });
 });

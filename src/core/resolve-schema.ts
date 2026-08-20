@@ -14,7 +14,11 @@ import type {
   SchemaEntry,
   SchemaTrustRoot,
 } from "./config.js";
-import { classifyRef, type SchemaPin } from "./schema-registry.js";
+import {
+  classifyRef,
+  isPublishedBuiltinUrl,
+  type SchemaPin,
+} from "./schema-registry.js";
 import { DocmetaError } from "../types.js";
 
 /**
@@ -240,11 +244,24 @@ function assertDocumentRefAllowed(
 ): void {
   const { kind } = classifyRef(ref);
 
-  // A built-in id is bundled with docmeta: it names no host and reads no file,
-  // so there is nothing for a document to reach with it. Allowed in every mode
-  // — `test/fixtures/schema-ref.md` and the documented "self-describing
-  // document" pattern both depend on that.
-  if (kind === "builtin") return;
+  // A built-in is bundled with docmeta: it names no host and reads no file, so
+  // there is nothing for a document to reach with it. Allowed in every mode —
+  // `test/fixtures/schema-ref.md` and the documented "self-describing document"
+  // pattern both depend on that.
+  //
+  // A **published** built-in URL (proposal 0009) is the same object under a
+  // second name: `loadSchema` aliases it back to the bundled copy before any
+  // cache or request, so it too reaches nothing. It is exempted here, above the
+  // `kind === "url"` block, rather than inside it — because there are two
+  // refusals to clear, not one. `documentRefs: "local"` rejects any URL outright
+  // and never consults `hosts`; `documentRefs: "any"` with a non-empty `hosts`
+  // rejects a host the operator did not list. An exemption placed inside the url
+  // block would clear the second and leave the first, which would make the
+  // spelling docmeta itself advertises unusable in the stricter mode.
+  //
+  // Deliberately narrow: this is an exact-match table lookup, not a host or
+  // prefix rule, so any other URL on the same host stays subject to both checks.
+  if (kind === "builtin" || isPublishedBuiltinUrl(ref)) return;
 
   if (kind === "url") {
     if (mode === "local") {

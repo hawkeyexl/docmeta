@@ -23,7 +23,9 @@ import {
   listBuiltins,
   classifyRef,
   fetchSchemaBytes,
+  isPublishedBuiltinUrl,
   loadSchema,
+  publishedBuiltins,
 } from "../src/core/schema-registry.js";
 import { SchemaCache } from "../src/core/schema-cache.js";
 import { DocmetaError } from "../src/types.js";
@@ -1029,5 +1031,116 @@ describe("0015 · the remote response excerpt is deliberately kept", () => {
     } finally {
       await server.close();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0009 — the built-ins are also published at stable URLs
+// ---------------------------------------------------------------------------
+
+describe("0009 · a published built-in URL resolves from the bundle", () => {
+  let server: SchemaServer;
+  let realFetch: typeof globalThis.fetch;
+
+  /**
+   * Every request that escapes the alias is rerouted to a local server, which
+   * counts what it received.
+   *
+   * Asserting on the returned object alone would not tell "served from the
+   * bundle" apart from "fetched, and happened to match", and letting a real
+   * request out would make the test depend on GitHub Pages being up. The
+   * assertion that carries the weight is therefore the empty request log.
+   */
+  beforeAll(async () => {
+    server = await startSchemaServer({});
+  });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  beforeEach(() => {
+    realFetch = globalThis.fetch;
+    globalThis.fetch = ((
+      input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ) => {
+      const href =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      const target = new URL(href);
+      return realFetch(
+        new URL(target.pathname + target.search, server.url),
+        init,
+      );
+    }) as typeof globalThis.fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  it("covers exactly the built-in registry — no built-in without a URL", () => {
+    expect(
+      publishedBuiltins()
+        .map((b) => b.id)
+        .sort(),
+    ).toEqual(listBuiltins().map((b) => b.id).sort());
+  });
+
+  it("serves every published URL from the bundle, with zero requests", async () => {
+    for (const { id, url } of publishedBuiltins()) {
+      // Identity, not deep equality: the alias must hand back the very object
+      // the built-in id resolves to, so both spellings share one registration
+      // downstream in Ajv.
+      expect(await loadSchema(url), url).toBe(await loadSchema(id));
+    }
+    expect(server.requests()).toEqual([]);
+  });
+
+  it("serves a published URL under --offline, with no cache configured", async () => {
+    // The consequence stress test 1 names: a published URL that only worked
+    // online would make docmeta strictly worse for anyone who used it.
+    for (const { id, url } of publishedBuiltins()) {
+      expect(await loadSchema(url, { offline: true }), url).toBe(
+        await loadSchema(id),
+      );
+    }
+    expect(server.requests()).toEqual([]);
+  });
+
+  it("classifies a published URL as a url — the alias is not a reclassification", () => {
+    const url = publishedBuiltins()[0]?.url ?? "";
+    expect(classifyRef(url).kind).toBe("url");
+    expect(isPublishedBuiltinUrl(url)).toBe(true);
+  });
+
+  it("does not alias a neighbouring path on the same host", async () => {
+    // A prefix check would swallow every URL under /docmeta/schemas/, including
+    // versions that do not exist. This one must stay an ordinary remote ref.
+    const notPublished =
+      "https://hawkeyexl.github.io/docmeta/schemas/okf/9.9.json";
+    expect(isPublishedBuiltinUrl(notPublished)).toBe(false);
+    await expect(loadSchema(notPublished)).rejects.toThrow();
+    expect(server.requests().map((r) => r.path)).toEqual([
+      "/docmeta/schemas/okf/9.9.json",
+    ]);
+  });
+
+  it("still refuses an integrity pin on a published URL", async () => {
+    // A deliberate non-change, pinned so it is a decision rather than an
+    // oversight. `loadSchema` refuses a pin on anything that is not a local
+    // file, and that guard runs before the alias — a published URL is served
+    // from the bundle, so there are no fetched bytes for a pin to hash, and a
+    // pin that silently verified nothing is worse than one that fails.
+    const url = publishedBuiltins()[0]?.url ?? "";
+    await expect(
+      loadSchema(url, {
+        pins: new Map([[url, { integrity: `sha256-${"0".repeat(64)}` }]]),
+      }),
+    ).rejects.toThrow(/integrity pin/);
   });
 });
