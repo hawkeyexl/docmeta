@@ -174,18 +174,52 @@ Print the values of one or more metadata fields from each file. Useful for
 scripted extraction. `get` reads and reports values; it does not validate.
 
 ```sh
-docmeta get <fields> [paths...] [options]
+docmeta get --fields <list> [paths...] [options]
+docmeta get [fields] [paths...] [options]
 ```
 
 ### Arguments
 
 | Argument | Description |
 |---|---|
-| `<fields>` | Comma-separated metadata field references to print. Each is a top-level key (`title`), a dot-notation path into nested objects and arrays (`author.name`, `tags.0`), or a [JSON Pointer](https://datatracker.ietf.org/doc/html/rfc6901) when prefixed with `/` (`/author/name`, `/tags/0`). **Required.** |
+| `[fields]` | Comma-separated metadata field references to print, when `--fields` is not used. Each is a top-level key (`title`), a dot-notation path into nested objects and arrays (`author.name`, `tags.0`), or a [JSON Pointer](https://datatracker.ietf.org/doc/html/rfc6901) when prefixed with `/` (`/author/name`, `/tags/0`). See [naming the fields](#naming-the-fields). |
 | `[paths...]` | Files, directories, or globs to read. Use `-` to read from stdin. Optional — falls back to config `paths:`. See the [shared input model](#shared-input-model). |
 
 A requested field that is absent from a file is reported as unset rather than
 as an error.
+
+#### Naming the fields
+
+The field list can be given either way, and there is one rule:
+
+> If `--fields` is present, **every** positional is a path. Otherwise the first
+> positional is the field list.
+
+```sh
+docmeta get title,type docs/intro.md          # positional field list
+docmeta get --fields title,type docs/intro.md # the flag; both positionals are paths
+docmeta get --fields title                    # no paths: config `paths:` applies
+```
+
+`--fields` is the same flag [`fill`](#fill) takes, and it is the unambiguous
+spelling: with it, nothing about a path can be mistaken for a field.
+
+Naming no fields at all is an error (exit 2) rather than an empty report. So is
+a *path* in the field-list position, which is the mistake the positional form
+invites:
+
+```console
+$ docmeta get docs/intro.md
+docmeta: "docs/intro.md" looks like a path, not a field list. Pass fields first
+(docmeta get title docs/intro.md) or use --fields.
+exit=2
+```
+
+A token is read as a path when it exists on disk, is a glob, ends in a
+[supported extension](/docmeta/reference/formats/), or contains a path
+separator. A field list is never mistaken for one: a comma-separated list and a
+leading-slash JSON Pointer are both recognized as fields, and `--fields` is the
+escape hatch for anything else.
 
 #### Nested fields
 
@@ -213,12 +247,14 @@ unaffected.
 
 | Option | Argument | Default | Description |
 |---|---|---|---|
+| `--fields` | `<list>` | the `[fields]` positional | Comma-separated fields to print. When given, **every** positional is a path. See [naming the fields](#naming-the-fields). |
 | `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
 | `--exclude` | `<glob>` | — | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
 | `--as` | `<format>` | — | Force an input [format](/docmeta/reference/formats/) (extractor name). Required when reading from stdin. |
-| `-f, --format` | `<pretty\|json>` | `pretty` | Output format. `github`, `sarif`, and `junit` are `validate`-only. An unknown value is an error (exit 2). |
+| `-f, --format` | `<pretty\|json>` | `pretty` | Output format. `sarif` and `junit` are `validate`-only, and `github` is available on `validate` and [`fill`](#fill). An unknown value is an error (exit 2). |
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). When set, the file must exist or docmeta exits 2. |
 | `--no-config` | — | off | Ignore any discovered config file and run on the [built-in default schema set](/docmeta/reference/schema-resolution/#precedence). `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
+| `-q, --quiet` | — | off | In `pretty` output, hide files where **every** requested field is unset. A file with any value present still prints, `(unset)` included — quiet hides files, never values. Has no effect on `json`. |
 | `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
 | `--no-gitignore` | — | on | Read files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
 | `--offline` | — | off | Accepted for parity with `validate` and `fill`. It has no effect here: `get` prints extracted values and never loads a schema, so it makes no network requests to suppress. |
@@ -235,8 +271,10 @@ requested field to its value; a requested field that is unset is omitted from
 
 ```sh
 docmeta get title,type docs/intro.md
+docmeta get --fields title,type docs/intro.md
 docmeta get author.name,/author/email docs/intro.md
 docmeta get type "**/*.md" -f json
+docmeta get owner "docs/**/*.md" -q          # only the files that set it
 cat page.md | docmeta get title - --as markdown
 ```
 
@@ -301,9 +339,10 @@ used, in both output formats.
 | `--no-cache` | — | cache on | Bypass the proposal cache in `.docmeta/cache`. |
 | `--max-cost-usd` | `<usd>` | — | Stop scheduling new files once this much has been spent. |
 | `--concurrency` | `<n>` | `4` | Files inferred in parallel. |
-| `-f, --format` | `<pretty\|json>` | `pretty` | Output format. `github`, `sarif`, and `junit` are `validate`-only: they describe *findings in files*, and `fill`'s output is *proposals with confidence scores*. An unknown value is an error (exit 2). |
+| `-f, --format` | `<pretty\|json\|github>` | `pretty` | Output format. `github` emits [one annotation per required property that could not be filled](#github-annotations). `sarif` and `junit` stay `validate`-only: they describe *findings in files*, and a skipped optional property is a proposal with a confidence score, not a finding. An unknown value is an error (exit 2). |
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). |
 | `--no-config` | — | off | Ignore any discovered config file and run on the [built-in default schema set](/docmeta/reference/schema-resolution/#precedence). `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
+| `-q, --quiet` | — | off | In `pretty` output, hide files with nothing written **and** nothing left undone. A file whose required property could not be filled, or that errored, always prints — those are the files that make the run exit 1. Has no effect on `json` or `github`. |
 | `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
 | `--no-gitignore` | — | on | Fill files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
 | `--offline` | — | off | Never fetch a remote schema, exactly as on [`validate`](#validate). It governs schema loading only — the inference provider is a separate network dependency, controlled by `--provider` and `--dry-run`. Overrides config `offline:`. |
@@ -361,12 +400,40 @@ filled confidently, or when any file errored, which is work still to do. Skipped
 *optional* properties are a normal outcome and leave the exit code at **0**. Usage
 and operational failures exit **2**, as elsewhere.
 
+### github annotations
+
+`-f github` reports the work `fill` could **not** do: one
+[workflow command](/docmeta/ci/exit-codes-and-annotations/#github) per property
+the schema requires that was not filled — exactly the set that drives exit 1.
+Optional skips stay silent, matching the exit-code rule.
+
+```text
+::error file=docs/api/legacy.md::[fill] /description is required and was not filled (confidence 0.42 is below the 0.7 threshold)
+```
+
+There is no `line=`. A proposal is about a property that is *missing* from the
+document, so there is nothing in the file to point at; GitHub anchors a
+file-only annotation to line 1.
+
+<Aside type="caution" title="Not with stdin">
+`docmeta fill - -f github` is a usage error (exit 2). With `-`, the filled
+document owns stdout and the report goes to stderr — where GitHub never reads
+`::error`. Annotations nobody can see would make a failing run look clean, so
+the combination is refused rather than silently degraded.
+</Aside>
+
+The format is available whether or not `--dry-run` is set: annotations describe
+what is still missing, which is as useful on a run that writes as on one that
+previews.
+
 ### Examples
 
 ```sh
 docmeta fill docs/ --dry-run                 # preview, write nothing
 docmeta fill docs/ --confidence 0.9          # only near-certain values
 docmeta fill page.md --fields description,tags
+docmeta fill docs/ -f github                 # annotate what it could not fill
+docmeta fill docs/ --dry-run -q              # only files with something to show
 cat page.md | docmeta fill - --as markdown   # filled document to stdout
 ```
 
@@ -384,7 +451,7 @@ docmeta schemas [options]
 
 | Option | Argument | Default | Description |
 |---|---|---|---|
-| `-f, --format` | `<pretty\|json>` | `pretty` | Output format. Anything else is a usage error (exit `2`), including `github`, `sarif`, and `junit` — those are [`validate`-only](/docmeta/ci/exit-codes-and-annotations/#output-formats). |
+| `-f, --format` | `<pretty\|json>` | `pretty` | Output format. Anything else is a usage error (exit `2`), including `github`, `sarif`, and `junit` — see [which command produces which format](/docmeta/ci/exit-codes-and-annotations/#output-formats). |
 
 In `pretty` format, `schemas` lists each built-in schema by id and title, then
 each input format with its extensions, whether it is implemented, and whether
@@ -575,6 +642,10 @@ with `No files matched` (exit 2) rather than reporting a green zero.
 {/* step {"description":"Shared input model: - reads stdin, with --as choosing the extractor.","runShell":{"command":"docmeta validate - --as markdown < test/fixtures/valid.md","exitCodes":[0],"stdio":"<stdin>"}} */}
 {/* step {"description":"get -f json prints an array of { file, present, values }.","runShell":{"command":"docmeta get title,type test/fixtures/valid.md -f json","exitCodes":[0],"stdio":"/\"present\": true[\\s\\S]*\"type\": \"concept\"/"}} */}
 {/* step {"description":"get reports an absent field as unset (pretty) and present:false for a file with no metadata block.","runShell":{"command":"docmeta get title test/fixtures/no-frontmatter.md","exitCodes":[0],"stdio":"title=(unset)"}} */}
+{/* step {"description":"--fields is the flag form; with it, every positional is a path.","runShell":{"command":"docmeta get --fields title,type test/fixtures/valid.md","exitCodes":[0],"stdio":"title=A Valid Document"}} */}
+{/* step {"description":"-q hides a file where every requested field is unset, so nothing is printed at all.","runShell":{"command":"docmeta get title test/fixtures/no-frontmatter.md -q","exitCodes":[0],"stdio":"/^$/"}} */}
+{/* step {"description":"A path in the field-list position names the real mistake instead of reporting the paths as missing (exit 2).","runShell":{"command":"docmeta get test/fixtures/valid.md","exitCodes":[2],"stdio":"looks like a path, not a field list"}} */}
+{/* step {"description":"Naming no fields at all is an operational error, not an empty report (exit 2).","runShell":{"command":"docmeta get","exitCodes":[2],"stdio":"Specify at least one field"}} */}
 {/* step {"description":"Nested fields: dot-notation, JSON Pointer (/author/email), and array index all resolve in one comma-separated request.","runShell":{"command":"docmeta get author.name,/author/email,tags.0 test/fixtures/nested/doc.md -f json","exitCodes":[0],"stdio":"/\"Jane\"[\\s\\S]*\"jane@example.com\"[\\s\\S]*\"intro\"/"}} */}
 {/* step {"description":"Requesting a parent key returns the whole nested object.","runShell":{"command":"docmeta get author test/fixtures/nested/doc.md -f json","exitCodes":[0],"stdio":"/\"name\": \"Jane\"[\\s\\S]*\"email\": \"jane@example.com\"/"}} */}
 {/* step {"description":"An explicitly named file is validated whether or not .gitignore covers it, and --no-gitignore is accepted on validate.","runShell":{"command":"docmeta validate test/fixtures/valid.md --no-gitignore -s google:okf:0.1","exitCodes":[0],"stdio":"1 passed"}} */}
@@ -585,7 +656,9 @@ with `No files matched` (exit 2) rather than reporting a green zero.
 {/* step {"description":"fill follows the shared input model: no paths and no config is an operational error (exit 2).","runShell":{"command":"docmeta fill","exitCodes":[2],"stdio":"No files"}} */}
 {/* step {"description":"fill rejects a non-numeric --confidence before contacting a provider (exit 2).","runShell":{"command":"docmeta fill test/fixtures/valid.md --confidence abc","exitCodes":[2],"stdio":"--confidence"}} */}
 {/* step {"description":"fill rejects an out-of-range --confidence (exit 2).","runShell":{"command":"docmeta fill test/fixtures/valid.md --confidence 1.5","exitCodes":[2],"stdio":"between 0 and 1"}} */}
-{/* step {"description":"fill has no github output format (exit 2).","runShell":{"command":"docmeta fill test/fixtures/valid.md -f github","exitCodes":[2],"stdio":"Unknown --format"}} */}
+{/* step {"description":"fill accepts -f github, and says so in --help. --provider mock --dry-run keeps this away from a real provider: with auto, a machine with no key detects llama-cpp and downloads model weights.","runShell":{"command":"docmeta fill test/fixtures/valid.md -f github --provider mock --dry-run --no-cache","exitCodes":[0]}} */}
+{/* step {"description":"fill still refuses sarif and junit, which describe findings rather than proposals (exit 2).","runShell":{"command":"docmeta fill test/fixtures/valid.md -f sarif --provider mock --dry-run --no-cache","exitCodes":[2],"stdio":"Unknown --format"}} */}
+{/* step {"description":"-f github with stdin is refused: the filled document owns stdout, so the annotations would land on stderr where GitHub ignores them (exit 2).","runShell":{"command":"docmeta fill - --as markdown -f github --provider mock --dry-run --no-cache < test/fixtures/valid.md","exitCodes":[2],"stdio":"stdout"}} */}
 {/* step {"description":"fill rejects an unknown provider before reading any file (exit 2).","runShell":{"command":"docmeta fill test/fixtures/valid.md --provider antropic","exitCodes":[2],"stdio":"antropic"}} */}
 {/* step {"description":"A model with no provider is ambiguous, and fails before the run starts (exit 2).","runShell":{"command":"docmeta fill test/fixtures/valid.md --model gpt-4o-mini","exitCodes":[2],"stdio":"provider"}} */}
 {/* Everything above stops before inference. The three below actually run it, using
