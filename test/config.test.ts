@@ -529,3 +529,83 @@ describe("schemas: the object form (0008)", () => {
     ).toThrow(DocmetaError);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 0015 — `schemaTrust:`, the trust boundary for document-supplied refs
+// ---------------------------------------------------------------------------
+
+describe("config: schemaTrust", () => {
+  it("parses documentRefs and hosts", () => {
+    expect(
+      parseConfig(
+        "schemaTrust:\n  documentRefs: local\n",
+        "docmeta.config.yaml",
+      ).schemaTrust,
+    ).toEqual({ documentRefs: "local" });
+    expect(
+      parseConfig(
+        "schemaTrust:\n  documentRefs: any\n  hosts:\n    - schemas.example.com\n",
+        "docmeta.config.yaml",
+      ).schemaTrust,
+    ).toEqual({ documentRefs: "any", hosts: ["schemas.example.com"] });
+  });
+
+  it("accepts every documented mode", () => {
+    for (const mode of ["any", "local", "none"]) {
+      expect(
+        parseConfig(`schemaTrust:\n  documentRefs: ${mode}\n`, "c.yaml")
+          .schemaTrust?.documentRefs,
+      ).toBe(mode);
+    }
+  });
+
+  it("is undefined when absent, so the default stays in one place", () => {
+    expect(
+      parseConfig("paths: ['a.md']\n", "docmeta.config.yaml").schemaTrust,
+    ).toBeUndefined();
+  });
+
+  it("rejects a non-mapping", () => {
+    expect(() => parseConfig("schemaTrust: local\n", "c.yaml")).toThrow(
+      /"schemaTrust" must be a mapping/,
+    );
+  });
+
+  // The failure worth catching: a misspelled nested key would otherwise be
+  // dropped in silence, leaving a config that reads as guarded and is not.
+  it("rejects an unknown key inside the mapping", () => {
+    expect(() =>
+      parseConfig("schemaTrust:\n  documentRef: local\n", "c.yaml"),
+    ).toThrow(/unknown key "documentRef"/);
+    expect(() =>
+      parseConfig("schemaTrust:\n  documentRef: local\n", "c.yaml"),
+    ).toThrow(/documentRefs, hosts/);
+  });
+
+  it("rejects a documentRefs value outside the three modes", () => {
+    expect(() =>
+      parseConfig("schemaTrust:\n  documentRefs: strict\n", "c.yaml"),
+    ).toThrow(/"schemaTrust.documentRefs" must be one of/);
+    expect(() =>
+      parseConfig("schemaTrust:\n  documentRefs: true\n", "c.yaml"),
+    ).toThrow(DocmetaError);
+  });
+
+  it("rejects hosts that is not a list of non-empty strings", () => {
+    expect(() =>
+      parseConfig("schemaTrust:\n  hosts: schemas.example.com\n", "c.yaml"),
+    ).toThrow(/"schemaTrust.hosts" must be a list/);
+    expect(() =>
+      parseConfig("schemaTrust:\n  hosts:\n    - 42\n", "c.yaml"),
+    ).toThrow(/"schemaTrust.hosts" must be a list/);
+    expect(() =>
+      parseConfig("schemaTrust:\n  hosts:\n    - '  '\n", "c.yaml"),
+    ).toThrow(DocmetaError);
+  });
+
+  it("carries a remedy in the message, not just a rule", () => {
+    expect(() =>
+      parseConfig("schemaTrust:\n  documentRefs: strict\n", "c.yaml"),
+    ).toThrow(/documentRefs: any/);
+  });
+});
