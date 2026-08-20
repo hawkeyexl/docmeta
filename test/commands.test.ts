@@ -1226,6 +1226,54 @@ describe("0015 · a document opting out of the repo's standard", () => {
     expect(byFile(results)).toEqual({ "contributed.md": true, "honest.md": false });
   });
 
+  it("does not let one document take the whole run down", async () => {
+    // A document may point `$schema` at any file in the repository — that is
+    // the feature. If that file will not load, the failure belongs to *that
+    // document*, exactly like the refusals above.
+    //
+    // It used to escape as an operational error: exit 2, the run aborted, and
+    // nothing reported about any file at all. So a contributor who could no
+    // longer sneak a document past the gate could still take the gate down, by
+    // naming any non-JSON file in the repo — a README would do.
+    dir = makeTempRepo({
+      files: {
+        "docmeta.config.yaml": "schemas:\n  - google:okf:0.1\n",
+        "notes.txt": "not json at all\n",
+        "saboteur.md": "---\ntitle: Saboteur\n$schema: ./notes.txt\n---\n",
+        "honest.md": HONEST_DOC,
+      },
+    });
+    const { results } = await runValidate({ inputs: ["*.md"], cwd: dir });
+
+    // Both files were reported. Before, neither was.
+    expect(results).toHaveLength(2);
+    const bad = results.find((r) => r.file.endsWith("saboteur.md"));
+    expect(bad?.errors[0]?.keyword).toBe("schema");
+    expect(bad?.errors[0]?.message).toMatch(/not valid JSON/);
+    // And the bytes still do not come along for the ride.
+    expect(bad?.errors[0]?.message).not.toMatch(/not json at all/);
+
+    const honest = results.find((r) => r.file.endsWith("honest.md"));
+    expect(honest?.schemas).toEqual(["google:okf:0.1"]);
+    expect(honest?.errors[0]?.keyword).toBe("required");
+  });
+
+  it("still aborts when the config names a schema that will not load", async () => {
+    // The other side, and the reason this is scoped to document-supplied refs:
+    // a broken schema the *operator* configured is not one document's problem,
+    // it invalidates every file in the run. That must stay operational.
+    dir = makeTempRepo({
+      files: {
+        "docmeta.config.yaml": "schemas:\n  - ./notes.txt\n",
+        "notes.txt": "not json at all\n",
+        "honest.md": HONEST_DOC,
+      },
+    });
+    await expect(
+      runValidate({ inputs: ["*.md"], cwd: dir }),
+    ).rejects.toBeInstanceOf(DocmetaError);
+  });
+
   it("flips under `schemaTrust.documentRefs: local`", async () => {
     const url = await buildRepo("schemaTrust:\n  documentRefs: local\n");
     const { results } = await runValidate({ inputs: ["*.md"], cwd: dir! });
@@ -1305,15 +1353,19 @@ describe("0015 · Ajv does not chase a $ref out of a fetched schema", () => {
     const cwd = await mkdtemp(join(tmpdir(), "docmeta-ajv-ref-"));
     try {
       const url = `${server.url}/chains.json`;
-      const run = runValidate({
+      const { results } = await runValidate({
         inputs: ["-"],
         as: "markdown",
         stdinContent: `---\n$schema: ${url}\ntitle: t\n---\n`,
         cwd,
       });
-      await expect(run).rejects.toBeInstanceOf(DocmetaError);
-      await expect(run).rejects.toThrow(/failed to compile/);
-      await expect(run).rejects.toThrow(/resolve reference/);
+      // Reported against the document that named it, not thrown: the schema
+      // came from the document, so the failure is that document's. What this
+      // test is really pinning is the *reason* it failed.
+      const err = results[0]?.errors[0];
+      expect(err?.keyword).toBe("schema");
+      expect(err?.message).toMatch(/failed to compile/);
+      expect(err?.message).toMatch(/resolve reference/);
       // The fetch that mattered happened once, for the schema itself. Nothing
       // went looking for the reference it names.
       expect(server.hits("/chains.json")).toBe(1);

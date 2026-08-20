@@ -42,8 +42,9 @@ import {
 } from "../core/config.js";
 import {
   collectSchemaPins,
-  resolveSchemaSet,
+  resolveSchemaSetWithSource,
   FILE_SCHEMA_KEY,
+  type ResolvedSchemaSet,
 } from "../core/resolve-schema.js";
 import { Validator } from "../core/validator.js";
 import { schemaLoadOptions } from "../core/schema-registry.js";
@@ -307,9 +308,9 @@ export async function runValidate(
       return;
     }
 
-    let schemaSet: string[];
+    let resolved: ResolvedSchemaSet;
     try {
-      schemaSet = resolveSchemaSet({
+      resolved = resolveSchemaSetWithSource({
         filePath: label,
         fileSchema: extracted.data[FILE_SCHEMA_KEY],
         cliSchemas: opts.cliSchemas,
@@ -328,11 +329,33 @@ export async function runValidate(
       return;
     }
 
-    const errors = await validator.validate(
-      extracted.data,
-      schemaSet,
-      extracted.lineFor,
-    );
+    const schemaSet = resolved.schemas;
+    let errors: FieldError[];
+    try {
+      errors = await validator.validate(
+        extracted.data,
+        schemaSet,
+        extracted.lineFor,
+      );
+    } catch (err) {
+      // A schema the *document* chose failing to load — unparseable, missing,
+      // integrity mismatch — is that document's failure, and is filed as one.
+      // Letting it escape meant a single contributed file naming any non-JSON
+      // path in the repo aborted the whole run: exit 2, and nothing reported
+      // about any file, including the ones that were fine.
+      //
+      // Every other source stays operational on purpose. A schema the operator
+      // configured is not one document's problem; it invalidates the run, and
+      // reporting it per-file would repeat the same error once per document
+      // while implying the documents were at fault.
+      if (!(err instanceof DocmetaError) || resolved.source !== "document") {
+        throw err;
+      }
+      results.push(
+        parseErrorResult(label, extractor.name, err.message, "schema"),
+      );
+      return;
+    }
     results.push({
       file: label,
       format: extractor.name,

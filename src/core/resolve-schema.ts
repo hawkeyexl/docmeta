@@ -302,10 +302,41 @@ function assertDocumentRefAllowed(
   );
 }
 
-export function resolveSchemaSet(params: ResolveParams): string[] {
+/** Which precedence level produced a schema set. */
+export type SchemaSetSource =
+  | "cli"
+  | "document"
+  | "override"
+  | "config"
+  | "default";
+
+export interface ResolvedSchemaSet {
+  schemas: string[];
+  source: SchemaSetSource;
+}
+
+/**
+ * `resolveSchemaSet`, plus the branch that won.
+ *
+ * The caller needs this to answer one question: if a ref in this set fails to
+ * *load*, whose problem is it? A schema the **document** chose is that
+ * document's problem and belongs in its own finding. A schema the **operator**
+ * configured invalidates every file in the run, so it stays operational and
+ * aborts. Without the source those two are indistinguishable by the time a
+ * `DocmetaError` comes back from `loadSchema`, and both aborted — which let one
+ * contributed document take down validation of every other file.
+ *
+ * Kept as a separate export rather than widening `resolveSchemaSet`'s return,
+ * which is public API and is what every existing caller wants.
+ */
+export function resolveSchemaSetWithSource(
+  params: ResolveParams,
+): ResolvedSchemaSet {
   const { filePath, fileSchema, cliSchemas, config } = params;
 
-  if (cliSchemas && cliSchemas.length > 0) return dedupe(cliSchemas);
+  if (cliSchemas && cliSchemas.length > 0) {
+    return { schemas: dedupe(cliSchemas), source: "cli" };
+  }
 
   const fromFile = coerceFileSchema(fileSchema);
   if (fromFile && fromFile.length > 0) {
@@ -319,21 +350,28 @@ export function resolveSchemaSet(params: ResolveParams): string[] {
       );
     } else {
       for (const ref of fromFile) assertDocumentRefAllowed(ref, mode, params);
-      return dedupe(fromFile);
+      return { schemas: dedupe(fromFile), source: "document" };
     }
   }
 
   if (config?.overrides) {
     for (const ov of config.overrides) {
       if (matches(ov.files, filePath) && ov.schemas.length > 0) {
-        return dedupe(ov.schemas);
+        return { schemas: dedupe(ov.schemas), source: "override" };
       }
     }
   }
 
   if (config?.schemas && config.schemas.length > 0) {
-    return dedupe(config.schemas.map(schemaEntryRef));
+    return {
+      schemas: dedupe(config.schemas.map(schemaEntryRef)),
+      source: "config",
+    };
   }
 
-  return [...DEFAULT_SCHEMAS];
+  return { schemas: [...DEFAULT_SCHEMAS], source: "default" };
+}
+
+export function resolveSchemaSet(params: ResolveParams): string[] {
+  return resolveSchemaSetWithSource(params).schemas;
 }
