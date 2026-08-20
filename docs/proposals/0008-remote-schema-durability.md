@@ -1,6 +1,6 @@
 # 0008 — Remote schema durability: vendoring, integrity, offline
 
-- **Status:** Proposed
+- **Status:** Implemented
 - **Serves:** Devin · D2 "Govern one schema across many repos"
 - **Touches:** `src/core/schema-registry.ts`, `src/core/config.ts`, `src/cli.ts`, new `docmeta schemas vendor`
 - **Relates to:** [0009](0009-publish-builtin-schemas.md) (which creates more URL refs to be durable about)
@@ -239,3 +239,62 @@ kind of detail that produces a cache that never expires.
    `reference/configuration.mdx` (`schemaCache`, object form of `schemas`), and
    `ci/govern-shared-schema.mdx`, which should be rewritten to lead with vendoring
    rather than a bare URL.
+
+## What shipped, and what changed on the way
+
+Delivered in three PRs: the payload guard, size cap, in-flight dedup and
+timeout-message fix; the cross-run cache and `--offline`; then vendoring,
+integrity pins, and `docmeta schemas vendor`.
+
+Design changes, each against the stress test that produced it:
+
+- **§7 (where vendored schemas live) — followed, and enforced rather than
+  documented.** `--dir` defaults to `./schema`, and the command asks `git
+  check-ignore` about the target *before* it downloads anything, exiting 2
+  without writing. Two spellings are checked, the file and its directory,
+  because a directory-only pattern (`vendor/`) does not match the bare path
+  while the directory does not yet exist — git can only answer for the file
+  underneath it. Where git cannot answer at all (no repository, no `git` on
+  `PATH`) the command proceeds and says so, since refusing every
+  non-repository would make it unusable in an extracted tarball.
+
+- **§2 (integrity vs. a moving URL) — resolved as proposed, and narrowed.**
+  `integrity` is opt-in and written by `vendor`. It is now also **rejected on a
+  built-in id or a URL**, at config-parse time and again in `loadSchema`: a
+  built-in has no bytes on disk, and a URL may legitimately be served from the
+  schema cache, which stores the parsed schema rather than what the server
+  sent. Either would have been a pin nothing could ever verify — a config that
+  reads as pinned and is not.
+
+- **One algorithm, one encoding.** `sha256-<64 hex characters>` and nothing
+  else. Every additional accepted form is another state the mismatch message
+  has to be right about, and docmeta writes these strings itself.
+
+- **A line-ending diagnosis, not anticipated by any stress test.** A vendored
+  schema is committed, so `core.autocrlf` (or a `*.json text` attribute) can
+  hand a checkout different bytes from the ones that were downloaded — a
+  mismatch on a file nobody edited. Reported as "the contents differ only in
+  line endings" with a `.gitattributes` remedy, checked in both directions,
+  because the pin survives but the bytes it was taken from do not.
+
+- **`resolveSchemaSet` still returns `string[]`.** The ref string is what every
+  report, every baseline fingerprint, and `Validator`'s compile cache key are
+  made of. `{source, integrity}` travels in a separate ref→pin map built from
+  the *rebased* config, so both sides spell a local path identically.
+
+- **`asSchemaList` is a separate parser.** `asStringList` also validates
+  `paths`, `exclude`, and `overrides[].schemas`; widening it in place would
+  have widened all four. An unknown key in the mapping form is rejected rather
+  than ignored, because a typo'd `intergrity:` is the one failure here that is
+  silent by default.
+
+- **The CLI drift check learned to recurse.** `scripts/check-cli-reference.mjs`
+  walked `program.commands` only and its doc-heading regex rejected a space, so
+  a subcommand was unverified in both directions at once. Both fixed;
+  `-f, --format` deliberately stays on the parent `schemas`, and bare `docmeta
+  schemas` remains a default action rather than group help.
+
+Out of scope and still open: **§6**, a document's own `$schema` naming an
+arbitrary URL and bypassing `schemas:` entirely. `--offline` mitigates it by
+accident; the code comment saying so is in `LoadSchemaOptions.offline` and
+should be removed by whoever writes 0015.

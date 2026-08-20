@@ -8,8 +8,8 @@
  */
 import { isAbsolute, resolve } from "node:path";
 import picomatch from "picomatch";
-import type { DocmetaConfig } from "./config.js";
-import { classifyRef } from "./schema-registry.js";
+import type { DocmetaConfig, SchemaEntry } from "./config.js";
+import { classifyRef, type SchemaPin } from "./schema-registry.js";
 
 /**
  * Applied when nothing else resolves. Seven-Action is safe to include here
@@ -23,6 +23,45 @@ export const DEFAULT_SCHEMAS: readonly string[] = Object.freeze([
   "passo-uno:seven-action:1.0",
 ]);
 export const FILE_SCHEMA_KEY = "$schema";
+
+/**
+ * The reference a `schemas:` entry loads, in either form.
+ *
+ * The ref *string* is what `resolveSchemaSet` returns and therefore what every
+ * report names, what every baseline fingerprint is taken over, and what keys
+ * `Validator`'s compile cache. Widening those to carry a mapping would have
+ * changed all three; the `{source, integrity}` sidecar travels separately, in
+ * the pin map below.
+ */
+export function schemaEntryRef(entry: SchemaEntry): string {
+  return typeof entry === "string" ? entry : entry.ref;
+}
+
+/**
+ * The ref → pin map for a config, for `loadSchema` to consult.
+ *
+ * Only entries that actually carry `source` or `integrity` are recorded, so a
+ * config written entirely in the string form produces an empty map and nothing
+ * about how it loads changes.
+ *
+ * Keyed on the ref exactly as `resolveSchemaSet` will hand it to `loadSchema`,
+ * which means this must be built from the **rebased** config — the same
+ * absolute spelling on both sides, or the pin silently fails to apply.
+ */
+export function collectSchemaPins(
+  config: DocmetaConfig | null | undefined,
+): Map<string, SchemaPin> {
+  const pins = new Map<string, SchemaPin>();
+  for (const entry of config?.schemas ?? []) {
+    if (typeof entry === "string") continue;
+    if (entry.source === undefined && entry.integrity === undefined) continue;
+    pins.set(entry.ref, {
+      ...(entry.source !== undefined ? { source: entry.source } : {}),
+      ...(entry.integrity !== undefined ? { integrity: entry.integrity } : {}),
+    });
+  }
+  return pins;
+}
 
 /**
  * Re-point a config's **local file** schema refs at the config's own directory.
@@ -64,9 +103,29 @@ export function rebaseConfigSchemaRefs(
       ? resolve(configDir, ref)
       : ref;
 
+  /**
+   * The mapping form rebases its `ref` for the same reason a string does, and
+   * its `source` too when that is itself a local path — a schema vendored from
+   * a checkout elsewhere on disk names a file the config's author could see,
+   * not one the caller's working directory can.
+   *
+   * A `source` that is a URL passes through `rebase` untouched, so no branch is
+   * needed here for it.
+   */
+  const rebaseEntry = (entry: SchemaEntry): SchemaEntry =>
+    typeof entry === "string"
+      ? rebase(entry)
+      : {
+          ...entry,
+          ref: rebase(entry.ref),
+          ...(entry.source !== undefined
+            ? { source: rebase(entry.source) }
+            : {}),
+        };
+
   return {
     ...config,
-    ...(config.schemas ? { schemas: config.schemas.map(rebase) } : {}),
+    ...(config.schemas ? { schemas: config.schemas.map(rebaseEntry) } : {}),
     ...(config.overrides
       ? {
           overrides: config.overrides.map((o) => ({
@@ -131,7 +190,9 @@ export function resolveSchemaSet(params: ResolveParams): string[] {
     }
   }
 
-  if (config?.schemas && config.schemas.length > 0) return dedupe(config.schemas);
+  if (config?.schemas && config.schemas.length > 0) {
+    return dedupe(config.schemas.map(schemaEntryRef));
+  }
 
   return [...DEFAULT_SCHEMAS];
 }

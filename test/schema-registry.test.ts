@@ -8,6 +8,8 @@ import {
   afterEach,
 } from "vitest";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
+import { Buffer } from "node:buffer";
 import {
   mkdtempSync,
   readdirSync,
@@ -20,6 +22,7 @@ import { dirname, join } from "node:path";
 import {
   listBuiltins,
   classifyRef,
+  fetchSchemaBytes,
   loadSchema,
 } from "../src/core/schema-registry.js";
 import { SchemaCache } from "../src/core/schema-cache.js";
@@ -753,5 +756,164 @@ describe("loadSchema over http(s) — offline with the cache disabled", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0008 — integrity pins on a vendored (local file) schema
+// ---------------------------------------------------------------------------
+
+describe("integrity pins (0008)", () => {
+  let dir: string;
+  let file: string;
+  const BODY = '{\n  "type": "object",\n  "required": ["type"]\n}\n';
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "docmeta-pin-"));
+    file = join(dir, "house.json");
+    writeFileSync(file, BODY);
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  const pinFor = (contents: string): string =>
+    `sha256-${createHash("sha256").update(Buffer.from(contents, "utf8")).digest("hex")}`;
+
+  const pins = (pin: { source?: string; integrity?: string }) =>
+    new Map([[file, pin]]);
+
+  it("loads a file whose bytes match the pin", async () => {
+    const schema = await loadSchema(file, {
+      pins: pins({ integrity: pinFor(BODY) }),
+    });
+    expect(schema.required).toEqual(["type"]);
+  });
+
+  it("loads a file with a source recorded but no pin", async () => {
+    const schema = await loadSchema(file, {
+      pins: pins({ source: "https://e.example/house.json" }),
+    });
+    expect(schema.type).toBe("object");
+  });
+
+  // The whole point: a changed vendored copy is loud, never a silent fallback
+  // to whatever is on disk.
+  it("fails loudly when the bytes do not match", async () => {
+    writeFileSync(file, '{"type":"object"}');
+    const err = await loadSchema(file, {
+      pins: pins({
+        integrity: pinFor(BODY),
+        source: "https://e.example/house.json",
+      }),
+    }).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(DocmetaError);
+    expect(err.message).toMatch(/does not match its recorded integrity/);
+    expect(err.message).toContain(pinFor(BODY));
+    expect(err.message).toContain(pinFor('{"type":"object"}'));
+    expect(err.message).toMatch(/contents have changed/);
+    expect(err.message).toContain("docmeta schemas vendor https://e.example/house.json");
+  });
+
+  // A committed schema plus `core.autocrlf` is a mismatch on a file nobody
+  // edited. Reporting it as "contents have changed" is accurate for the other
+  // case and useless for this one, which is how a user ends up deleting the pin.
+  it("names a line-ending difference as such", async () => {
+    writeFileSync(file, BODY.replace(/\n/g, "\r\n"));
+    const err = await loadSchema(file, {
+      pins: pins({ integrity: pinFor(BODY) }),
+    }).catch((e: Error) => e);
+    expect(err.message).toMatch(/differ only in line endings/);
+    expect(err.message).toContain(".gitattributes");
+    expect(err.message).not.toMatch(/contents have changed/);
+  });
+
+  it("names the line-ending case in the other direction too", async () => {
+    // Vendored from a host that served CRLF, checked out as LF.
+    writeFileSync(file, BODY);
+    const err = await loadSchema(file, {
+      pins: pins({ integrity: pinFor(BODY.replace(/\n/g, "\r\n")) }),
+    }).catch((e: Error) => e);
+    expect(err.message).toMatch(/differ only in line endings/);
+  });
+
+  it("advises differently when no source was recorded", async () => {
+    writeFileSync(file, '{"type":"string"}');
+    const err = await loadSchema(file, {
+      pins: pins({ integrity: pinFor(BODY) }),
+    }).catch((e: Error) => e);
+    expect(err.message).toMatch(/Restore the file from version control/);
+    expect(err.message).not.toMatch(/vendor https/);
+  });
+
+  it("names the source when a vendored file is missing entirely", async () => {
+    rmSync(file);
+    const err = await loadSchema(file, {
+      pins: pins({
+        integrity: pinFor(BODY),
+        source: "https://e.example/house.json",
+      }),
+    }).catch((e: Error) => e);
+    expect(err.message).toMatch(/Schema file not found/);
+    expect(err.message).toContain("vendored from https://e.example/house.json");
+  });
+
+  it("rejects an unverifiable pin rather than ignoring it", async () => {
+    const err = await loadSchema(file, {
+      pins: pins({ integrity: "sha512-abc" }),
+    }).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(DocmetaError);
+    expect(err.message).toMatch(/cannot verify/);
+  });
+
+  // A pin on a URL or a built-in can never be checked, so accepting one would
+  // leave a config that reads as pinned and is not.
+  it("refuses a pin on a reference that is not a local file", async () => {
+    const onUrl = await loadSchema("https://e.example/s.json", {
+      pins: new Map([
+        ["https://e.example/s.json", { integrity: pinFor(BODY) }],
+      ]),
+    }).catch((e: Error) => e);
+    expect(onUrl).toBeInstanceOf(DocmetaError);
+    expect(onUrl.message).toMatch(/only be verified against a local file/);
+
+    const onBuiltin = await loadSchema("google:okf:0.1", {
+      pins: new Map([["google:okf:0.1", { integrity: pinFor(BODY) }]]),
+    }).catch((e: Error) => e);
+    expect(onBuiltin).toBeInstanceOf(DocmetaError);
+    expect(onBuiltin.message).toMatch(/built-in id/);
+  });
+
+  it("leaves an unpinned reference exactly as it was", async () => {
+    writeFileSync(file, '{"type":"object"}');
+    const schema = await loadSchema(file, { pins: new Map() });
+    expect(schema.type).toBe("object");
+  });
+});
+
+describe("fetchSchemaBytes (0008)", () => {
+  let server: SchemaServer;
+  // Deliberately not pretty-printed: `vendor` writes exactly what the server
+  // sent, so the bytes have to survive the round trip unaltered.
+  const RAW = '{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object"}';
+
+  beforeAll(async () => {
+    server = await startSchemaServer({
+      "/raw.json": { body: RAW },
+      "/envelope.json": { json: { error: "not found" } },
+    });
+  });
+  afterAll(async () => server.close());
+
+  it("returns the exact bytes alongside the parsed schema", async () => {
+    const got = await fetchSchemaBytes(`${server.url}/raw.json`);
+    expect(got.bytes.toString("utf8")).toBe(RAW);
+    expect(got.schema.type).toBe("object");
+  });
+
+  // Vendoring an error envelope would commit a schema that passes every
+  // document, so the payload guard has to apply on this path too.
+  it("applies the payload guard", async () => {
+    await expect(
+      fetchSchemaBytes(`${server.url}/envelope.json`),
+    ).rejects.toBeInstanceOf(DocmetaError);
   });
 });

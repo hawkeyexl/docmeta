@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
+import { resolve } from "node:path";
 import {
+  collectSchemaPins,
+  rebaseConfigSchemaRefs,
   resolveSchemaSet,
   DEFAULT_SCHEMAS,
 } from "../src/core/resolve-schema.js";
@@ -82,5 +85,78 @@ describe("resolveSchemaSet", () => {
     expect(() =>
       resolveSchemaSet({ filePath: "x.md", fileSchema: 42 }),
     ).toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0008 — the mapping form of a `schemas:` entry
+// ---------------------------------------------------------------------------
+
+const PIN = `sha256-${"b".repeat(64)}`;
+
+describe("mapping-form schema entries (0008)", () => {
+  it("resolves to the ref string, so reports and baselines are unchanged", () => {
+    const set = resolveSchemaSet({
+      filePath: "a.md",
+      config: {
+        schemas: [
+          { ref: "./schema/house.json", source: "https://e.example/h.json", integrity: PIN },
+          "google:okf:0.1",
+        ],
+      },
+    });
+    expect(set).toEqual(["./schema/house.json", "google:okf:0.1"]);
+  });
+
+  it("collects pins keyed on the ref, skipping entries that carry none", () => {
+    const pins = collectSchemaPins({
+      schemas: [
+        "google:okf:0.1",
+        { ref: "./bare.json" },
+        { ref: "./pinned.json", integrity: PIN },
+        { ref: "./sourced.json", source: "https://e.example/s.json" },
+      ],
+    });
+    expect([...pins.keys()]).toEqual(["./pinned.json", "./sourced.json"]);
+    expect(pins.get("./pinned.json")).toEqual({ integrity: PIN });
+    expect(pins.get("./sourced.json")).toEqual({
+      source: "https://e.example/s.json",
+    });
+  });
+
+  it("collects nothing from a string-only config", () => {
+    expect(collectSchemaPins({ schemas: ["google:okf:0.1"] }).size).toBe(0);
+    expect(collectSchemaPins(null).size).toBe(0);
+  });
+
+  // The pin map is keyed on the ref `loadSchema` will be handed, so rebasing
+  // has to move both or the pin silently stops applying.
+  it("rebases the mapping form's ref, and a source that is a local path", () => {
+    const configDir = resolve("/repo");
+    const rebased = rebaseConfigSchemaRefs(
+      {
+        schemas: [
+          { ref: "./schema/house.json", source: "../vendor/house.json", integrity: PIN },
+          { ref: "./plain.json", source: "https://e.example/h.json" },
+          "google:okf:0.1",
+        ],
+      },
+      configDir,
+      resolve("/elsewhere"),
+    );
+    expect(rebased.schemas?.[0]).toEqual({
+      ref: resolve(configDir, "schema/house.json"),
+      source: resolve(configDir, "../vendor/house.json"),
+      integrity: PIN,
+    });
+    // A URL source has no base to rebase against and must pass through.
+    expect(rebased.schemas?.[1]).toEqual({
+      ref: resolve(configDir, "plain.json"),
+      source: "https://e.example/h.json",
+    });
+    expect(rebased.schemas?.[2]).toBe("google:okf:0.1");
+
+    const pins = collectSchemaPins(rebased);
+    expect(pins.has(resolve(configDir, "schema/house.json"))).toBe(true);
   });
 });

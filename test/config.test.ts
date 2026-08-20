@@ -400,3 +400,132 @@ describe("schemaCache.ttlHours upper bound", () => {
     ).toThrow(DocmetaError);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 0008 — `schemas:` entries widen to `string | { ref, source?, integrity? }`
+// ---------------------------------------------------------------------------
+
+const PIN = `sha256-${"a".repeat(64)}`;
+
+describe("schemas: the object form (0008)", () => {
+  it("still accepts a plain list of strings", () => {
+    const cfg = parseConfig("schemas:\n  - google:okf:0.1\n", "c.yaml");
+    expect(cfg.schemas).toEqual(["google:okf:0.1"]);
+  });
+
+  it("accepts a mapping with ref, source, and integrity", () => {
+    const cfg = parseConfig(
+      [
+        "schemas:",
+        "  - ref: ./schema/house.json",
+        "    source: https://schemas.example.com/house/2.1.json",
+        `    integrity: "${PIN}"`,
+      ].join("\n"),
+      "c.yaml",
+    );
+    expect(cfg.schemas).toEqual([
+      {
+        ref: "./schema/house.json",
+        source: "https://schemas.example.com/house/2.1.json",
+        integrity: PIN,
+      },
+    ]);
+  });
+
+  it("accepts strings and mappings side by side", () => {
+    const cfg = parseConfig(
+      [
+        "schemas:",
+        "  - google:okf:0.1",
+        "  - ref: ./schema/house.json",
+      ].join("\n"),
+      "c.yaml",
+    );
+    expect(cfg.schemas).toEqual([
+      "google:okf:0.1",
+      { ref: "./schema/house.json" },
+    ]);
+  });
+
+  it("rejects a mapping with no ref", () => {
+    expect(() =>
+      parseConfig("schemas:\n  - source: https://e.com/s.json\n", "c.yaml"),
+    ).toThrow(/schemas\[0\]\.ref/);
+  });
+
+  it("rejects an empty ref", () => {
+    expect(() => parseConfig('schemas:\n  - ref: "  "\n', "c.yaml")).toThrow(
+      DocmetaError,
+    );
+  });
+
+  // A typo'd key that is silently ignored is the worst outcome available here:
+  // `intergrity:` would leave the schema unpinned while the config reads as if
+  // it were pinned.
+  it("rejects an unknown key rather than ignoring it", () => {
+    expect(() =>
+      parseConfig(
+        `schemas:\n  - ref: ./s.json\n    intergrity: "${PIN}"\n`,
+        "c.yaml",
+      ),
+    ).toThrow(/intergrity/);
+  });
+
+  it("rejects an integrity that is not sha256-<64 hex>", () => {
+    for (const bad of ["nonsense", "sha256-zz", "sha512-" + "a".repeat(128)]) {
+      expect(() =>
+        parseConfig(`schemas:\n  - ref: ./s.json\n    integrity: "${bad}"\n`, "c.yaml"),
+      ).toThrow(/integrity/);
+    }
+  });
+
+  // An integrity pin is verified against bytes on disk. Accepting one on a
+  // built-in id or a URL would record a pin nothing can check — a config that
+  // reads as pinned and is not.
+  it("rejects integrity on a reference that is not a local file", () => {
+    expect(() =>
+      parseConfig(
+        `schemas:\n  - ref: https://e.com/s.json\n    integrity: "${PIN}"\n`,
+        "c.yaml",
+      ),
+    ).toThrow(/integrity/);
+    expect(() =>
+      parseConfig(
+        `schemas:\n  - ref: google:okf:0.1\n    integrity: "${PIN}"\n`,
+        "c.yaml",
+      ),
+    ).toThrow(/integrity/);
+  });
+
+  it("rejects a non-string source", () => {
+    expect(() =>
+      parseConfig("schemas:\n  - ref: ./s.json\n    source: 42\n", "c.yaml"),
+    ).toThrow(/source/);
+  });
+
+  it("rejects a list entry that is neither a string nor a mapping", () => {
+    expect(() => parseConfig("schemas:\n  - [a, b]\n", "c.yaml")).toThrow(
+      DocmetaError,
+    );
+    expect(() => parseConfig("schemas:\n  - 42\n", "c.yaml")).toThrow(
+      DocmetaError,
+    );
+  });
+
+  // `asStringList` is shared with paths, exclude, and overrides[].schemas.
+  // Widening it in place would have widened all four.
+  it("does not widen paths, exclude, or overrides[].schemas", () => {
+    expect(() => parseConfig("paths:\n  - ref: ./x.md\n", "c.yaml")).toThrow(
+      DocmetaError,
+    );
+    expect(() => parseConfig("exclude:\n  - ref: ./x.md\n", "c.yaml")).toThrow(
+      DocmetaError,
+    );
+    expect(() =>
+      parseConfig(
+        "overrides:\n  - files: '**/*.md'\n    schemas:\n      - ref: ./s.json\n",
+        "c.yaml",
+      ),
+    ).toThrow(DocmetaError);
+  });
+});

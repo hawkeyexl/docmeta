@@ -1284,3 +1284,117 @@ describe("docmeta CLI: --offline and the cross-run schema cache (built bin)", ()
     await server.close();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 0008 — `schemas vendor`, end to end against the built binary
+// ---------------------------------------------------------------------------
+
+describe("docmeta CLI: schemas vendor (built bin)", () => {
+  let repo: string | undefined;
+
+  /**
+   * Async, not `spawnSync`: the schema server lives in this process, so a
+   * synchronous child would block the event loop waiting for a reply that
+   * cannot be sent until it exits.
+   */
+  const runInAsync = (args: string[], cwd: string): Promise<Run> =>
+    new Promise((done) => {
+      execFile(
+        "node",
+        [bin, ...args],
+        { cwd, encoding: "utf8" },
+        (err, stdout, stderr) => {
+          done({
+            stdout: stdout ?? "",
+            stderr: stderr ?? "",
+            status: err ? ((err as { code?: number }).code ?? 1) : 0,
+          });
+        },
+      );
+    });
+
+  /** A schema that actually rejects something, so a false green is visible. */
+  const HOUSE = [
+    "{",
+    '  "$schema": "https://json-schema.org/draft/2020-12/schema",',
+    '  "type": "object",',
+    '  "required": ["owner"]',
+    "}",
+    "",
+  ].join("\n");
+
+  const OK = "---\ntitle: t\nowner: docs\n---\n\n# t\n";
+  const MISSING_OWNER = "---\ntitle: t\n---\n\n# t\n";
+
+  afterEach(() => {
+    removeTempRepo(repo);
+    repo = undefined;
+  });
+
+  it("survives the host disappearing, and fails loudly when the copy changes", async () => {
+    const server = await startSchemaServer({ "/house/2.1.json": { body: HOUSE } });
+    repo = makeTempRepo({ files: { "ok.md": OK, "bad.md": MISSING_OWNER } });
+    const url = `${server.url}/house/2.1.json`;
+
+    const vendored = await runInAsync(["schemas", "vendor", url], repo);
+    expect(vendored.status).toBe(0);
+    expect(vendored.stdout).toContain("schema/2.1.json");
+    expect(vendored.stdout).toMatch(/integrity\s+sha256-[0-9a-f]{64}/);
+
+    // The host is now gone for good — this is the D2 failure the whole
+    // proposal exists to survive.
+    await server.close();
+
+    const checked = await runInAsync(["validate", "*.md"], repo);
+    // Exit 1, not 2: the schema resolved fine and one document is genuinely
+    // non-conformant. A 2 here would mean the copy was not being used.
+    expect(checked.status).toBe(1);
+    expect(checked.stdout).toContain("./schema/2.1.json");
+    expect(checked.stdout).toContain("1 passed, 1 failed");
+
+    // Now break the vendored copy. It must not degrade to "whatever is on
+    // disk"; a contract that cannot be trusted stops the run.
+    writeFileSync(join(repo, "schema", "2.1.json"), '{"type":"object"}\n', "utf8");
+    const tampered = await runInAsync(["validate", "*.md"], repo);
+    expect(tampered.status).toBe(2);
+    expect(tampered.stderr).toMatch(/does not match its recorded integrity/);
+    expect(tampered.stderr).toContain(url);
+  });
+
+  it("refuses a gitignored target and leaves the tree untouched", async () => {
+    const server = await startSchemaServer({ "/g.json": { body: HOUSE } });
+    repo = makeTempRepo({ files: { ".gitignore": ".docmeta/\n" } });
+    const r = await runInAsync(
+      ["schemas", "vendor", `${server.url}/g.json`, "--dir", ".docmeta/schemas"],
+      repo,
+    );
+    await server.close();
+
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/ignored/i);
+    expect(existsSync(join(repo, ".docmeta"))).toBe(false);
+    expect(existsSync(join(repo, "docmeta.config.yaml"))).toBe(false);
+  });
+
+  it("converts a bare-URL config into a vendored one", async () => {
+    const server = await startSchemaServer({ "/house/2.1.json": { body: HOUSE } });
+    const url = `${server.url}/house/2.1.json`;
+    repo = makeTempRepo({
+      files: {
+        "ok.md": OK,
+        "docmeta.config.yaml": `paths:\n  - "*.md"\nschemas:\n  - ${url}\n`,
+      },
+    });
+    const r = await runInAsync(["schemas", "vendor", url], repo);
+    await server.close();
+
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("reference updated");
+    const config = readFileSync(join(repo, "docmeta.config.yaml"), "utf8");
+    // The URL is provenance now, not a live dependency.
+    expect(config).toContain("ref: ./schema/2.1.json");
+    expect(config.match(new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")))
+      .toHaveLength(1);
+    expect((await runInAsync(["validate"], repo)).status).toBe(0);
+  });
+});

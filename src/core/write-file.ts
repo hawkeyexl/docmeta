@@ -37,7 +37,14 @@ const wait = (ms: number): Promise<void> =>
  */
 export async function writeFileAtomic(
   path: string,
-  contents: string,
+  /**
+   * A `Uint8Array` writes byte-for-byte. `schemas vendor` needs that: the
+   * integrity pin it records is taken over exactly what the server sent, and a
+   * decode/re-encode round trip through a UTF-8 string would change the bytes
+   * of a payload that is not valid UTF-8 — so the pin would be wrong the first
+   * time anything checked it.
+   */
+  contents: string | Uint8Array,
 ): Promise<void> {
   const tmp = join(
     dirname(path),

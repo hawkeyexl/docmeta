@@ -1,14 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative, resolve } from "node:path";
 import { parseBaseline } from "../src/core/baseline.js";
 import { runValidate, type ValidateOptions } from "../src/commands/validate.js";
 import { runGet } from "../src/commands/get.js";
-import { getSchemasInfo } from "../src/commands/schemas.js";
+import { getSchemasInfo, runVendorSchema } from "../src/commands/schemas.js";
 import { DEFAULT_SCHEMAS } from "../src/core/resolve-schema.js";
+import { parseConfig } from "../src/core/config.js";
+import { makeTempRepo, removeTempRepo } from "./helpers/temp-repo.js";
 import { DocmetaError } from "../src/types.js";
 import { startSchemaServer, type SchemaServer } from "./helpers/schema-server.js";
 
@@ -715,5 +717,259 @@ describe("runValidate --write-baseline", () => {
       writeBaseline: path,
     });
     expect(summary.baseline?.written).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+/**
+ * Await a call that must reject, and hand back the error.
+ *
+ * A bare `.catch(e => e)` types as `Result | Error`, and — worse — a call that
+ * unexpectedly *succeeds* then fails on a missing `.message` rather than on the
+ * thing that actually went wrong.
+ */
+const failure = (p: Promise<unknown>): Promise<Error> =>
+  p.then(
+    () => {
+      throw new Error("expected the call to fail, but it resolved");
+    },
+    (e: Error) => e,
+  );
+
+// 0008 — `docmeta schemas vendor`
+// ---------------------------------------------------------------------------
+
+/** A real, minimal schema, served byte-for-byte so the pin is checkable. */
+const VENDORED = [
+  "{",
+  '  "$schema": "https://json-schema.org/draft/2020-12/schema",',
+  '  "type": "object",',
+  '  "required": ["type"]',
+  "}",
+  "",
+].join("\n");
+
+describe("runVendorSchema (0008)", () => {
+  let dir: string;
+  let server: SchemaServer;
+
+  beforeEach(async () => {
+    dir = await realpath(await mkdtemp(join(tmpdir(), "docmeta-vendor-")));
+    server = await startSchemaServer({
+      "/house/2.1.json": { body: VENDORED },
+      "/envelope.json": { json: { error: "not found" } },
+    });
+  });
+  afterEach(async () => {
+    await server.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  const url = (): string => `${server.url}/house/2.1.json`;
+
+  it("downloads the schema, records the pin, and creates a config", async () => {
+    const result = await runVendorSchema({ url: url(), cwd: dir });
+
+    expect(result.file).toBe("schema/2.1.json");
+    expect(result.configCreated).toBe(true);
+    // Byte-for-byte: the pin is over what the server sent, so any reformatting
+    // here would make the recorded integrity unverifiable.
+    expect(await readFile(join(dir, "schema", "2.1.json"), "utf8")).toBe(VENDORED);
+    expect(result.integrity).toMatch(/^sha256-[0-9a-f]{64}$/);
+
+    const written = await readFile(join(dir, "docmeta.config.yaml"), "utf8");
+    expect(written).toContain("ref: ./schema/2.1.json");
+    expect(written).toContain(`source: ${url()}`);
+    expect(written).toContain(result.integrity);
+  });
+
+  // The end-to-end pair — vendor, kill the host, still validate; then corrupt
+  // the copy and fail loudly — lives in `cli.integration.test.ts`. It needs a
+  // real working directory, and `loadSchema` resolves a *relative* file ref
+  // against `process.cwd()`, which a core test cannot move.
+
+  it("replaces a bare-URL entry rather than appending beside it", async () => {
+    await writeFile(
+      join(dir, "docmeta.config.yaml"),
+      ["# keep me", "paths:", '  - "*.md"', "schemas:", `  - ${url()}`, ""].join("\n"),
+    );
+    const result = await runVendorSchema({ url: url(), cwd: dir });
+    expect(result.replaced).toBe(true);
+    expect(result.configCreated).toBe(false);
+
+    const written = await readFile(join(dir, "docmeta.config.yaml"), "utf8");
+    expect(written).toContain("# keep me");
+    expect(written).toContain("*.md");
+    // The URL survives only as `source:`, never as a second live reference.
+    expect(written.match(new RegExp(escapeRe(url()), "g"))).toHaveLength(1);
+    const cfg = parseConfig(written, "docmeta.config.yaml");
+    expect(cfg.schemas).toEqual([
+      { ref: "./schema/2.1.json", source: url(), integrity: result.integrity },
+    ]);
+  });
+
+  it("updates in place when the same URL is vendored twice", async () => {
+    await runVendorSchema({ url: url(), cwd: dir });
+    const again = await runVendorSchema({ url: url(), cwd: dir });
+    expect(again.replaced).toBe(true);
+    expect(again.unchanged).toBe(true);
+    const cfg = parseConfig(
+      await readFile(join(dir, "docmeta.config.yaml"), "utf8"),
+      "docmeta.config.yaml",
+    );
+    expect(cfg.schemas).toHaveLength(1);
+  });
+
+  it("appends beside unrelated entries", async () => {
+    await writeFile(
+      join(dir, "docmeta.config.yaml"),
+      ["schemas:", "  - google:okf:0.1", ""].join("\n"),
+    );
+    await runVendorSchema({ url: url(), cwd: dir });
+    const cfg = parseConfig(
+      await readFile(join(dir, "docmeta.config.yaml"), "utf8"),
+      "docmeta.config.yaml",
+    );
+    expect(cfg.schemas).toHaveLength(2);
+    expect(cfg.schemas?.[0]).toBe("google:okf:0.1");
+  });
+
+  // The highest-value guard in the command: a vendored schema git ignores
+  // works locally and is simply absent in CI.
+  it("refuses to write into a gitignored directory, and writes nothing", async () => {
+    const repo = makeTempRepo({ files: { ".gitignore": "vendor/\n" } });
+    try {
+      const err = await failure(runVendorSchema({
+        url: url(),
+        dir: "./vendor",
+        cwd: repo,
+      }));
+      expect(err).toBeInstanceOf(DocmetaError);
+      expect(err.message).toMatch(/ignored/i);
+      expect(err.message).toContain("vendor");
+      expect(err.message).toContain(".gitignore");
+      expect(existsSync(join(repo, "vendor"))).toBe(false);
+      expect(existsSync(join(repo, "docmeta.config.yaml"))).toBe(false);
+    } finally {
+      removeTempRepo(repo);
+    }
+  });
+
+  it("refuses when a file pattern ignores the vendored file itself", async () => {
+    const repo = makeTempRepo({ files: { ".gitignore": "*.json\n" } });
+    try {
+      const err = await failure(runVendorSchema({ url: url(), cwd: repo }));
+      expect(err).toBeInstanceOf(DocmetaError);
+      expect(err.message).toMatch(/ignored/i);
+      expect(err.message).toContain("schema/2.1.json");
+    } finally {
+      removeTempRepo(repo);
+    }
+  });
+
+  it("proceeds with a notice when git cannot answer at all", async () => {
+    // A plain directory with no repository: the check cannot run, and refusing
+    // every non-repository would make the command unusable in a tarball.
+    const notices: string[] = [];
+    await runVendorSchema({
+      url: url(),
+      cwd: dir,
+      onNotice: (m) => notices.push(m),
+    });
+    expect(notices.join("\n")).toMatch(/gitignore/i);
+    expect(existsSync(join(dir, "schema", "2.1.json"))).toBe(true);
+  });
+
+  it("refuses to clobber an unrelated file already at the target path", async () => {
+    await mkdir(join(dir, "schema"), { recursive: true });
+    await writeFile(join(dir, "schema", "2.1.json"), '{"type":"string"}\n');
+    const err = await failure(runVendorSchema({ url: url(), cwd: dir }));
+    expect(err).toBeInstanceOf(DocmetaError);
+    expect(err.message).toMatch(/already exists/);
+    expect(await readFile(join(dir, "schema", "2.1.json"), "utf8")).toBe(
+      '{"type":"string"}\n',
+    );
+  });
+
+  it("rejects a reference that is not an http(s) URL", async () => {
+    for (const bad of ["./local.json", "google:okf:0.1"]) {
+      const err = await failure(runVendorSchema({ url: bad, cwd: dir }));
+      expect(err).toBeInstanceOf(DocmetaError);
+      expect(err.message).toMatch(/http/);
+    }
+  });
+
+  // Vendoring an error envelope would commit a contract that passes every
+  // document — the exact false green PR 1 closed, made permanent.
+  it("refuses to vendor a payload that is not a schema", async () => {
+    const err = await failure(runVendorSchema({
+      url: `${server.url}/envelope.json`,
+      cwd: dir,
+    }));
+    expect(err).toBeInstanceOf(DocmetaError);
+    expect(err.message).toMatch(/does not look like a JSON Schema/);
+    expect(existsSync(join(dir, "schema"))).toBe(false);
+  });
+
+  it("errors when an explicit config path does not exist", async () => {
+    const err = await failure(runVendorSchema({
+      url: url(),
+      cwd: dir,
+      configPath: "nope.yaml",
+    }));
+    expect(err).toBeInstanceOf(DocmetaError);
+    expect(err.message).toMatch(/nope\.yaml/);
+  });
+
+  it("records a ref relative to the config, not to the working directory", async () => {
+    // The config governs a subdirectory run, so its ref has to be meaningful
+    // from where the config sits.
+    await mkdir(join(dir, "docs"), { recursive: true });
+    await writeFile(
+      join(dir, "docmeta.config.yaml"),
+      "schemas:\n  - google:okf:0.1\n",
+    );
+    await runVendorSchema({
+      url: url(),
+      cwd: join(dir, "docs"),
+      configPath: join("..", "docmeta.config.yaml"),
+    });
+    const cfg = parseConfig(
+      await readFile(join(dir, "docmeta.config.yaml"), "utf8"),
+      "docmeta.config.yaml",
+    );
+    const entry = cfg.schemas?.[1];
+    expect(typeof entry === "object" && entry.ref).toBe("./docs/schema/2.1.json");
+  });
+  // A config can name the same schema twice — the bare URL from before
+  // vendoring, and a hand-written local ref. Replacing only the first would
+  // leave the list disagreeing with itself about whether it is pinned.
+  it("collapses every entry that names the same schema", async () => {
+    await writeFile(
+      join(dir, "docmeta.config.yaml"),
+      [
+        "schemas:",
+        `  - ${url()}`,
+        "  - google:okf:0.1",
+        "  - ref: ./schema/2.1.json",
+        "",
+      ].join("\n"),
+    );
+    await runVendorSchema({ url: url(), cwd: dir });
+    const cfg = parseConfig(
+      await readFile(join(dir, "docmeta.config.yaml"), "utf8"),
+      "docmeta.config.yaml",
+    );
+    expect(cfg.schemas).toHaveLength(2);
+    expect(cfg.schemas?.[1]).toBe("google:okf:0.1");
+  });
+
+  it("keeps a config that is nothing but comments", async () => {
+    await writeFile(join(dir, "docmeta.config.yaml"), "# why this exists\n");
+    await runVendorSchema({ url: url(), cwd: dir });
+    const written = await readFile(join(dir, "docmeta.config.yaml"), "utf8");
+    expect(written).toContain("# why this exists");
+    expect(parseConfig(written, "docmeta.config.yaml").schemas).toHaveLength(1);
   });
 });

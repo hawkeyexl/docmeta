@@ -146,7 +146,7 @@ The classification is purely structural, applied in this order: a value starting
 If a reference can't be resolved, docmeta stops with an operational error (exit code 2) rather than skipping the file or falling back to the default. This applies to an unknown built-in id, a missing schema file, and a URL that 404s or times out after the 10-second limit. Treat the schema reference as load-bearing: a broken one fails the run, which is what you want in CI.
 </Aside>
 
-URL references are the foundation for governing one schema across many repos: a central, versioned schema URL that every consumer points at. That workflow, including the fetch timeout and caching behavior in depth, is covered in [Govern a shared schema by URL](/docmeta/ci/govern-shared-schema/).
+URL references are one way to govern a single schema across many repos: a central, versioned schema URL that every consumer points at. Vendoring that URL into each consumer is the other, and the more durable one. Both, with the fetch timeout and caching behavior in depth, are covered in [Govern a shared schema across repos](/docmeta/ci/govern-shared-schema/).
 
 ## Validating against more than one schema
 
@@ -202,7 +202,7 @@ For the full lookup table of precedence, reference kinds, and dialects in one pl
     description="Ship a stricter schema, and migrate consumers, without breaking CI everywhere at once."
   />
   <LinkCard
-    title="Govern a shared schema by URL"
+    title="Govern a shared schema across repos"
     href="/docmeta/ci/govern-shared-schema/"
     description="Centralize one schema, reference it by URL, and version it across many repos."
   />

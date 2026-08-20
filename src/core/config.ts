@@ -9,11 +9,41 @@ import { dirname, join, relative, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { DocmetaError } from "../types.js";
 import { rebaseConfigSchemaRefs } from "./resolve-schema.js";
+import { classifyRef } from "./schema-registry.js";
+import { INTEGRITY_SHAPE, isIntegrity } from "./integrity.js";
 
 export interface SchemaOverride {
   files: string;
   schemas: string[];
 }
+
+/**
+ * A `schemas:` entry in its long form: a reference plus where it came from and
+ * what it must hash to.
+ *
+ * Written by `docmeta schemas vendor`, which downloads a remote schema into the
+ * repository and records both. `source` keeps the provenance the URL used to
+ * carry, so a re-vendor knows where to look and an error can say what to
+ * re-download; `integrity` makes an edited or corrupted copy a loud failure
+ * rather than a silently changed contract.
+ */
+export interface SchemaRefEntry {
+  /** What is loaded: a built-in id, a local `.json` path, or a URL. */
+  ref: string;
+  /** Where `ref` was vendored from — a URL, or a path for a local copy. */
+  source?: string;
+  /** `sha256-<64 hex>` over the bytes of `ref`. Local files only. */
+  integrity?: string;
+}
+
+/**
+ * One `schemas:` entry. A bare string is the original form and is unchanged by
+ * 0008; the mapping form adds provenance and a pin.
+ */
+export type SchemaEntry = string | SchemaRefEntry;
+
+/** The keys a `schemas:` mapping entry may carry. */
+const SCHEMA_ENTRY_KEYS = ["ref", "source", "integrity"] as const;
 
 /** Defaults for the `fill` command; every key is overridable by a CLI flag. */
 export interface FillConfig {
@@ -47,7 +77,11 @@ const MAX_TTL_HOURS = 8760;
 export interface DocmetaConfig {
   paths?: string[];
   exclude?: string[];
-  schemas?: string[];
+  /**
+   * The default schema set. Each entry is either a reference string or a
+   * `{ ref, source?, integrity? }` mapping — see `SchemaEntry`.
+   */
+  schemas?: SchemaEntry[];
   overrides?: SchemaOverride[];
   fill?: FillConfig;
   /**
@@ -89,6 +123,90 @@ function asStringList(value: unknown, field: string, source: string): string[] {
   return value as string[];
 }
 
+/**
+ * Parse the top-level `schemas:` list, which accepts both forms.
+ *
+ * Separate from `asStringList` on purpose. That helper also validates `paths`,
+ * `exclude`, and `overrides[].schemas`, and widening it in place would have
+ * quietly widened all four — `paths: [{ref: …}]` would have started parsing and
+ * then failed somewhere far from the config file.
+ */
+function asSchemaList(
+  value: unknown,
+  field: string,
+  source: string,
+): SchemaEntry[] {
+  if (!Array.isArray(value)) {
+    throw new DocmetaError(
+      `${source}: "${field}" must be a list of schema references.`,
+    );
+  }
+  return value.map((entry, i) => parseSchemaEntry(entry, `${field}[${i}]`, source));
+}
+
+function parseSchemaEntry(
+  entry: unknown,
+  where: string,
+  source: string,
+): SchemaEntry {
+  if (typeof entry === "string") return entry;
+  if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+    throw new DocmetaError(
+      `${source}: ${where} must be a schema reference string, or a mapping with "ref" (and optionally "source" and "integrity").`,
+    );
+  }
+  const raw = entry as Record<string, unknown>;
+
+  // A misspelled key is the failure worth catching here: `intergrity:` would
+  // otherwise be dropped in silence, leaving a config that reads as pinned and
+  // a schema that is not.
+  for (const key of Object.keys(raw)) {
+    if (!(SCHEMA_ENTRY_KEYS as readonly string[]).includes(key)) {
+      throw new DocmetaError(
+        `${source}: ${where} has unknown key "${key}". Supported keys: ${SCHEMA_ENTRY_KEYS.join(", ")}.`,
+      );
+    }
+  }
+
+  if (typeof raw.ref !== "string" || raw.ref.trim() === "") {
+    throw new DocmetaError(
+      `${source}: ${where}.ref must be a non-empty schema reference string.`,
+    );
+  }
+  const parsed: SchemaRefEntry = { ref: raw.ref };
+
+  if (raw.source !== undefined) {
+    if (typeof raw.source !== "string" || raw.source.trim() === "") {
+      throw new DocmetaError(
+        `${source}: ${where}.source must be a non-empty string naming where "${raw.ref}" was vendored from.`,
+      );
+    }
+    parsed.source = raw.source;
+  }
+
+  if (raw.integrity !== undefined) {
+    if (typeof raw.integrity !== "string" || !isIntegrity(raw.integrity)) {
+      throw new DocmetaError(
+        `${source}: ${where}.integrity must look like "${INTEGRITY_SHAPE}". Record one with \`docmeta schemas vendor\`.`,
+      );
+    }
+    // A pin is checked against bytes on disk. On a built-in id there are no
+    // bytes to read, and on a URL the copy that satisfies a run may come from
+    // the schema cache, which stores the parsed schema rather than what the
+    // server sent. Accepting either would record a pin nothing ever verifies —
+    // a config that reads as pinned and is not.
+    const kind = classifyRef(parsed.ref).kind;
+    if (kind !== "file") {
+      throw new DocmetaError(
+        `${source}: ${where}.integrity applies to a vendored local file, but "${parsed.ref}" is a ${kind === "url" ? "URL" : "built-in id"}. Vendor it first with \`docmeta schemas vendor\`, or drop the pin.`,
+      );
+    }
+    parsed.integrity = raw.integrity;
+  }
+
+  return parsed;
+}
+
 /** Parse and validate config YAML text. */
 export function parseConfig(text: string, source: string): DocmetaConfig {
   let raw: unknown;
@@ -110,7 +228,7 @@ export function parseConfig(text: string, source: string): DocmetaConfig {
   if (obj.exclude !== undefined)
     config.exclude = asStringList(obj.exclude, "exclude", source);
   if (obj.schemas !== undefined)
-    config.schemas = asStringList(obj.schemas, "schemas", source);
+    config.schemas = asSchemaList(obj.schemas, "schemas", source);
 
   if (obj.overrides !== undefined) {
     if (!Array.isArray(obj.overrides)) {

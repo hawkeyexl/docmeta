@@ -11,6 +11,12 @@ import {
   SchemaCache,
   schemaCacheDir,
 } from "./schema-cache.js";
+import {
+  INTEGRITY_SHAPE,
+  diagnoseIntegrity,
+  integrityOf,
+  isIntegrity,
+} from "./integrity.js";
 
 import okf01 from "../schemas/okf/0.1.json" with { type: "json" };
 import diataxis10 from "../schemas/diataxis/1.0.json" with { type: "json" };
@@ -209,6 +215,20 @@ const wait = (ms: number): Promise<void> =>
     setTimeout(resolve, ms);
   });
 
+/**
+ * What a config recorded about one reference beyond the reference itself.
+ *
+ * Kept out of the ref string deliberately: the ref appears in every report,
+ * every baseline fingerprint, and `Validator`'s compile cache key, so it has to
+ * stay exactly the string the user wrote.
+ */
+export interface SchemaPin {
+  /** Where the reference was vendored from — a URL, or a local path. */
+  source?: string;
+  /** `sha256-<64 hex>` the file's bytes must hash to. */
+  integrity?: string;
+}
+
 export interface LoadSchemaOptions {
   /** Abort a remote fetch after this many ms (default 10_000). */
   timeoutMs?: number;
@@ -236,6 +256,14 @@ export interface LoadSchemaOptions {
    * not remove it while "simplifying" until the real allowlist exists.
    */
   offline?: boolean;
+  /**
+   * Provenance and integrity pins, keyed on the reference exactly as it is
+   * passed to `loadSchema`. Built by `collectSchemaPins` from the **rebased**
+   * config, so both sides spell a local path the same way; a config with no
+   * mapping-form `schemas:` entries produces an empty map and none of this
+   * runs.
+   */
+  pins?: ReadonlyMap<string, SchemaPin>;
 }
 
 /**
@@ -271,9 +299,9 @@ async function readCappedBody(
   ref: string,
   res: Response,
   maxBytes: number,
-): Promise<string> {
+): Promise<Buffer> {
   const body = res.body;
-  if (!body) return "";
+  if (!body) return Buffer.alloc(0);
   const reader = body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -297,10 +325,15 @@ async function readCappedBody(
     // stream has already completed.
     void reader.cancel().catch(() => {});
   }
-  // Concatenate before decoding: a multi-byte character can straddle a chunk
-  // boundary, and decoding per chunk would corrupt it. `total` is already exact,
-  // so passing it spares `concat` a second pass to re-derive the same length.
-  return Buffer.concat(chunks, total).toString("utf8");
+  // Concatenate rather than decoding per chunk: a multi-byte character can
+  // straddle a chunk boundary. `total` is already exact, so passing it spares
+  // `concat` a second pass to re-derive the same length.
+  //
+  // Returned as **bytes**. `schemas vendor` hashes and writes exactly what the
+  // server sent, and a decode/re-encode round trip through a UTF-8 string is
+  // lossy for a payload that is not valid UTF-8 — which would make an integrity
+  // pin wrong in precisely the case it exists to catch.
+  return Buffer.concat(chunks, total);
 }
 
 /**
@@ -382,11 +415,31 @@ async function requestSchema(
   return res;
 }
 
-/** Fetch, size-cap, parse, and guard a remote schema. At most two requests. */
-async function fetchSchema(
+/** A fetched schema, with the bytes it arrived as. */
+export interface FetchedSchema {
+  /** Exactly what the server sent, undecoded. */
+  bytes: Buffer;
+  /** The same payload, parsed and guarded. */
+  schema: Record<string, unknown>;
+}
+
+/**
+ * Fetch, size-cap, parse, and guard a remote schema. At most two requests.
+ *
+ * Exported for `schemas vendor`, which needs the raw bytes to write and to
+ * hash. Sharing this path rather than fetching separately is what keeps
+ * vendoring subject to the same size cap, retry policy, and payload guard as
+ * validation — a vendored error envelope would otherwise be committed to the
+ * repository and pass every document from then on.
+ *
+ * Deliberately **not** routed through the disk cache or `offline`: vendoring is
+ * an explicit request to download, and the cache stores a parsed schema rather
+ * than the bytes a pin has to be taken over.
+ */
+export async function fetchSchemaBytes(
   ref: string,
-  options: LoadSchemaOptions,
-): Promise<Record<string, unknown>> {
+  options: LoadSchemaOptions = {},
+): Promise<FetchedSchema> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
   const timedOut = new DocmetaError(
@@ -405,9 +458,9 @@ async function fetchSchema(
     res = await requestSchema(ref, timeoutMs, timedOut);
   }
 
-  let raw: string;
+  let bytes: Buffer;
   try {
-    raw = await readCappedBody(ref, res, maxBytes);
+    bytes = await readCappedBody(ref, res, maxBytes);
   } catch (err) {
     if (err instanceof DocmetaError) throw err;
     // The headers arrive first, so a timeout during the body lands here rather
@@ -420,6 +473,7 @@ async function fetchSchema(
     );
   }
 
+  const raw = bytes.toString("utf8");
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -429,7 +483,7 @@ async function fetchSchema(
     );
   }
 
-  return assertFetchedSchema(ref, parsed, raw);
+  return { bytes, schema: assertFetchedSchema(ref, parsed, raw) };
 }
 
 /**
@@ -485,7 +539,7 @@ async function resolveRemote(
     );
   }
 
-  const schema = await fetchSchema(ref, options);
+  const { schema } = await fetchSchemaBytes(ref, options);
   urlCache.set(ref, schema);
   urlFromNetwork.add(ref);
   if (cache && (await cache.write(ref, schema))) {
@@ -514,12 +568,68 @@ export function schemaLoadOptions(args: {
   ttlHours?: number;
   /** `--offline`, else config `offline:`. */
   offline?: boolean;
+  /** From `collectSchemaPins(config)`; omitted when the config pins nothing. */
+  pins?: ReadonlyMap<string, SchemaPin>;
 }): LoadSchemaOptions {
   return {
     cacheDir: schemaCacheDir(args.root),
     ...(args.ttlHours !== undefined ? { ttlHours: args.ttlHours } : {}),
     ...(args.offline !== undefined ? { offline: args.offline } : {}),
+    // An empty map is dropped so a config with no mapping-form entries produces
+    // exactly the options object it produced before 0008.
+    ...(args.pins !== undefined && args.pins.size > 0 ? { pins: args.pins } : {}),
   };
+}
+
+/**
+ * How to get the bytes of a pinned reference back, for an error message.
+ *
+ * Two states, and they lead different places: the config recorded where the
+ * schema came from, or it did not. Advising a re-vendor without a `source` to
+ * re-vendor *from* is the kind of remedy that sends an operator in a circle.
+ */
+function repinAdvice(ref: string, pin: SchemaPin): string {
+  return pin.source !== undefined
+    ? `Re-download it with \`docmeta schemas vendor ${pin.source}\`, or update the recorded integrity if the change was intended.`
+    : `Restore the file from version control, or record the new bytes by re-running \`docmeta schemas vendor\` with the URL this copy came from. (No \`source:\` is recorded for "${ref}", so docmeta cannot say where that is.)`;
+}
+
+/**
+ * Check a local schema file against its recorded pin.
+ *
+ * Three outcomes, all of them enumerated rather than defaulted: the pin is not
+ * one this version can verify, the bytes match, or they do not — and in the
+ * last case the *reason* is narrowed further, because a CRLF checkout of an LF
+ * download is a mismatch on a file nobody edited and reads as corruption unless
+ * it is named.
+ */
+function assertIntegrity(
+  ref: string,
+  bytes: Buffer,
+  pin: SchemaPin,
+  integrity: string,
+): void {
+  // Reachable only from a library caller building pins by hand; the config
+  // parser rejects a malformed pin at its source, where the line number is.
+  if (!isIntegrity(integrity)) {
+    throw new DocmetaError(
+      `Schema "${ref}" has an integrity pin docmeta cannot verify: "${integrity}". Expected "${INTEGRITY_SHAPE}".`,
+    );
+  }
+  const found = integrityOf(bytes);
+  if (found === integrity) return;
+
+  const because =
+    diagnoseIntegrity(bytes, integrity) === "line-endings"
+      ? `The contents differ only in line endings, so this is almost certainly a checkout converting them rather than an edit — keep the file byte-exact with a \`.gitattributes\` rule such as \`${ref.split(/[\\/]/).pop() ?? "*.json"} -text\`.`
+      : "The file's contents have changed since it was vendored.";
+
+  throw new DocmetaError(
+    `Schema "${ref}" does not match its recorded integrity.\n` +
+      `  expected ${integrity}\n` +
+      `  found    ${found}\n` +
+      `${because} ${repinAdvice(ref, pin)}`,
+  );
 }
 
 /** Load and return the JSON Schema object for a reference. */
@@ -528,6 +638,19 @@ export async function loadSchema(
   options: LoadSchemaOptions = {},
 ): Promise<Record<string, unknown>> {
   const { kind } = classifyRef(ref);
+  const pin = options.pins?.get(ref);
+
+  // A pin on anything but a local file cannot be checked: a built-in has no
+  // bytes on disk, and a URL may legitimately be served from the schema cache,
+  // which stores the parsed schema rather than what the server sent. Silently
+  // skipping it would leave a config that reads as pinned and is not, so this
+  // fails loudly instead. The config parser rejects the same thing earlier and
+  // with a better message; this catches a library caller.
+  if (pin?.integrity !== undefined && kind !== "file") {
+    throw new DocmetaError(
+      `Schema "${ref}" carries an integrity pin, but a pin can only be verified against a local file (this is a ${kind === "url" ? "URL" : "built-in id"}). Vendor it with \`docmeta schemas vendor\`, or drop the pin.`,
+    );
+  }
 
   if (kind === "builtin") {
     const schema = BUILTINS.get(ref);
@@ -582,14 +705,28 @@ export async function loadSchema(
   }
 
   // file
-  let raw: string;
+  let bytes: Buffer;
   try {
-    raw = await readFile(ref, "utf8");
+    // Bytes, not a decoded string: the pin below is taken over what is actually
+    // on disk, and a UTF-8 round trip would silently repair a payload that is
+    // not valid UTF-8 into one that hashes differently from the vendored copy.
+    bytes = await readFile(ref);
   } catch {
-    throw new DocmetaError(`Schema file not found: "${ref}".`);
+    // A vendored schema that is missing is a different problem from a mistyped
+    // path — the file is supposed to be committed, so it is either not checked
+    // in or the checkout is partial. Say where it came from when the config
+    // recorded that.
+    throw new DocmetaError(
+      pin?.source !== undefined
+        ? `Schema file not found: "${ref}". It was vendored from ${pin.source}; commit the file, or re-download it with \`docmeta schemas vendor ${pin.source}\`.`
+        : `Schema file not found: "${ref}".`,
+    );
+  }
+  if (pin?.integrity !== undefined) {
+    assertIntegrity(ref, bytes, pin, pin.integrity);
   }
   try {
-    return JSON.parse(raw) as Record<string, unknown>;
+    return JSON.parse(bytes.toString("utf8")) as Record<string, unknown>;
   } catch (err) {
     throw new DocmetaError(
       `Schema file "${ref}" is not valid JSON: ${(err as Error).message}`,

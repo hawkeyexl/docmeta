@@ -57,7 +57,7 @@ schemas:
   - https://schemas.example.com/metadata/1.2/schema.json
 ```
 
-Consumers pin by referencing a versioned URL, never a "latest" one. Keep old versions reachable so pinned repos don't break, and announce a new version rather than mutating an existing URL in place. The fetch timeout and per-run caching that make URL schemas practical at scale are covered in [Govern a shared schema by URL](/docmeta/ci/govern-shared-schema/).
+Consumers pin by referencing a versioned URL, never a "latest" one. Keep old versions reachable so pinned repos don't break, and announce a new version rather than mutating an existing URL in place. Consumers can also vendor a versioned URL into their own repository so a release is pinned by hash rather than fetched on every run; both approaches, and their tradeoffs, are covered in [Govern a shared schema across repos](/docmeta/ci/govern-shared-schema/).
 
 </TabItem>
 </Tabs>
@@ -192,7 +192,7 @@ Same key name, different files, different jobs: one points at a meta-schema, the
     description="The staged ratchet in full: add, backfill, and tighten across a large repo without a flag day."
   />
   <LinkCard
-    title="Govern a shared schema by URL"
+    title="Govern a shared schema across repos"
     href="/docmeta/ci/govern-shared-schema/"
     description="Centralize one versioned schema, reference it by URL, and pin it across many repos."
   />

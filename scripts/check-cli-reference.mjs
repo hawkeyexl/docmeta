@@ -53,27 +53,42 @@ const codeGlobalOptions = new Set([
   "help", // commander auto-adds -h, --help
 ]);
 
-const codeCommands = new Map(); // name -> { options:Set, args:[{name,required,variadic}], defaults:Map }
-for (const cmd of program.commands) {
-  const options = new Set(
-    optionLongs(cmd).filter((l) => !GLOBAL_ONLY.has(l)),
-  );
-  const args = cmd.registeredArguments.map((a) => ({
-    name: a.name(),
-    required: a.required,
-    variadic: a.variadic,
-  }));
-  // Only primitive, non-empty defaults are machine-comparable to the docs.
-  const defaults = new Map();
-  for (const o of cmd.options) {
-    if (!o.long) continue;
-    const d = o.defaultValue;
-    if (typeof d === "string" || typeof d === "number") {
-      defaults.set(stripDashes(o.long), String(d));
+const codeCommands = new Map(); // qualified name -> { options:Set, args:[{name,required,variadic}], defaults:Map }
+
+/**
+ * Walk the command tree, not just its first level.
+ *
+ * Iterating `program.commands` alone left every *sub*command silently
+ * unverified — `docmeta schemas vendor` could gain, lose, or rename a flag and
+ * this check would report the page as in sync. Commands are keyed by their
+ * qualified name ("schemas vendor"), which is also how the page heads their
+ * section.
+ */
+function collectCommands(parent, prefix) {
+  for (const cmd of parent.commands) {
+    const name = prefix ? `${prefix} ${cmd.name()}` : cmd.name();
+    const options = new Set(
+      optionLongs(cmd).filter((l) => !GLOBAL_ONLY.has(l)),
+    );
+    const args = cmd.registeredArguments.map((a) => ({
+      name: a.name(),
+      required: a.required,
+      variadic: a.variadic,
+    }));
+    // Only primitive, non-empty defaults are machine-comparable to the docs.
+    const defaults = new Map();
+    for (const o of cmd.options) {
+      if (!o.long) continue;
+      const d = o.defaultValue;
+      if (typeof d === "string" || typeof d === "number") {
+        defaults.set(stripDashes(o.long), String(d));
+      }
     }
+    codeCommands.set(name, { options, args, defaults });
+    collectCommands(cmd, name);
   }
-  codeCommands.set(cmd.name(), { options, args, defaults });
 }
+collectCommands(program, "");
 
 // ---------------------------------------------------------------------------
 // 2. What the docs page documents (parsed from markdown tables).
@@ -117,7 +132,11 @@ for (const line of lines) {
   const h2 = line.match(/^##\s+(.*\S)\s*$/);
   if (h2) {
     const title = h2[1];
-    const cmd = title.match(/^`([a-z][a-z-]*)`$/);
+    // A space is allowed so a subcommand's section — `` ## `schemas vendor` ``
+    // — is recognized as one. The old pattern rejected it, so the heading was
+    // read as narrative and the whole section skipped, which is precisely how a
+    // subcommand went unverified in both directions at once.
+    const cmd = title.match(/^`([a-z][a-z-]*(?: [a-z][a-z-]*)*)`$/);
     if (cmd) {
       section = { command: cmd[1] };
       docCommands.set(cmd[1], {
