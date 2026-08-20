@@ -23,7 +23,8 @@
  *
  * Only these three. GitHub also treats `,` and `:` specially, but in the
  * command's *property* values (`file=`, `line=`), not in the message — encoding
- * them here would show up as `%3A` in the rendered annotation.
+ * them here would show up as `%3A` in the rendered annotation. That is what
+ * {@link escapeWorkflowCommandProperty} is for.
  *
  * @see https://docs.github.com/actions/reference/workflow-commands-for-github-actions
  */
@@ -32,4 +33,26 @@ export function escapeWorkflowCommandMessage(message: string): string {
     .replace(/%/g, "%25")
     .replace(/\r/g, "%0D")
     .replace(/\n/g, "%0A");
+}
+
+/**
+ * Escape a workflow command's **property value** — the right-hand side of
+ * `file=`, `line=`, `col=`.
+ *
+ * Everything the message needs, plus `,` and `:`. Properties are comma-
+ * separated and each is `name:value`-adjacent in the grammar, so an unescaped
+ * separator inside a value silently re-partitions the command: a real path like
+ * `docs/report,final.md` yields `file=docs/report` and a stray property named
+ * `final.md`, and the annotation lands on the wrong file — or nowhere — with no
+ * error anywhere.
+ *
+ * `%` first, for the same reason as the message escaper.
+ */
+export function escapeWorkflowCommandProperty(value: string): string {
+  return value
+    .replace(/%/g, "%25")
+    .replace(/\r/g, "%0D")
+    .replace(/\n/g, "%0A")
+    .replace(/:/g, "%3A")
+    .replace(/,/g, "%2C");
 }

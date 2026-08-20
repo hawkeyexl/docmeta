@@ -210,9 +210,13 @@ npx -y docmeta get type "docs/**/*.md" --format json \
 
 <Aside type="note" title="get supports pretty and json only">
 `docmeta get` accepts `--format pretty` (the default) and `--format json`. It
-does **not** accept `--format github`, `sarif`, or `junit`, which are specific
-to `validate`.
-Passing an unsupported format is a usage error and exits `2`.
+does **not** accept `--format github`, `sarif`, or `junit`: `get` reports
+*values*, not findings. `github` is available on `validate` and
+[`fill`](/docmeta/reference/cli/#github-annotations); `sarif` and `junit` are
+`validate`-only. Passing an unsupported format is a usage error and exits `2`.
+
+Add `-q` / `--quiet` to drop the files where every requested field is unset — a
+file with any of them set still prints, `(unset)` included.
 </Aside>
 
 </TabItem>
@@ -274,6 +278,7 @@ Alongside `runValidate`, the entry point exports the other cores and helpers:
 | `loadConfig`, `parseConfig` | Load or parse a `docmeta.config.yaml`. |
 | `listBuiltins`, `loadSchema`, `classifyRef` | Enumerate, fetch, and classify schema references. |
 | `render` | Format a result set as `pretty`, `json`, `github`, `sarif`, or `junit` text. `sarif` also takes the run's `frame`, which `runValidate` returns. |
+| `renderGet`, `renderFill` | The reporters behind `docmeta get` and `docmeta fill`. `--quiet` lives here, not in the cores: `runGet` and `runFill` always return every file they saw, so a programmatic caller can never mistake a filtered run for an empty one. |
 | `DocmetaError` and the result types | The operational-error class and `ValidationResult` / `RunSummary` / `FieldError` interfaces. |
 
 <Aside type="caution" title="Operational failures throw DocmetaError">

@@ -438,8 +438,11 @@ describe("cli fill", () => {
     expect(report.model.length).toBeGreaterThan(0);
   }, 60000);
 
+  // `nonsense`, not `github`: `fill` gained `github` under 0005 §3. `sarif` and
+  // `junit` are still refused, and that pair has its own case with the rest of
+  // the parity work.
   it("exits 2 on an unknown --format", () => {
-    const r = run(["fill", "test/fixtures/valid.md", "-f", "github"]);
+    const r = run(["fill", "test/fixtures/valid.md", "-f", "nonsense"]);
     expect(r.status).toBe(2);
     expect(r.stderr).toContain("Unknown --format");
   });
@@ -1442,8 +1445,11 @@ describe("usage errors exit 2 (0005 §4)", () => {
     expect(r.status).toBe(2);
   });
 
+  // `schemas vendor <url>`, not `get`: `get`'s field list became `[fields]`
+  // under 0005 §1, so commander no longer rejects a bare `get` — the CLI's own
+  // guard does, and it is covered with the rest of that rule.
   it("a missing required argument exits 2", () => {
-    const r = runSync(["get"]);
+    const r = runSync(["schemas", "vendor"]);
     expect(r.status).toBe(2);
     expect(r.stderr).toMatch(/missing required argument/i);
   });
@@ -1544,4 +1550,311 @@ describe("github annotations escape the message", () => {
     // One annotation, one line: nothing was truncated at the escape.
     expect(r.stdout.trim().split("\n")).toHaveLength(1);
   });
+});
+
+// ---------------------------------------------------------------------------
+// 0005 § 1 — `--fields` on `get`, with the positional kept as a fallback
+// ---------------------------------------------------------------------------
+
+/**
+ * One rule, stated once: **if `--fields` is present, every positional is a
+ * path**; otherwise the first positional is the field list, exactly as before.
+ *
+ * The table is the proposal's probe table, run against the built binary rather
+ * than against a commander prototype — the prototype shows what commander
+ * binds, not what the action handler does with it, and that is the half that
+ * was wrong.
+ */
+describe("get: --fields, positional kept as a fallback (0005 §1)", () => {
+  const A = "test/fixtures/get-parity/docs/a.md";
+  const B = "test/fixtures/get-parity/more/b.md";
+
+  interface GetJson {
+    file: string;
+    present: boolean;
+    values: Record<string, unknown>;
+  }
+  const parse = (r: Run): GetJson[] => JSON.parse(r.stdout) as GetJson[];
+  const files = (r: Run): string[] =>
+    parse(r).map((x) => x.file.replace(/\\/g, "/"));
+  const requested = (r: Run): string[] => {
+    // `values` omits an unset field in JSON, so the *requested* set is read
+    // from a file where every field resolves.
+    const first = parse(r)[0];
+    return first ? Object.keys(first.values).sort() : [];
+  };
+
+  it("binds the first positional to the field list when --fields is absent", () => {
+    const r = run(["get", "title", A, "-f", "json"]);
+    expect(r.status).toBe(0);
+    expect(requested(r)).toEqual(["title"]);
+    expect(files(r)).toEqual([A]);
+  });
+
+  it("keeps every later positional a path, including directories", () => {
+    const r = run([
+      "get",
+      "title,type",
+      "test/fixtures/get-parity/docs/",
+      "test/fixtures/get-parity/more/",
+      "-f",
+      "json",
+    ]);
+    expect(r.status).toBe(0);
+    expect(requested(r)).toEqual(["title", "type"]);
+    expect(files(r).sort()).toEqual([A, B]);
+  });
+
+  it("--fields makes the first positional a path", () => {
+    const r = run(["get", "--fields", "title", A, "-f", "json"]);
+    expect(r.status).toBe(0);
+    expect(requested(r)).toEqual(["title"]);
+    expect(files(r)).toEqual([A]);
+  });
+
+  it("--fields keeps every positional a path", () => {
+    const r = run(["get", "--fields", "title", A, B, "-f", "json"]);
+    expect(r.status).toBe(0);
+    expect(files(r).sort()).toEqual([A, B]);
+  });
+
+  it("--fields=value is accepted, and the positional is still a path", () => {
+    const r = run(["get", "--fields=title", A, "-f", "json"]);
+    expect(r.status).toBe(0);
+    expect(requested(r)).toEqual(["title"]);
+    expect(files(r)).toEqual([A]);
+  });
+
+  it("--fields with no positional falls back to config paths:", () => {
+    const repo = makeTempRepo({
+      files: {
+        "docmeta.config.yaml": 'paths:\n  - "*.md"\n',
+        "one.md": "---\ntitle: from config\n---\n\n# one\n",
+      },
+      init: false,
+    });
+    try {
+      const r = spawnSync(
+        "node",
+        [bin, "get", "--fields", "title", "-f", "json"],
+        { cwd: repo, encoding: "utf8" },
+      );
+      expect(r.status).toBe(0);
+      const parsed = JSON.parse(r.stdout ?? "") as GetJson[];
+      expect(parsed.map((x) => x.values.title)).toEqual(["from config"]);
+    } finally {
+      removeTempRepo(repo);
+    }
+  });
+
+  it("--fields still leaves - reading stdin", () => {
+    const r = run(
+      ["get", "--fields", "type", "-", "--as", "markdown", "-f", "json"],
+      "---\ntype: note\n---\n",
+    );
+    expect(r.status).toBe(0);
+    expect(parse(r)[0]?.values.type).toBe("note");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0005 § 2 — "that's a path, not a field list"
+// ---------------------------------------------------------------------------
+
+describe("get names the real mistake when a path lands in [fields] (0005 §2)", () => {
+  const A = "test/fixtures/get-parity/docs/a.md";
+  const B = "test/fixtures/get-parity/more/b.md";
+  const LOOKS = "looks like a path, not a field list";
+  // spawnSync, because `run()` reports stderr as "" on a passing run and two of
+  // these assert on stderr while expecting exit 0.
+  const runIn = (args: string[], cwd: string): Run => {
+    const r = spawnSync("node", [bin, ...args], { cwd, encoding: "utf8" });
+    return {
+      stdout: r.stdout ?? "",
+      stderr: r.stderr ?? "",
+      status: r.status ?? 1,
+    };
+  };
+
+  it("fires on a sole positional that is a file path", () => {
+    const r = run(["get", A]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain(LOOKS);
+    // The old message blamed the *paths*, which were never the problem.
+    expect(r.stderr).not.toContain("No files to read");
+  });
+
+  it("fires with paths following it, too", () => {
+    // The guard is on the field-list argument, not on "there is exactly one
+    // positional" — otherwise `get a.md b.md` silently reports `a.md=(unset)`.
+    const r = run(["get", A, B]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain(LOOKS);
+    expect(r.stdout).not.toContain("(unset)");
+  });
+
+  it("fires on a bare directory name, which has no dot or separator", () => {
+    const r = run(["get", "docs"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain(LOOKS);
+  });
+
+  it("fires on a glob", () => {
+    const r = run(["get", "test/fixtures/*.md"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain(LOOKS);
+  });
+
+  it("does not fire on a bare field name that also names a real path", () => {
+    // Field names collide with directory names constantly — `tags`, `docs`,
+    // `type`, `content`. `existsSync` alone refused this legal invocation and
+    // suggested `docmeta get title tags`, which is nonsense. A shapeless token
+    // is a path only when nothing else was offered as one.
+    const cwd = join(root, "test", "fixtures", "get-parity");
+    const r = runIn(["get", "tags", "docs/a.md", "-f", "json"], cwd);
+    expect(r.status).toBe(0);
+    expect(r.stderr).not.toContain(LOOKS);
+  });
+
+  it("still fires on that same name when it stands alone", () => {
+    // The other half: with no path following, a bare name that is really there
+    // is the forgotten-field-list case the guard exists for.
+    const cwd = join(root, "test", "fixtures", "get-parity");
+    const r = runIn(["get", "tags"], cwd);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain(LOOKS);
+  });
+
+  it("refuses a bare `-` in the field slot instead of naming a field `-`", () => {
+    // `-` is stdin, never a field. Treated as one, it printed `-=(unset)` for
+    // every file in the config's `paths:` and exited 0 — the piped document
+    // never read, the run looking entirely successful.
+    const cwd = join(root, "test", "fixtures", "get-parity");
+    const r = runIn(["get", "-", "--as", "markdown"], cwd);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("Specify at least one field");
+    expect(r.stdout).not.toContain("-=(unset)");
+  });
+
+  it("does not fire on a real field list", () => {
+    const r = run(["get", "title,type", A, "-f", "json"]);
+    expect(r.status).toBe(0);
+  });
+
+  it("does not fire on a JSON Pointer field, which carries slashes", () => {
+    const r = run([
+      "get",
+      "/author/email",
+      "test/fixtures/nested/doc.md",
+      "-f",
+      "json",
+    ]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("jane@example.com");
+  });
+
+  it("does not fire on a mixed list holding a pointer", () => {
+    const r = run([
+      "get",
+      "author.name,/author/email",
+      "test/fixtures/nested/doc.md",
+      "-f",
+      "json",
+    ]);
+    expect(r.status).toBe(0);
+  });
+
+  it("bare `get` is an operational error, not a run over `undefined`", () => {
+    // `[fields]` is optional now, so commander no longer rejects this. Without
+    // its own guard the CLI would print `undefined=(unset)` per file, exit 0,
+    // and read as a successful extraction of a field nobody asked for.
+    const r = run(["get"]);
+    expect(r.status).toBe(2);
+    expect(r.stdout).not.toContain("undefined");
+    expect(r.stderr).toMatch(/field/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0005 § 2/3 — `-q/--quiet` on `get` and `fill`, `-f github` on `fill`
+// ---------------------------------------------------------------------------
+
+describe("get --quiet (0005 §2)", () => {
+  it("hides a file where every requested field is unset", () => {
+    const noisy = run(["get", "title", "test/fixtures/no-frontmatter.md"]);
+    expect(noisy.status).toBe(0);
+    expect(noisy.stdout).toContain("title=(unset)");
+
+    const quiet = run(["get", "title", "test/fixtures/no-frontmatter.md", "-q"]);
+    expect(quiet.status).toBe(0);
+    expect(quiet.stdout.trim()).toBe("");
+  });
+
+  it("still prints a file where one requested field is set", () => {
+    const r = run([
+      "get",
+      "title,owner",
+      "test/fixtures/get-parity/partial.md",
+      "--quiet",
+    ]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("title=Only a title");
+    // Quiet hides files, never values: the unset one still shows.
+    expect(r.stdout).toContain("owner=(unset)");
+  });
+
+  it("has no effect on json", () => {
+    const r = run([
+      "get",
+      "title",
+      "test/fixtures/no-frontmatter.md",
+      "-q",
+      "-f",
+      "json",
+    ]);
+    expect(r.status).toBe(0);
+    expect(JSON.parse(r.stdout)).toHaveLength(1);
+  });
+});
+
+/**
+ * `--provider mock --dry-run --no-cache` on every run that actually reaches
+ * `fill`: with `auto`, a machine with no key detects `llama-cpp` and starts
+ * downloading multi-gigabyte weights.
+ */
+describe("fill accepts -q and -f github (0005 §3)", () => {
+  const MOCK = ["--provider", "mock", "--dry-run", "--no-cache"];
+
+  it("accepts --quiet", () => {
+    const r = run(["fill", "test/fixtures/valid.md", ...MOCK, "--quiet"]);
+    expect(r.status).toBe(0);
+  }, 60000);
+
+  it("accepts -f github", () => {
+    const r = run(["fill", "test/fixtures/valid.md", ...MOCK, "-f", "github"]);
+    expect(r.status).toBe(0);
+  }, 60000);
+
+  it("still rejects sarif and junit", () => {
+    for (const format of ["sarif", "junit"]) {
+      const r = run(["fill", "test/fixtures/valid.md", ...MOCK, "-f", format]);
+      expect(r.status).toBe(2);
+      expect(r.stderr).toContain("Unknown --format");
+    }
+  }, 60000);
+
+  /**
+   * With `-`, the filled document owns stdout and the report goes to stderr,
+   * where GitHub never reads `::error`. An annotation nobody can see is exactly
+   * the false green this proposal set exists to remove, so the request is
+   * refused rather than silently degraded.
+   */
+  it("refuses -f github with stdin, rather than annotating into stderr", () => {
+    const r = run(
+      ["fill", "-", "--as", "markdown", "-f", "github", ...MOCK],
+      "---\ntype: note\n---\n",
+    );
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/stdin/i);
+  }, 60000);
 });

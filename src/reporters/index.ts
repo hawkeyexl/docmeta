@@ -13,12 +13,18 @@ import { palette } from "./color.js";
 import { fieldLabel } from "./rule-id.js";
 import { renderSarif, type SarifOptions } from "./sarif.js";
 import { renderJunit } from "./junit.js";
-import { escapeWorkflowCommandMessage } from "./github.js";
+import {
+  escapeWorkflowCommandMessage,
+  escapeWorkflowCommandProperty,
+} from "./github.js";
 
 export { renderSarif, SARIF_NO_GIT_ROOT } from "./sarif.js";
 export type { SarifOptions } from "./sarif.js";
 export { renderJunit, xmlEscape } from "./junit.js";
-export { escapeWorkflowCommandMessage } from "./github.js";
+export {
+  escapeWorkflowCommandMessage,
+  escapeWorkflowCommandProperty,
+} from "./github.js";
 export {
   PARSE_ERROR_RULE,
   SCHEMA_ERROR_RULE,
@@ -45,13 +51,49 @@ export const REPORT_FORMATS = [
 
 export type ReportFormat = (typeof REPORT_FORMATS)[number];
 
+/**
+ * A format list as a sentence fragment: `"pretty or json"`,
+ * `"pretty, json, or github"`.
+ *
+ * The two-value case is why this is a function rather than one `join`. A pair
+ * takes no comma before "or", and `get` and `schemas` have said "Use pretty or
+ * json." since long before the list was shared — a mechanical
+ * `map(...).join(", ")` would have quietly reworded every one of those messages
+ * to "pretty, or json".
+ */
+export function formatList(formats: readonly string[]): string {
+  if (formats.length < 2) return formats[0] ?? "";
+  if (formats.length === 2) return `${formats[0]} or ${formats[1]}`;
+  return formats
+    .map((format, i) => (i === formats.length - 1 ? `or ${format}` : format))
+    .join(", ");
+}
+
 /** `"pretty, json, github, sarif, or junit"`, for messages and help text. */
-export const REPORT_FORMAT_LIST = REPORT_FORMATS.map((format, i) =>
-  i === REPORT_FORMATS.length - 1 ? `or ${format}` : format,
-).join(", ");
+export const REPORT_FORMAT_LIST = formatList(REPORT_FORMATS);
 
 export function isReportFormat(value: string): value is ReportFormat {
   return (REPORT_FORMATS as readonly string[]).includes(value);
+}
+
+/**
+ * The formats **every** command produces.
+ *
+ * `get` and `schemas` accept exactly these two, and each used to spell the pair
+ * out inline in `src/cli.ts` as `format !== "pretty" && format !== "json"` with
+ * a hand-written "Use pretty or json." beside it — the same stringly-typed
+ * drift this module's `REPORT_FORMATS` comment describes, reproduced three more
+ * times. Stated once, the guard and the message cannot disagree.
+ */
+export const COMMON_FORMATS = ["pretty", "json"] as const;
+
+export type CommonFormat = (typeof COMMON_FORMATS)[number];
+
+/** `"pretty or json"`, for messages and help text. */
+export const COMMON_FORMAT_LIST = formatList(COMMON_FORMATS);
+
+export function isCommonFormat(value: string): value is CommonFormat {
+  return (COMMON_FORMATS as readonly string[]).includes(value);
 }
 
 /**
@@ -175,7 +217,7 @@ export function renderGithub(results: ValidationResult[]): string {
   const lines: string[] = [];
   for (const r of results) {
     for (const e of r.errors) {
-      const params = [`file=${r.file}`];
+      const params = [`file=${escapeWorkflowCommandProperty(r.file)}`];
       if (e.line != null) params.push(`line=${e.line}`);
       if (e.col != null) params.push(`col=${e.col}`);
       // Escaped as one string, after assembly: the schema id and the field

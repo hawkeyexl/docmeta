@@ -61,13 +61,16 @@ export {
 } from "./core/schema-cache.js";
 export type { ReadOptions, SchemaCacheEntry } from "./core/schema-cache.js";
 export {
+  COMMON_FORMATS,
   REPORT_FORMATS,
+  isCommonFormat,
   isReportFormat,
   render,
   renderJunit,
   renderSarif,
 } from "./reporters/index.js";
 export type {
+  CommonFormat,
   ReportFormat,
   ReportOptions,
   SarifOptions,
@@ -75,8 +78,18 @@ export type {
 // `ValidateRun.frame` is typed with this, so a caller passing the frame back
 // into `render` needs to be able to name it.
 export type { FingerprintContext } from "./core/baseline.js";
-export { renderFill } from "./reporters/fill.js";
-export type { FillReportFormat } from "./reporters/fill.js";
+export {
+  FILL_FORMATS,
+  isFillFormat,
+  renderFill,
+  renderFillGithub,
+} from "./reporters/fill.js";
+export type { FillReportFormat, FillReportOptions } from "./reporters/fill.js";
+// `stringifyValue` alongside `renderGet`: a caller building its own loop over
+// `runGet` results needs the same `(unset)`-and-JSON formatting the CLI uses,
+// and deriving it a second time is how two spellings of one rule start.
+export { renderGet, stringifyValue } from "./reporters/get.js";
+export type { GetReportOptions } from "./reporters/get.js";
 export {
   extractFrontmatter,
   locateFrontmatter,

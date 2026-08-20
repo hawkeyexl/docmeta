@@ -1,8 +1,8 @@
 # 0005 — Command parity: flags first, positional fallbacks kept
 
-- **Status:** Proposed
+- **Status:** Implemented
 - **Serves:** every persona; enforces the project's own working agreement
-- **Touches:** `src/cli.ts`, `src/commands/{get,fill}.ts`, `src/reporters/fill.ts`
+- **Touches:** `src/cli.ts`, `src/reporters/{index,fill,get}.ts` (as built — the command cores were *not* touched; see [correction 3](#correction-3--quiet-is-a-reporter-concern-not-a-core-one))
 - **Constraint:** `npm run docs:check-cli` compares documented args/options/defaults *and* required-vs-optional arity against `buildProgram()`. Every change here needs a matching `reference/cli.mdx` edit.
 
 ## Problem
@@ -199,3 +199,94 @@ to semantics one command has and another cannot.
 7. `reference/cli.mdx`: `[fields]`, `--fields`, `--quiet` on two commands,
    `github` in `fill`'s format list. Then `npm run build && npm run docs:check-cli`
    must pass — it is the gate for this proposal.
+
+## Corrections found while implementing
+
+Five things above are wrong. They are left in place rather than edited away, so
+the record shows what the design said and what the code had to do instead. The
+implementation follows the corrections.
+
+### Correction 1 — the four-line sketch in § 1 is wrong
+
+```ts
+const fields = options.fields ?? fieldsArg;
+const paths  = options.fields ? [fieldsArg, ...pathsArg].filter(Boolean) : pathsArg;
+```
+
+With **neither** the flag nor the positional, `options.fields ?? fieldsArg` is
+`undefined`, and `String(undefined).split(",")` is `["undefined"]` — a field
+list of length one. `runGet`'s `fields.length === 0` guard therefore never
+fires, so a bare `docmeta get` in a repo with config `paths:` prints
+`undefined=(unset)` per file and exits **0**: a successful-looking extraction of
+a field nobody named. The CLI has to detect the missing list itself and raise a
+`DocmetaError` before calling `runGet`.
+
+`.filter(Boolean)` is wrong too, for a smaller reason: it silently drops an
+empty-string path. The fold is keyed on `fieldsArg !== undefined` instead.
+
+### Correction 2 — stress test 2 scopes the guard too narrowly
+
+It says the guard fires when "the **sole** positional" looks like a path. Then
+`docmeta get docs/a.md docs/b.md` has two positionals, the guard never fires,
+and the user gets `docs/b.md: docs/a.md=(unset)` — the original bug, exit 0.
+The guard fires on the field-list argument **regardless of how many paths
+follow**.
+
+The heuristic is also wider than "a path separator or a supported extension".
+It reuses the shape already proven in `suggestCommand`: exists on disk, is a
+glob, ends in a supported extension, or contains a separator. The `existsSync`
+leg is what catches a bare directory name (`docmeta get docs`), which has
+neither a dot nor a slash. Two negative tests come first, because a false
+positive would reject a legal field list: a **comma** makes it a list, and a
+**leading `/`** is a JSON Pointer — `docmeta get /author/email page.md` is
+documented usage that a bare separator test would refuse.
+
+### Correction 3 — quiet is a reporter concern, not a core one
+
+Implementation sketch item 4 says "`runGet` / `runFill` honor `quiet`". That is
+wrong for this codebase. `validate` already treats quiet as a **reporter**
+option (`ReportOptions.quiet`, consumed in `renderPretty`), and `GetOptions` /
+`FillOptions` are public API: a programmatic caller handed a silently filtered
+`GetFileResult[]` cannot tell a filtered run from an empty one.
+
+So the cores are untouched, and `get` gained the reporter it never had —
+`src/reporters/get.ts`, exporting `renderGet(results, fields, { color, quiet })`
+plus `stringifyValue`. It was the last command rendering inline in `src/cli.ts`.
+
+### Correction 4 — stress test 7's rule for `fill --quiet` is a no-op
+
+"`--quiet` additionally drops files with zero proposals" describes something
+`renderFillPretty` already does: it skips `result.fields.length === 0` outright.
+The only files left to drop are those with nothing **written** — which is
+exactly the set that carries a `requiredSkipped`, the thing that makes `fill`
+exit 1. Under the proposal's rule, `fill --quiet` would hide the reason for its
+own failure.
+
+The rule as implemented: hide a file only when it has **no written fields, no
+required skip, and no error**.
+
+### Correction 5 — annotations cannot be placed at the frontmatter line
+
+§ 3 says `github` emits one `::error` "at the file's frontmatter line".
+`FillFileResult` / `FilledField` carry **no location** — unlike
+`ValidationResult.errors[].line` — because a fill report is about a property
+that is *missing* from the document. Threading `locateFrontmatter` through would
+be a public-API shape change for a line number that points at the block rather
+than at anything wrong in it.
+
+So the annotation is `::error file=…::<message>` with **no `line=`**, and GitHub
+anchors it to line 1. The reference page says so.
+
+### Two things the proposal did not anticipate
+
+- **`fill -f github` made two doc-detective steps stale**, not one.
+  `reference/cli.mdx` asserted `fill … -f github` exits 2, and
+  `ci/exit-codes-and-annotations.mdx` asserted `docmeta get` reports "missing
+  required argument" — which stops being true the moment `[fields]` is optional.
+  Both were replaced with steps that exercise the new behavior.
+- **Any doc step or test that *runs* `fill` needs `--provider mock --dry-run
+  --no-cache`.** The stale `-f github` step above, once it stopped failing at
+  the format check, ran a real fill against `test/fixtures/valid.md` and wrote
+  `action: understand` into the committed fixture — which then made two
+  unrelated provider tests fail, since a fully-filled fixture has no candidates
+  left to propose.
