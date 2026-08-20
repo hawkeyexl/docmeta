@@ -1,6 +1,6 @@
 # 0014 — An empty input set is not success
 
-- **Status:** Proposed
+- **Status:** Implemented (#73)
 - **Serves:** every persona; this is the highest-severity item in the set
 - **Relates to:** [0004](0004-config-upward-discovery.md) (same false-green class), [0001](0001-validation-baseline.md) (a ratchet makes this worse)
 - **Touches:** `src/cli.ts`, `src/commands/{validate,get,fill}.ts`
