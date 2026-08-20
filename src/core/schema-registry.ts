@@ -4,6 +4,7 @@
  * a built-in id, a local `.json` path, or an `http(s)` URL.
  */
 import { readFile } from "node:fs/promises";
+import { resolve as resolvePath } from "node:path";
 import { Buffer } from "node:buffer";
 import { DocmetaError } from "../types.js";
 import {
@@ -210,6 +211,25 @@ const wait = (ms: number): Promise<void> =>
   });
 
 export interface LoadSchemaOptions {
+  /**
+   * Directory a **relative local-file** ref is resolved against.
+   *
+   * Omitted means `process.cwd()`, which is what the CLI wants and what this
+   * always did. A library caller passing `cwd` to a command core needs the
+   * ref measured from *that* directory instead: `rebaseConfigSchemaRefs`
+   * deliberately leaves refs untouched when the config already sits in the
+   * run's `cwd`, so `./schema/house.json` arrives here exactly as written and
+   * was then read against the wrong directory.
+   *
+   * Resolved at read time rather than by rewriting the ref, and that choice is
+   * load-bearing: the ref string is what reports name, what `Validator` keys
+   * its compile cache on, and what every baseline fingerprint is taken over.
+   * Rewriting it to an absolute path would silently move every recorded
+   * baseline. `canonicalSchemaRef` in `baseline.ts` already measures a relative
+   * ref from the run's `cwd`, so this makes loading agree with fingerprinting
+   * rather than introducing a new convention.
+   */
+  fileBase?: string;
   /** Abort a remote fetch after this many ms (default 10_000). */
   timeoutMs?: number;
   /** Reject a remote schema whose body exceeds this many bytes (default 5 MB). */
@@ -510,6 +530,13 @@ async function resolveRemote(
  */
 export function schemaLoadOptions(args: {
   root: string;
+  /**
+   * Where a relative local-file schema ref is measured from — the run's `cwd`,
+   * not `root`. The two differ when a config was discovered in an ancestor, and
+   * a `--schema ./x.json` typed on the command line belongs to the directory
+   * the user was standing in, not to the config's.
+   */
+  fileBase?: string;
   /** Config `schemaCache.ttlHours`. */
   ttlHours?: number;
   /** `--offline`, else config `offline:`. */
@@ -517,6 +544,7 @@ export function schemaLoadOptions(args: {
 }): LoadSchemaOptions {
   return {
     cacheDir: schemaCacheDir(args.root),
+    ...(args.fileBase !== undefined ? { fileBase: args.fileBase } : {}),
     ...(args.ttlHours !== undefined ? { ttlHours: args.ttlHours } : {}),
     ...(args.offline !== undefined ? { offline: args.offline } : {}),
   };
@@ -582,10 +610,18 @@ export async function loadSchema(
   }
 
   // file
+  //
+  // `resolve` is a no-op on an already-absolute ref, which is the shape
+  // `rebaseConfigSchemaRefs` produces when the config lives somewhere other
+  // than the run's `cwd`. So both paths land here correctly: an absolute ref
+  // passes through, and a relative one is measured from the run's directory.
+  const file = resolvePath(options.fileBase ?? process.cwd(), ref);
   let raw: string;
   try {
-    raw = await readFile(ref, "utf8");
+    raw = await readFile(file, "utf8");
   } catch {
+    // Names the ref as written, not the resolved path: that is the string the
+    // user put in their config and the one every other message uses for it.
     throw new DocmetaError(`Schema file not found: "${ref}".`);
   }
   try {
