@@ -82,6 +82,26 @@ describe("config", () => {
     );
   });
 
+  it("rejects an unknown key inside an overrides entry", () => {
+    // The section the first pass missed, and the worst case of the three: a
+    // misspelling *beside* a correct key was dropped in silence and the run
+    // passed, which is the false green this check exists to end.
+    expect(() =>
+      parseConfig(
+        'overrides:\n  - files: "*.md"\n    schemas: [google:okf:0.1]\n    schemass: [x]\n',
+        "c.yaml",
+      ),
+    ).toThrow(/overrides\[0\] has unknown key "schemass"/);
+    // And alone, where the old message blamed `schemas` for being absent
+    // rather than naming the key that was wrong.
+    expect(() =>
+      parseConfig(
+        'overrides:\n  - files: "*.md"\n    schemass: [google:okf:0.1]\n',
+        "c.yaml",
+      ),
+    ).toThrow(/unknown key "schemass"/);
+  });
+
   it("still accepts every key it documents", () => {
     // The guard is a whitelist, so a key omitted from it would start failing a
     // config that has always been valid. Exercise all of them together.

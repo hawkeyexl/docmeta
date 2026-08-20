@@ -88,6 +88,9 @@ const SCHEMA_TRUST_KEYS = ["documentRefs", "hosts"] as const;
 /** The keys a `schemaCache:` mapping may carry. */
 const SCHEMA_CACHE_KEYS = ["ttlHours"] as const;
 
+/** The keys one `overrides:` entry may carry. */
+const OVERRIDE_KEYS = ["files", "schemas"] as const;
+
 /** The keys a `fill:` mapping may carry. */
 const FILL_KEYS = [
   "provider",
@@ -340,6 +343,13 @@ export function parseConfig(text: string, source: string): DocmetaConfig {
         throw new DocmetaError(`${source}: overrides[${i}] must be a mapping.`);
       }
       const e = entry as Record<string, unknown>;
+      // Before the field checks, so a misspelling is reported as the typo it
+      // is. `schemass:` beside a correct `schemas:` was dropped in silence and
+      // the run passed — the false green this whole check exists to end, in the
+      // one section it had not reached. Alone, it produced `"overrides[0].
+      // schemas" must be a list of strings`, blaming the key that is missing
+      // rather than the one that is wrong.
+      rejectUnknownKeys(e, OVERRIDE_KEYS, `overrides[${i}]`, source);
       if (typeof e.files !== "string") {
         throw new DocmetaError(
           `${source}: overrides[${i}].files must be a string glob.`,

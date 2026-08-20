@@ -127,8 +127,8 @@ export const htmlExtractor: MetadataExtractor = {
             setKey(key, typeValue(value), line, col);
           }
         }
-      }
-      if (defaultTreeAdapter.isElementNode(node)) {
+        // Same guard, same node, nothing between that could change the answer:
+        // recursion belongs inside the one check rather than behind a second.
         for (const child of node.childNodes) visit(child);
       }
     };
