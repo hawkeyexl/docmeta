@@ -164,6 +164,20 @@ describe("baseline file", () => {
     );
   });
 
+  it("parses a baseline an editor re-saved with a UTF-8 BOM", () => {
+    // A baseline is committed, so a Windows editor can re-save it with a BOM
+    // and Node's `JSON.parse` then rejects a file every other tool reads. The
+    // ratchet would fail with "invalid JSON" on a file nobody meaningfully
+    // changed. Nothing hashes a baseline, so this is purely a parse concession.
+    const baseline = {
+      version: BASELINE_VERSION,
+      generatedWith: "3.4.2",
+      entries: { "docs/a.md": ["a1b2c3d4e5f60718"] },
+    };
+    const withBom = "\u{FEFF}" + serializeBaseline(baseline);
+    expect(parseBaseline(withBom, DEFAULT_BASELINE_PATH)).toEqual(baseline);
+  });
+
   it("sorts file keys and fingerprints so the file is diff-stable", () => {
     const text = serializeBaseline({
       version: BASELINE_VERSION,
