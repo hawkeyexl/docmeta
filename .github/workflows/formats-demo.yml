@@ -37,7 +37,7 @@ jobs:
     name: SARIF to code scanning, JUnit to the run summary
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - uses: actions/setup-node@v6
         with:
           node-version: 24
