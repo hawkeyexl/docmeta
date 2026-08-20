@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { Validator } from "../src/core/validator.js";
+import { PUBLISHED_BASE } from "../src/core/schema-registry.js";
 import { startSchemaServer, type SchemaServer } from "./helpers/schema-server.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -198,16 +199,17 @@ describe("Validator compile cache under concurrency", () => {
     expect(errors.map((e) => e.schema)).toEqual([withId, withIdAlias]);
   });
 
-  it("silently checks a divergent schema against the first one under the same $id", async () => {
-    // The cost the reuse above buys, pinned rather than left to a comment.
-    // Ajv can hold only one schema per `$id`, so when two refs disagree about
-    // the rules, the first compile wins and the second ref is answered from it.
-    // Nothing errors — the run just gives the wrong answer.
+  it("judges a divergent schema by its own rules, not by the one that took the $id first", async () => {
+    // This used to assert the opposite, and the opposite was a documented
+    // silent wrong answer: Ajv holds one schema per `$id`, so when two refs
+    // disagreed about the rules the first compile won and the second ref was
+    // answered from it. Nothing errored; the run just gave the wrong result.
     //
-    // This is why the schema-authoring guide tells readers to change the `$id`
-    // when they copy a built-in: a local copy that keeps `google:okf:0.1` is
-    // this case exactly, and the symptom is a check that passes when it should
-    // have failed.
+    // Reuse is now conditional on the registration being *the same object*, so
+    // a ref naming different content gets its own compile with the contested id
+    // dropped. That mattered once `registerBuiltins` began pre-loading the
+    // built-ins: the collision stopped being an ordering race and became
+    // certain, and a vendored-then-edited built-in would always have lost.
     const data = { title: "Hi", stray: 1 };
 
     // Alone, the divergent schema rejects the stray key.
@@ -215,14 +217,15 @@ describe("Validator compile cache under concurrency", () => {
       await new Validator().validate(data, [withIdDivergent], lineFor),
     ).toHaveLength(1);
 
-    // Behind a permissive schema wearing the same `$id`, it does not — the
-    // second ref reports clean because it never got its own compile.
-    const shadowed = await new Validator().validate(
+    // And behind a permissive schema wearing the same `$id`, it still does.
+    const alongside = await new Validator().validate(
       data,
       [withId, withIdDivergent],
       lineFor,
     );
-    expect(shadowed).toEqual([]);
+    expect(alongside).toHaveLength(1);
+    expect(alongside[0]?.schema).toBe(withIdDivergent);
+    expect(alongside[0]?.subject).toBe("stray");
   });
 
   it("does not cache a failed load, so a later attempt can still succeed", async () => {
@@ -305,6 +308,54 @@ describe("Validator with remote schemas of different dialects", () => {
     expect(errors).toHaveLength(1);
     expect(errors[0]?.schema).toBe(ref);
     expect(errors[0]?.message).toMatch(/type/);
+  });
+});
+
+describe("a local schema that claims a built-in's $id (0009)", () => {
+  it("is judged by its own contents, not by the built-in it shadows", async () => {
+    // `schemas vendor` writes a copy of a built-in carrying its `$id`, and 0009
+    // encourages vendoring the published URL — so an edited vendored copy is a
+    // normal thing to have. Pre-registering the built-ins put one under that
+    // `$id` in every Ajv up front, and `compileUncached`'s id short-circuit then
+    // handed back the *bundled* schema for a ref naming the local file: the
+    // house rule silently did not apply, while the report went on naming the
+    // local path. Before the fix this reported 'type' — the bundled OKF's
+    // requirement — for a schema that does not mention it.
+    const dir = await mkdtemp(join(tmpdir(), "docmeta-idshadow-"));
+    try {
+      const mine = join(dir, "my-okf.json");
+      await writeFile(
+        mine,
+        JSON.stringify({
+          $schema: "https://json-schema.org/draft/2020-12/schema",
+          $id: "google:okf:0.1",
+          type: "object",
+          required: ["owner"],
+        }),
+      );
+      const errors = await new Validator().validate(
+        { title: "t" },
+        [mine],
+        () => undefined,
+      );
+      const said = errors.map((e) => e.message).join();
+      expect(said).toMatch(/'owner'/);
+      expect(said).not.toMatch(/'type'/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("still shares one validator when the object really is the same", async () => {
+    // The dedup the short-circuit exists for has to survive the fix: the id and
+    // the published URL are two names for one bundled object, so compiling both
+    // must not trip Ajv's duplicate-id error.
+    const errors = await new Validator().validate(
+      { title: "t" },
+      ["google:okf:0.1", `${PUBLISHED_BASE}okf/0.1.json`],
+      () => undefined,
+    );
+    expect(errors.length).toBeGreaterThan(0);
   });
 });
 

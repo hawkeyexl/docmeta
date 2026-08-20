@@ -213,15 +213,32 @@ export class Validator {
       // the only reading available — the alternative is the hard error this
       // replaces.
       //
-      // The cost, stated plainly: if two refs share an `$id` but their CONTENTS
-      // differ, whichever compiled first wins and the second ref is checked
-      // against the wrong schema — a silent wrong answer, not an error. That
-      // setup is already broken (Ajv cannot hold two schemas under one id), but
-      // it now fails quietly, so a surprising pass on a mis-copied schema
-      // starts here.
+      // Reused only when the registration really is *this* object. Sharing on
+      // the id alone was tolerable while a registration could only come from an
+      // earlier compile in the same run. It stopped being tolerable when
+      // `registerBuiltins` began pre-loading all seven built-ins into every
+      // instance: an id collision is no longer a race whose outcome depends on
+      // ordering, it is certain, and the built-in always wins.
+      //
+      // What that would silently override is a vendored built-in the user then
+      // edited — the workflow proposal 0009 actively encourages. `schemas
+      // vendor` writes a copy carrying `$id: google:okf:0.1`, so a house rule
+      // added to that copy would simply not apply, while the report went on
+      // naming the local path.
+      //
+      // A different schema claiming a taken id is compiled on its own merits,
+      // with the id dropped from a shallow copy: Ajv refuses a second schema
+      // under one id, and the id is not what identifies a schema here anyway —
+      // the *ref* is what reports name, what baselines fingerprint, and what
+      // this cache is keyed on.
       const id = typeof schema["$id"] === "string" ? schema["$id"] : undefined;
       const registered = id != null ? ajv.getSchema(id) : undefined;
-      return registered ?? ajv.compile(schema);
+      if (registered) {
+        if (registered.schema === schema) return registered;
+        const { $id: _taken, ...anonymous } = schema;
+        return ajv.compile(anonymous);
+      }
+      return ajv.compile(schema);
     } catch (err) {
       throw new DocmetaError(
         `Schema "${ref}" failed to compile: ${(err as Error).message}`,
