@@ -301,7 +301,9 @@ export async function runValidate(
     try {
       extracted = extractor.extract(content, label);
     } catch (err) {
-      if (err instanceof DocmetaError) throw err; // operational (stub/unsupported)
+      // A `DocmetaError` out of an extractor is operational, not a bad
+      // document — it aborts the run rather than counting as a file failure.
+      if (err instanceof DocmetaError) throw err;
       results.push(
         parseErrorResult(label, extractor.name, (err as Error).message, "parse"),
       );

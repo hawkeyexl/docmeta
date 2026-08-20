@@ -14,7 +14,6 @@ import {
   supportedExtensions,
   listFormats,
 } from "../src/extractors/index.js";
-import { createStubExtractor } from "../src/extractors/stub.js";
 import { DocmetaError } from "../src/types.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -705,11 +704,11 @@ describe("extractor registry", () => {
     expect(extractorForExtension(".txt")).toBeUndefined();
   });
 
-  it("stub extractors throw not-implemented", () => {
-    // No registered format is a stub anymore; exercise the factory directly.
-    const stub = createStubExtractor("planned", [".planned"], "future format");
-    expect(stub.implemented).toBe(false);
-    expect(() => stub.extract("x", "x.planned")).toThrow(DocmetaError);
+  it("registers only implemented extractors, so the flag reads true", () => {
+    // `implemented` stays on the interface as a declaration a future
+    // read-only-pending format can set false; today nothing does, and the
+    // registry filters above depend on that staying visible.
+    expect(listFormats().every((f) => f.implemented)).toBe(true);
   });
 });
 
