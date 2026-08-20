@@ -1,3 +1,10 @@
+# [3.10.0](https://github.com/hawkeyexl/docmeta/compare/v3.9.1...v3.10.0) (2026-08-20)
+
+
+### Features
+
+* **cli:** one input and output surface across validate, get, and fill ([#86](https://github.com/hawkeyexl/docmeta/issues/86)) ([7ecde9b](https://github.com/hawkeyexl/docmeta/commit/7ecde9bbf20c8154adebadb0565fd02c50cc24bd))
+
 ## [3.9.1](https://github.com/hawkeyexl/docmeta/compare/v3.9.0...v3.9.1) (2026-08-20)
 
 
