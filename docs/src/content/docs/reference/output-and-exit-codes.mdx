@@ -108,7 +108,7 @@ Machine-readable. Prints a single JSON object with a run `summary` and a
 | `results[].errors[].keyword` | string | The JSON Schema keyword that failed (`required`, `format`, `pattern`, `type`, …), or `parse` / `schema` for docmeta's own errors. |
 | `results[].errors[].subject` | string | The identifier within that keyword: the missing property, the additional property, the format name, the expected type. Omitted for keywords whose parameter is a schema-authored *value*, such as `pattern`'s regex or `minLength`'s number. |
 | `results[].errors[].line` | number | 1-based source line. Omitted when unknown. |
-| `results[].errors[].col` | number | 1-based column. Omitted when unknown. |
+| `results[].errors[].col` | number | 1-based column. Supplied by the `html` and `xml` extractors — the `content=` attribute of a `<meta>` tag, the value of an XML attribute. Omitted for every other format, and for a `required` violation in any format: that error reports the parent object, and a missing property has no column. |
 
 `keyword` and `subject` are the machine-stable half of a violation's identity.
 They are what a script should key on when it needs to recognize "the same
@@ -131,7 +131,8 @@ Each line has the form:
 ::error file=<file>,line=<N>,col=<N>::[<schema-id>] <field> <message>
 ```
 
-`line` and `col` are included only when known. `<field>` is the field path, or
+`line` and `col` are included only when known — `col` today means an `html` or
+`xml` document and a violation other than `required`. `<field>` is the field path, or
 `(root)` for a whole-document error.
 
 The message is escaped the way GitHub's workflow-command protocol requires:
@@ -208,7 +209,7 @@ complete envelope with an empty `results` array — never an empty file, which
 | `results[].level` | string | Always `error`. See [severity](#severity-is-always-error) below. |
 | `results[].message.text` | string | The field path (or `(root)`) followed by the violation message. |
 | `results[].locations[].physicalLocation.artifactLocation.uri` | string | The file, **relative to the repository root**. See [paths](#sarif-paths-are-repository-root-relative). |
-| `results[].locations[].physicalLocation.region.startLine` | number | 1-based source line. The whole `region` is **omitted** when no line is known — SARIF requires `startLine >= 1`, so `0` would be invalid and `1` would silently mislocate the finding at the top of the file. A location with only an `artifactLocation` renders as a file-level alert, which is true. No `startColumn` is ever emitted. |
+| `results[].locations[].physicalLocation.region.startLine` | number | 1-based source line. The whole `region` is **omitted** when no line is known — SARIF requires `startLine >= 1`, so `0` would be invalid and `1` would silently mislocate the finding at the top of the file. A location with only an `artifactLocation` renders as a file-level alert, which is true. No `startColumn` is ever emitted, even for a finding whose JSON `col` is set — the SARIF region stays line-only for now. |
 | `results[].partialFingerprints` | object | `{"docmetaViolation/v1": "<fingerprint>"}` — the same fingerprint the [baseline](/docmeta/reference/cli/#baselines) records. |
 
 docmeta's own failures do not get a rule id built from `(parse)`. A document

@@ -338,6 +338,7 @@ export async function runValidate(
         extracted.data,
         schemaSet,
         extracted.lineFor,
+        extracted.colFor,
       );
     } catch (err) {
       // A schema the *document* chose failing to load — unparseable, missing,

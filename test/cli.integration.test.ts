@@ -89,6 +89,36 @@ describe("docmeta CLI (built bin)", () => {
     const r = run(["validate", "test/fixtures/bad-timestamp.md", "-f", "github"]);
     expect(r.status).toBe(1);
     expect(r.stdout).toContain("::error file=test/fixtures/bad-timestamp.md");
+    // Frontmatter supplies no column, so none is invented for it.
+    expect(r.stdout).not.toContain("col=");
+  });
+
+  it("annotates an html meta tag at its content= column", () => {
+    // `<meta name="timestamp" content="last Tuesday">` is line 6; `content`
+    // starts at column 28, so the caret lands on the failing value's attribute
+    // rather than on `<meta`.
+    const r = run(["validate", "test/fixtures/bad-timestamp.html", "-f", "github"]);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain(
+      "::error file=test/fixtures/bad-timestamp.html,line=6,col=28::",
+    );
+  });
+
+  it("annotates an xml attribute at its value column", () => {
+    // `timestamp="last Tuesday"` is line 4; xmldom reports the opening quote
+    // of the value, column 21.
+    const r = run(["validate", "test/fixtures/bad-timestamp.xml", "-f", "github"]);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain(
+      "::error file=test/fixtures/bad-timestamp.xml,line=4,col=21::",
+    );
+  });
+
+  it("omits col for a required violation, which points at no token", () => {
+    const r = run(["validate", "test/fixtures/missing-type.html", "-f", "github"]);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("must have required property 'type'");
+    expect(r.stdout).not.toContain("col=");
   });
 
   it("lists built-in schemas", () => {

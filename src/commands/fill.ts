@@ -376,6 +376,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
         extracted.data,
         schemaSet,
         extracted.lineFor,
+        extracted.colFor,
       );
     } catch (err) {
       // Same rule as `validate`: a schema the *document* chose failing to load
@@ -507,6 +508,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
         merged,
         schemaSet,
         extracted.lineFor,
+        extracted.colFor,
       );
       const broken = new Set(
         after.map((e) => topKey(e.instancePath)).filter((k) => k !== ""),

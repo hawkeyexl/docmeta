@@ -117,6 +117,33 @@ describe("reporters", () => {
     expect(out).toContain("::error file=bad.md,line=1::[google:okf:0.1]");
     expect(out).toContain("line=9");
     expect(out).not.toContain("ok.md");
+    // These findings carry no column, so no `col=` is invented for them.
+    expect(out).not.toContain("col=");
+  });
+
+  it("github output emits col= after line= when a finding carries one", () => {
+    const withCol: ValidationResult[] = [
+      {
+        file: "bad.html",
+        format: "html",
+        ok: false,
+        schemas: ["google:okf:0.1"],
+        errors: [
+          {
+            schema: "google:okf:0.1",
+            instancePath: "/timestamp",
+            message: 'must match format "date-time"',
+            keyword: "format",
+            subject: "date-time",
+            line: 5,
+            col: 23,
+          },
+        ],
+      },
+    ];
+    expect(renderGithub(withCol)).toContain(
+      "::error file=bad.html,line=5,col=23::[google:okf:0.1]",
+    );
   });
 
   it("json output carries the machine identity of every violation", () => {
@@ -445,8 +472,32 @@ describe("reporters: sarif", () => {
     expect(location).not.toHaveProperty("region");
   });
 
-  it("never emits a startColumn, which no extractor populates", () => {
+  it("never emits a startColumn, even for a finding that carries a column", () => {
+    // The html and xml extractors populate `col`, so this is no longer true by
+    // accident. SARIF `region.startColumn` is 0003's to add along with the rest
+    // of the region work; until then the region stays line-only deliberately.
+    const withCol: ValidationResult[] = [
+      {
+        file: "bad.html",
+        format: "html",
+        ok: false,
+        schemas: ["google:okf:0.1"],
+        errors: [
+          {
+            schema: "google:okf:0.1",
+            instancePath: "/timestamp",
+            message: 'must match format "date-time"',
+            keyword: "format",
+            subject: "date-time",
+            line: 9,
+            col: 23,
+          },
+        ],
+      },
+    ];
     expect(renderSarif(results)).not.toContain("startColumn");
+    expect(renderSarif(withCol)).not.toContain("startColumn");
+    expect(renderSarif(withCol)).toContain('"startLine": 9');
   });
 
   it("skips the stdin label, which is not a path any consumer can resolve", () => {

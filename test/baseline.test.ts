@@ -46,6 +46,14 @@ describe("fingerprint", () => {
     expect(fingerprint(err({ line: 3 }))).toBe(fingerprint(err({ line: 41 })));
   });
 
+  it("survives a column shift, for the same reason the line is excluded", () => {
+    // The html and xml extractors populate `col`, so this is now a live risk:
+    // renaming a `<meta>` attribute or reindenting a tag moves every column on
+    // the line without changing a single violation.
+    expect(fingerprint(err({ col: 4 }))).toBe(fingerprint(err({ col: 37 })));
+    expect(fingerprint(err({ col: 4 }))).toBe(fingerprint(err()));
+  });
+
   it("survives a reworded message — an Ajv upgrade must not invalidate a baseline", () => {
     expect(fingerprint(err({ message: "is invalid" }))).toBe(fingerprint(err()));
   });

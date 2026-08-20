@@ -21,6 +21,18 @@ export interface ExtractedMetadata {
    * when no position is known.
    */
   lineFor(pointer: string): number | undefined;
+  /**
+   * The column counterpart of {@link lineFor}, 1-based, resolving the same
+   * pointer forms.
+   *
+   * **Optional on purpose.** `lineFor` is required and public, so widening it
+   * to return a position pair would break every consumer that implements
+   * `MetadataExtractor` outside this repository. A format that cannot cheaply
+   * give a column simply omits this — today that is every frontmatter-based
+   * extractor, whose `yaml` node offsets would need an offset -> line/col
+   * conversion first. `html` and `xml` implement it.
+   */
+  colFor?(pointer: string): number | undefined;
 }
 
 /** Fenced front matter flavors, in fence order: `---`, `+++`, `;;;`. */
