@@ -1524,3 +1524,24 @@ describe("schemas rejects an unsupported --format", () => {
     expect(r.stdout).toContain("Built-in schemas:");
   });
 });
+
+// ---------------------------------------------------------------------------
+// A `%` in a violation message must not corrupt the annotation it lands in
+// ---------------------------------------------------------------------------
+
+describe("github annotations escape the message", () => {
+  it("escapes a % an Ajv pattern message carried through", () => {
+    const r = run([
+      "validate",
+      "test/fixtures/percent-hostile.md",
+      "-s",
+      "./test/fixtures/percent-hostile.schema.json",
+      "-f",
+      "github",
+    ]);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain('must match pattern "^[0-9]+%25$"');
+    // One annotation, one line: nothing was truncated at the escape.
+    expect(r.stdout.trim().split("\n")).toHaveLength(1);
+  });
+});

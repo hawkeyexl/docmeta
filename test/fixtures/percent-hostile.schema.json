@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.test/percent-hostile.schema.json",
+  "title": "A schema whose message carries a percent sign",
+  "type": "object",
+  "properties": {
+    "discount": {
+      "type": "string",
+      "description": "The pattern holds a literal % on purpose: Ajv quotes the regex into the violation message verbatim, and % is the escape introducer in a GitHub workflow command.",
+      "pattern": "^[0-9]+%$"
+    }
+  },
+  "required": ["discount"]
+}

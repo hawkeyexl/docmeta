@@ -210,6 +210,14 @@ required-property error at the document root reports the field as `(root)`:
 ::error file=missing-type.md::[google:okf:0.1] (root) must have required property 'type'
 ```
 
+`<message>` is escaped as the workflow-command protocol requires: `%` becomes
+`%25`, a carriage return `%0D`, and a newline `%0A`. GitHub decodes them when it
+renders the annotation. Without it a schema `pattern` containing `%` — Ajv
+quotes the regex into the message verbatim — would corrupt the annotation, and a
+multi-line message would truncate it at the first newline. Do not decode these
+yourself if you post-process the lines; treat the message as
+percent-escaped-on-those-three.
+
 <Aside type="tip" title="github output outside GitHub">
 The `::error` lines are GitHub-specific. On other CI systems they print as plain
 text with no annotation behavior. Use `pretty`, `json`, `sarif`, or `junit`

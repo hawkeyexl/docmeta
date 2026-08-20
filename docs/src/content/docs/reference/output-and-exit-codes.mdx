@@ -134,6 +134,16 @@ Each line has the form:
 `line` and `col` are included only when known. `<field>` is the field path, or
 `(root)` for a whole-document error.
 
+The message is escaped the way GitHub's workflow-command protocol requires:
+`%` becomes `%25`, a carriage return becomes `%0D`, and a newline becomes
+`%0A`. GitHub decodes them again when it renders the annotation, so you see the
+original characters on the pull request. The escaping matters because the
+protocol is line-oriented — an unescaped newline would end the command early and
+spill the rest of the message into the log as plain text — and because a schema
+`pattern` is quoted into the message verbatim, so a regex containing `%` reaches
+the annotation. Only those three are encoded; `,` and `:` are special in the
+`file=` / `line=` properties, not in the message.
+
 </TabItem>
 <TabItem label="sarif">
 
@@ -452,5 +462,6 @@ instead, so the report stays parseable.
 {/* step {"description":"sarif emits a 2.1.0 envelope whose ruleId joins the schema ref to the keyword.","runShell":{"command":"docmeta validate test/fixtures/bad-timestamp.md --format sarif","exitCodes":[1],"stdio":"\"ruleId\": \"google:okf:0.1/format\""}} */}
 {/* step {"description":"A clean sarif run still prints the envelope rather than nothing.","runShell":{"command":"docmeta validate test/fixtures/valid.md --format sarif","exitCodes":[0],"stdio":"\"version\": \"2.1.0\""}} */}
 {/* step {"description":"junit counts one test per file, so the tab matches the summary.","runShell":{"command":"docmeta validate test/fixtures/valid.md test/fixtures/bad-timestamp.md --format junit","exitCodes":[1],"stdio":"/<testsuites name=\"docmeta\" tests=\"2\" failures=\"1\"/"}} */}
+{/* step {"description":"github escapes the % a schema pattern puts in a message, so the annotation is not corrupted.","runShell":{"command":"docmeta validate test/fixtures/percent-hostile.md -s ./test/fixtures/percent-hostile.schema.json --format github","exitCodes":[1],"stdio":"%25$"}} */}
 {/* step {"description":"junit escapes the XML metacharacters a schema pattern puts in a message.","runShell":{"command":"docmeta validate test/fixtures/xml-hostile.md -s ./test/fixtures/xml-hostile.schema.json --format junit","exitCodes":[1],"stdio":"&lt;a href=&quot;x&quot;&gt;"}} */}
 {/* test end */}
