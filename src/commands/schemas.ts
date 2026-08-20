@@ -191,7 +191,7 @@ async function assertNotIgnored(
 function foldEntry(
   entries: SchemaEntry[],
   next: { ref: string; source: string; integrity: string },
-): { entries: SchemaEntry[]; replaced: boolean } {
+): { entries: SchemaEntry[]; replaced: boolean; displacedSource?: string } {
   const speaksAbout = (entry: SchemaEntry): boolean =>
     typeof entry === "string"
       ? entry === next.source || entry === next.ref
@@ -199,6 +199,18 @@ function foldEntry(
 
   const index = entries.findIndex(speaksAbout);
   if (index === -1) return { entries: [...entries, next], replaced: false };
+
+  // Matched on `ref` while naming a *different* origin. Two hosts serving
+  // different schemas whose URLs end in the same segment both default to the
+  // same filename, so this replaces one pinned contract with another and the
+  // "already exists and is not ours" guard reads it as a re-vendor. Doing it is
+  // right — the command was asked to — but the caller reports it, because a
+  // pinned entry silently changing meaning is not something to find out from a
+  // diff later.
+  const displacedSource = entries
+    .filter(speaksAbout)
+    .map((entry) => (typeof entry === "string" ? undefined : entry.source))
+    .find((source) => source !== undefined && source !== next.source);
   // Every match collapses into the one entry, not just the first. A config
   // carrying both the bare URL and an earlier vendored ref would otherwise keep
   // the one that was not replaced — leaving the list disagreeing with itself
@@ -208,6 +220,7 @@ function foldEntry(
       i === index ? [next] : speaksAbout(entry) ? [] : [entry],
     ),
     replaced: true,
+    ...(displacedSource !== undefined ? { displacedSource } : {}),
   };
 }
 
@@ -277,6 +290,11 @@ export async function runVendorSchema(
 
   const entries = loaded?.config.schemas ?? [];
   const folded = foldEntry(entries, { ref, source: url, integrity });
+  if (folded.displacedSource !== undefined) {
+    opts.onNotice?.(
+      `"${ref}" was vendored from ${folded.displacedSource}; replacing it with ${url}.`,
+    );
+  }
 
   // Whether this path is already ours. Three states: nothing there, our own
   // earlier copy (a re-vendor, which is the update path), or a file that
@@ -285,7 +303,7 @@ export async function runVendorSchema(
   let unchanged = false;
   if (existsSync(absFile)) {
     const current = await readFile(absFile);
-    unchanged = Buffer.from(bytes).equals(current);
+    unchanged = bytes.equals(current);
     if (!unchanged && !folded.replaced) {
       throw new DocmetaError(
         `"${posixRelative(cwd, absFile)}" already exists and is not the copy this config points at, so vendoring ${url} here would overwrite it. Vendor into a different directory with --dir, or remove that file first.`,

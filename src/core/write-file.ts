@@ -52,7 +52,12 @@ export async function writeFileAtomic(
   );
 
   try {
-    await writeFile(tmp, contents, "utf8");
+    // No encoding argument. Node ignores one when `contents` is a
+    // `Uint8Array`, so passing `"utf8"` was harmless — but it reads as though a
+    // decode happens, which is exactly what the byte-for-byte guarantee above
+    // says must not. The two-argument overload defaults a string to UTF-8 and
+    // writes bytes as they are, which is the behaviour both callers want.
+    await writeFile(tmp, contents);
 
     // Carry the target's permissions over; a missing target just means we are
     // creating it, in which case the default mode is correct.
@@ -80,7 +85,7 @@ export async function writeFileAtomic(
       `docmeta: ${path} is locked by another process; writing in place (not atomically).\n`,
     );
     try {
-      await writeFile(path, contents, "utf8");
+      await writeFile(path, contents);
     } catch {
       throw lastError;
     }

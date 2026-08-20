@@ -825,6 +825,9 @@ describe("runVendorSchema (0008)", () => {
     dir = await realpath(await mkdtemp(join(tmpdir(), "docmeta-vendor-")));
     server = await startSchemaServer({
       "/house/2.1.json": { body: VENDORED },
+      // A different schema whose URL ends in the same segment, so it vendors to
+      // the same default filename. See the source-collision test below.
+      "/rival/2.1.json": { body: VENDORED.replace('"type"', '"owner"') },
       "/envelope.json": { json: { error: "not found" } },
     });
   });
@@ -834,6 +837,36 @@ describe("runVendorSchema (0008)", () => {
   });
 
   const url = (): string => `${server.url}/house/2.1.json`;
+
+  it("says so when it replaces an entry vendored from a different URL", async () => {
+    // Two hosts serving different schemas whose URLs end in the same segment
+    // both default to `./schema/2.1.json`. The second vendor matches the first
+    // on `ref`, so it counts as a replacement — which clears the "already
+    // exists and is not ours" guard and overwrites the first host's bytes and
+    // pin. The command is doing what it was asked, but silently swapping the
+    // meaning of a pinned entry is not something to discover from a diff.
+    await runVendorSchema({ url: url(), cwd: dir });
+    const notices: string[] = [];
+    const result = await runVendorSchema({
+      url: `${server.url}/rival/2.1.json`,
+      cwd: dir,
+      onNotice: (m) => notices.push(m),
+    });
+
+    expect(result.replaced).toBe(true);
+    const said = notices.join(" ");
+    expect(said).toContain(`${server.url}/house/2.1.json`);
+    expect(said).toContain(`${server.url}/rival/2.1.json`);
+    // A plain re-vendor of the same URL must stay quiet, or the notice is noise
+    // on the command's most common path.
+    const quiet: string[] = [];
+    await runVendorSchema({
+      url: `${server.url}/rival/2.1.json`,
+      cwd: dir,
+      onNotice: (m) => quiet.push(m),
+    });
+    expect(quiet.join(" ")).not.toContain("was vendored from");
+  });
 
   it("downloads the schema, records the pin, and creates a config", async () => {
     const result = await runVendorSchema({ url: url(), cwd: dir });
