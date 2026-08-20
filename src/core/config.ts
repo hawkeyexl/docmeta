@@ -525,17 +525,22 @@ export function findGitRoot(cwd: string): string | null {
  * documents reference `../shared/x.json` keeps working — that path is still
  * inside the repository, which is what "a schema in this project" means.
  *
- * `fromGit` is not decoration: with no repository the boundary falls back to
- * the config directory (or the run's `cwd`), which is a *narrower* and less
- * obvious rule, so the refusal message has to be able to say which one it
- * applied. Same reasoning as `SARIF_NO_GIT_ROOT`: "there is no repository" and
- * "the repository root is where you are standing" must stay distinguishable.
+ * `source` is not decoration, and it has **three** values rather than a
+ * boolean: with no repository the boundary falls back to the config's
+ * directory, and with no config either it falls back to the run's `cwd`. Those
+ * are progressively narrower and less obvious rules, and the refusal message
+ * has to name the one it actually applied — telling someone with no config file
+ * that "the config's own directory is the boundary" sends them looking for a
+ * file that is not there.
+ *
+ * Same reasoning as `SARIF_NO_GIT_ROOT`: "there is no repository" and "the
+ * repository root is where you are standing" must stay distinguishable.
  */
 export interface SchemaTrustRoot {
   /** Absolute directory the path must resolve inside. */
   dir: string;
-  /** True when `dir` came from `findGitRoot`, false for the fallback. */
-  fromGit: boolean;
+  /** Which rule produced `dir`, so a refusal can name it accurately. */
+  source: "git" | "config" | "cwd";
 }
 
 /** Settle the containment root once per run, for `resolveSchemaSet`. */
@@ -544,8 +549,9 @@ export function schemaTrustRoot(
   configDir?: string,
 ): SchemaTrustRoot {
   const git = findGitRoot(cwd);
-  if (git !== null) return { dir: git, fromGit: true };
-  return { dir: resolve(configDir ?? cwd), fromGit: false };
+  if (git !== null) return { dir: git, source: "git" };
+  if (configDir !== undefined) return { dir: resolve(configDir), source: "config" };
+  return { dir: resolve(cwd), source: "cwd" };
 }
 
 /**

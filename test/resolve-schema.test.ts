@@ -168,7 +168,7 @@ describe("mapping-form schema entries (0008)", () => {
 const URL_REF = "https://schemas.example.com/house/2.1.json";
 const REPO = resolve("/repo");
 /** The containment root a command core hands the resolver. */
-const ROOT = { dir: REPO, fromGit: true } as const;
+const ROOT = { dir: REPO, source: "git" } as const;
 
 /** Every mode, spelled the way a config spells it. */
 function trust(
@@ -414,7 +414,7 @@ describe("schemaTrust · containing a document-supplied local path", () => {
         filePath: "a.md",
         fileSchema: "../outside.json",
         fileBase: REPO,
-        trustRoot: { dir: REPO, fromGit: false },
+        trustRoot: { dir: REPO, source: "config" },
         config: trust("any"),
       });
     } catch (err) {
@@ -422,6 +422,28 @@ describe("schemaTrust · containing a document-supplied local path", () => {
     }
     expect(message).toMatch(/outside/);
     expect(message).toMatch(/no git repository/i);
+    expect(message).toMatch(/config file's own directory/);
+  });
+
+  it("does not blame a config file when there is no config file", () => {
+    // The `cwd` fallback. A boolean `fromGit` could not tell this apart from
+    // the config fallback, so both said "the config's own directory is the
+    // boundary" — sending someone with no config file looking for one.
+    let message = "";
+    try {
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: "../outside.json",
+        fileBase: REPO,
+        trustRoot: { dir: REPO, source: "cwd" },
+        config: trust("any"),
+      });
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toMatch(/no git repository and no config file/i);
+    expect(message).toMatch(/directory the command was run from/);
+    expect(message).not.toMatch(/config file's own directory/);
   });
 
   it("names the git root as the repository when there is one", () => {

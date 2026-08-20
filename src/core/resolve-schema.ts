@@ -285,10 +285,20 @@ function assertDocumentRefAllowed(
   // `path.relative` compares case-insensitively on Windows, so a differently
   // cased spelling of an in-repo path is still recognized as inside.
   if (within !== "" && !within.startsWith("..") && !isAbsolute(within)) return;
+  // The boundary is named by the rule that produced it. Saying "the config's
+  // own directory" to someone who has no config file sends them looking for a
+  // file that is not there, and the `cwd` case is the one where the boundary
+  // moves depending on where the command was run — which is worth saying out
+  // loud rather than leaving them to infer it.
+  const boundary =
+    root.source === "git"
+      ? `the repository root (${root.dir})`
+      : root.source === "config"
+        ? `${root.dir} — no git repository was found, so the config file's own directory is the boundary`
+        : `${root.dir} — no git repository and no config file were found, so the directory the command was run from is the boundary`;
+  const scope = root.source === "git" ? "the repository" : "the project";
   throw new DocmetaError(
-    root.fromGit
-      ? `Refusing the "${FILE_SCHEMA_KEY}" path "${ref}": it resolves outside the repository root (${root.dir}). A document may only name a schema inside the repository; a path in \`schemas:\` or on \`--schema\` is not restricted this way.`
-      : `Refusing the "${FILE_SCHEMA_KEY}" path "${ref}": it resolves outside ${root.dir} — no git repository was found here, so the config's own directory is the boundary. A document may only name a schema inside the project; a path in \`schemas:\` or on \`--schema\` is not restricted this way.`,
+    `Refusing the "${FILE_SCHEMA_KEY}" path "${ref}": it resolves outside ${boundary}. A document may only name a schema inside ${scope}; a path in \`schemas:\` or on \`--schema\` is not restricted this way.`,
   );
 }
 

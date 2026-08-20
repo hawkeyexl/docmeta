@@ -624,12 +624,12 @@ describe("schemaTrustRoot", () => {
 
   it("reports the git root, from anywhere inside it", () => {
     dir = makeTempRepo({ files: { "packages/docs/a.md": DOC } });
-    expect(schemaTrustRoot(dir)).toEqual({ dir, fromGit: true });
+    expect(schemaTrustRoot(dir)).toEqual({ dir, source: "git" });
     // The monorepo case: a package deep inside still gets the repository, so a
     // document referencing `../shared/x.json` stays inside the boundary.
     expect(schemaTrustRoot(join(dir, "packages", "docs"))).toEqual({
       dir,
-      fromGit: true,
+      source: "git",
     });
   });
 
@@ -638,12 +638,15 @@ describe("schemaTrustRoot", () => {
     const configDir = join(dir, "pkg");
     expect(schemaTrustRoot(dir, configDir)).toEqual({
       dir: configDir,
-      fromGit: false,
+      source: "config",
     });
   });
 
   it("falls back to cwd when there is neither a repository nor a config", () => {
     dir = makeTempRepo({ files: { "a.md": DOC }, init: false });
-    expect(schemaTrustRoot(dir)).toEqual({ dir, fromGit: false });
+    // `source` distinguishes this from the config fallback above. A boolean
+    // could not, and the refusal message told someone with no config file that
+    // "the config's own directory is the boundary" — a file that is not there.
+    expect(schemaTrustRoot(dir)).toEqual({ dir, source: "cwd" });
   });
 });
