@@ -38,15 +38,22 @@ changed as a result, and lists what it depends on.
 | [0012](0012-fill-cost-and-privacy.md) | `fill` cost, privacy, and offline operation | Maya · M4 / Devin · D1 | Proposed |
 | [0013](0013-cleanup-dead-code-and-exit-codes.md) | Dead code, unpopulated fields, usage exit codes | correctness | Proposed |
 | [0014](0014-empty-input-is-not-success.md) | An empty input set is not success | correctness | Proposed |
+| [0015](0015-schema-trust-boundary.md) | A trust boundary for document-supplied schemas | Devin · D2 / Sara · S3 | Proposed |
 
 0014 was not in the original review. It surfaced while stress-testing 0004 and
 is the most severe item in the set: **docmeta currently exits `0` when it
 validates nothing at all**, including when an explicitly named file does not
 exist.
 
+0015 was reserved by 0008 § stress test 6 and written later. A document's
+`$schema` outranks config, so in a repo that takes outside pull requests a
+contributor can pick the schema their own file is judged against — and the file
+that opts out of the standard is the one that passes. It adds an opt-in
+constraint; it does not narrow what `$schema` may reference by default.
+
 ## Dependency order
 
-At a glance, so a planning pass does not have to reconstruct it from 14 headers.
+At a glance, so a planning pass does not have to reconstruct it from 15 headers.
 
 ```
 0014 ──┬─> 0006          (0006 can turn a gate into a silent no-op without 0014)
@@ -58,7 +65,9 @@ At a glance, so a planning pass does not have to reconstruct it from 14 headers.
 
 0001 ──┬─> 0003          (shared FieldError identity — see below)
 
-0008 ──> 0009            (publishing adds URL refs that must stay durable)
+0008 ──┬─> 0009          (publishing adds URL refs that must stay durable)
+       └─> 0015          (0008 reserved it; --offline is the accidental guard)
+0015 ──> 0009            (0009 normalizes document $schema URLs; constrain first)
 0011 ──> 0012            (0012 is the content gap 0011's journey walk exposes)
 ```
 
