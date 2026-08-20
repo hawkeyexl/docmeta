@@ -254,13 +254,19 @@ function toFieldError(
   const defined = e as DefinedError;
   const instancePath = e.instancePath;
   const subject = subjectOf(defined);
-  // For `required`, point at the parent object but name the missing property.
+  // Both of these point `instancePath` at the *parent* object and name the
+  // property in the message, so neither gets a column.
   //
-  // That is also why `required` gets no column: `instancePath` resolves to the
-  // parent, which exists, so `colFor` would happily answer — with the parent's
-  // column, for a property that is not in the file at all. A `line` on the
-  // parent is a useful "look around here"; a caret on a specific character is a
-  // claim about a token, and there is no token.
+  // The parent exists, so `colFor` answers happily — with the parent's column,
+  // which is a different token from the one the message is about. For
+  // `required` the property is not in the file at all; for
+  // `additionalProperties` it is, but somewhere else entirely, and the parent
+  // of a document's root is the root, whose recorded position is 1:1. So a
+  // stray key on line 40 was annotated at line 1 column 1, a caret on the first
+  // character of the file.
+  //
+  // A `line` on the parent is a useful "look around here". A caret is a claim
+  // about one character, and for these two keywords it would be the wrong one.
   let message = e.message ?? "is invalid";
   let wantsColumn = true;
   if (defined.keyword === "required") {
@@ -268,6 +274,7 @@ function toFieldError(
     wantsColumn = false;
   } else if (defined.keyword === "additionalProperties") {
     message = `must NOT have additional property '${defined.params.additionalProperty}'`;
+    wantsColumn = false;
   }
   const line = lineFor(instancePath);
   const col = wantsColumn ? colFor?.(instancePath) : undefined;

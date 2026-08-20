@@ -94,6 +94,37 @@ describe("Validator: the optional column", () => {
     expect(errors[0]).not.toHaveProperty("col");
   });
 
+  it("leaves col unset for additionalProperties, as for required", async () => {
+    // Both keywords point `instancePath` at the parent and name the property in
+    // the message. For a stray key at the document root the parent *is* the
+    // root, recorded at 1:1 — so the annotation carried a caret on the first
+    // character of the file for a key that could be anywhere in it.
+    const dir = await mkdtemp(join(tmpdir(), "docmeta-addprop-"));
+    try {
+      const strict = join(dir, "strict.schema.json");
+      await writeFile(
+        strict,
+        JSON.stringify({
+          $schema: "https://json-schema.org/draft/2020-12/schema",
+          type: "object",
+          properties: { title: { type: "string" } },
+          additionalProperties: false,
+        }),
+      );
+      const errors = await new Validator().validate(
+        { stray: "x" },
+        [strict],
+        lineFor,
+        colFor,
+      );
+      const found = errors.find((e) => e.keyword === "additionalProperties");
+      expect(found).toBeDefined();
+      expect(found).not.toHaveProperty("col");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("carries col through when the extractor supplies one", async () => {
     const v = new Validator();
     const errors = await v.validate(
