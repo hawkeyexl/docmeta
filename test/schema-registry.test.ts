@@ -12,6 +12,7 @@ import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
 import {
   mkdtempSync,
+  readFileSync,
   readdirSync,
   rmSync,
   utimesSync,
@@ -785,6 +786,84 @@ describe("loadSchema over http(s) — offline with the cache disabled", () => {
 // ---------------------------------------------------------------------------
 // 0008 — integrity pins on a vendored (local file) schema
 // ---------------------------------------------------------------------------
+
+describe("a schema file saved with a UTF-8 BOM", () => {
+  // A Windows editor writes EF BB BF at the head of a `.json` file — PowerShell
+  // 5.1's `Set-Content -Encoding utf8`, Notepad, older VS Code settings. Node's
+  // `JSON.parse` rejects it, so a file every other tool reads happily failed
+  // with "unexpected token at line 1 column 1" — which reads as an empty or
+  // corrupt file and points the operator nowhere near the real cause.
+  const BOM = "\u{FEFF}";
+  const fixture = join(here, "fixtures", "bom.schema.json");
+
+  it("has a real BOM on disk, or this whole block proves nothing", () => {
+    expect([...readFileSync(fixture).subarray(0, 3)]).toEqual([
+      0xef, 0xbb, 0xbf,
+    ]);
+  });
+
+  it("loads, rather than failing as invalid JSON", async () => {
+    const schema = await loadSchema(fixture);
+    expect(schema.required).toEqual(["owner"]);
+  });
+
+  it("still hashes the BOM, so an integrity pin is taken over the real bytes", async () => {
+    // The load-bearing one. Stripping the BOM must be a *parsing* concession
+    // and nothing more: `assertIntegrity` hashes what is on disk, and a pin
+    // recorded by `schemas vendor` covers the BOM. If stripping moved earlier
+    // than the hash, this pin would stop matching and every vendored BOM'd
+    // schema would fail its own pin.
+    const raw = readFileSync(fixture);
+    const pin = `sha256-${createHash("sha256").update(raw).digest("hex")}`;
+    const schema = await loadSchema(fixture, {
+      pins: new Map([[fixture, { integrity: pin }]]),
+    });
+    expect(schema.required).toEqual(["owner"]);
+  });
+
+  it("rejects a pin taken over the de-BOM'd bytes", async () => {
+    // The other direction, and the reason the test above is not enough on its
+    // own: a pin over the stripped content must NOT match, or "hashes the raw
+    // bytes" would be satisfied by hashing whatever we happened to parse.
+    const stripped = readFileSync(fixture).toString("utf8").replace(BOM, "");
+    const wrong = `sha256-${createHash("sha256").update(Buffer.from(stripped, "utf8")).digest("hex")}`;
+    const err = await loadSchema(fixture, {
+      pins: new Map([[fixture, { integrity: wrong }]]),
+    }).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(DocmetaError);
+    // On the message, not just the type: before the fix this rejected as
+    // invalid JSON, which is also a DocmetaError — so a type-only assertion
+    // passed for entirely the wrong reason.
+    expect((err as Error).message).toMatch(/integrity/i);
+  });
+
+  it("parses a fetched body that carries one", async () => {
+    const server = await startSchemaServer({
+      "/bom.json": { body: BOM + JSON.stringify(URL_SCHEMA) },
+    });
+    try {
+      const schema = await loadSchema(`${server.url}/bom.json`);
+      expect(schema.required).toEqual(["type"]);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("hands `schemas vendor` the bytes as served, BOM included", async () => {
+    // `runVendorSchema` writes these bytes and hashes them, so the BOM has to
+    // survive the round trip — the vendored copy should be what the server
+    // sent, byte for byte.
+    const body = BOM + JSON.stringify(URL_SCHEMA);
+    const server = await startSchemaServer({ "/keep.json": { body } });
+    try {
+      const { bytes, schema } = await fetchSchemaBytes(`${server.url}/keep.json`);
+      expect([...bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+      expect(schema.required).toEqual(["type"]);
+    } finally {
+      await server.close();
+    }
+  });
+});
 
 describe("integrity pins (0008)", () => {
   let dir: string;
