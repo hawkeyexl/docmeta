@@ -1,3 +1,10 @@
+## [3.12.1](https://github.com/hawkeyexl/docmeta/compare/v3.12.0...v3.12.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* proposal 0013 cleanup — dead code, the unpopulated `col`, strict config keys ([#92](https://github.com/hawkeyexl/docmeta/issues/92)) ([1dde5b9](https://github.com/hawkeyexl/docmeta/commit/1dde5b9f54e1c1f938a86e4c7ea670554d96e832)), closes [#84](https://github.com/hawkeyexl/docmeta/issues/84)
+
 # [3.12.0](https://github.com/hawkeyexl/docmeta/compare/v3.11.1...v3.12.0) (2026-08-20)
 
 
