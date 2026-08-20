@@ -77,7 +77,7 @@ jobs:
       # marked AVOID upstream for that reason.
       #
       # A warm run adds roughly ten seconds. A cold one adds a couple of minutes.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.hawkeyexl-inference
           key: inference-local-granite-4.1-3b-q2-${{ runner.os }}
