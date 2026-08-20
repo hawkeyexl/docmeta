@@ -95,6 +95,22 @@ describe("schema cache", () => {
     expect(await cache.read(URL_A)).toEqual(SCHEMA);
   });
 
+  it("treats a future mtime as stale rather than as forever-fresh", async () => {
+    // Freshness is `Date.now() - mtimeMs >= ttl`, so an mtime ahead of now
+    // makes the left side negative and the entry passes the check for as long
+    // as the clock takes to catch up — a schema pinned for years, not hours.
+    //
+    // Not hypothetical: a cache restored from an archive keeps the mtimes it
+    // was packed with, and a machine whose clock ran fast and was corrected
+    // leaves every entry it wrote in the future. Choosing mtime over the
+    // embedded `fetchedAt` was meant to make freshness unforgeable; this is the
+    // one direction in which it still is.
+    const cache = new SchemaCache(dir, 24);
+    await cache.write(URL_A, SCHEMA);
+    ageEntry(cache.entryPath(URL_A), -240);
+    expect(await cache.read(URL_A)).toBeNull();
+  });
+
   it("serves a stale entry when the TTL is ignored", async () => {
     // What `--offline` needs: there is no refetch available, so a stale entry
     // beats failing the run.

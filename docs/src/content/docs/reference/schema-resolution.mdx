@@ -141,7 +141,10 @@ What invalidates an entry:
   re-fetches and rewrites it. Freshness reads the filesystem's mtime rather than
   the `fetchedAt` recorded inside the file, because a restored cache or a clock
   change makes an embedded timestamp disagree with reality — and an entry that
-  never looks old is a cache that never expires.
+  never looks old is a cache that never expires. An mtime in the *future* —
+  which an archived cache carries with it, and a machine whose clock ran fast
+  leaves behind — is treated as stale for the same reason, since it would
+  otherwise satisfy the age check until the clock caught up.
 - **A different URL.** The key is the full URL, so changing the version segment
   is a different entry, not a stale one.
 - **Damage.** An unreadable, unparseable, or unrecognized entry is treated as a

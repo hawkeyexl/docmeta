@@ -113,7 +113,18 @@ export class SchemaCache {
       } catch {
         return null;
       }
-      if (Date.now() - mtimeMs >= this.ttlHours * 3_600_000) return null;
+      const age = Date.now() - mtimeMs;
+      // A negative age is an entry stamped in the future, and it would satisfy
+      // the TTL check for as long as the clock took to catch up — hours of
+      // intended lifetime turned into years. An archive keeps the mtimes it was
+      // packed with, and a machine whose clock ran fast leaves every entry it
+      // wrote ahead of now, so this outlives the clock that caused it.
+      //
+      // Treated as a miss rather than clamped: the miss costs one fetch, and
+      // the write that follows re-stamps the file, so the entry heals instead
+      // of staying suspect. `ignoreTtl` still serves it — `--offline` has no
+      // fetch to fall back on, and there a stale contract beats no contract.
+      if (age < 0 || age >= this.ttlHours * 3_600_000) return null;
     }
 
     let raw: unknown;
