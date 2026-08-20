@@ -809,6 +809,19 @@ describe("reporters: github message escaping", () => {
     },
   ];
 
+  it("escapes the file property, which is comma-separated", () => {
+    // The message escaper deliberately leaves `,` and `:` alone, because they
+    // are only special in a *property* value. `file=` is a property value: an
+    // unescaped comma re-partitions the command, so `file=a,b.md` parses as
+    // `file=a` plus a stray property and the annotation lands nowhere.
+    const [first] = withMessage("anything");
+    const out = renderGithub([
+      { ...(first as ValidationResult), file: "a,b.md" },
+    ]);
+    expect(out).toContain("file=a%2Cb.md");
+    expect(out).not.toContain("file=a,b.md");
+  });
+
   it("escapes % in the message", () => {
     const out = renderGithub(withMessage('must match pattern "^%[a-z]+$"'));
     expect(out).toContain('must match pattern "^%25[a-z]+$"');
@@ -1018,14 +1031,43 @@ describe("reporters: fill", () => {
     expect(out).toContain("Threshold 0.7");
   });
 
-  it("github annotates required-and-unfilled fields only", () => {
+  it("github annotates required-and-unfilled fields, not optional ones", () => {
     const out = renderFillGithub(run);
-    const lines = out.split("\n").filter(Boolean);
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain("::error file=required-skip.md::");
-    expect(lines[0]).toContain("/type");
+    const required = out
+      .split("\n")
+      .filter((l) => l.includes("required-skip.md"));
+    expect(required).toHaveLength(1);
+    expect(required[0]).toContain("::error file=required-skip.md::");
+    expect(required[0]).toContain("/type");
+    // A skipped *optional* property is a normal outcome that does not fail the
+    // run, so annotating it would make every run look broken.
     expect(out).not.toContain("optional-skip.md");
     expect(out).not.toContain("written.md");
+  });
+
+  it("github annotates a file-level error, which also drives exit 1", () => {
+    // `summary.errors` fails the run exactly as a required skip does. Emitting
+    // nothing for it left a red build with a clean Files tab — the same "fails
+    // with nothing to point at" shape this work exists to remove.
+    const broken = renderFillGithub(run)
+      .split("\n")
+      .filter((l) => l.includes("broken.md"));
+    expect(broken).toHaveLength(1);
+    expect(broken[0]).toContain("::error file=broken.md::");
+    expect(broken[0]).toContain("Invalid YAML frontmatter");
+  });
+
+  it("github escapes the file property, which is comma-separated", () => {
+    // A comma in a path re-partitions the command: `file=docs/report,final.md`
+    // parses as `file=docs/report` plus a stray property, so the annotation
+    // lands on the wrong file — with no error anywhere.
+    const odd: FillRun = {
+      ...run,
+      results: [{ ...(results[2] as FillFileResult), file: "a,b.md" }],
+    };
+    const out = renderFillGithub(odd);
+    expect(out).toContain("file=a%2Cb.md");
+    expect(out).not.toContain("file=a,b.md");
   });
 
   it("github carries no line=, because a proposal has no location", () => {

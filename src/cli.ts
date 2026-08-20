@@ -92,6 +92,16 @@ const STDIN = "-";
  * that leg is the one that catches a bare directory name (`docmeta get docs`),
  * which has neither a dot, a separator, nor a glob character.
  *
+ * `existsSync` alone is too eager for a token with **no path shape at all**,
+ * though, because field names collide with directory names constantly: `tags`,
+ * `docs`, `type`, `content`. In a site repo holding a `tags/` directory,
+ * `docmeta get tags docs/a.md` was refused as a path, and the remedy it
+ * suggested (`docmeta get title tags`) was nonsense. So a shapeless token is
+ * only read as a path when it is **alone** — nothing else was offered as one,
+ * which is the shape of someone who forgot the field list. Give a path *and* a
+ * bare name and the bare name is the field list: the only reading that makes
+ * sense of both.
+ *
  * The two negative tests come first and matter more, because a false positive
  * would reject a legal field list:
  *
@@ -101,9 +111,15 @@ const STDIN = "-";
  *   or dotted key — `docmeta get /author/email page.md` is exactly the usage
  *   the separator test would otherwise refuse.
  */
-function looksLikePath(token: string, cwd: string): boolean {
+function looksLikePath(token: string, cwd: string, alone: boolean): boolean {
   if (token === STDIN) return false;
-  if (existsSync(resolvePath(cwd, token))) return true;
+  const shaped =
+    /[\\/]/.test(token) ||
+    extname(token) !== "" ||
+    picomatch.scan(token).isGlob;
+  // A file that really is there settles it — but only when the token looks
+  // like a path, or nothing else was offered as one.
+  if ((shaped || alone) && existsSync(resolvePath(cwd, token))) return true;
   if (token.includes(",") || token.startsWith("/")) return false;
   if (picomatch.scan(token).isGlob) return true;
   const ext = extname(token).toLowerCase();
@@ -135,13 +151,22 @@ export function resolveGetInputs(
 ): { fields: string[]; paths: string[] } {
   const flag = typeof fieldsOption === "string" ? fieldsOption : undefined;
 
-  if (flag === undefined && fieldsArg !== undefined && looksLikePath(fieldsArg, cwd)) {
+  if (
+    flag === undefined &&
+    fieldsArg !== undefined &&
+    looksLikePath(fieldsArg, cwd, pathsArg.length === 0)
+  ) {
     throw new DocmetaError(
       `"${fieldsArg}" looks like a path, not a field list. Pass fields first (docmeta get title ${fieldsArg}) or use --fields.`,
     );
   }
 
-  const source = flag ?? fieldsArg;
+  // `-` is stdin, never a field name. Letting it become one made
+  // `docmeta get - --as markdown` print `-=(unset)` for every file in the
+  // config's `paths:` and exit 0 — the piped document never read, the run
+  // looking entirely successful. Dropping it here leaves `fields` empty, so
+  // the missing-field-list error below fires instead.
+  const source = flag ?? (fieldsArg === STDIN ? undefined : fieldsArg);
   const fields = source === undefined ? [] : splitList(source);
   if (fields.length === 0) {
     throw new DocmetaError(
@@ -150,7 +175,7 @@ export function resolveGetInputs(
   }
 
   const paths =
-    flag !== undefined && fieldsArg !== undefined
+    fieldsArg !== undefined && (flag !== undefined || fieldsArg === STDIN)
       ? [fieldsArg, ...pathsArg]
       : pathsArg;
   return { fields, paths };

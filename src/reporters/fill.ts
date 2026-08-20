@@ -13,7 +13,10 @@
 import { DocmetaError } from "../types.js";
 import type { FillRun } from "../commands/fill-types.js";
 import { palette } from "./color.js";
-import { escapeWorkflowCommandMessage } from "./github.js";
+import {
+  escapeWorkflowCommandMessage,
+  escapeWorkflowCommandProperty,
+} from "./github.js";
 import { formatList } from "./index.js";
 
 /**
@@ -164,6 +167,17 @@ function formatValue(value: unknown): string {
 export function renderFillGithub(run: FillRun): string {
   const lines: string[] = [];
   for (const result of run.results) {
+    const file = escapeWorkflowCommandProperty(result.file);
+    // A file-level error — an unparseable document, a read-only format, a
+    // provider failure — counts toward `summary.errors` and so drives exit 1
+    // exactly as a required skip does. Emitting nothing for it left a red run
+    // with no annotation anywhere: CI fails, and the Files tab is clean.
+    if (result.error != null) {
+      lines.push(
+        `::error file=${file}::${escapeWorkflowCommandMessage(`[fill] ${result.error}`)}`,
+      );
+      continue;
+    }
     for (const f of result.fields) {
       if (!f.required || f.written) continue;
       const why =
@@ -173,7 +187,7 @@ export function renderFillGithub(run: FillRun): string {
       const msg = escapeWorkflowCommandMessage(
         `[fill] ${f.field} is required and was not filled (${why})`,
       );
-      lines.push(`::error file=${result.file}::${msg}`);
+      lines.push(`::error file=${file}::${msg}`);
     }
   }
   return lines.join("\n");
