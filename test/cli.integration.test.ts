@@ -1398,3 +1398,88 @@ describe("docmeta CLI: schemas vendor (built bin)", () => {
     expect((await runInAsync(["validate"], repo)).status).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 0005 § 4 — usage errors exit 2, and the terminating success paths still exit 0
+// ---------------------------------------------------------------------------
+
+/**
+ * `run()` reports `stderr: ""` whenever the child exits 0, because
+ * `execFileSync` returns stdout alone. Half of these cases are about a *passing*
+ * run (`--help`, `-V`), and all of them assert on stderr, so they need the
+ * spawnSync form.
+ */
+describe("usage errors exit 2 (0005 §4)", () => {
+  const runSync = (args: string[]): Run => {
+    const r = spawnSync("node", [bin, ...args], { cwd: root, encoding: "utf8" });
+    return {
+      stdout: r.stdout ?? "",
+      stderr: r.stderr ?? "",
+      status: r.status ?? 1,
+    };
+  };
+
+  /**
+   * Per subcommand, not just on the program. Commander copies `_exitCallback`
+   * **by value** in `copyInheritedSettings` when `.command()` runs, so an
+   * `exitOverride()` installed after the subcommands exist leaves every one of
+   * them calling `process.exit(1)` while the program-level case passes.
+   */
+  it.each([
+    ["program", ["--nope"]],
+    ["validate", ["validate", "--nope"]],
+    ["get", ["get", "--nope"]],
+    ["fill", ["fill", "--nope"]],
+    ["schemas", ["schemas", "--nope"]],
+  ])("an unknown option on %s exits 2", (_name, args) => {
+    const r = runSync(args);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("unknown option");
+  });
+
+  it("an unknown command exits 2", () => {
+    const r = runSync(["nosuchcommand"]);
+    expect(r.status).toBe(2);
+  });
+
+  it("a missing required argument exits 2", () => {
+    const r = runSync(["get"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/missing required argument/i);
+  });
+
+  /**
+   * `fail()` is for DocmetaError and genuine crashes. Routing a CommanderError
+   * through it would append `docmeta: Unexpected error: error: unknown option
+   * '--nope'` under a message commander already printed.
+   */
+  it("does not report a usage error as an unexpected error", () => {
+    const r = runSync(["validate", "--nope"]);
+    expect(r.stderr).not.toContain("Unexpected error");
+  });
+
+  it("keeps the after-error hint short instead of dumping full help", () => {
+    const r = runSync(["validate", "--nope"]);
+    expect(r.stderr).toContain("(add --help for usage)");
+    expect(r.stderr).not.toContain("Examples:");
+  });
+
+  it.each([
+    ["--help", ["--help"]],
+    ["-V", ["-V"]],
+    ["--version", ["--version"]],
+    ["validate --help", ["validate", "--help"]],
+    ["get --help", ["get", "--help"]],
+    ["fill --help", ["fill", "--help"]],
+    ["schemas --help", ["schemas", "--help"]],
+    // A third success code: commander.help, distinct from
+    // commander.helpDisplayed and commander.version. Matching on `exitCode`
+    // rather than a hand-written list of code strings is what covers it.
+    ["help get", ["help", "get"]],
+  ])("%s still exits 0 and prints to stdout", (_name, args) => {
+    const r = runSync(args);
+    expect(r.status).toBe(0);
+    expect(r.stdout.length).toBeGreaterThan(0);
+    expect(r.stderr).toBe("");
+  });
+});

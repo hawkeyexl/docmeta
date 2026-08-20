@@ -328,7 +328,12 @@ governed the run.
 |---|---|
 | `0` | All files passed (or nothing failed). |
 | `1` | One or more files failed validation. |
-| `2` | Operational or usage error (a `DocmetaError`) — for example, no inputs, **no files matched**, an unknown `--format`, a missing config file, a missing `--baseline` file, or an unresolvable schema. |
+| `2` | Operational or usage error — for example, an **unknown flag**, an **unknown subcommand**, a **missing required argument**, no inputs, **no files matched**, an unknown `--format`, a missing config file, a missing `--baseline` file, or an unresolvable schema. |
+
+The first three are the parser's own rejections; the rest are a `DocmetaError`.
+Both are exit `2`, because both mean the invocation was wrong rather than the
+documents. `docmeta validate --nope docs/` is a mistyped command, not a
+non-conformant file, and a pipeline that branches on `1` must not see it there.
 
 Exit code `1` reflects validation failures in the documents. Exit code `2`
 reflects a problem running docmeta itself, and means no validation verdict was
@@ -405,7 +410,8 @@ documents still need work, not that docmeta malfunctioned.
 
 - **Primary output**: the rendered report in any format, goes to **stdout**.
 - **Diagnostics**: operational errors that cause exit 2, go to **stderr**,
-  prefixed with `docmeta: `.
+  prefixed with `docmeta: `. Usage errors the argument parser rejects also go to
+  stderr, prefixed with `error: ` and followed by `(add --help for usage)`.
 
 This separation lets you capture machine-readable output cleanly:
 

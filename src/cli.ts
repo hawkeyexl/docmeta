@@ -7,7 +7,7 @@
 import { existsSync, realpathSync } from "node:fs";
 import { basename, relative, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Command, Option } from "commander";
+import { Command, CommanderError, Option } from "commander";
 import picomatch from "picomatch";
 import pkg from "../package.json" with { type: "json" };
 import { DocmetaError } from "./types.js";
@@ -199,7 +199,16 @@ export function buildProgram(): Command {
     )
     .version(pkg.version, "-V, --version")
     .option("--no-color", "disable colored output")
-    .showHelpAfterError();
+    // A pointer, not the whole help screen. Commander appends this after every
+    // usage error, and ~40 lines of options per typo is noise in a CI log — the
+    // message that precedes it already names the offending flag.
+    .showHelpAfterError("(add --help for usage)")
+    // MUST come before the `.command()` calls below. `copyInheritedSettings`
+    // copies `_exitCallback` **by value** at subcommand-creation time, so an
+    // `exitOverride()` installed afterwards (including
+    // `buildProgram().exitOverride()` from main) leaves every subcommand still
+    // calling `process.exit(1)` while the program-level case looks fixed.
+    .exitOverride();
 
   program
     .command("validate", { isDefault: true })
@@ -647,7 +656,28 @@ export function buildProgram(): Command {
 
 export async function main(argv: string[] = process.argv): Promise<void> {
   const program = buildProgram();
-  await program.parseAsync(argv);
+  try {
+    await program.parseAsync(argv);
+  } catch (err) {
+    // `exitOverride()` makes commander throw on every terminating condition,
+    // including the successful ones. Branch on `err.exitCode`, not on a list of
+    // code strings: `--help` is `commander.helpDisplayed`, `-V` is
+    // `commander.version`, and `docmeta help get` is a third code,
+    // `commander.help` — all carrying exitCode 0, and a hand-written list would
+    // eventually miss one and turn a success into a usage error.
+    if (err instanceof CommanderError) {
+      // Say nothing. `Command.error()` has already written the message and the
+      // after-error hint; `fail()` would add "Unexpected error: …" on top,
+      // because a CommanderError is not a DocmetaError.
+      //
+      // `process.exitCode`, not `process.exit()`: Node does not flush queued
+      // async stderr writes on `process.exit`, which truncates the very message
+      // the user needs.
+      process.exitCode = err.exitCode === 0 ? 0 : 2;
+      return;
+    }
+    throw err;
+  }
 }
 
 /** Run only when executed directly (not when imported by tests). */
