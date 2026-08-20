@@ -1,3 +1,10 @@
+# [3.12.0](https://github.com/hawkeyexl/docmeta/compare/v3.11.1...v3.12.0) (2026-08-20)
+
+
+### Features
+
+* **schemas:** publish the built-in schemas at stable URLs ([#91](https://github.com/hawkeyexl/docmeta/issues/91)) ([a9df163](https://github.com/hawkeyexl/docmeta/commit/a9df1632d9362f019dcfe14b7bc4f0a5a0033ef8))
+
 ## [3.11.1](https://github.com/hawkeyexl/docmeta/compare/v3.11.0...v3.11.1) (2026-08-20)
 
 
