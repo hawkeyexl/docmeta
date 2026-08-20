@@ -1,6 +1,6 @@
 # 0015 — A trust boundary for document-supplied schemas
 
-- **Status:** Proposed
+- **Status:** Implemented
 - **Serves:** Devin · D2 "Govern one schema across many repos"; Sara · S3
 - **Touches:** `src/core/resolve-schema.ts`, `src/core/config.ts`, `src/core/schema-registry.ts`
 - **Reserved by:** [0008 § stress test 6](0008-remote-schema-durability.md), which
@@ -239,3 +239,43 @@ proposal set exists to remove.
    limit), `reference/schema-resolution.mdx` (what a document may reference and
    how a repo constrains it), and `ci/govern-shared-schema.mdx` — the D2 page,
    and the natural home for "your repo takes outside pull requests".
+
+## What shipped
+
+Four commits, one per numbered part above, each landing red-first.
+
+| Part | Where |
+|---|---|
+| `schemaTrust:` parsing | `src/core/config.ts` — `parseSchemaTrust`, shaped after `parseSchemaCache` |
+| The guard | `src/core/resolve-schema.ts` — `assertDocumentRefAllowed`, in the `fileSchema` branch |
+| Containment | same function; the boundary comes from `schemaTrustRoot` in `config.ts`, reusing `findGitRoot` |
+| The excerpt | `src/core/schema-registry.ts` — `withoutFileExcerpt`, file branch only |
+
+Two decisions differ from a literal reading of the text above, and both come
+out of the stress test rather than around it:
+
+**Containment applies in `any`, not only in `local`** (stress test §"Two
+smaller holes"). The traversal fix "costs nobody a feature", so making a repo
+opt into it would have left the hole open in every default setup — which is
+every setup. `$schema: ../../../../etc/passwd` is refused with no config at
+all; `schemas:` and `--schema` are untouched, so an operator's schema kept
+beside the project still resolves.
+
+**The containment root is a parameter, not something the resolver discovers.**
+`resolveSchemaSet` is synchronous and pure and runs once per file; finding a
+git root is a filesystem walk. So `ResolveParams.trustRoot` is settled once per
+run by `runValidate`/`runFill`, and omitting it skips containment. That is a
+real precondition rather than a hidden default, so it is documented on the
+field and pinned end to end in `test/commands.test.ts` — a unit test alone
+could not tell a wired core from an unwired one.
+
+Everything else landed as written. Stress test 5 (`--schema` unfiltered in
+every mode), stress test 2 (a built-in `$schema` passing under `local`), and
+stress test 6 (Ajv raising `MissingRefError` rather than chasing a remote
+`$ref`) each have a test standing on them. Stress tests 1 and 3 — the redirect
+limit of `hosts:` and the version floor — are documented at
+`reference/configuration.mdx#schema-trust`, which is what they asked for.
+
+The note this proposal was reserved by, in `LoadSchemaOptions.offline`, is
+gone: `offline` is a durability control again, and the comment points at the
+real guard.

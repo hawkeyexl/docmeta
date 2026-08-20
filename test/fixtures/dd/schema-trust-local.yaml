@@ -1,0 +1,6 @@
+# A repo that takes outside pull requests: documents may name a built-in id or
+# a schema file in the repository, but not a URL.
+schemaTrust:
+  documentRefs: local
+schemas:
+  - google:okf:0.1

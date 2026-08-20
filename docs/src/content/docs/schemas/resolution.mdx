@@ -110,6 +110,8 @@ The file is validated against *both* schemas; see [below](#validating-against-mo
 A `$schema` value that is anything else (a number, an object, a list with non-string entries) is a configuration error, and docmeta reports it rather than guessing. Keep it to a single reference or a flat list of references.
 </Aside>
 
+Level 2 beating config is what makes a document self-describing, and it is also the one level a repository can narrow. A repo taking pull requests from outside can say that documents may name a built-in id or a repository file but not a URL — or that their `$schema` is ignored entirely — with [`schemaTrust`](/docmeta/reference/configuration/#schema-trust). Left unset, level 2 behaves exactly as described here.
+
 ## The three reference kinds
 
 Everywhere a schema is named (a `--schema` flag, a `$schema` key, a config entry), the value is a **reference**, and docmeta classifies it into one of three kinds by its shape. You don't declare the kind; docmeta infers it.

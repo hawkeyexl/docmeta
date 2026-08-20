@@ -18,7 +18,7 @@ and using the **first** one that yields a non-empty set:
 | Level | Source | Scope |
 |---|---|---|
 | 1 | `-s/--schema` on the command line | All files in the run. |
-| 2 | `$schema` in the file's own metadata | That file only. |
+| 2 | `$schema` in the file's own metadata | That file only. A repo can [narrow what a document may name](#what-a-document-may-reference-and-how-a-repo-narrows-it). |
 | 3 | First matching config `overrides` entry (by glob) | Files matching the glob. |
 | 4 | Config `schemas` | All files not matched above. |
 | 5 | Built-in default set: `google:okf:0.1` + `passo-uno:seven-action:1.0` | Every file, when nothing else applies. |
@@ -57,6 +57,40 @@ type: concept
 **reserved and stripped** before validation, so a schema with
 `additionalProperties: false` will not flag it. A `$schema` value that is
 neither a string nor a list of strings is an error for that file.
+
+### What a document may reference, and how a repo narrows it
+
+By default a document's `$schema` may name any of the [three
+kinds](#reference-kinds) — a built-in id, a local file, or a URL. That is the
+feature: a page carries its own contract, and level 2 of the chain is above
+config precisely so it can.
+
+It also means one line of frontmatter chooses the schema that file is judged by.
+In a repository whose pull requests come from outside, that is a way to opt out
+of the standard: a document naming a permissive URL passes while the documents
+playing by the config's rules fail.
+
+[`schemaTrust`](/docmeta/reference/configuration/#schema-trust) is how a repo
+narrows level 2. It changes nothing else in the chain:
+
+| `schemaTrust.documentRefs` | Effect on level 2 |
+|---|---|
+| `any` (default) | Unchanged. All three kinds, from any host unless `schemaTrust.hosts` is set. |
+| `local` | Built-in ids and repository files resolve; a URL is refused. |
+| `none` | Level 2 is skipped entirely, so resolution continues at level 3. The dropped reference is reported on stderr. |
+
+Two things hold in **every** mode, including the default:
+
+- A document-supplied **path** must resolve inside the repository — the git
+  root, so a monorepo's `../shared/house.json` still resolves. A path that
+  escapes it is refused.
+- A reference an **operator** supplied is never filtered. `schemas`,
+  `overrides[].schemas`, and `-s/--schema` resolve exactly as they always have,
+  in every mode, including to a path outside the repository.
+
+A refused reference fails **that file** (exit 1) with the reason as its error,
+so the rest of the run is validated normally and the annotation lands on the
+document that carried the reference.
 
 ## Reference kinds
 
@@ -102,6 +136,18 @@ When a config directory differs from the working directory, docmeta reports
 config-supplied file schemas by their absolute path, so it is unambiguous which
 file a run actually loaded.
 </Aside>
+
+A file reference a **document** supplied has one extra rule: it must resolve
+inside the repository. `$schema: ../../../../etc/passwd` is refused rather than
+read, in every `schemaTrust` mode. A file reference from a config or from
+`--schema` has no such limit — see [what a document may
+reference](#what-a-document-may-reference-and-how-a-repo-narrows-it).
+
+If a local schema file is not valid JSON, docmeta reports the reference and the
+line and column where parsing failed. It does **not** quote the file's contents
+back, because that message travels into `json` and `sarif` reports that are
+routinely uploaded to code scanning. A *fetched* body is quoted, deliberately —
+seeing what a URL actually returned is how you tell a gateway from a schema.
 
 #### Vendored references
 

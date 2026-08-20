@@ -1,6 +1,6 @@
 ---
 title: Govern a shared schema across repos
-description: Vendor one canonical JSON Schema into each consuming repository with docmeta schemas vendor, so CI validates against a committed, hash-pinned copy instead of a live URL, and keep the plain URL form where its tradeoff is acceptable.
+description: Vendor one canonical JSON Schema into each consuming repository with docmeta schemas vendor, so CI validates against a committed, hash-pinned copy instead of a live URL, keep the plain URL form where its tradeoff is acceptable, and stop a contributed document choosing its own schema.
 ---
 
 import { Steps, Tabs, TabItem, Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
@@ -253,6 +253,89 @@ with no `$schema` is treated as 2020-12). Set `$schema` explicitly in the
 published schema so its dialect is unambiguous to every consumer.
 </Aside>
 
+## When your repo takes outside pull requests
+
+Everything above governs where *your* canonical schema comes from. One more
+thing decides whether a repository is actually judged by it.
+
+A document's own `$schema` sits **above** config in the [precedence
+chain](/docmeta/reference/schema-resolution/#precedence). That is the feature
+that lets a page carry its own contract — and in a repo whose pull requests come
+from people you have not met, it is also a way to opt out of yours. One line of
+frontmatter, and that file is judged by a schema the contributor chose:
+
+```yaml title="contributed.md"
+---
+title: Contributed page
+$schema: https://example.invalid/permissive.json
+---
+```
+
+Serve `{"type": "object"}` from that URL and the file passes everything. Worse,
+the run reads as a *partial* success — the contributed file green, the honest
+files still red against your real schema — so nothing about the output looks
+like a bypass:
+
+```
+✓ contributed.md
+✗ honest.md
+    (root)  must have required property 'type'  (line 1)  [google:okf:0.1]
+```
+
+Note what this walks past: `schemas:`, the vendored copy, and the integrity pin
+all sit *below* `$schema` in the chain, so none of the durability work above
+applies to that file.
+
+One key closes it:
+
+```yaml title="docmeta.config.yaml"
+schemas:
+  - ref: ./schema/2.1.json
+    source: https://schemas.example.com/house/2.1.json
+    integrity: sha256-c12b1cfe…7341
+schemaTrust:
+  documentRefs: local
+```
+
+Now the contributed file fails with the reason on the file itself, and every
+other document is validated exactly as before:
+
+```
+✗ contributed.md
+    Refusing the "$schema" URL "https://example.invalid/permissive.json":
+    schemaTrust.documentRefs is "local" …
+```
+
+It is a **failing file**, exit 1 — not a stopped run — so with `--format github`
+the annotation appears on that line of the pull request, where the contributor
+can act on it.
+
+What `local` still allows is worth stating, because it is why turning it on is
+cheap: a built-in id (`$schema: google:okf:0.1`) and a schema file committed in
+the repository both keep working. Only a URL, and a path reaching outside the
+repository, are refused. And `-s/--schema` is untouched in every mode — you can
+still check a candidate schema for one run.
+
+`documentRefs: none` goes one step further: the document's key is ignored
+entirely and the config decides for every file, with one line on stderr naming
+each file whose reference was dropped.
+
+<Aside type="caution" title="Two things to know before you rely on it">
+**An allowlist is not the strong setting.** `schemaTrust.hosts` narrows which
+hosts a document-supplied URL may name, but `fetch` follows redirects, so an
+allowlisted host answering `302` sends the request wherever it likes. Use
+`hosts` for a known publisher; use `documentRefs: local` when you actually
+distrust the contributor.
+
+**Pin the version in CI.** A docmeta older than 3.11 does not know the key,
+ignores it, and reports nothing — so the guard is only as real as the binary
+your workflow runs:
+
+```sh
+npx -y docmeta@^3.11 validate "docs/**/*.md"
+```
+</Aside>
+
 ## Verify it works
 
 The `json` output reports the resolved schema set per file, so a normal run on a
@@ -286,6 +369,11 @@ nothing in the run touches it) and confirm the gate still passes.
     title="Exit codes & PR annotations"
     href="/docmeta/ci/exit-codes-and-annotations/"
     description="The 0/1/2 contract, and why a schema problem is exit 2, not exit 1."
+  />
+  <LinkCard
+    title="Configuration reference: schemaTrust"
+    href="/docmeta/reference/configuration/#schema-trust"
+    description="Every mode, the host allowlist and its redirect limit, and the version floor CI needs."
   />
 </CardGrid>
 

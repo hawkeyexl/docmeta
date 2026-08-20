@@ -1,0 +1,5 @@
+# Invalid: `schemaTrust.documentRefs` must be one of any, local, or none.
+schemaTrust:
+  documentRefs: strict
+schemas:
+  - google:okf:0.1
