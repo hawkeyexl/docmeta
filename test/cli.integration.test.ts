@@ -1483,3 +1483,44 @@ describe("usage errors exit 2 (0005 §4)", () => {
     expect(r.stderr).toBe("");
   });
 });
+
+// ---------------------------------------------------------------------------
+// `schemas -f` is a closed set, like every other command's --format
+// ---------------------------------------------------------------------------
+
+describe("schemas rejects an unsupported --format", () => {
+  it("exits 2 and names the accepted values", () => {
+    const r = run(["schemas", "-f", "nonsense"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain('docmeta: Unknown --format "nonsense"');
+    expect(r.stderr).toContain("pretty or json");
+    // Nothing on stdout: a rejected format must not fall through to a report
+    // in some other one.
+    expect(r.stdout).toBe("");
+  });
+
+  it("does not report it as an unexpected error", () => {
+    const r = run(["schemas", "-f", "nonsense"]);
+    expect(r.stderr).not.toContain("Unexpected error");
+  });
+
+  // `github` is the one that actually bit: it is a real docmeta format, just
+  // not one `schemas` can produce, so it read as accepted and printed pretty.
+  it("rejects a real format that this command cannot produce", () => {
+    const r = run(["schemas", "-f", "github"]);
+    expect(r.status).toBe(2);
+    expect(r.stdout).not.toContain("google:okf:0.1");
+  });
+
+  it("still accepts json", () => {
+    const r = run(["schemas", "-f", "json"]);
+    expect(r.status).toBe(0);
+    expect(JSON.parse(r.stdout)).toHaveProperty("builtins");
+  });
+
+  it("still accepts pretty", () => {
+    const r = run(["schemas", "-f", "pretty"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("Built-in schemas:");
+  });
+});

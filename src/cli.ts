@@ -569,28 +569,46 @@ export function buildProgram(): Command {
     .description("List built-in schemas and supported input formats")
     .option("-f, --format <format>", "output: pretty | json", "pretty")
     .action((options, command: Command) => {
-      const info = getSchemasInfo();
-      if (options.format === "json") {
-        process.stdout.write(`${JSON.stringify(info, null, 2)}\n`);
-        return;
-      }
-      const c = palette(resolveColor(command.parent ?? command));
-      const lines: string[] = [c.bold("Built-in schemas:")];
-      for (const b of info.builtins) {
-        lines.push(`  ${c.cyan(b.id)}  ${c.dim("—")}  ${b.title}`);
-      }
-      lines.push("", c.bold("Input formats:"));
-      for (const f of info.formats) {
-        const tags = [f.implemented ? c.green("implemented") : c.dim("planned")];
-        // Only worth surfacing on formats that can actually be read.
-        if (f.implemented) {
-          tags.push(f.writable ? c.green("writable") : c.dim("read-only"));
+      try {
+        // A closed set, checked like every other command's --format. This used
+        // to be a bare `=== "json" ? json : pretty`, so `schemas -f github`
+        // printed a pretty listing and exited 0 — a request docmeta cannot
+        // honor, answered with success in a different format. `github` is the
+        // case that matters: it is a real docmeta format, just not one this
+        // command produces, so nothing about the invocation looked wrong.
+        const format = options.format as string;
+        if (format !== "pretty" && format !== "json") {
+          throw new DocmetaError(
+            `Unknown --format "${format}". Use pretty or json.`,
+          );
         }
-        lines.push(
-          `  ${f.name} (${f.extensions.join(", ")})  [${tags.join(", ")}]`,
-        );
+        const info = getSchemasInfo();
+        if (format === "json") {
+          process.stdout.write(`${JSON.stringify(info, null, 2)}\n`);
+          return;
+        }
+        const c = palette(resolveColor(command.parent ?? command));
+        const lines: string[] = [c.bold("Built-in schemas:")];
+        for (const b of info.builtins) {
+          lines.push(`  ${c.cyan(b.id)}  ${c.dim("—")}  ${b.title}`);
+        }
+        lines.push("", c.bold("Input formats:"));
+        for (const f of info.formats) {
+          const tags = [
+            f.implemented ? c.green("implemented") : c.dim("planned"),
+          ];
+          // Only worth surfacing on formats that can actually be read.
+          if (f.implemented) {
+            tags.push(f.writable ? c.green("writable") : c.dim("read-only"));
+          }
+          lines.push(
+            `  ${f.name} (${f.extensions.join(", ")})  [${tags.join(", ")}]`,
+          );
+        }
+        process.stdout.write(`${lines.join("\n")}\n`);
+      } catch (err) {
+        fail(err);
       }
-      process.stdout.write(`${lines.join("\n")}\n`);
     });
 
   schemas
