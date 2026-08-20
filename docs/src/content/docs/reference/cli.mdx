@@ -217,9 +217,11 @@ exit=2
 
 A token is read as a path when it exists on disk, is a glob, ends in a
 [supported extension](/docmeta/reference/formats/), or contains a path
-separator. A field list is never mistaken for one: a comma-separated list and a
-leading-slash JSON Pointer are both recognized as fields, and `--fields` is the
-escape hatch for anything else.
+separator. A comma-separated list and a leading-slash JSON Pointer are
+recognized as fields, so a normal field list is not mistaken for a path — but
+"exists on disk" is checked first, so a pointer that happens to match a real
+absolute file is read as a path. `--fields` is the unambiguous spelling
+whenever the guess would be wrong.
 
 #### Nested fields
 

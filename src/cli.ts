@@ -102,26 +102,32 @@ const STDIN = "-";
  * bare name and the bare name is the field list: the only reading that makes
  * sense of both.
  *
- * The two negative tests come first and matter more, because a false positive
- * would reject a legal field list:
+ * Two negative tests matter more than any of the shape tests, because a false
+ * positive rejects a legal field list:
  *
- * - a **comma** makes it a list, and a path holding one is vanishingly rare
- *   (and still caught by `existsSync` when it is real);
+ * - a **comma** makes it a list, and a path holding one is vanishingly rare;
  * - a **leading `/`** is a JSON Pointer, the documented way to address a nested
  *   or dotted key — `docmeta get /author/email page.md` is exactly the usage
  *   the separator test would otherwise refuse.
+ *
+ * They do not run *first*, though, and the distinction is worth stating because
+ * the obvious reading of the list above is that they do: a token that names a
+ * file which really exists is taken as a path before either is consulted. So a
+ * JSON Pointer that happens to match a real absolute path — `/author/email`, on
+ * a machine where that file exists — is read as a path. `--fields` is the
+ * escape, and is why the guard can afford to be wrong here.
  */
 function looksLikePath(token: string, cwd: string, alone: boolean): boolean {
   if (token === STDIN) return false;
-  const shaped =
-    /[\\/]/.test(token) ||
-    extname(token) !== "" ||
-    picomatch.scan(token).isGlob;
+  // One scan, used twice: `shaped` needs it, and so does the positive test
+  // below when `existsSync` did not settle the question.
+  const scan = picomatch.scan(token);
+  const shaped = /[\\/]/.test(token) || extname(token) !== "" || scan.isGlob;
   // A file that really is there settles it — but only when the token looks
   // like a path, or nothing else was offered as one.
   if ((shaped || alone) && existsSync(resolvePath(cwd, token))) return true;
   if (token.includes(",") || token.startsWith("/")) return false;
-  if (picomatch.scan(token).isGlob) return true;
+  if (scan.isGlob) return true;
   const ext = extname(token).toLowerCase();
   if (ext !== "" && supportedExtensions().includes(ext)) return true;
   return /[\\/]/.test(token);
@@ -473,9 +479,7 @@ export function buildProgram(): Command {
 
   program
     .command("get")
-    .description(
-      "Print metadata field values from the given files/dirs/globs",
-    )
+    .description("Print metadata field values from the given files/dirs/globs")
     // Optional, and the flag below is the unambiguous spelling. A required
     // positional ate the user's *path* when the field list was forgotten, and
     // reported the paths — which were never the problem — as missing.
@@ -523,69 +527,71 @@ export function buildProgram(): Command {
         "  cat page.md | docmeta get title - --as markdown",
       ].join("\n"),
     )
-    .action(async (
-      fieldsArg: string | undefined,
-      pathsArg: string[],
-      options,
-      command: Command,
-    ) => {
-      try {
-        const format = assertCommonFormat(options.format);
-        const { fields, paths } = resolveGetInputs(
-          fieldsArg,
-          pathsArg,
-          options.fields,
-          process.cwd(),
-        );
-        const exts: string[] | undefined = options.ext
-          ? String(options.ext)
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean)
-          : undefined;
-        const stdinContent = paths.includes("-")
-          ? await readStdin()
-          : undefined;
+    .action(
+      async (
+        fieldsArg: string | undefined,
+        pathsArg: string[],
+        options,
+        command: Command,
+      ) => {
+        try {
+          const format = assertCommonFormat(options.format);
+          const { fields, paths } = resolveGetInputs(
+            fieldsArg,
+            pathsArg,
+            options.fields,
+            process.cwd(),
+          );
+          const exts: string[] | undefined = options.ext
+            ? String(options.ext)
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : undefined;
+          const stdinContent = paths.includes("-")
+            ? await readStdin()
+            : undefined;
 
-        const results = await runGet({
-          fields,
-          inputs: paths,
-          as: options.as,
-          exclude: options.exclude,
-          exts,
-          ...configOption(options.config),
-          onConfigLoaded: reportConfig(format === "pretty", process.cwd()),
-          stdinContent,
-          allowEmpty: options.allowEmpty ? true : undefined,
-          respectGitignore: gitignoreFlag(options.gitignore),
-          offline: options.offline ? true : undefined,
-          onNotice: notice,
-        });
-        switch (format) {
-          case "json":
-            // `--quiet` is a pretty-output affordance; a filtered array would
-            // be indistinguishable from an empty run to whatever parses this.
-            process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
-            break;
-          case "pretty": {
-            const text = renderGet(results, fields, {
-              color: resolveColor(command.parent ?? command),
-              quiet: Boolean(options.quiet),
-            });
-            if (text.length > 0) process.stdout.write(`${text}\n`);
-            break;
+          const results = await runGet({
+            fields,
+            inputs: paths,
+            as: options.as,
+            exclude: options.exclude,
+            exts,
+            ...configOption(options.config),
+            onConfigLoaded: reportConfig(format === "pretty", process.cwd()),
+            stdinContent,
+            allowEmpty: options.allowEmpty ? true : undefined,
+            respectGitignore: gitignoreFlag(options.gitignore),
+            offline: options.offline ? true : undefined,
+            onNotice: notice,
+          });
+          switch (format) {
+            case "json":
+              // `--quiet` is a pretty-output affordance; a filtered array would
+              // be indistinguishable from an empty run to whatever parses this.
+              process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
+              break;
+            case "pretty": {
+              const text = renderGet(results, fields, {
+                color: resolveColor(command.parent ?? command),
+                quiet: Boolean(options.quiet),
+              });
+              if (text.length > 0) process.stdout.write(`${text}\n`);
+              break;
+            }
+            default: {
+              const unreachable: never = format;
+              throw new DocmetaError(
+                `Unknown --format ${JSON.stringify(unreachable)}. Use ${COMMON_FORMAT_LIST}.`,
+              );
+            }
           }
-          default: {
-            const unreachable: never = format;
-            throw new DocmetaError(
-              `Unknown --format ${JSON.stringify(unreachable)}. Use ${COMMON_FORMAT_LIST}.`,
-            );
-          }
+        } catch (err) {
+          fail(err);
         }
-      } catch (err) {
-        fail(err);
-      }
-    });
+      },
+    );
 
   program
     .command("fill")
@@ -661,7 +667,12 @@ export function buildProgram(): Command {
         // parseFloat("abc") is NaN, and every comparison against NaN is false,
         // so a bare range check would silently accept garbage.
         numeric("--confidence", options.confidence, 0, 1);
-        numeric("--max-cost-usd", options.maxCostUsd, 0, Number.MAX_SAFE_INTEGER);
+        numeric(
+          "--max-cost-usd",
+          options.maxCostUsd,
+          0,
+          Number.MAX_SAFE_INTEGER,
+        );
         numeric("--concurrency", options.concurrency, 1, 64);
 
         const exts: string[] | undefined = options.ext
@@ -698,7 +709,9 @@ export function buildProgram(): Command {
           respectGitignore: gitignoreFlag(options.gitignore),
           offline: options.offline ? true : undefined,
           onNotice: notice,
-          fields: options.fields ? splitList(String(options.fields)) : undefined,
+          fields: options.fields
+            ? splitList(String(options.fields))
+            : undefined,
           confidence: options.confidence,
           dryRun: Boolean(options.dryRun),
           provider: options.provider,

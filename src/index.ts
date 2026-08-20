@@ -85,7 +85,10 @@ export {
   renderFillGithub,
 } from "./reporters/fill.js";
 export type { FillReportFormat, FillReportOptions } from "./reporters/fill.js";
-export { renderGet } from "./reporters/get.js";
+// `stringifyValue` alongside `renderGet`: a caller building its own loop over
+// `runGet` results needs the same `(unset)`-and-JSON formatting the CLI uses,
+// and deriving it a second time is how two spellings of one rule start.
+export { renderGet, stringifyValue } from "./reporters/get.js";
 export type { GetReportOptions } from "./reporters/get.js";
 export {
   extractFrontmatter,
