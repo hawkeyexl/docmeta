@@ -21,6 +21,18 @@ export interface ExtractedMetadata {
    * when no position is known.
    */
   lineFor(pointer: string): number | undefined;
+  /**
+   * The column counterpart of {@link lineFor}, 1-based, resolving the same
+   * pointer forms.
+   *
+   * **Optional on purpose.** `lineFor` is required and public, so widening it
+   * to return a position pair would break every consumer that implements
+   * `MetadataExtractor` outside this repository. A format that cannot cheaply
+   * give a column simply omits this — today that is every frontmatter-based
+   * extractor, whose `yaml` node offsets would need an offset -> line/col
+   * conversion first. `html` and `xml` implement it.
+   */
+  colFor?(pointer: string): number | undefined;
 }
 
 /** Fenced front matter flavors, in fence order: `---`, `+++`, `;;;`. */
@@ -40,7 +52,13 @@ export interface MetadataExtractor {
   name: string;
   /** Lowercase file extensions this extractor handles, incl. dot (e.g. ".md"). */
   extensions: string[];
-  /** Whether this extractor is wired up (false for roadmap stubs). */
+  /**
+   * Whether this extractor can *read* — false for a format that is registered
+   * but not yet wired up. Every registered extractor sets it true today; it is
+   * kept because it is a distinct capability from writability, which is the
+   * presence of `apply`. A format can read without writing, and one being
+   * added could be declared before it can do either.
+   */
   implemented: boolean;
   /** Extract metadata from raw file content. */
   extract(content: string, filePath: string): ExtractedMetadata;

@@ -1,8 +1,9 @@
 /**
  * Extractor registry. Maps file extensions to extractors and resolves an
- * extractor by name (for the `--as` override). Roadmap stubs are registered so
- * detection can report them clearly, but only implemented extractors count as
- * "supported" for directory walks.
+ * extractor by name (for the `--as` override). Every registered extractor is
+ * implemented today; the `implemented` filters below are what would keep a
+ * declared-but-unwired format out of directory walks, so an unfinished format
+ * can be registered without becoming "supported".
  */
 import type { MetadataExtractor } from "../types.js";
 import { markdownExtractor } from "./markdown.js";

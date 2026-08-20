@@ -203,7 +203,10 @@ export function renderSarif(
               // SARIF requires `startLine >= 1`. `0` is schema-invalid and `1`
               // silently mislocates the finding at the top of the file, so an
               // unknown line omits the region and renders file-level, which is
-              // true. No extractor populates `col`, so no `startColumn`.
+              // true. `startColumn` is deliberately still absent: html and xml
+              // now populate `col`, but the rest of the region work (endLine,
+              // endColumn, snippet) belongs to 0003, and a lone startColumn
+              // would be the half of it that misleads.
               ...(e.line != null ? { region: { startLine: e.line } } : {}),
             },
           },

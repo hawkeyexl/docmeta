@@ -1,7 +1,7 @@
 /**
  * JSON Schema validation engine. Compiles and caches an Ajv validator per
  * schema reference, validates extracted metadata against each schema in a set,
- * and maps every violation to a {schema, instancePath, line} FieldError.
+ * and maps every violation to a {schema, instancePath, line, col} FieldError.
  */
 import * as AjvDraft07Ns from "ajv";
 import * as Ajv2019Ns from "ajv/dist/2019.js";
@@ -250,11 +250,17 @@ export class Validator {
    * Validate `data` against every schema in `refs`. Returns all violations,
    * each tagged with the schema that produced it and a source line via
    * `lineFor`.
+   *
+   * `colFor` is optional and additive: this signature is public, so a fourth
+   * *required* parameter — or a widened third one — would be a consumer break.
+   * Callers with an extractor that supplies no column pass nothing and get the
+   * previous behavior exactly.
    */
   async validate(
     data: Record<string, unknown>,
     refs: string[],
     lineFor: (pointer: string) => number | undefined,
+    colFor?: (pointer: string) => number | undefined,
   ): Promise<FieldError[]> {
     // `$schema` is a docmeta directive, not part of the document's metadata —
     // strip it so schemas with additionalProperties:false don't flag it.
@@ -267,7 +273,7 @@ export class Validator {
       const ok = fn(subject);
       if (ok) continue;
       for (const e of fn.errors ?? []) {
-        errors.push(toFieldError(ref, e, lineFor));
+        errors.push(toFieldError(ref, e, lineFor, colFor));
       }
     }
     return errors;
@@ -308,6 +314,7 @@ function toFieldError(
   schema: string,
   e: ErrorObject,
   lineFor: (pointer: string) => number | undefined,
+  colFor?: (pointer: string) => number | undefined,
 ): FieldError {
   // Ajv's documented way to narrow: every error it raises for a built-in
   // vocabulary is a member of `DefinedError`, but `ValidateFunction.errors` is
@@ -315,14 +322,30 @@ function toFieldError(
   const defined = e as DefinedError;
   const instancePath = e.instancePath;
   const subject = subjectOf(defined);
-  // For `required`, point at the parent object but name the missing property.
+  // Both of these point `instancePath` at the *parent* object and name the
+  // property in the message, so neither gets a column.
+  //
+  // The parent exists, so `colFor` answers happily — with the parent's column,
+  // which is a different token from the one the message is about. For
+  // `required` the property is not in the file at all; for
+  // `additionalProperties` it is, but somewhere else entirely, and the parent
+  // of a document's root is the root, whose recorded position is 1:1. So a
+  // stray key on line 40 was annotated at line 1 column 1, a caret on the first
+  // character of the file.
+  //
+  // A `line` on the parent is a useful "look around here". A caret is a claim
+  // about one character, and for these two keywords it would be the wrong one.
   let message = e.message ?? "is invalid";
+  let wantsColumn = true;
   if (defined.keyword === "required") {
     message = `must have required property '${defined.params.missingProperty}'`;
+    wantsColumn = false;
   } else if (defined.keyword === "additionalProperties") {
     message = `must NOT have additional property '${defined.params.additionalProperty}'`;
+    wantsColumn = false;
   }
   const line = lineFor(instancePath);
+  const col = wantsColumn ? colFor?.(instancePath) : undefined;
   return {
     schema,
     instancePath,
@@ -330,5 +353,6 @@ function toFieldError(
     keyword: e.keyword,
     ...(subject != null ? { subject } : {}),
     ...(line != null ? { line } : {}),
+    ...(col != null ? { col } : {}),
   };
 }

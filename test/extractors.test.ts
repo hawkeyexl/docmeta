@@ -14,7 +14,6 @@ import {
   supportedExtensions,
   listFormats,
 } from "../src/extractors/index.js";
-import { createStubExtractor } from "../src/extractors/stub.js";
 import { DocmetaError } from "../src/types.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -501,6 +500,22 @@ describe("xml extractor", () => {
     expect(r.lineFor("/missing")).toBe(3);
   });
 
+  it("maps the root element and each attribute to its source column", () => {
+    const r = xmlExtractor.extract(XML_DOC, "x.xml");
+    // xmldom reports an element at its `<` and an attribute at the opening
+    // quote of its value — both 1-based. `<document` opens column 1 of line 3;
+    // `type="concept"` puts its quote at column 16 of that line.
+    expect(r.colFor?.("")).toBe(1);
+    expect(r.colFor?.("/type")).toBe(16);
+    expect(r.colFor?.("/version")).toBe(19);
+    expect(r.colFor?.("/draft")).toBe(17);
+    expect(r.colFor?.("/title")).toBe(17);
+    // a bare top-level key resolves like its JSON pointer
+    expect(r.colFor?.("version")).toBe(19);
+    // and an unknown pointer falls back to the root, like `lineFor`
+    expect(r.colFor?.("/missing")).toBe(1);
+  });
+
   it("ignores xmlns namespace declarations", () => {
     const r = xmlExtractor.extract(
       `<doc xmlns="http://example.com/ns" xmlns:x="http://example.com/x" type="ref"/>`,
@@ -629,6 +644,22 @@ describe("html extractor", () => {
     expect(r.lineFor("/missing")).toBe(1);
   });
 
+  it("maps a meta tag to its content= attribute column, not the tag start", () => {
+    const r = htmlExtractor.extract(HTML_DOC, "x.html");
+    // parse5 gives per-attribute locations, so the caret lands on the value
+    // that failed rather than on `<meta`. `<meta` itself opens at column 5.
+    expect(r.colFor?.("/type")).toBe(23);
+    expect(r.colFor?.("/version")).toBe(26);
+    expect(r.colFor?.("/og:title")).toBe(31);
+    // <title> has no attribute to point at, so it points at the tag
+    expect(r.colFor?.("/title")).toBe(5);
+    // a bare top-level key resolves like its JSON pointer
+    expect(r.colFor?.("title")).toBe(5);
+    // the root and unknown pointers anchor at column 1, like `lineFor`
+    expect(r.colFor?.("")).toBe(1);
+    expect(r.colFor?.("/missing")).toBe(1);
+  });
+
   it("decodes HTML entities in values", () => {
     const r = htmlExtractor.extract(
       `<meta name="summary" content="A &amp; B">`,
@@ -705,11 +736,22 @@ describe("extractor registry", () => {
     expect(extractorForExtension(".txt")).toBeUndefined();
   });
 
-  it("stub extractors throw not-implemented", () => {
-    // No registered format is a stub anymore; exercise the factory directly.
-    const stub = createStubExtractor("planned", [".planned"], "future format");
-    expect(stub.implemented).toBe(false);
-    expect(() => stub.extract("x", "x.planned")).toThrow(DocmetaError);
+  it("leaves colFor absent for formats that cannot supply a column", () => {
+    // `colFor` is optional on purpose: frontmatter would need an offset ->
+    // line/col conversion the `yaml` node offsets do not give directly, so
+    // those extractors say nothing rather than guessing.
+    expect(markdownExtractor.extract(VALID, "x.md").colFor).toBeUndefined();
+    expect(asciidocExtractor.extract(ADOC_HEADER, "x.adoc").colFor).toBeUndefined();
+    expect(
+      rstExtractor.extract(readFixture("valid.rst"), "x.rst").colFor,
+    ).toBeUndefined();
+  });
+
+  it("registers only implemented extractors, so the flag reads true", () => {
+    // `implemented` stays on the interface as a declaration a future
+    // read-only-pending format can set false; today nothing does, and the
+    // registry filters above depend on that staying visible.
+    expect(listFormats().every((f) => f.implemented)).toBe(true);
   });
 });
 

@@ -102,7 +102,7 @@ Metadata extraction is a pluggable layer. A new format is an isolated change; it
 2. **Register it** in [`src/extractors/index.ts`](src/extractors/index.ts) by adding it to the `EXTRACTORS` array.
 3. **Add a test and fixture.** Cover the new format in `test/extractors.test.ts` and add a minimal sample under `test/fixtures/`, following the red/green flow above.
 
-The `MetadataExtractor` interface returns an `ExtractedMetadata` object: the parsed `data`, whether a metadata block was `present`, the `format` name, and a `lineFor()` function that maps a field to its source line for precise error annotations. Set `implemented: true` once the extractor is wired up; roadmap stubs can register with `implemented: false` so the `schemas` command can report them as planned.
+The `MetadataExtractor` interface returns an `ExtractedMetadata` object: the parsed `data`, whether a metadata block was `present`, the `format` name, and a `lineFor()` function that maps a field to its source line for precise error annotations. Set `implemented: true` once the extractor is wired up; a format registered before its parser works sets `implemented: false`, which keeps it out of directory walks and has the `schemas` command report it as planned.
 
 ### Write support is optional
 

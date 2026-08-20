@@ -166,9 +166,12 @@ The shape is stable:
   - `line`: 1-based source line, when docmeta can locate it. Omitted when
     unknown. For example, errors at the document root often have no specific
     line.
-  - `col`: 1-based column. This field is defined in the output contract and is
-    emitted when present, but the current extractors resolve errors to a line
-    only, so `col` is absent in practice today. Treat it as optional.
+  - `col`: 1-based column, when the format can supply one. The `html` and `xml`
+    extractors do — an HTML error points at the `content=` attribute of the
+    `<meta>` tag, an XML one at the offending attribute's value. Frontmatter
+    formats give a line only. It is also omitted for a `required` violation,
+    which reports the parent object rather than the property that is missing:
+    there is no column for something absent. Treat it as optional.
 
 <Aside type="note" title="line and col are best-effort">
 `line` and `col` appear only when docmeta can map the error back to a position
@@ -191,8 +194,11 @@ The format of each line is:
 
 - `file=` is always present.
 - `line=` is included only when the error has a known line.
-- `col=` is included only when the error has a known column. Current extractors
-  resolve to a line only, so `col=` is absent in practice today.
+- `col=` is included only when the error has a known column, which today means
+  an `html` or `xml` document and a violation other than `required` or
+  `additionalProperties`. Those two name a property in the message but point at
+  its *parent*, so a caret would land on the wrong token; the line is still
+  reported.
 - `<schema>` is the schema id that produced the error.
 - `<field>` is the JSON Pointer to the offending field, or `(root)` when the
   error is at the document root.
@@ -205,8 +211,16 @@ format:
 ::error file=bad-timestamp.md,line=4::[google:okf:0.1] /timestamp must match format "date-time"
 ```
 
+The same violation in an HTML document also carries a column, pointing at the
+`content=` attribute of the `<meta>` tag that holds the bad value:
+
+```text
+::error file=bad-timestamp.html,line=6,col=28::[google:okf:0.1] /timestamp must match format "date-time"
+```
+
 When the line is unknown, `line=` is dropped and only `file=` remains. A
-required-property error at the document root reports the field as `(root)`:
+required-property error at the document root reports the field as `(root)`, and
+carries no column even in a format that can supply one:
 
 ```text
 ::error file=missing-type.md::[google:okf:0.1] (root) must have required property 'type'

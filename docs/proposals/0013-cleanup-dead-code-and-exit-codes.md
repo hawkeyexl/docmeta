@@ -1,6 +1,6 @@
 # 0013 — Dead code, the unpopulated `col`, and usage exit codes
 
-- **Status:** Proposed
+- **Status:** Implemented
 - **Serves:** correctness and maintainability; no CUJ directly
 - **Touches:** `src/extractors/stub.ts`, `src/extractors/{html,xml}.ts`, `src/types.ts`, `test/extractors.test.ts`, `CONTRIBUTING.md`
 - **Note:** the exit-code item is **owned by [0005](0005-command-parity.md)**; it is described here for completeness because it belongs to the same defect class.
@@ -199,3 +199,76 @@ Independent, in any order. Items 1 and 2 are each a single small PR.
    `content-strategy/README.md`, which uses `col` as its example of a declared-but-
    unpopulated field — that example needs replacing once it is no longer true.
 3. **Item 3** — see [0005](0005-command-parity.md).
+
+---
+
+## What shipped
+
+Item 3 was **already done** before this proposal was implemented: `exitOverride()`
+landed in #84, ahead of the rest of [0005](0005-command-parity.md), which landed
+in #86. Verified against the built CLI rather than assumed — `validate --nope
+x.md` exits 2, and `--help` and `--version` still exit 0. 0005 § 4 now records
+that it shipped separately, which is the line this work corrected there.
+
+Item 1 shipped as **Option C**, as recommended: `src/extractors/stub.ts` and its
+self-referential test are gone, `implemented` stays on `MetadataExtractor` and on
+`getSchemasInfo()`, and the `planned` render branch in `src/cli.ts` stays with
+it. Three comments that described the deleted facility as present — the registry
+docstring, the `implemented` doc comment, and validate's `// operational
+(stub/unsupported)` — were corrected rather than left behind, and
+`CONTRIBUTING.md` now points at the field instead of the helper.
+
+### Item 2 was wider than "one property away"
+
+The proposal calls `col` "one property away" for both formats. That reading
+misses that `ExtractedMetadata.lineFor` and `Validator.validate(data, refs,
+lineFor)` are **both public**, so widening either — a returned position pair, a
+required third argument — is a consumer break for anyone implementing
+`MetadataExtractor` or calling the validator outside this repository.
+
+So the scope changed, and the shape is **additive**: an optional
+`colFor?(pointer)` joins `ExtractedMetadata`, and `Validator.validate` takes an
+optional fourth parameter. Nothing existing changes shape, and an extractor with
+no column to give simply omits the method. Scope stayed at `html` and `xml`;
+frontmatter still needs the offset -> line/col conversion the proposal names, and
+is still a second step.
+
+Two things the stress test did not reach:
+
+- **The bases had to be checked against the parsers, not their typings.**
+  `@xmldom/xmldom` documents `lineNumber` as *zero*-based and `columnNumber` as
+  *one*-based, while `xml.ts` treated `lineNumber` as 1-based and its tests
+  passed — so one of the two had to be wrong. Empirically, a root element opening
+  on source line 3 reports `lineNumber: 3`: both count from 1 and the doc comment
+  is wrong. Had the column trusted the prose instead, it would have inherited an
+  off-by-one that no existing test could catch.
+- **The two parsers point at different things.** An xmldom attribute reports the
+  opening quote of its *value*; parse5 reports each attribute's *name* start, and
+  exposes them per attribute — so an HTML annotation lands on `content=` rather
+  than on `<meta`. Both are sensible carets, and neither is the tag start.
+
+The stress test's own conclusions held: `required` gets no column (gated in the
+same block that already special-cases the keyword), the baseline fingerprint
+still excludes it — now asserted rather than assumed — and SARIF still emits no
+`startColumn`, which stays [0003](0003-sarif-and-junit-reporters.md)'s to add
+with the rest of the region.
+
+### One thing outside the proposal, in the same class
+
+`parseConfig` walked a fixed list of known keys and dropped the rest, as did the
+`schemaCache` and `fill` mappings; only `schemas[]` entries and `schemaTrust`
+rejected an unknown key. `parseSchemaTrust`'s own docstring already named the
+consequence — a misspelled `schemaTrust:` was a silent no-op "leaving a repo that
+reads as guarded and is not". That is the same false-green this proposal set
+exists to remove, so all three levels are now strict. It is a real breaking
+change for a config carrying a stray key, and for an older binary reading a
+config written for a newer one; the configuration reference states both.
+
+### Deliberately not done
+
+The `(parse)` schema label is **not** renamed to `(schema)` for schema-resolution
+failures. It looks like a wart and is not: keeping one label for both is a
+documented decision (`parseErrorResult`'s docstring, a test comment, four docs
+pages), and the discriminator already exists — `keyword` separates them, and
+`ruleIdFor` already emits `docmeta/parse-error` against `docmeta/schema-error`,
+so SARIF and JUnit consumers tell them apart today.

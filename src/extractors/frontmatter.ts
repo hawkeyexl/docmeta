@@ -125,9 +125,14 @@ export function frontmatterInnerText(
     .replace(/\n$/, "");
 }
 
-export function escapePointerSegment(key: string): string {
-  return key.replace(/~/g, "~0").replace(/\//g, "~1");
-}
+// Re-exported so `asciidoc` and `rst` keep one import site while the
+// implementations live with the other pointer helpers, where `html` and `xml`
+// can share them instead of each keeping a copy.
+export {
+  escapePointerSegment,
+  positionForFactory as lineForFactory,
+} from "./pointer.js";
+import { escapePointerSegment, positionForFactory } from "./pointer.js";
 
 /** Build a JSON-Pointer -> 1-based file line map from a parsed YAML/JSON block. */
 function buildLineMap(
@@ -215,29 +220,6 @@ function buildTomlLineMap(raw: string, prefixLines: number): Map<string, number>
   return map;
 }
 
-export function lineForFactory(
-  map: Map<string, number>,
-): (pointer: string) => number | undefined {
-  return (pointer: string) => {
-    // A bare top-level key (e.g. "type") maps to its "/type" JSON pointer.
-    const start =
-      pointer !== "" && !pointer.startsWith("/")
-        ? `/${escapePointerSegment(pointer)}`
-        : pointer;
-    if (map.has(start)) return map.get(start);
-    // A value can be an array/object, so Ajv may report nested pointers like
-    // "/tags/0". Walk up to the nearest recorded ancestor.
-    let p = start;
-    while (p.length > 0) {
-      const idx = p.lastIndexOf("/");
-      if (idx < 0) break;
-      p = p.slice(0, idx);
-      if (map.has(p)) return map.get(p);
-    }
-    return map.get("");
-  };
-}
-
 /**
  * Coerce a parsed document root to the metadata object shape. An empty document
  * (`null`/`undefined`) is treated as no metadata (`{}`). A scalar or array root
@@ -267,13 +249,13 @@ function parseYamlBlock(
   }
   const data = rootObject(doc.toJS({ maxAliasCount: 100 }) as unknown, "YAML");
   const map = buildLineMap(doc, lc, prefixLines);
-  return { data, present: true, format, lineFor: lineForFactory(map) };
+  return { data, present: true, format, lineFor: positionForFactory(map) };
 }
 
 function emptyBlock(format: string): ExtractedMetadata {
   // An empty fenced block is present with no data (parity with empty YAML).
   const map = new Map<string, number>([["", 1]]);
-  return { data: {}, present: true, format, lineFor: lineForFactory(map) };
+  return { data: {}, present: true, format, lineFor: positionForFactory(map) };
 }
 
 function parseJsonBlock(
@@ -296,7 +278,7 @@ function parseJsonBlock(
   const lc = new LineCounter();
   const doc = parseDocument(raw, { lineCounter: lc });
   const map = buildLineMap(doc, lc, prefixLines);
-  return { data, present: true, format, lineFor: lineForFactory(map) };
+  return { data, present: true, format, lineFor: positionForFactory(map) };
 }
 
 function parseTomlBlock(
@@ -316,7 +298,7 @@ function parseTomlBlock(
   // A valid TOML document is always a table, but stay uniform with the others.
   const data = rootObject(parsed, "TOML");
   const map = buildTomlLineMap(raw, prefixLines);
-  return { data, present: true, format, lineFor: lineForFactory(map) };
+  return { data, present: true, format, lineFor: positionForFactory(map) };
 }
 
 /** Core front matter extraction shared by the markdown, mdx, adoc, rst formats. */

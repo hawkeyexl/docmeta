@@ -72,7 +72,8 @@ The fields:
   set), and `errors`.
 - **Each error**: `schema` (the schema id that produced it), `instancePath` (a
   JSON Pointer to the field, `""` for the document root), `message`, `keyword`,
-  `subject`, and `line` (1-based, when docmeta can locate it).
+  `subject`, `line` (1-based, when docmeta can locate it), and `col` (1-based,
+  when the format can supply one).
 
 <Aside type="tip" title="Key on keyword, not on message">
 `message` is prose docmeta gets from Ajv, and an Ajv release can reword it.
@@ -89,11 +90,14 @@ be read, `schema` when a schema set could not be resolved. Both keep
 `schema: "(parse)"`.
 </Aside>
 
-<Aside type="note" title="line and col are optional; col is absent today">
+<Aside type="note" title="line and col are both optional">
 `line` appears only when docmeta can map an error back to a source position, so
-parse it as optional. The contract also defines a `col` field, but current
-extractors resolve errors to a line only, so `col` is never present in practice
-today. Check for each field rather than assuming it exists.
+parse it as optional. `col` is optional in a second way as well: only the `html`
+and `xml` extractors resolve a column today, and even there it is omitted for a
+`required` violation, which reports the parent object and names the missing
+property — there is no column for something absent. Frontmatter formats
+(Markdown, MDX, AsciiDoc, reStructuredText) give a line and no column at all.
+Check for each field rather than assuming it exists.
 </Aside>
 
 The output is plain (never colorized) and goes to stdout, so it pipes cleanly

@@ -92,6 +92,89 @@ describe("Validator", () => {
   });
 });
 
+describe("Validator: the optional column", () => {
+  const colFor = (ptr: string) => (ptr === "/timestamp" ? 14 : 3);
+
+  it("leaves col unset when the extractor supplies no colFor", async () => {
+    const v = new Validator();
+    const errors = await v.validate(
+      { type: "concept", timestamp: "not-a-date" },
+      ["google:okf:0.1"],
+      lineFor,
+    );
+    expect(errors[0]?.line).toBe(9);
+    expect(errors[0]).not.toHaveProperty("col");
+  });
+
+  it("leaves col unset for additionalProperties, as for required", async () => {
+    // Both keywords point `instancePath` at the parent and name the property in
+    // the message. For a stray key at the document root the parent *is* the
+    // root, recorded at 1:1 — so the annotation carried a caret on the first
+    // character of the file for a key that could be anywhere in it.
+    const dir = await mkdtemp(join(tmpdir(), "docmeta-addprop-"));
+    try {
+      const strict = join(dir, "strict.schema.json");
+      await writeFile(
+        strict,
+        JSON.stringify({
+          $schema: "https://json-schema.org/draft/2020-12/schema",
+          type: "object",
+          properties: { title: { type: "string" } },
+          additionalProperties: false,
+        }),
+      );
+      const errors = await new Validator().validate(
+        { stray: "x" },
+        [strict],
+        lineFor,
+        colFor,
+      );
+      const found = errors.find((e) => e.keyword === "additionalProperties");
+      expect(found).toBeDefined();
+      expect(found).not.toHaveProperty("col");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("carries col through when the extractor supplies one", async () => {
+    const v = new Validator();
+    const errors = await v.validate(
+      { type: "concept", timestamp: "not-a-date" },
+      ["google:okf:0.1"],
+      lineFor,
+      colFor,
+    );
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.instancePath).toBe("/timestamp");
+    expect(errors[0]?.line).toBe(9);
+    expect(errors[0]?.col).toBe(14);
+  });
+
+  it("omits col for `required`, which points at the parent, not a token", async () => {
+    // The missing property has no source position at all. `toFieldError`
+    // already points `required` at the parent object and names the property in
+    // the message, so a column here would draw a caret at an arbitrary spot.
+    const v = new Validator();
+    const errors = await v.validate({ title: "Hi" }, ["google:okf:0.1"], lineFor, colFor);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.keyword).toBe("required");
+    expect(errors[0]?.line).toBe(1);
+    expect(errors[0]).not.toHaveProperty("col");
+  });
+
+  it("omits col when colFor knows no position for the pointer", async () => {
+    const v = new Validator();
+    const errors = await v.validate(
+      { type: "concept", timestamp: "not-a-date" },
+      ["google:okf:0.1"],
+      lineFor,
+      () => undefined,
+    );
+    expect(errors[0]).not.toHaveProperty("col");
+  });
+});
+
 describe("FieldError machine identity", () => {
   /**
    * One document that trips six different keywords, so the identity fields can

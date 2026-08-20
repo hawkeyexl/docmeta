@@ -44,8 +44,15 @@ baseline shared by `validate`, `get`, and `fill`:
 Do not introduce per-command input conventions (e.g. an `--in` option on one
 command but positional paths on another). If a parser limitation forces a
 difference, prefer changing how the *other* argument is supplied rather than
-breaking parity. (This is pre-1.0; breaking CLI changes are acceptable, so do not
-keep deprecated aliases unless asked.)
+breaking parity.
+
+Do not add a deprecated alias to soften a rename unless asked. The reason is not
+that breakage is free — docmeta is past 1.0 and published to npm, and
+semantic-release turns a breaking change into a major release, so it costs the
+version number and a release note. It is that an alias is a permanent second
+surface for one command, which is what "commands must have parallel behaviors"
+exists to prevent. When a rename is right, make it and mark the commit
+`feat!:` / `BREAKING CHANGE:` so the release says so.
 
 ### Red/green TDD
 
