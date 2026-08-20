@@ -92,7 +92,16 @@ for (const key of keys) {
 let recorded = {};
 try {
   const existing = JSON.parse(readFileSync(MANIFEST, "utf8"));
-  if (existing && typeof existing.schemas === "object") {
+  // `typeof null === "object"`, so the null check is not redundant: without
+  // it `recorded` becomes null and the `recorded[key]` below throws a raw
+  // TypeError outside this try, printing a stack trace instead of a
+  // `schemas:sync:` line. `schemas:check` already guards the same shape.
+  if (
+    existing &&
+    typeof existing.schemas === "object" &&
+    existing.schemas !== null &&
+    !Array.isArray(existing.schemas)
+  ) {
     recorded = existing.schemas;
   }
 } catch {

@@ -88,6 +88,28 @@ const PUBLISHED_ALIAS: ReadonlyMap<string, string> = new Map([
 ]);
 
 /**
+ * The bundled object a published URL names, or `undefined`.
+ *
+ * **Both** tables have to answer, not just `PUBLISHED_ALIAS`. A URL mapped to
+ * an id that is not in `BUILTINS` — a typo in one of the two literals — is not
+ * a published built-in at all: `loadSchema` would fall through to the network
+ * for it. If membership alone decided, the trust boundary would exempt a URL
+ * that then got fetched from a third party, which is the one combination
+ * neither check may produce. One resolution, so the two cannot disagree.
+ *
+ * Unreachable in practice: a test asserts the table covers exactly
+ * {@link listBuiltins}, so a mismatch fails the suite rather than shipping.
+ * The point of resolving through both is that a future edit cannot quietly
+ * turn a typo into a trust hole.
+ */
+function publishedBuiltinSchema(
+  ref: string,
+): Record<string, unknown> | undefined {
+  const id = PUBLISHED_ALIAS.get(ref);
+  return id === undefined ? undefined : BUILTINS.get(id);
+}
+
+/**
  * Does this reference name a built-in that docmeta happens to publish?
  *
  * A published URL resolves to a **bundled object**: no request is made, no
@@ -97,7 +119,7 @@ const PUBLISHED_ALIAS: ReadonlyMap<string, string> = new Map([
  * which shares this predicate rather than repeating the table.
  */
 export function isPublishedBuiltinUrl(ref: string): boolean {
-  return PUBLISHED_ALIAS.has(ref);
+  return publishedBuiltinSchema(ref) !== undefined;
 }
 
 /** One built-in, in both of its spellings, with the object they both name. */
@@ -120,10 +142,12 @@ export interface PublishedBuiltin {
 export function publishedBuiltins(): PublishedBuiltin[] {
   const out: PublishedBuiltin[] = [];
   for (const [url, id] of PUBLISHED_ALIAS) {
-    const schema = BUILTINS.get(id);
-    // Unreachable while both tables are literals in this file; a mismatch is a
-    // typo in one of them, and skipping it silently would hide exactly the
-    // coverage the tests check for.
+    const schema = publishedBuiltinSchema(url);
+    // A URL whose id is not in `BUILTINS` is skipped rather than registered as
+    // `undefined`. Unreachable while both tables are literals here, and the
+    // coverage test is what keeps it that way: it compares this list against
+    // `listBuiltins()`, so a typo shows up as a missing entry — which is
+    // exactly what skipping produces.
     if (schema) out.push({ id, url, schema });
   }
   return out;
@@ -860,11 +884,10 @@ export async function loadSchema(
     // a published URL. The pin would have nothing to verify — no bytes are
     // fetched — and a pin that silently checked nothing reads as protection
     // that is not there. Vendor the file if you want a pinned copy.
-    const aliased = PUBLISHED_ALIAS.get(ref);
-    if (aliased !== undefined) {
-      const schema = BUILTINS.get(aliased);
-      if (schema) return schema;
-    }
+    // The same resolution `isPublishedBuiltinUrl` uses, so a URL the trust
+    // boundary treated as a built-in cannot arrive here and be fetched.
+    const published = publishedBuiltinSchema(ref);
+    if (published) return published;
 
     const cached = urlCache.get(ref);
     // An offline call must not be satisfied by something this process pulled
