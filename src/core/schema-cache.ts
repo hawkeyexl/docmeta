@@ -39,6 +39,22 @@ export const SCHEMA_CACHE_VERSION = 1;
 /** How long a cached schema is served before it is re-fetched. */
 export const DEFAULT_TTL_HOURS = 24;
 
+/**
+ * How far ahead of `Date.now()` an mtime may sit and still count as written
+ * "now" rather than as a clock problem.
+ *
+ * A file's timestamp and `Date.now()` do not come from the same clock: on
+ * Windows the system clock ticks in ~15.6ms steps while `Date.now()` is
+ * interpolated, so a file written this instant can read as one or two
+ * milliseconds in the future. Measured at ~1ms here; a network filesystem can
+ * be worse. Without a tolerance, an entry the current run just wrote is stale
+ * the moment it is read, which quietly turns the cache off.
+ *
+ * A minute is far above any of that and far below the shortest useful TTL, so
+ * it separates jitter from the hours-to-years skew a restored archive carries.
+ */
+const FUTURE_MTIME_TOLERANCE_MS = 60_000;
+
 /** The cache directory for a project rooted at `root`. */
 export function schemaCacheDir(root: string): string {
   return join(root, SCHEMA_CACHE_DIR);
@@ -114,17 +130,23 @@ export class SchemaCache {
         return null;
       }
       const age = Date.now() - mtimeMs;
-      // A negative age is an entry stamped in the future, and it would satisfy
-      // the TTL check for as long as the clock took to catch up — hours of
-      // intended lifetime turned into years. An archive keeps the mtimes it was
-      // packed with, and a machine whose clock ran fast leaves every entry it
-      // wrote ahead of now, so this outlives the clock that caused it.
+      // An age below `-FUTURE_MTIME_TOLERANCE_MS` is an entry stamped in the
+      // future by more than clock jitter explains, and it would satisfy the TTL
+      // check for as long as the clock took to catch up — hours of intended
+      // lifetime turned into years. An archive keeps the mtimes it was packed
+      // with, and a machine whose clock ran fast leaves every entry it wrote
+      // ahead of now, so this outlives the clock that caused it.
       //
       // Treated as a miss rather than clamped: the miss costs one fetch, and
       // the write that follows re-stamps the file, so the entry heals instead
       // of staying suspect. `ignoreTtl` still serves it — `--offline` has no
       // fetch to fall back on, and there a stale contract beats no contract.
-      if (age < 0 || age >= this.ttlHours * 3_600_000) return null;
+      if (
+        age < -FUTURE_MTIME_TOLERANCE_MS ||
+        age >= this.ttlHours * 3_600_000
+      ) {
+        return null;
+      }
     }
 
     let raw: unknown;

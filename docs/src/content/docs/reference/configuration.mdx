@@ -17,7 +17,7 @@ the command line.
 |---|---|---|---|
 | `paths` | `string[]` | none | Default files, directories, or globs to process when no positional paths are given. |
 | `exclude` | `string[]` | none | Globs to exclude from directory and glob walks. Merged with `--exclude` and the [default ignores](/docmeta/reference/cli/#default-ignores). |
-| `schemas` | `string[]` | none | Default [schema set](/docmeta/reference/schema-resolution/) applied to every file that no higher-precedence rule matches. |
+| `schemas` | `(string \| {ref, source?, integrity?})[]` | none | Default [schema set](/docmeta/reference/schema-resolution/) applied to every file that no higher-precedence rule matches. See [Schemas](#schemas). |
 | `overrides` | `Override[]` | none | Per-glob schema overrides. The first matching entry wins. See [Overrides](#overrides). |
 | `baseline` | `string` | none | Path to a [validation baseline](/docmeta/reference/cli/#baselines). Setting it turns on `--baseline` for every run; `--no-baseline` suppresses it for one. A bare `--write-baseline` records into this same file. |
 | `allowEmpty` | `boolean` | `false` | Treat an input set that resolves to zero files as success instead of an error (exit 2). Equivalent to `--allow-empty`. See [empty input sets](/docmeta/reference/cli/#empty-input-sets). |
@@ -26,16 +26,64 @@ the command line.
 | `schemaCache` | `SchemaCache` | none | Settings for the [cross-run schema cache](/docmeta/reference/schema-resolution/#the-cross-run-cache). See [Schema cache](#schema-cache). |
 | `fill` | `Fill` | none | Defaults for [`docmeta fill`](/docmeta/reference/cli/#fill). See [Fill](#fill). |
 
-The top level must be a YAML mapping. Each of `paths`, `exclude`, and `schemas`
-must be a list of strings; a non-list or a list containing a non-string value is
-an error (exit 2). `allowEmpty` and `respectGitignore` must be booleans — a
-quoted `"false"` is a string, and accepting it would turn a setting **on** for
-someone who wrote it off.
+The top level must be a YAML mapping. `paths` and `exclude` must be lists of
+strings; a non-list or a list containing a non-string value is an error
+(exit 2). `schemas` takes [two forms](#schemas). `allowEmpty` and
+`respectGitignore` must be booleans — a quoted `"false"` is a string, and
+accepting it would turn a setting **on** for someone who wrote it off.
 
 <Aside type="caution">
 `allowEmpty: true` disables the check that stops a glob which stopped matching
 from reporting a permanently green result. Set it only where matching nothing is
 genuinely expected — a repo in a shared CI template that may have no docs yet.
+</Aside>
+
+### Schemas
+
+Each entry in `schemas:` is either a plain reference string or a mapping. Both
+forms can appear in the same list.
+
+```yaml title="docmeta.config.yaml"
+schemas:
+  - google:okf:0.1                                    # string form
+  - ref: ./schema/2.1.json                            # mapping form
+    source: https://schemas.example.com/house/2.1.json
+    integrity: sha256-9f8e7d6c…
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `ref` | `string` | yes | What is loaded: a built-in id, a local `.json` path, or a URL. Identical in meaning to the string form. |
+| `source` | `string` | no | Where `ref` came from. Recorded by [`schemas vendor`](/docmeta/reference/cli/#schemas-vendor) so a re-vendor knows the URL, and so an error about the file can name it. |
+| `integrity` | `string` | no | `sha256-<64 hex characters>` over the file's bytes. A mismatch is an operational error (exit 2). |
+
+The two forms mean exactly the same thing to schema resolution: the `ref` string
+is what appears in reports, in [baseline
+fingerprints](/docmeta/reference/cli/#baselines), and in `json` output's
+`schemas` array. `source` and `integrity` change nothing about *which* schema is
+used — only what happens when the file on disk is not the one that was recorded.
+
+Rules, all of them exit 2 when broken:
+
+- An unknown key in the mapping is an error rather than being ignored, because
+  a typo such as `intergrity:` would otherwise leave a config that reads as
+  pinned and is not.
+- `integrity` must match `sha256-<64 hex characters>`. There is one algorithm
+  and one encoding; write them with [`schemas
+  vendor`](/docmeta/reference/cli/#schemas-vendor) rather than by hand.
+- `integrity` is only accepted on a **local file** reference. A built-in has no
+  bytes to check, and a URL may be served from the [schema
+  cache](#schema-cache), which stores the parsed schema rather than what the
+  server sent — so a pin on either could never be verified.
+
+`overrides[].schemas` takes the string form only. Pins live in one place, and an
+override that matched a pinned `ref` still gets that pin, because pins are keyed
+on the reference.
+
+<Aside type="note">
+A local `ref` — and a `source` that is itself a local path — is resolved
+relative to **the config file**, exactly like a plain string ref. See [what
+relative paths are relative to](#what-relative-paths-are-relative-to).
 </Aside>
 
 ### `respectGitignore`

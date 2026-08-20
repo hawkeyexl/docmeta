@@ -36,7 +36,11 @@ import {
   STDIN_TOKEN,
 } from "../core/load-files.js";
 import { resolveRunConfig, type ConfigNotice } from "../core/config.js";
-import { resolveSchemaSet, FILE_SCHEMA_KEY } from "../core/resolve-schema.js";
+import {
+  collectSchemaPins,
+  resolveSchemaSet,
+  FILE_SCHEMA_KEY,
+} from "../core/resolve-schema.js";
 import { Validator } from "../core/validator.js";
 import { schemaLoadOptions } from "../core/schema-registry.js";
 
@@ -264,6 +268,9 @@ export async function runValidate(
       fileBase: cwd,
       ttlHours: config?.schemaCache?.ttlHours,
       offline: opts.offline ?? config?.offline,
+      // Built from the rebased config, so a pinned local ref is keyed by the
+      // same absolute spelling `resolveSchemaSet` will hand to `loadSchema`.
+      pins: collectSchemaPins(config),
     }),
   );
   const results: ValidationResult[] = [];

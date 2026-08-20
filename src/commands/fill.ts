@@ -50,7 +50,11 @@ import {
   listFormats,
   supportedExtensions,
 } from "../extractors/index.js";
-import { resolveSchemaSet, FILE_SCHEMA_KEY } from "../core/resolve-schema.js";
+import {
+  collectSchemaPins,
+  resolveSchemaSet,
+  FILE_SCHEMA_KEY,
+} from "../core/resolve-schema.js";
 import { loadSchema, schemaLoadOptions } from "../core/schema-registry.js";
 import { Validator, compileWithFormats } from "../core/validator.js";
 import { writeFileAtomic } from "../core/write-file.js";
@@ -119,6 +123,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
     fileBase: cwd,
     ttlHours: config?.schemaCache?.ttlHours,
     offline: opts.offline ?? config?.offline,
+    pins: collectSchemaPins(config),
   });
   const usingStdin = inputs.includes(STDIN_TOKEN);
   if (inputs.length === 0) {

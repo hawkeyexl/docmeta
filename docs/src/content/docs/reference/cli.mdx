@@ -372,8 +372,9 @@ cat page.md | docmeta fill - --as markdown   # filled document to stdout
 
 ## `schemas`
 
-List the built-in schemas and the supported input formats. Takes no positional
-arguments and reads no files.
+List the built-in schemas and the supported input formats. On its own it takes
+no positional arguments and reads no files. Its [`vendor`](#schemas-vendor)
+subcommand is the one that reaches the network and writes to the repository.
 
 ```sh
 docmeta schemas [options]
@@ -396,6 +397,50 @@ each input format with its extensions, whether it is implemented, and whether
 docmeta schemas
 docmeta schemas -f json
 ```
+
+## `schemas vendor`
+
+Download a remote schema into this repository and pin it in config, so the
+contract lives in your own history instead of depending on a host staying up.
+
+```sh
+docmeta schemas vendor <url> [options]
+```
+
+### Arguments
+
+| Argument | Description |
+|---|---|
+| `<url>` | The `http(s)` URL to download. Required. |
+
+### Options
+
+| Option | Argument | Default | Description |
+|---|---|---|---|
+| `--dir` | `<path>` | `./schema` | Directory for the committed copy. Must be a path the repository tracks — see below. |
+| `-c, --config` | `<path>` | discovered | Path to the [config file](/docmeta/reference/configuration/) to rewrite. |
+
+Vendoring writes two things: the schema file itself, and a `schemas:` entry
+naming it, where it came from, and the digest of the bytes that were fetched.
+
+```yaml
+schemas:
+  - ref: ./schema/2.1.json
+    source: https://schemas.example.com/house/2.1.json
+    integrity: sha256-392da4339d91f59e3161a083a5d95913b6c7f98668e2bdfbebae53dc123e8994
+```
+
+Commit both. From then on the schema resolves from the local copy, so the run
+no longer depends on the origin being reachable, and any later change to those
+bytes is an [integrity failure](/docmeta/reference/schema-resolution/) rather
+than a contract that shifted without anyone noticing.
+
+<Aside type="caution" title="The target directory must be tracked">
+`vendor` refuses to write into a directory `.gitignore` covers, and checks
+before it downloads. An ignored copy validates on the machine that created it
+and is simply absent in CI, where the failure reads as a schema nobody changed —
+which is the failure vendoring exists to remove.
+</Aside>
 
 ## Shared input model
 

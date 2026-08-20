@@ -103,6 +103,65 @@ config-supplied file schemas by their absolute path, so it is unambiguous which
 file a run actually loaded.
 </Aside>
 
+#### Vendored references
+
+[`docmeta schemas vendor`](/docmeta/reference/cli/#schemas-vendor) turns a URL
+reference into a file reference that keeps a record of where it came from:
+
+```yaml title="docmeta.config.yaml"
+schemas:
+  - ref: ./schema/2.1.json
+    source: https://schemas.example.com/house/2.1.json
+    integrity: sha256-9f8e7d6c…
+```
+
+**A pinned reference resolves exactly like any other file reference.** `ref` is
+the whole of what resolution sees: it is classified, rebased, deduplicated, and
+reported identically to the bare string `./schema/2.1.json`, and it is the
+string that appears in reports, in `json` output, and in [baseline
+fingerprints](/docmeta/reference/cli/#baselines). `source` and `integrity` are
+carried alongside and consulted only when the file is read.
+
+Reading it adds one step. Before the JSON is parsed, the file's **bytes** are
+hashed and compared against `integrity`. A match resolves normally; a mismatch
+is an operational error (exit 2) that stops the run:
+
+```
+docmeta: Schema "./schema/2.1.json" does not match its recorded integrity.
+  expected sha256-c12b1cfe…7341
+  found    sha256-9091a816…46cb
+The file's contents have changed since it was vendored. Re-download it with
+`docmeta schemas vendor https://schemas.example.com/house/2.1.json`, or update
+the recorded integrity if the change was intended.
+```
+
+There is deliberately **no fallback**. Loading the file anyway, or re-fetching
+`source` instead, would mean the run continues against a contract nobody
+approved — which is the failure the pin exists to make visible.
+
+Three other messages come out of the same check, and which one you get says
+what actually happened:
+
+| Situation | What docmeta reports |
+|---|---|
+| The bytes differ only in **line endings** | `The contents differ only in line endings…`, with a `.gitattributes` suggestion. A committed schema plus `core.autocrlf` produces a mismatch on a file nobody edited, and this is the case that would otherwise read as corruption. |
+| The file is **missing** | `Schema file not found: "…". It was vendored from <source>; commit the file, or re-download it…`. Usually a copy that was never committed. |
+| The pin is on a **built-in or URL** ref | Rejected when the config is parsed: neither can be verified, so a pin there would be decorative. |
+
+The hash is taken over the raw bytes, and `schemas vendor` writes exactly what
+the server sent, so the pin also attests to the upstream file: re-downloading
+the URL and hashing it reproduces the same value.
+
+<Aside type="tip" title="Keep the vendored file byte-exact">
+The one thing that can move the bytes without anyone editing them is a checkout
+converting line endings. If your repository normalizes them, mark the vendored
+copy as binary-ish in `.gitattributes`:
+
+```
+schema/*.json -text
+```
+</Aside>
+
 ### URL references
 
 A `url` reference is fetched with a default **10-second timeout**. Within a
@@ -162,8 +221,9 @@ URL can restore a *stale* contract, which is worse than fetching, because the
 build then validates against a rule nobody is looking at.
 
 Treat the cache as a developer and pre-commit convenience. For CI durability,
-keep a copy of the schema in the consuming repository and reference it as a
-local file, so the contract is a reviewable artifact in your own history.
+[vendor the schema](#vendored-references) into the consuming repository with
+`docmeta schemas vendor`, so the contract is a reviewable artifact in your own
+history rather than a request that has to succeed.
 </Aside>
 
 #### Offline

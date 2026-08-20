@@ -95,6 +95,20 @@ describe("schema cache", () => {
     expect(await cache.read(URL_A)).toEqual(SCHEMA);
   });
 
+  it("still serves an entry a moment ahead of the clock", async () => {
+    // The other side of the future-mtime rule, and the one that bites first: a
+    // file's timestamp and `Date.now()` are not the same clock, so an entry the
+    // current run just wrote can read as a millisecond or two in the future.
+    // Rejecting on any negative age at all turned that into an immediate miss
+    // and quietly switched the cache off — it surfaced as a *fetch* in a test
+    // asserting the network was never touched, which is how a disabled cache
+    // shows up rather than as an error.
+    const cache = new SchemaCache(dir, 24);
+    await cache.write(URL_A, SCHEMA);
+    ageEntry(cache.entryPath(URL_A), -1 / 3_600); // one second ahead
+    expect(await cache.read(URL_A)).toEqual(SCHEMA);
+  });
+
   it("treats a future mtime as stale rather than as forever-fresh", async () => {
     // Freshness is `Date.now() - mtimeMs >= ttl`, so an mtime ahead of now
     // makes the left side negative and the entry passes the check for as long

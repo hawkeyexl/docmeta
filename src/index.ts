@@ -3,7 +3,13 @@ export { runValidate } from "./commands/validate.js";
 export type { ValidateOptions, ValidateRun } from "./commands/validate.js";
 export { runGet } from "./commands/get.js";
 export type { GetOptions, GetFileResult } from "./commands/get.js";
-export { getSchemasInfo } from "./commands/schemas.js";
+export {
+  getSchemasInfo,
+  runVendorSchema,
+  vendorFileName,
+  DEFAULT_VENDOR_DIR,
+} from "./commands/schemas.js";
+export type { VendorOptions, VendorResult } from "./commands/schemas.js";
 export { runFill } from "./commands/fill.js";
 export type {
   FillOptions,
@@ -14,7 +20,13 @@ export type {
   SkipReason,
 } from "./commands/fill.js";
 export { Validator } from "./core/validator.js";
-export { resolveSchemaSet, DEFAULT_SCHEMAS } from "./core/resolve-schema.js";
+export {
+  resolveSchemaSet,
+  collectSchemaPins,
+  schemaEntryRef,
+  rebaseConfigSchemaRefs,
+  DEFAULT_SCHEMAS,
+} from "./core/resolve-schema.js";
 export { loadConfig, parseConfig, resolveRunConfig } from "./core/config.js";
 export type {
   ConfigNotice,
@@ -24,14 +36,22 @@ export type {
   RunConfig,
   RunConfigOptions,
   SchemaCacheConfig,
+  SchemaEntry,
+  SchemaRefEntry,
 } from "./core/config.js";
 export {
   listBuiltins,
   loadSchema,
+  fetchSchemaBytes,
   classifyRef,
   schemaLoadOptions,
 } from "./core/schema-registry.js";
-export type { LoadSchemaOptions } from "./core/schema-registry.js";
+export type {
+  FetchedSchema,
+  LoadSchemaOptions,
+  SchemaPin,
+} from "./core/schema-registry.js";
+export { integrityOf, isIntegrity, INTEGRITY_SHAPE } from "./core/integrity.js";
 export {
   SchemaCache,
   SCHEMA_CACHE_DIR,

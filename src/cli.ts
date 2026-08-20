@@ -13,7 +13,11 @@ import pkg from "../package.json" with { type: "json" };
 import { DocmetaError } from "./types.js";
 import { runValidate } from "./commands/validate.js";
 import { runGet } from "./commands/get.js";
-import { getSchemasInfo } from "./commands/schemas.js";
+import {
+  DEFAULT_VENDOR_DIR,
+  getSchemasInfo,
+  runVendorSchema,
+} from "./commands/schemas.js";
 import { runFill } from "./commands/fill.js";
 import {
   OMITTED_WHEN_CLEAN,
@@ -548,7 +552,10 @@ export function buildProgram(): Command {
       }
     });
 
-  program
+  // `-f, --format` stays on the parent rather than moving to a `list`
+  // subcommand: bare `docmeta schemas` is a *default action*, not group help,
+  // and both are part of the documented surface.
+  const schemas = program
     .command("schemas")
     .description("List built-in schemas and supported input formats")
     .option("-f, --format <format>", "output: pretty | json", "pretty")
@@ -575,6 +582,64 @@ export function buildProgram(): Command {
         );
       }
       process.stdout.write(`${lines.join("\n")}\n`);
+    });
+
+  schemas
+    .command("vendor")
+    .description(
+      "Download a remote schema into this repository and pin it in config",
+    )
+    .argument("<url>", "http(s) URL of the schema to vendor")
+    .option(
+      "--dir <path>",
+      "directory for the committed copy",
+      DEFAULT_VENDOR_DIR,
+    )
+    .option("-c, --config <path>", "path to a docmeta config file")
+    .addHelpText(
+      "after",
+      [
+        "",
+        "Examples:",
+        "  docmeta schemas vendor https://schemas.example.com/house/2.1.json",
+        "  docmeta schemas vendor https://schemas.example.com/house/2.1.json --dir ./contracts",
+        "",
+        "Commit both the downloaded file and the config change: the point of",
+        "vendoring is that CI validates against a copy in your own history.",
+      ].join("\n"),
+    )
+    .action(async (url: string, options) => {
+      try {
+        const result = await runVendorSchema({
+          url,
+          dir: options.dir as string,
+          ...(typeof options.config === "string"
+            ? { configPath: options.config }
+            : {}),
+          onNotice: notice,
+        });
+        // Three states, and the operator needs to be able to tell them apart in
+        // a diff: a config was created, an existing reference was replaced (the
+        // re-vendor and the bare-URL migration both land here), or an entry was
+        // added beside what was already there.
+        const configNote = result.configCreated
+          ? "created"
+          : result.replaced
+            ? "reference updated"
+            : "reference added";
+        process.stdout.write(
+          [
+            `Vendored ${result.url}`,
+            `  file       ${result.file} (${result.bytes} bytes${result.unchanged ? ", unchanged" : ""})`,
+            `  integrity  ${result.integrity}`,
+            `  config     ${result.config} (${configNote})`,
+            "",
+            `Commit ${result.file} and ${result.config} so CI validates against this copy.`,
+          ].join("\n") + "\n",
+        );
+      } catch (err) {
+        fail(err);
+      }
     });
 
   return program;
