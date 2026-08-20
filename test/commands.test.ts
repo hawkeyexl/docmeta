@@ -7,6 +7,8 @@ import { dirname, join, relative, resolve } from "node:path";
 import { parseBaseline } from "../src/core/baseline.js";
 import { runValidate, type ValidateOptions } from "../src/commands/validate.js";
 import { runGet } from "../src/commands/get.js";
+import { runFill } from "../src/commands/fill.js";
+import { MockProvider } from "@hawkeyexl/inference";
 import { getSchemasInfo } from "../src/commands/schemas.js";
 import { DEFAULT_SCHEMAS } from "../src/core/resolve-schema.js";
 import { DocmetaError } from "../src/types.js";
@@ -743,6 +745,10 @@ describe("a relative config schema ref, for a library caller", () => {
       JSON.stringify({
         $schema: "https://json-schema.org/draft/2020-12/schema",
         type: "object",
+        // `properties` as well as `required`, because `fill` proposes against a
+        // property's own subschema and has nothing to offer without one. The
+        // validate cases below turn on `required` alone and are unaffected.
+        properties: { owner: { type: "string" } },
         required: ["owner"],
       }),
     );
@@ -766,6 +772,35 @@ describe("a relative config schema ref, for a library caller", () => {
 
     const { results } = await runValidate({ inputs: ["a.md"], cwd: dir });
     expect(results[0]?.errors.map((e) => e.message).join()).toMatch(/'owner'/);
+  });
+
+  it("resolves the same ref for runFill, which loads schemas on its own path", async () => {
+    // `fill` does not go through `Validator` for everything: it calls
+    // `loadSchema` directly to collect a schema's property subschemas, so it
+    // gets its own `fileBase` and needs its own proof that the wiring is
+    // there. The code path is the same one `runValidate` exercises above,
+    // which is the point — the two hand `schemaLoadOptions` the same `cwd`,
+    // and a regression in either call site is invisible from the other.
+    //
+    // `/owner` is a candidate only because the config's schema was read and
+    // its `required` was seen. A ref that failed to resolve throws
+    // `Schema file not found` outright, and one that resolved to nothing would
+    // leave no candidate to propose against — so the field appearing at all
+    // is what proves the path.
+    const { results } = await runFill({
+      inputs: ["a.md"],
+      cwd: dir,
+      cache: false,
+      inferenceProvider: new MockProvider([
+        {
+          json: {
+            owner: { value: "Docs", confidence: 0.9, reasoning: "stated" },
+          },
+        },
+      ]),
+    });
+    expect(results).toHaveLength(1);
+    expect(results[0]?.fields.map((f) => f.field)).toContain("/owner");
   });
 
   it("keeps the ref string exactly as the config wrote it", async () => {

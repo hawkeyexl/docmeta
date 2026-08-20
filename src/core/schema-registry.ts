@@ -122,6 +122,10 @@ const urlInflight = new Map<string, Promise<Record<string, unknown>>>();
  * The cost is one extra resolve when a single process runs both modes against
  * one URL concurrently, which no CLI invocation does — every run has one
  * `offline` setting.
+ *
+ * `false` and `undefined` deliberately collapse to the same key: only `true`
+ * means offline, and an absent flag is an online call, so the two must share an
+ * entry or an ordinary run would dedup against nothing.
  */
 function inflightKey(ref: string, offline: boolean | undefined): string {
   return `${offline === true ? "offline" : "online"}:${ref}`;
