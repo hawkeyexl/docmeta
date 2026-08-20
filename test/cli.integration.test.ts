@@ -1665,6 +1665,16 @@ describe("get names the real mistake when a path lands in [fields] (0005 §2)", 
   const A = "test/fixtures/get-parity/docs/a.md";
   const B = "test/fixtures/get-parity/more/b.md";
   const LOOKS = "looks like a path, not a field list";
+  // spawnSync, because `run()` reports stderr as "" on a passing run and two of
+  // these assert on stderr while expecting exit 0.
+  const runIn = (args: string[], cwd: string): Run => {
+    const r = spawnSync("node", [bin, ...args], { cwd, encoding: "utf8" });
+    return {
+      stdout: r.stdout ?? "",
+      stderr: r.stderr ?? "",
+      status: r.status ?? 1,
+    };
+  };
 
   it("fires on a sole positional that is a file path", () => {
     const r = run(["get", A]);
@@ -1693,6 +1703,37 @@ describe("get names the real mistake when a path lands in [fields] (0005 §2)", 
     const r = run(["get", "test/fixtures/*.md"]);
     expect(r.status).toBe(2);
     expect(r.stderr).toContain(LOOKS);
+  });
+
+  it("does not fire on a bare field name that also names a real path", () => {
+    // Field names collide with directory names constantly — `tags`, `docs`,
+    // `type`, `content`. `existsSync` alone refused this legal invocation and
+    // suggested `docmeta get title tags`, which is nonsense. A shapeless token
+    // is a path only when nothing else was offered as one.
+    const cwd = join(root, "test", "fixtures", "get-parity");
+    const r = runIn(["get", "tags", "docs/a.md", "-f", "json"], cwd);
+    expect(r.status).toBe(0);
+    expect(r.stderr).not.toContain(LOOKS);
+  });
+
+  it("still fires on that same name when it stands alone", () => {
+    // The other half: with no path following, a bare name that is really there
+    // is the forgotten-field-list case the guard exists for.
+    const cwd = join(root, "test", "fixtures", "get-parity");
+    const r = runIn(["get", "tags"], cwd);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain(LOOKS);
+  });
+
+  it("refuses a bare `-` in the field slot instead of naming a field `-`", () => {
+    // `-` is stdin, never a field. Treated as one, it printed `-=(unset)` for
+    // every file in the config's `paths:` and exited 0 — the piped document
+    // never read, the run looking entirely successful.
+    const cwd = join(root, "test", "fixtures", "get-parity");
+    const r = runIn(["get", "-", "--as", "markdown"], cwd);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("Specify at least one field");
+    expect(r.stdout).not.toContain("-=(unset)");
   });
 
   it("does not fire on a real field list", () => {

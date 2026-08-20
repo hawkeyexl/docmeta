@@ -13,12 +13,18 @@ import { palette } from "./color.js";
 import { fieldLabel } from "./rule-id.js";
 import { renderSarif, type SarifOptions } from "./sarif.js";
 import { renderJunit } from "./junit.js";
-import { escapeWorkflowCommandMessage } from "./github.js";
+import {
+  escapeWorkflowCommandMessage,
+  escapeWorkflowCommandProperty,
+} from "./github.js";
 
 export { renderSarif, SARIF_NO_GIT_ROOT } from "./sarif.js";
 export type { SarifOptions } from "./sarif.js";
 export { renderJunit, xmlEscape } from "./junit.js";
-export { escapeWorkflowCommandMessage } from "./github.js";
+export {
+  escapeWorkflowCommandMessage,
+  escapeWorkflowCommandProperty,
+} from "./github.js";
 export {
   PARSE_ERROR_RULE,
   SCHEMA_ERROR_RULE,
@@ -211,7 +217,7 @@ export function renderGithub(results: ValidationResult[]): string {
   const lines: string[] = [];
   for (const r of results) {
     for (const e of r.errors) {
-      const params = [`file=${r.file}`];
+      const params = [`file=${escapeWorkflowCommandProperty(r.file)}`];
       if (e.line != null) params.push(`line=${e.line}`);
       if (e.col != null) params.push(`col=${e.col}`);
       // Escaped as one string, after assembly: the schema id and the field
