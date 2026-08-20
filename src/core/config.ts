@@ -85,6 +85,67 @@ export interface SchemaTrustConfig {
 /** The keys a `schemaTrust:` mapping may carry. */
 const SCHEMA_TRUST_KEYS = ["documentRefs", "hosts"] as const;
 
+/** The keys a `schemaCache:` mapping may carry. */
+const SCHEMA_CACHE_KEYS = ["ttlHours"] as const;
+
+/** The keys a `fill:` mapping may carry. */
+const FILL_KEYS = [
+  "provider",
+  "model",
+  "confidenceThreshold",
+  "maxCostUsd",
+  "concurrency",
+] as const;
+
+/**
+ * The keys the config's top level may carry.
+ *
+ * Adding a key to `DocmetaConfig` means adding it here too, or a config using
+ * it is rejected. That coupling is the point: the alternative is the silence
+ * this list exists to end.
+ */
+const CONFIG_KEYS = [
+  "paths",
+  "exclude",
+  "schemas",
+  "overrides",
+  "baseline",
+  "allowEmpty",
+  "respectGitignore",
+  "offline",
+  "schemaCache",
+  "schemaTrust",
+  "fill",
+] as const;
+
+/**
+ * Reject any key outside `allowed`, naming what was supported.
+ *
+ * One helper so every level of the config reports a typo the same way. A key
+ * the parser does not recognize is dropped in silence otherwise, which is the
+ * failure this whole class of check exists to prevent: a misspelled
+ * `schemaTust:` leaves a repository that reads as guarded and is not, and a
+ * misspelled `intergrity:` leaves a schema that reads as pinned and is not.
+ * Neither produces a diagnostic anywhere, at any verbosity.
+ *
+ * `where` names the mapping as the user would recognize it — `"schemaTrust"`,
+ * `schemas[0]`, or `the top level`.
+ */
+function rejectUnknownKeys(
+  raw: Record<string, unknown>,
+  allowed: readonly string[],
+  where: string,
+  source: string,
+): void {
+  for (const key of Object.keys(raw)) {
+    if (!allowed.includes(key)) {
+      throw new DocmetaError(
+        `${source}: ${where} has unknown key "${key}". Supported keys: ${allowed.join(", ")}.`,
+      );
+    }
+  }
+}
+
 /** Defaults for the `fill` command; every key is overridable by a CLI flag. */
 export interface FillConfig {
   provider?: string;
@@ -205,13 +266,7 @@ function parseSchemaEntry(
   // A misspelled key is the failure worth catching here: `intergrity:` would
   // otherwise be dropped in silence, leaving a config that reads as pinned and
   // a schema that is not.
-  for (const key of Object.keys(raw)) {
-    if (!(SCHEMA_ENTRY_KEYS as readonly string[]).includes(key)) {
-      throw new DocmetaError(
-        `${source}: ${where} has unknown key "${key}". Supported keys: ${SCHEMA_ENTRY_KEYS.join(", ")}.`,
-      );
-    }
-  }
+  rejectUnknownKeys(raw, SCHEMA_ENTRY_KEYS, where, source);
 
   if (typeof raw.ref !== "string" || raw.ref.trim() === "") {
     throw new DocmetaError(
@@ -267,6 +322,7 @@ export function parseConfig(text: string, source: string): DocmetaConfig {
     throw new DocmetaError(`${source}: top level must be a mapping.`);
   }
   const obj = raw as Record<string, unknown>;
+  rejectUnknownKeys(obj, CONFIG_KEYS, "the top level", source);
   const config: DocmetaConfig = {};
 
   if (obj.paths !== undefined) config.paths = asStringList(obj.paths, "paths", source);
@@ -344,6 +400,7 @@ function parseSchemaCache(value: unknown, source: string): SchemaCacheConfig {
     throw new DocmetaError(`${source}: "schemaCache" must be a mapping.`);
   }
   const raw = value as Record<string, unknown>;
+  rejectUnknownKeys(raw, SCHEMA_CACHE_KEYS, '"schemaCache"', source);
   const schemaCache: SchemaCacheConfig = {};
 
   const ttl = raw.ttlHours;
@@ -380,9 +437,11 @@ function parseSchemaCache(value: unknown, source: string): SchemaCacheConfig {
  *
  * Unknown nested keys are rejected the way a `schemas:` mapping entry rejects
  * them, and for the same reason: a misspelled `documentRef:` would otherwise be
- * dropped in silence, leaving a repo that reads as guarded and is not. That
- * cannot be done at the *top* level — `parseConfig` walks known keys and ignores
- * the rest — so a misspelled `schemaTrust:` itself is still a silent no-op. See
+ * dropped in silence, leaving a repo that reads as guarded and is not. A
+ * misspelled `schemaTrust:` is now rejected too — `parseConfig` checks the top
+ * level against `CONFIG_KEYS` rather than walking only the keys it knows. What
+ * remains, and cannot be fixed here, is an *older* docmeta reading a config
+ * written for a newer one: it has never heard of the key and ignores it. See
  * the version-floor note in the configuration reference.
  */
 function parseSchemaTrust(value: unknown, source: string): SchemaTrustConfig {
@@ -392,13 +451,7 @@ function parseSchemaTrust(value: unknown, source: string): SchemaTrustConfig {
     );
   }
   const raw = value as Record<string, unknown>;
-  for (const key of Object.keys(raw)) {
-    if (!(SCHEMA_TRUST_KEYS as readonly string[]).includes(key)) {
-      throw new DocmetaError(
-        `${source}: "schemaTrust" has unknown key "${key}". Supported keys: ${SCHEMA_TRUST_KEYS.join(", ")}.`,
-      );
-    }
-  }
+  rejectUnknownKeys(raw, SCHEMA_TRUST_KEYS, '"schemaTrust"', source);
   const schemaTrust: SchemaTrustConfig = {};
 
   const mode = raw.documentRefs;
@@ -435,6 +488,7 @@ function parseFill(value: unknown, source: string): FillConfig {
     throw new DocmetaError(`${source}: "fill" must be a mapping.`);
   }
   const raw = value as Record<string, unknown>;
+  rejectUnknownKeys(raw, FILL_KEYS, '"fill"', source);
   const fill: FillConfig = {};
 
   const asString = (key: "provider" | "model"): void => {

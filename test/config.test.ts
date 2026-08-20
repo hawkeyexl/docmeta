@@ -51,6 +51,68 @@ describe("config", () => {
     );
   });
 
+  // The same false-green as a misspelled `intergrity:` inside a `schemas:`
+  // entry, one level up: a key the parser does not know was dropped in
+  // silence, so `schemaTust:` or `allowEmtpy:` left a config that read as
+  // configured and was not.
+  it("rejects an unknown top-level key rather than ignoring it", () => {
+    expect(() => parseConfig("schemaTust:\n  documentRefs: local\n", "c.yaml")).toThrow(
+      /unknown key "schemaTust"/,
+    );
+    expect(() => parseConfig("allowEmtpy: true\n", "c.yaml")).toThrow(
+      /unknown key "allowEmtpy"/,
+    );
+  });
+
+  it("names the supported top-level keys when it rejects one", () => {
+    expect(() => parseConfig("nonsense: 1\n", "c.yaml")).toThrow(
+      /Supported keys: .*schemaTrust/,
+    );
+  });
+
+  it("rejects an unknown key inside schemaCache", () => {
+    expect(() => parseConfig("schemaCache:\n  ttlHour: 6\n", "c.yaml")).toThrow(
+      /"schemaCache" has unknown key "ttlHour"/,
+    );
+  });
+
+  it("rejects an unknown key inside fill", () => {
+    expect(() => parseConfig("fill:\n  proivder: anthropic\n", "c.yaml")).toThrow(
+      /"fill" has unknown key "proivder"/,
+    );
+  });
+
+  it("still accepts every key it documents", () => {
+    // The guard is a whitelist, so a key omitted from it would start failing a
+    // config that has always been valid. Exercise all of them together.
+    const cfg = parseConfig(
+      [
+        "paths: ['docs/**/*.md']",
+        "exclude: ['**/drafts/**']",
+        "schemas: ['google:okf:0.1']",
+        "overrides:",
+        "  - files: 'a/**'",
+        "    schemas: ['google:okf:0.1']",
+        "baseline: .docmeta-baseline.json",
+        "allowEmpty: true",
+        "respectGitignore: false",
+        "offline: true",
+        "schemaCache:",
+        "  ttlHours: 6",
+        "schemaTrust:",
+        "  documentRefs: local",
+        "fill:",
+        "  provider: anthropic",
+      ].join("\n"),
+      "c.yaml",
+    );
+    expect(cfg.baseline).toBe(".docmeta-baseline.json");
+    expect(cfg.offline).toBe(true);
+    expect(cfg.schemaCache).toEqual({ ttlHours: 6 });
+    expect(cfg.schemaTrust).toEqual({ documentRefs: "local" });
+    expect(cfg.fill).toEqual({ provider: "anthropic" });
+  });
+
   it("loads the fixture config from disk", async () => {
     const loaded = await loadConfig(join(here, "fixtures", "docmeta.config.yaml"));
     expect(loaded?.config.schemas).toEqual(["google:okf:0.1"]);

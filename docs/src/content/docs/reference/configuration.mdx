@@ -39,6 +39,26 @@ from reporting a permanently green result. Set it only where matching nothing is
 genuinely expected — a repo in a shared CI template that may have no docs yet.
 </Aside>
 
+### Unknown keys are errors
+
+Any key outside the table above is an operational error (exit 2), naming the
+key it did not recognize and listing the ones it accepts. The same rule applies
+inside every nested mapping: `schemas[]` entries, `schemaCache`, `schemaTrust`,
+and `fill`.
+
+This is what makes a typo visible. A dropped `schemaTust:` leaves a repository
+that reads as guarded and is not; a dropped `intergrity:` leaves a schema that
+reads as pinned and is not. Neither produces a diagnostic at any verbosity, so
+the config file itself is the only evidence — and it looks correct.
+
+<Aside type="caution" title="A key from a newer docmeta will now fail here">
+The cost of the rule is the mirror of its benefit. A config written for a newer
+docmeta, carrying a key this version does not know, is rejected outright rather
+than partly honored. If you share one config across environments, move them to
+the same version, or the same version floor, before adding a key that only the
+newer one understands.
+</Aside>
+
 ### Schemas
 
 Each entry in `schemas:` is either a plain reference string or a mapping. Both
@@ -211,9 +231,10 @@ that genuinely distrusts its contributors, the honest setting is
 </Aside>
 
 <Aside type="caution" title="Pin the docmeta version in CI">
-docmeta reads the config keys it knows and ignores the rest, so a version older
-than 3.11 sees `schemaTrust:` and **silently does nothing** — no guard, no
-warning. That is inherent to any new guard: an old release predates it.
+A version older than 3.11 has never heard of `schemaTrust:`, so it reads the
+config, ignores the key, and **silently does nothing** — no guard, no warning.
+That is inherent to any new guard: an old release predates it, and cannot
+report a key it does not know is missing.
 
 The mitigation is a version floor wherever the gate runs:
 
@@ -221,10 +242,11 @@ The mitigation is a version floor wherever the gate runs:
 npx -y docmeta@^3.11 validate "docs/**/*.md"
 ```
 
-The same silence covers a *misspelled* key: `schemTrust:` is a no-op, not an
-error. Unknown keys **inside** the mapping are rejected (exit 2), so
-`documentRef:` and a bad `documentRefs` value both fail loudly — it is only the
-top-level name that has no such check.
+A *misspelled* key is no longer part of this: since the [unknown-key
+rule](#unknown-keys-are-errors), `schemTrust:` is an error (exit 2) rather than
+a no-op, in the version that introduced it and every version after. The
+remaining silence is only the older-binary case above, which a version floor is
+the answer to.
 </Aside>
 
 ### Fill
@@ -387,4 +409,5 @@ Use config `overrides` when different folders need different schemas.
 {/* step {"description":"--schema overrides config/file schema resolution for every file in the run.","runShell":{"command":"docmeta validate test/fixtures/missing-type.md -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
 {/* step {"description":"A documentRefs value outside the three modes is a usage error (exit 2), not a silently ignored key.","runShell":{"command":"docmeta validate -c test/fixtures/dd/bad-schema-trust.yaml test/fixtures/valid.md","exitCodes":[2],"stdio":"must be one of"}} */}
 {/* step {"description":"documentRefs: local keeps a built-in $schema working — the self-describing document pattern is unaffected.","runShell":{"command":"docmeta validate -c test/fixtures/dd/schema-trust-local.yaml test/fixtures/schema-ref.md","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"A misspelled top-level key is a usage error (exit 2), not a silent no-op.","runShell":{"command":"docmeta validate -c test/fixtures/dd/misspelled-top-level-key.yaml test/fixtures/valid.md","exitCodes":[2],"stdio":"unknown key"}} */}
 {/* test end */}
