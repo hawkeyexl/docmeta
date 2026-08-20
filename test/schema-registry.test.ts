@@ -666,6 +666,7 @@ describe("loadSchema over http(s) — offline is not satisfied by a warm memo", 
     server = await startSchemaServer({
       "/memo-nocache.json": { json: URL_SCHEMA },
       "/memo-disk.json": { json: URL_SCHEMA },
+      "/memo-inflight.json": { json: URL_SCHEMA, delayMs: 150 },
     });
   });
 
@@ -686,6 +687,28 @@ describe("loadSchema over http(s) — offline is not satisfied by a warm memo", 
     await expect(loadSchema(ref, { offline: true })).rejects.toBeInstanceOf(
       DocmetaError,
     );
+  });
+
+  it("refuses an offline call that joins an in-flight network fetch", async () => {
+    // The concurrent form of the test above, and the one the provenance guard
+    // does not reach: `urlFromNetwork` is only consulted against a *settled*
+    // memo, so an offline call arriving while the fetch is still open falls
+    // through to `urlInflight` and is handed the network result directly.
+    //
+    // Reachable the moment two differently-configured validators share a
+    // process — which `Validator`'s own doc comment describes, and promises is
+    // safe: "`offline` is excluded from that sharing on purpose".
+    const ref = `${server.url}/memo-inflight.json`;
+    const online = loadSchema(ref);
+    // Started in the same tick, so `urlInflight` holds the online fetch: the
+    // `set` happens before `loadSchema` reaches its first await.
+    const offline = loadSchema(ref, { offline: true });
+    // The rejection is asserted first on purpose. It arrives long before the
+    // 150ms fetch settles, and awaiting `online` ahead of it would leave a
+    // rejected promise unhandled for that whole window — which node reports and
+    // vitest fails the file on, for a run that is otherwise correct.
+    await expect(offline).rejects.toBeInstanceOf(DocmetaError);
+    await expect(online).resolves.toBeTypeOf("object");
   });
 
   it("does serve an offline call once the ref is on disk", async () => {

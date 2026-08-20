@@ -102,8 +102,30 @@ const urlFromNetwork = new Set<string>();
  * Mirrors `Validator.compile`, including its two disciplines: the entry is
  * stored before the first await, and a rejection evicts it through a detached
  * `.catch()`. See the comments at the `set` below for why each matters.
+ *
+ * Keyed on `offline` as well as the ref, via {@link inflightKey}. Sharing one
+ * entry across both modes let an offline caller join an online caller's open
+ * fetch and receive the network result — the very thing `urlFromNetwork`
+ * refuses one step earlier, undone by arriving a moment sooner.
  */
 const urlInflight = new Map<string, Promise<Record<string, unknown>>>();
+
+/**
+ * The `urlInflight` key for one call.
+ *
+ * Offline and online resolves of the same URL are different requests with
+ * different answers, so they must not share an entry — in *either* direction.
+ * An offline caller joining an online fetch is served over the network. An
+ * online caller joining an offline resolve inherits its rejection when nothing
+ * is cached, failing a run that had a working network the whole time.
+ *
+ * The cost is one extra resolve when a single process runs both modes against
+ * one URL concurrently, which no CLI invocation does — every run has one
+ * `offline` setting.
+ */
+function inflightKey(ref: string, offline: boolean | undefined): string {
+  return `${offline === true ? "offline" : "online"}:${ref}`;
+}
 
 /** Default network timeout for fetching a remote (`http(s)`) schema. */
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -576,7 +598,8 @@ export async function loadSchema(
     if (cached && !(options.offline === true && urlFromNetwork.has(ref))) {
       return cached;
     }
-    const inflight = urlInflight.get(ref);
+    const key = inflightKey(ref, options.offline);
+    const inflight = urlInflight.get(key);
     // A caller joining an in-flight fetch inherits the first caller's
     // `timeoutMs`/`maxBytes` — there is one request, so there is one set of
     // limits. Every production call site uses the defaults, so this is only
@@ -587,7 +610,7 @@ export async function loadSchema(
     // miss, or a second caller slips in before the entry exists and fetches
     // again.
     const pending = resolveRemote(ref, options);
-    urlInflight.set(ref, pending);
+    urlInflight.set(key, pending);
     // Evict once settled, either way. This map exists only to collapse
     // *concurrent* callers onto one request; `urlCache` is the actual cache and
     // is consulted first, so a resolved entry left here is a duplicate handle
@@ -604,7 +627,7 @@ export async function loadSchema(
     void pending
       .catch(() => {})
       .finally(() => {
-        if (urlInflight.get(ref) === pending) urlInflight.delete(ref);
+        if (urlInflight.get(key) === pending) urlInflight.delete(key);
       });
     return pending;
   }
