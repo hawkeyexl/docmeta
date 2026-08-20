@@ -1858,3 +1858,96 @@ describe("fill accepts -q and -f github (0005 §3)", () => {
     expect(r.stderr).toMatch(/stdin/i);
   }, 60000);
 });
+
+// ---------------------------------------------------------------------------
+// 0015 — the trust boundary for document-supplied schemas, end to end
+// ---------------------------------------------------------------------------
+
+describe("docmeta CLI: schemaTrust (built bin)", () => {
+  let repo: string | undefined;
+
+  /**
+   * `execFile`, not `spawnSync`: the schema server lives in *this* process, so
+   * a synchronous child would block the event loop waiting for a reply that
+   * cannot be sent until it exits.
+   */
+  const runInAsync = (args: string[], cwd: string): Promise<Run> =>
+    new Promise((done) => {
+      execFile("node", [bin, ...args], { cwd, encoding: "utf8" }, (err, stdout, stderr) => {
+        done({
+          stdout: stdout ?? "",
+          stderr: stderr ?? "",
+          status: err ? ((err as { code?: number }).code ?? 1) : 0,
+        });
+      });
+    });
+
+  afterEach(() => {
+    removeTempRepo(repo);
+    repo = undefined;
+  });
+
+  it("reproduces the Problem, then closes it with documentRefs: local", async () => {
+    const server = await startSchemaServer({
+      // A schema that constrains nothing, so every document passes it.
+      "/permissive.json": { json: { type: "object" } },
+    });
+    try {
+      const url = `${server.url}/permissive.json`;
+      repo = makeTempRepo({
+        files: {
+          "docmeta.config.yaml": "schemas:\n  - google:okf:0.1\n",
+          "contributed.md": `---\ntitle: Contributed page\n$schema: ${url}\n---\n`,
+          "honest.md": "---\ntitle: Honest page\n---\n",
+        },
+      });
+
+      // Default: the contributor who opted out passes; the document playing by
+      // the config's rules is the one that fails. This is the documented
+      // feature, and it must keep working.
+      const before = await runInAsync(["validate", "*.md"], repo);
+      expect(before.status).toBe(1);
+      expect(before.stdout).toContain("✓ contributed.md");
+      expect(before.stdout).toContain("✗ honest.md");
+
+      writeFileSync(
+        join(repo, "docmeta.config.yaml"),
+        "schemas:\n  - google:okf:0.1\nschemaTrust:\n  documentRefs: local\n",
+        "utf8",
+      );
+
+      const after = await runInAsync(["validate", "*.md"], repo);
+      // Exit 1, not 2. A refusal is ONE FAILING FILE annotated on the offending
+      // document, not an aborted run — which is what puts it on the pull
+      // request rather than in a stack trace.
+      expect(after.status).toBe(1);
+      expect(after.stdout).toContain("✗ contributed.md");
+      expect(after.stdout).toContain("2 files checked, 0 passed, 2 failed");
+      expect(after.stdout).toContain("schemaTrust.documentRefs");
+      // The honest document's verdict is unchanged: still the config's schema.
+      expect(after.stdout).toContain("required property 'type'");
+    } finally {
+      await server.close();
+    }
+  }, 60000);
+
+  it("annotates the refusal on the document in --format github", async () => {
+    const server = await startSchemaServer({
+      "/permissive.json": { json: { type: "object" } },
+    });
+    try {
+      repo = makeTempRepo({
+        files: {
+          "docmeta.config.yaml":
+            "schemas:\n  - google:okf:0.1\nschemaTrust:\n  documentRefs: local\n",
+          "contributed.md": `---\ntitle: t\n$schema: ${server.url}/permissive.json\n---\n`,
+        },
+      });
+      const r = await runInAsync(["validate", "*.md", "-f", "github"], repo);
+      expect(r.status).toBe(1);
+      expect(r.stdout).toMatch(/^::error file=contributed\.md/m);
+    } finally {
+      await server.close();
+    }
+  }, 60000);
+});

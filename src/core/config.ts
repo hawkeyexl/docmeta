@@ -519,6 +519,36 @@ export function findGitRoot(cwd: string): string | null {
 }
 
 /**
+ * The directory a **document-supplied** local schema path must stay inside.
+ *
+ * The git root rather than the config's directory, so a monorepo package whose
+ * documents reference `../shared/x.json` keeps working — that path is still
+ * inside the repository, which is what "a schema in this project" means.
+ *
+ * `fromGit` is not decoration: with no repository the boundary falls back to
+ * the config directory (or the run's `cwd`), which is a *narrower* and less
+ * obvious rule, so the refusal message has to be able to say which one it
+ * applied. Same reasoning as `SARIF_NO_GIT_ROOT`: "there is no repository" and
+ * "the repository root is where you are standing" must stay distinguishable.
+ */
+export interface SchemaTrustRoot {
+  /** Absolute directory the path must resolve inside. */
+  dir: string;
+  /** True when `dir` came from `findGitRoot`, false for the fallback. */
+  fromGit: boolean;
+}
+
+/** Settle the containment root once per run, for `resolveSchemaSet`. */
+export function schemaTrustRoot(
+  cwd: string,
+  configDir?: string,
+): SchemaTrustRoot {
+  const git = findGitRoot(cwd);
+  if (git !== null) return { dir: git, fromGit: true };
+  return { dir: resolve(configDir ?? cwd), fromGit: false };
+}
+
+/**
  * The directories a discovery walk may look in, nearest first.
  *
  * The walk stops at the project boundary `findGitRoot` reports, which is

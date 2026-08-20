@@ -35,7 +35,11 @@ import {
   STDIN_LABEL,
   STDIN_TOKEN,
 } from "../core/load-files.js";
-import { resolveRunConfig, type ConfigNotice } from "../core/config.js";
+import {
+  resolveRunConfig,
+  schemaTrustRoot,
+  type ConfigNotice,
+} from "../core/config.js";
 import {
   collectSchemaPins,
   resolveSchemaSet,
@@ -259,6 +263,10 @@ export async function runValidate(
     action: "validated",
   });
 
+  // Settled once per run, not per file: finding it is a filesystem walk, and
+  // every file in one run shares the same repository.
+  const trustRoot = schemaTrustRoot(cwd, configDir);
+
   const validator = new Validator(
     schemaLoadOptions({
       // The config's directory when a config governs the run, so one project
@@ -306,6 +314,12 @@ export async function runValidate(
         fileSchema: extracted.data[FILE_SCHEMA_KEY],
         cliSchemas: opts.cliSchemas,
         config,
+        // A document's own `$schema` is measured from the run's directory, the
+        // same base `loadSchema` will read it from, and contained to the
+        // repository the run is standing in.
+        fileBase: cwd,
+        trustRoot,
+        onNotice: opts.onNotice,
       });
     } catch (err) {
       results.push(

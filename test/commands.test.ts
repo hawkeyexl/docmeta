@@ -1175,3 +1175,151 @@ describe("a relative config schema ref, for a library caller", () => {
     expect(results[0]?.errors[0]?.schema).toBe("./schema/house.json");
   });
 });
+
+// ---------------------------------------------------------------------------
+// 0015 — the trust boundary for document-supplied schemas
+// ---------------------------------------------------------------------------
+
+/** A schema that constrains nothing, so every document passes it. */
+const PERMISSIVE = { type: "object" };
+/** Fails the config's `google:okf:0.1` on `required: type`. */
+const HONEST_DOC = "---\ntitle: Honest page\n---\n";
+
+describe("0015 · a document opting out of the repo's standard", () => {
+  let server: SchemaServer | undefined;
+  let dir: string | undefined;
+
+  afterEach(async () => {
+    await server?.close();
+    server = undefined;
+    removeTempRepo(dir);
+    dir = undefined;
+  });
+
+  /**
+   * The Problem section of 0015, reproduced end to end.
+   *
+   * Both halves matter and neither is redundant. The *contributed* file passing
+   * is the hole; the *honest* file failing beside it is what makes it an
+   * inversion rather than a loose check. A test that asserted only the new
+   * refusal would pass just as happily against code that never had the bug.
+   */
+  const buildRepo = async (trust: string): Promise<string> => {
+    const s = await startSchemaServer({ "/permissive.json": { json: PERMISSIVE } });
+    server = s;
+    const url = `${s.url}/permissive.json`;
+    dir = makeTempRepo({
+      files: {
+        "docmeta.config.yaml": `schemas:\n  - google:okf:0.1\n${trust}`,
+        "contributed.md": `---\ntitle: Contributed page\n$schema: ${url}\n---\n`,
+        "honest.md": HONEST_DOC,
+      },
+    });
+    return url;
+  };
+
+  it("passes by default — the documented feature, and the hole", async () => {
+    await buildRepo("");
+    const { results } = await runValidate({ inputs: ["*.md"], cwd: dir! });
+    // The contributor who opted out is the one who passes; the document
+    // playing by the config's rules is the one that fails.
+    expect(byFile(results)).toEqual({ "contributed.md": true, "honest.md": false });
+  });
+
+  it("flips under `schemaTrust.documentRefs: local`", async () => {
+    const url = await buildRepo("schemaTrust:\n  documentRefs: local\n");
+    const { results } = await runValidate({ inputs: ["*.md"], cwd: dir! });
+    expect(byFile(results)).toEqual({ "contributed.md": false, "honest.md": false });
+
+    const refused = results.find((r) => r.file.endsWith("contributed.md"));
+    // One failing FILE, annotated on the offending document — not an aborted
+    // run. `runValidate` catches the resolver's throw and files it as a
+    // per-file `schema` finding, which is what puts the annotation on the
+    // pull request instead of in a stack trace.
+    expect(refused?.errors[0]?.keyword).toBe("schema");
+    expect(refused?.errors[0]?.message).toMatch(new RegExp(escapeRe(url)));
+    expect(refused?.errors[0]?.message).toMatch(/documentRefs/);
+    // The honest file is untouched: still judged by the config's schema.
+    const honest = results.find((r) => r.file.endsWith("honest.md"));
+    expect(honest?.schemas).toEqual(["google:okf:0.1"]);
+    expect(honest?.errors[0]?.keyword).toBe("required");
+  });
+
+  it("under `none`, ignores the ref and says so rather than silently dropping it", async () => {
+    const url = await buildRepo("schemaTrust:\n  documentRefs: none\n");
+    const notices: string[] = [];
+    const { results } = await runValidate({
+      inputs: ["*.md"],
+      cwd: dir!,
+      onNotice: (m) => notices.push(m),
+    });
+    // Config decides for both files, so both are judged by google:okf:0.1.
+    expect(byFile(results)).toEqual({ "contributed.md": false, "honest.md": false });
+    const contributed = results.find((r) => r.file.endsWith("contributed.md"));
+    expect(contributed?.schemas).toEqual(["google:okf:0.1"]);
+    // Ignoring input without saying so is the failure mode this whole proposal
+    // set exists to remove.
+    expect(notices.join("\n")).toMatch(/contributed\.md/);
+    expect(notices.join("\n")).toMatch(new RegExp(escapeRe(url)));
+    expect(notices.join("\n")).toMatch(/ignored/);
+  });
+
+  it("honors an allowlisted host, and refuses one that is not listed", async () => {
+    const s = await startSchemaServer({ "/permissive.json": { json: PERMISSIVE } });
+    server = s;
+    const url = `${s.url}/permissive.json`;
+    dir = makeTempRepo({
+      files: {
+        "docmeta.config.yaml":
+          "schemas:\n  - google:okf:0.1\nschemaTrust:\n  documentRefs: any\n  hosts:\n    - 127.0.0.1\n",
+        "contributed.md": `---\ntitle: Contributed page\n$schema: ${url}\n---\n`,
+        "elsewhere.md": `---\ntitle: Elsewhere\n$schema: https://schemas.invalid/permissive.json\n---\n`,
+      },
+    });
+    const { results } = await runValidate({ inputs: ["*.md"], cwd: dir });
+    expect(byFile(results)).toEqual({ "contributed.md": true, "elsewhere.md": false });
+    const refused = results.find((r) => r.file.endsWith("elsewhere.md"));
+    expect(refused?.errors[0]?.keyword).toBe("schema");
+    expect(refused?.errors[0]?.message).toMatch(/schemas\.invalid/);
+    expect(refused?.errors[0]?.message).toMatch(/schemaTrust\.hosts/);
+  });
+});
+
+describe("0015 · Ajv does not chase a $ref out of a fetched schema", () => {
+  // Stress test 6, and the assumption the whole design rests on. Guarding at
+  // docmeta's own resolver is only sufficient because Ajv never resolves a
+  // remote `$ref` itself: `loadSchema` is not wired into Ajv's `loadSchema`
+  // option and `compileAsync` is never called, so a remote `$ref` is a hard
+  // MissingRefError at compile time rather than a second, unguarded fetch.
+  // If that ever changes, an allowlisted schema could pull in anything.
+  it("fails to compile rather than fetching the reference", async () => {
+    const server = await startSchemaServer({
+      "/chains.json": {
+        json: {
+          $schema: "http://json-schema.org/draft-07/schema#",
+          type: "object",
+          properties: { title: { $ref: "https://schemas.invalid/deep.json" } },
+        },
+      },
+    });
+    const cwd = await mkdtemp(join(tmpdir(), "docmeta-ajv-ref-"));
+    try {
+      const url = `${server.url}/chains.json`;
+      const run = runValidate({
+        inputs: ["-"],
+        as: "markdown",
+        stdinContent: `---\n$schema: ${url}\ntitle: t\n---\n`,
+        cwd,
+      });
+      await expect(run).rejects.toBeInstanceOf(DocmetaError);
+      await expect(run).rejects.toThrow(/failed to compile/);
+      await expect(run).rejects.toThrow(/resolve reference/);
+      // The fetch that mattered happened once, for the schema itself. Nothing
+      // went looking for the reference it names.
+      expect(server.hits("/chains.json")).toBe(1);
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+});

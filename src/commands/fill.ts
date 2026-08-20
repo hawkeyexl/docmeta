@@ -37,7 +37,7 @@ import {
   type TokenUsage,
 } from "@hawkeyexl/inference";
 import { DocmetaError, type FieldError, type MetadataPatch } from "../types.js";
-import { resolveRunConfig } from "../core/config.js";
+import { resolveRunConfig, schemaTrustRoot } from "../core/config.js";
 import {
   assertNonEmpty,
   gitignoreOptions,
@@ -125,6 +125,9 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
     offline: opts.offline ?? config?.offline,
     pins: collectSchemaPins(config),
   });
+  // Settled once per run, not per file: finding it is a filesystem walk, and
+  // every file in one run shares the same repository.
+  const trustRoot = schemaTrustRoot(cwd, configDir);
   const usingStdin = inputs.includes(STDIN_TOKEN);
   if (inputs.length === 0) {
     throw new DocmetaError(
@@ -350,6 +353,12 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
         fileSchema: extracted.data[FILE_SCHEMA_KEY],
         cliSchemas: opts.cliSchemas,
         config,
+        // Same trust boundary as `validate`: `fill` writes metadata back into
+        // the document, so a schema a document chose for itself decides what
+        // gets written — if anything, a stronger reason to guard it.
+        fileBase: cwd,
+        trustRoot,
+        onNotice: opts.onNotice,
       });
     } catch (err) {
       return errorResult(label, extractor.name, (err as Error).message);
