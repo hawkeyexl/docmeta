@@ -195,7 +195,10 @@ The format of each line is:
 - `file=` is always present.
 - `line=` is included only when the error has a known line.
 - `col=` is included only when the error has a known column, which today means
-  an `html` or `xml` document and a violation other than `required`.
+  an `html` or `xml` document and a violation other than `required` or
+  `additionalProperties`. Those two name a property in the message but point at
+  its *parent*, so a caret would land on the wrong token; the line is still
+  reported.
 - `<schema>` is the schema id that produced the error.
 - `<field>` is the JSON Pointer to the offending field, or `(root)` when the
   error is at the document root.
