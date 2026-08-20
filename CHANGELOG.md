@@ -1,3 +1,10 @@
+## [3.9.1](https://github.com/hawkeyexl/docmeta/compare/v3.9.0...v3.9.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* **cli:** usage errors exit 2, and two adjacent output bugs ([#84](https://github.com/hawkeyexl/docmeta/issues/84)) ([6fed95a](https://github.com/hawkeyexl/docmeta/commit/6fed95af39c8cba6da249fc4a52c112981fb67b7))
+
 # [3.9.0](https://github.com/hawkeyexl/docmeta/compare/v3.8.0...v3.9.0) (2026-08-20)
 
 
