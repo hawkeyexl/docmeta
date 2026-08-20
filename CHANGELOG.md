@@ -1,3 +1,10 @@
+## [3.11.1](https://github.com/hawkeyexl/docmeta/compare/v3.11.0...v3.11.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* **schemas:** strip a leading BOM before parsing, never before hashing ([#94](https://github.com/hawkeyexl/docmeta/issues/94)) ([cde18dc](https://github.com/hawkeyexl/docmeta/commit/cde18dc7d3aef9d76ce77ce00388cc85f6b70d20))
+
 # [3.11.0](https://github.com/hawkeyexl/docmeta/compare/v3.10.0...v3.11.0) (2026-08-20)
 
 

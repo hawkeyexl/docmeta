@@ -7,6 +7,7 @@ import { readFile } from "node:fs/promises";
 import { resolve as resolvePath } from "node:path";
 import { Buffer } from "node:buffer";
 import { DocmetaError } from "../types.js";
+import { stripBom } from "./json-text.js";
 import {
   DEFAULT_TTL_HOURS,
   SchemaCache,
@@ -51,6 +52,106 @@ export function listBuiltins(): BuiltinInfo[] {
     description:
       typeof schema.description === "string" ? schema.description : "",
   }));
+}
+
+/**
+ * Where the docs site serves byte-identical copies of the built-ins (0009).
+ *
+ * The site's `site` is `https://hawkeyexl.github.io` and its `base` is
+ * `/docmeta`, and Astro serves `docs/public/**` at the site root — so
+ * `docs/public/schemas/okf/0.1.json` is reachable at
+ * `<PUBLISHED_BASE>okf/0.1.json`.
+ */
+export const PUBLISHED_BASE = "https://hawkeyexl.github.io/docmeta/schemas/";
+
+/**
+ * Published URL → built-in id.
+ *
+ * Written out rather than derived, because the two sides do **not** correspond
+ * mechanically: `passo-uno:seven-action:1.0` lives at `seven-action/1.0.json`,
+ * `tgdp:templates:1.0` at `tgdp/1.0.json`, and `docusaurus:docs:3.10` at
+ * `docusaurus-docs/3.10.json`. Any rule that reproduced one of those would get
+ * the other two wrong, and getting it wrong means fetching a built-in over the
+ * network — the regression stress test 1 of proposal 0009 exists to prevent.
+ *
+ * Matched as an exact string. A prefix or host rule would also swallow
+ * `.../schemas/okf/9.9.json`, which does not exist and must stay an ordinary
+ * remote ref that fails with a 404 rather than resolving to something else.
+ */
+const PUBLISHED_ALIAS: ReadonlyMap<string, string> = new Map([
+  [`${PUBLISHED_BASE}okf/0.1.json`, "google:okf:0.1"],
+  [`${PUBLISHED_BASE}diataxis/1.0.json`, "diataxis:diataxis:1.0"],
+  [`${PUBLISHED_BASE}seven-action/1.0.json`, "passo-uno:seven-action:1.0"],
+  [`${PUBLISHED_BASE}tgdp/1.0.json`, "tgdp:templates:1.0"],
+  [`${PUBLISHED_BASE}docusaurus-docs/3.10.json`, "docusaurus:docs:3.10"],
+  [`${PUBLISHED_BASE}docusaurus-blog/3.10.json`, "docusaurus:blog:3.10"],
+  [`${PUBLISHED_BASE}docusaurus-pages/3.10.json`, "docusaurus:pages:3.10"],
+]);
+
+/**
+ * The bundled object a published URL names, or `undefined`.
+ *
+ * **Both** tables have to answer, not just `PUBLISHED_ALIAS`. A URL mapped to
+ * an id that is not in `BUILTINS` — a typo in one of the two literals — is not
+ * a published built-in at all: `loadSchema` would fall through to the network
+ * for it. If membership alone decided, the trust boundary would exempt a URL
+ * that then got fetched from a third party, which is the one combination
+ * neither check may produce. One resolution, so the two cannot disagree.
+ *
+ * Unreachable in practice: a test asserts the table covers exactly
+ * {@link listBuiltins}, so a mismatch fails the suite rather than shipping.
+ * The point of resolving through both is that a future edit cannot quietly
+ * turn a typo into a trust hole.
+ */
+function publishedBuiltinSchema(
+  ref: string,
+): Record<string, unknown> | undefined {
+  const id = PUBLISHED_ALIAS.get(ref);
+  return id === undefined ? undefined : BUILTINS.get(id);
+}
+
+/**
+ * Does this reference name a built-in that docmeta happens to publish?
+ *
+ * A published URL resolves to a **bundled object**: no request is made, no
+ * third party can answer for it, and the bytes are the ones in this package. So
+ * every place that reasons about what a `url` ref can reach has to treat it as
+ * the built-in it is — see `assertDocumentRefAllowed` in `resolve-schema.ts`,
+ * which shares this predicate rather than repeating the table.
+ */
+export function isPublishedBuiltinUrl(ref: string): boolean {
+  return publishedBuiltinSchema(ref) !== undefined;
+}
+
+/** One built-in, in both of its spellings, with the object they both name. */
+export interface PublishedBuiltin {
+  /** The `vendor:name:version` id, which is also the schema's own `$id`. */
+  id: string;
+  /** The docs-site URL serving byte-identical content. */
+  url: string;
+  /** The bundled object — the same reference `loadSchema(id)` returns. */
+  schema: Record<string, unknown>;
+}
+
+/**
+ * Every built-in with its published URL, for callers that need both spellings.
+ *
+ * `validator.ts` registers these with each Ajv instance so a user's schema can
+ * `$ref` a built-in by either name, and the tests assert this covers exactly
+ * {@link listBuiltins} — adding a built-in without a URL fails there.
+ */
+export function publishedBuiltins(): PublishedBuiltin[] {
+  const out: PublishedBuiltin[] = [];
+  for (const [url, id] of PUBLISHED_ALIAS) {
+    const schema = publishedBuiltinSchema(url);
+    // A URL whose id is not in `BUILTINS` is skipped rather than registered as
+    // `undefined`. Unreachable while both tables are literals here, and the
+    // coverage test is what keeps it that way: it compares this list against
+    // `listBuiltins()`, so a typo shows up as a missing entry — which is
+    // exactly what skipping produces.
+    if (schema) out.push({ id, url, schema });
+  }
+  return out;
 }
 
 export type RefKind = "builtin" | "file" | "url";
@@ -571,7 +672,10 @@ export async function fetchSchemaBytes(
     );
   }
 
-  const raw = bytes.toString("utf8");
+  // `bytes` is returned untouched below — `schemas vendor` hashes it and writes
+  // it, so the vendored copy is what the server actually sent. Only the string
+  // we parse loses the BOM. See `stripBom`.
+  const raw = stripBom(bytes.toString("utf8"));
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -772,6 +876,23 @@ export async function loadSchema(
   }
 
   if (kind === "url") {
+    // First, ahead of every cache and every request: a URL docmeta publishes is
+    // one of its own built-ins, and resolving it over the network would be
+    // slower, subject to the timeout, broken offline, and broken air-gapped —
+    // for a file that is already in this package. Returning the bundled object
+    // itself (not a copy) also keeps the two spellings sharing one Ajv
+    // registration, since `Validator.compileUncached` dedupes on `$id`.
+    //
+    // Placed inside the url branch rather than before it deliberately: an
+    // integrity pin on a non-file ref is refused above, and that stays true for
+    // a published URL. The pin would have nothing to verify — no bytes are
+    // fetched — and a pin that silently checked nothing reads as protection
+    // that is not there. Vendor the file if you want a pinned copy.
+    // The same resolution `isPublishedBuiltinUrl` uses, so a URL the trust
+    // boundary treated as a built-in cannot arrive here and be fetched.
+    const published = publishedBuiltinSchema(ref);
+    if (published) return published;
+
     const cached = urlCache.get(ref);
     // An offline call must not be satisfied by something this process pulled
     // over the network; it goes back through `resolveRemote` so the disk cache
@@ -849,7 +970,9 @@ export async function loadSchema(
   if (pin?.integrity !== undefined) {
     assertIntegrity(ref, bytes, pin, pin.integrity);
   }
-  const text = bytes.toString("utf8");
+  // After `assertIntegrity`, deliberately: the pin covers the bytes on disk,
+  // BOM and all. See `stripBom`.
+  const text = stripBom(bytes.toString("utf8"));
   try {
     return JSON.parse(text) as Record<string, unknown>;
   } catch (err) {

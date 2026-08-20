@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "schemas": {
+    "diataxis/1.0.json": "sha256-5796a1ca72aa9b5f7e5273a18b9b1c91ba331bbad9a3623443d569cacd24576b",
+    "docusaurus-blog/3.10.json": "sha256-b7a3a8169b3730eb50969037219f8b1c448a06ab7f5a2533718106d309f42e6a",
+    "docusaurus-docs/3.10.json": "sha256-a048dd3c3b65ca0d053d975e0495e5113922548439872944033ede87604ecc18",
+    "docusaurus-pages/3.10.json": "sha256-a5d811d47960684407187382276acee118d7d0f8ad573c31f2524bec6c639ce3",
+    "okf/0.1.json": "sha256-ce1d1db7641cca0b5e077ee090cee8c40cb28ca31fbbcf1078b3f6fdfbaefd77",
+    "seven-action/1.0.json": "sha256-50ee6a5471442e5537eda84a28cc7d2e9aa152407de61ac08ad27f9cece9220b",
+    "tgdp/1.0.json": "sha256-b41c4cc926302be2024723a3b122f49409b4479b5b5c92302912941586f61306"
+  }
+}

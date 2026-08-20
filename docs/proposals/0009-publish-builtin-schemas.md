@@ -1,9 +1,70 @@
 # 0009 — Publish the built-in schemas at stable URLs
 
-- **Status:** Proposed
+- **Status:** Implemented
 - **Serves:** Sara · S1 "Define our metadata standard as a schema"; external consumers
 - **Depends on:** URL→built-in aliasing (stress test 1) — without it this proposal is a regression
-- **Touches:** new `docs/public/schemas/**`, `src/core/schema-registry.ts`, a copy+verify script, `.github/workflows/docs.yml`
+- **Touches:** new `docs/public/schemas/**`, `src/core/schema-registry.ts`, `src/core/resolve-schema.ts`, `src/core/validator.ts`, `src/schemas/manifest.json`, `scripts/sync-builtin-schemas.mjs`, `scripts/check-builtin-schemas.mjs`, `.github/workflows/ci.yml`
+
+## What shipped, and where it diverged
+
+Four changes to the design below. Each is recorded against the stress test it
+came out of, because each was found by taking that stress test literally.
+
+**Stress test 1 (aliasing) grew a second half, from proposal 0015.** 0015
+(`214bbaa`) landed after this was written and added `schemaTrust`, which refuses
+a document-supplied URL in two independent places: `documentRefs: "local"`
+rejects any URL outright and never reaches the host list, and `documentRefs:
+"any"` with a non-empty `schemaTrust.hosts` rejects a host the operator did not
+list. Aliasing inside `loadSchema` does not help, because both refusals happen
+earlier, in `resolveSchemaSet` — the last place that still knows a ref came from
+a document. So a published URL is exempted in `assertDocumentRefAllowed`
+alongside built-in ids, **above** the `kind === "url"` block; putting it inside
+that block would clear the host check and leave `local` broken. The predicate
+(`isPublishedBuiltinUrl`) is exported from `schema-registry.ts` and shared, so
+there is one table rather than two.
+
+**Stress test 1's premise "the mapping needs no table" was wrong.** The path
+does *not* mirror the id: `passo-uno:seven-action:1.0` is at
+`seven-action/1.0.json`, `tgdp:templates:1.0` at `tgdp/1.0.json`, and
+`docusaurus:docs:3.10` at `docusaurus-docs/3.10.json`. No derivation gets all
+three right, so `PUBLISHED_ALIAS` is a literal table, matched exactly. A prefix
+or host rule would also have swallowed `.../schemas/okf/9.9.json`, which does not
+exist and must stay an ordinary remote ref.
+
+**Stress test 3's enforcement idiom was described wrongly.** The claim that
+`docs:check-cli` "runs the script and fails on a dirty tree" is not what
+`scripts/check-cli-reference.mjs` does — it regenerates nothing and never
+inspects git state. `scripts/check-builtin-schemas.mjs` copies the actual idiom
+instead: pure Node stdlib, parse both sides, accumulate and sort a `problems[]`
+array, prefix every line with the npm script name, exit 0/1/2, and end with a
+remedy line naming the command to re-run. The writer (`npm run schemas:sync`) is
+deliberately **additive**: it adds manifest entries and refreshes the copies but
+never rewrites a hash it has already recorded, so re-running it cannot paper the
+immutability check over.
+
+**Stress test 7's "copy at docs-build time" would not have worked.** The `build`
+job in `.github/workflows/docs.yml` is a separate checkout that runs `npm ci`
+only inside `docs/`: the repo root has no `node_modules` there, and nothing from
+the `validate-docs` job reaches it. So the copies are **committed**, and byte
+equality is asserted in `npm test` — which `ci.yml` runs, so it gates pull
+requests, which is what stress test 7 actually asked for.
+
+**Stress test 5 needed one mechanic the sketch does not mention.** `addSchema`
+validates against the meta-schema by default, and the 2019, draft-07 and
+draft-04 Ajv instances do not carry the 2020-12 meta-schema every built-in
+declares — so registration throws there unless it is skipped per call.
+Registration also lives in `buildAjv`, not in `Validator`, because
+`compileWithFormats` builds its own throwaway instance for `fill`'s proposal
+envelope and would otherwise lose every `$ref` into a built-in. One
+`addSchema(schema, url)` covers both spellings, since Ajv also registers the
+schema's `$id`; draft-04 predates `$id` and needs the id added explicitly.
+
+**One thing deliberately left alone.** A published URL carrying an `integrity:`
+pin still fails, because `loadSchema`'s "a pin can only be verified against a
+local file" guard runs before the alias. That is the right answer, not an
+oversight: the URL is served from the bundle, so there are no fetched bytes for
+a pin to hash, and a pin that silently verified nothing would read as protection
+that is not there. Vendor the file if you want a pinned copy.
 
 ## Problem
 

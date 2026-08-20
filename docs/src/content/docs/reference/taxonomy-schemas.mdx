@@ -11,15 +11,21 @@ classification field to a published set of values. They exist because
 any non-empty string for it, so it cannot stop a docs set from drifting into
 `how-to`, `howto`, and `guide` all meaning the same thing.
 
-| Id | Key | Key required? | Framework |
-|---|---|---|---|
-| `diataxis:diataxis:1.0` | `type` | **Yes** | [Diátaxis](https://diataxis.fr/) |
-| `tgdp:templates:1.0` | `type` | **Yes** | [The Good Docs Project](https://www.thegooddocsproject.dev/template) |
-| `passo-uno:seven-action:1.0` | `action` | No | [Seven-Action Documentation Model](https://passo.uno/seven-action-model/) |
+| Id | Key | Key required? | Framework | JSON |
+|---|---|---|---|---|
+| `diataxis:diataxis:1.0` | `type` | **Yes** | [Diátaxis](https://diataxis.fr/) | [`diataxis/1.0.json`](/docmeta/schemas/diataxis/1.0.json) |
+| `tgdp:templates:1.0` | `type` | **Yes** | [The Good Docs Project](https://www.thegooddocsproject.dev/template) | [`tgdp/1.0.json`](/docmeta/schemas/tgdp/1.0.json) |
+| `passo-uno:seven-action:1.0` | `action` | No | [Seven-Action Documentation Model](https://passo.uno/seven-action-model/) | [`seven-action/1.0.json`](/docmeta/schemas/seven-action/1.0.json) |
 
 All three use [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects),
 allow additional properties, and are [built-in
 references](/docmeta/reference/schema-resolution/#reference-kinds).
+
+Each **JSON** link is the schema itself, at a [permanent, version-pinned
+URL](/docmeta/reference/built-in-schemas/#the-published-urls) — useful for
+reading the exact vocabulary, or for `$ref`-ing one from a schema of your own.
+Inside docmeta the URL and the id are interchangeable, and neither makes a
+network call.
 
 The two keyed on `type` are alternatives to each other — see [Which ones
 compose](#which-ones-compose). For the other four schemas docmeta ships,

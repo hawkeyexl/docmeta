@@ -32,7 +32,7 @@ changed as a result, and lists what it depends on.
 | [0006](0006-gitignore-aware-discovery.md) | `.gitignore`-aware file discovery | all | Implemented |
 | [0007](0007-html-xml-write-support.md) | `fill` write support for HTML (XML/DITA stay read-only) | Maya · M1 | Proposed |
 | [0008](0008-remote-schema-durability.md) | Remote schema durability | Devin · D2 | Implemented |
-| [0009](0009-publish-builtin-schemas.md) | Publish built-in schemas at stable URLs | Sara · S1 | Proposed |
+| [0009](0009-publish-builtin-schemas.md) | Publish built-in schemas at stable URLs | Sara · S1 | Implemented |
 | [0010](0010-init-and-schema-inference.md) | `docmeta init` and schema inference | Maya · M1 / Sara · S1 | Proposed |
 | [0011](0011-fill-in-content-strategy.md) | Fold `fill` into the content strategy | strategy debt | Proposed |
 | [0012](0012-fill-cost-and-privacy.md) | `fill` cost, privacy, and offline operation | Maya · M4 / Devin · D1 | Proposed |
