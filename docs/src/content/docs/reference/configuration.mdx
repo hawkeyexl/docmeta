@@ -17,7 +17,7 @@ the command line.
 |---|---|---|---|
 | `paths` | `string[]` | none | Default files, directories, or globs to process when no positional paths are given. |
 | `exclude` | `string[]` | none | Globs to exclude from directory and glob walks. Merged with `--exclude` and the [default ignores](/docmeta/reference/cli/#default-ignores). |
-| `schemas` | `(string \| SchemaRef)[]` | none | Default [schema set](/docmeta/reference/schema-resolution/) applied to every file that no higher-precedence rule matches. See [Schemas](#schemas). |
+| `schemas` | `(string \| {ref, source?, integrity?})[]` | none | Default [schema set](/docmeta/reference/schema-resolution/) applied to every file that no higher-precedence rule matches. See [Schemas](#schemas). |
 | `overrides` | `Override[]` | none | Per-glob schema overrides. The first matching entry wins. See [Overrides](#overrides). |
 | `baseline` | `string` | none | Path to a [validation baseline](/docmeta/reference/cli/#baselines). Setting it turns on `--baseline` for every run; `--no-baseline` suppresses it for one. A bare `--write-baseline` records into this same file. |
 | `allowEmpty` | `boolean` | `false` | Treat an input set that resolves to zero files as success instead of an error (exit 2). Equivalent to `--allow-empty`. See [empty input sets](/docmeta/reference/cli/#empty-input-sets). |

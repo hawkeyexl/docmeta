@@ -7,7 +7,11 @@ import { dirname, join, relative, resolve } from "node:path";
 import { parseBaseline } from "../src/core/baseline.js";
 import { runValidate, type ValidateOptions } from "../src/commands/validate.js";
 import { runGet } from "../src/commands/get.js";
-import { getSchemasInfo, runVendorSchema } from "../src/commands/schemas.js";
+import {
+  getSchemasInfo,
+  runVendorSchema,
+  vendorFileName,
+} from "../src/commands/schemas.js";
 import { DEFAULT_SCHEMAS } from "../src/core/resolve-schema.js";
 import { parseConfig } from "../src/core/config.js";
 import { makeTempRepo, removeTempRepo } from "./helpers/temp-repo.js";
@@ -749,6 +753,26 @@ const VENDORED = [
   "}",
   "",
 ].join("\n");
+
+describe("vendorFileName", () => {
+  it("survives a path segment with a malformed percent-escape", () => {
+    // `new URL` accepts `%zz` — the WHATWG parser does not validate escapes,
+    // it carries them through — so the URL reaches `decodeURIComponent`,
+    // which throws `URIError`. That escaped as an unhandled exception and a
+    // stack trace rather than the exit-2 `DocmetaError` every other bad-input
+    // path produces.
+    //
+    // Decoding is a nicety here: the result is sanitized to
+    // `[A-Za-z0-9._-]` anyway, so an undecodable segment can simply be used
+    // as written rather than failing the command.
+    expect(() => vendorFileName("https://x.example/%zz.json")).not.toThrow();
+    expect(vendorFileName("https://x.example/%zz.json")).toMatch(/\.json$/);
+    // The decodable case still decodes, so the fallback has not replaced it.
+    expect(vendorFileName("https://x.example/house%20style.json")).toBe(
+      "house-style.json",
+    );
+  });
+});
 
 describe("runVendorSchema (0008)", () => {
   let dir: string;

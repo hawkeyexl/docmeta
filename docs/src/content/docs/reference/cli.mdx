@@ -372,9 +372,9 @@ cat page.md | docmeta fill - --as markdown   # filled document to stdout
 
 ## `schemas`
 
-List the built-in schemas and the supported input formats. Run bare it takes no
-positional arguments and reads no files; its [`vendor`](#schemas-vendor)
-subcommand downloads a schema and writes to the repository.
+List the built-in schemas and the supported input formats. On its own it takes
+no positional arguments and reads no files. Its [`vendor`](#schemas-vendor)
+subcommand is the one that reaches the network and writes to the repository.
 
 ```sh
 docmeta schemas [options]

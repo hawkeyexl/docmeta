@@ -104,7 +104,19 @@ export function vendorFileName(url: string): string {
   }
   const segments = parsed.pathname.split("/").filter(Boolean);
   const last = segments[segments.length - 1] ?? "";
-  let name = decodeURIComponent(last).replace(/[^A-Za-z0-9._-]/g, "-");
+  // `new URL` carries a malformed escape like `%zz` through untouched — the
+  // WHATWG parser does not validate percent-encoding — so the segment reaches
+  // here and `decodeURIComponent` throws `URIError`, which is not a
+  // `DocmetaError` and escaped as an unhandled stack trace. Decoding is only a
+  // nicety: the result is sanitized to `[A-Za-z0-9._-]` regardless, so an
+  // undecodable segment is used as written.
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(last);
+  } catch {
+    decoded = last;
+  }
+  let name = decoded.replace(/[^A-Za-z0-9._-]/g, "-");
   // No usable segment at all (`https://host/`): fall back to the host, which is
   // at least recognizable in a diff.
   if (name === "" || /^\.+$/.test(name)) {
