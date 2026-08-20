@@ -35,11 +35,16 @@ import {
   STDIN_LABEL,
   STDIN_TOKEN,
 } from "../core/load-files.js";
-import { resolveRunConfig, type ConfigNotice } from "../core/config.js";
+import {
+  resolveRunConfig,
+  schemaTrustRoot,
+  type ConfigNotice,
+} from "../core/config.js";
 import {
   collectSchemaPins,
-  resolveSchemaSet,
+  resolveSchemaSetWithSource,
   FILE_SCHEMA_KEY,
+  type ResolvedSchemaSet,
 } from "../core/resolve-schema.js";
 import { Validator } from "../core/validator.js";
 import { schemaLoadOptions } from "../core/schema-registry.js";
@@ -259,6 +264,10 @@ export async function runValidate(
     action: "validated",
   });
 
+  // Settled once per run, not per file: finding it is a filesystem walk, and
+  // every file in one run shares the same repository.
+  const trustRoot = schemaTrustRoot(cwd, configDir);
+
   const validator = new Validator(
     schemaLoadOptions({
       // The config's directory when a config governs the run, so one project
@@ -299,13 +308,19 @@ export async function runValidate(
       return;
     }
 
-    let schemaSet: string[];
+    let resolved: ResolvedSchemaSet;
     try {
-      schemaSet = resolveSchemaSet({
+      resolved = resolveSchemaSetWithSource({
         filePath: label,
         fileSchema: extracted.data[FILE_SCHEMA_KEY],
         cliSchemas: opts.cliSchemas,
         config,
+        // A document's own `$schema` is measured from the run's directory, the
+        // same base `loadSchema` will read it from, and contained to the
+        // repository the run is standing in.
+        fileBase: cwd,
+        trustRoot,
+        onNotice: opts.onNotice,
       });
     } catch (err) {
       results.push(
@@ -314,11 +329,33 @@ export async function runValidate(
       return;
     }
 
-    const errors = await validator.validate(
-      extracted.data,
-      schemaSet,
-      extracted.lineFor,
-    );
+    const schemaSet = resolved.schemas;
+    let errors: FieldError[];
+    try {
+      errors = await validator.validate(
+        extracted.data,
+        schemaSet,
+        extracted.lineFor,
+      );
+    } catch (err) {
+      // A schema the *document* chose failing to load — unparseable, missing,
+      // integrity mismatch — is that document's failure, and is filed as one.
+      // Letting it escape meant a single contributed file naming any non-JSON
+      // path in the repo aborted the whole run: exit 2, and nothing reported
+      // about any file, including the ones that were fine.
+      //
+      // Every other source stays operational on purpose. A schema the operator
+      // configured is not one document's problem; it invalidates the run, and
+      // reporting it per-file would repeat the same error once per document
+      // while implying the documents were at fault.
+      if (!(err instanceof DocmetaError) || resolved.source !== "document") {
+        throw err;
+      }
+      results.push(
+        parseErrorResult(label, extractor.name, err.message, "schema"),
+      );
+      return;
+    }
     results.push({
       file: label,
       format: extractor.name,

@@ -940,3 +940,94 @@ describe("fetchSchemaBytes (0008)", () => {
     ).rejects.toBeInstanceOf(DocmetaError);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 0015 — a schema FILE's bytes must not reach the error message
+// ---------------------------------------------------------------------------
+
+describe("0015 · a schema file that is not JSON", () => {
+  let dir: string | undefined;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "docmeta-not-json-"));
+  });
+  afterEach(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+    dir = undefined;
+  });
+
+  const failing = async (content: string): Promise<string> => {
+    const file = join(dir!, "schema.json");
+    writeFileSync(file, content, "utf8");
+    const err = await loadSchema(file, {}).then(
+      () => null,
+      (e: unknown) => e as Error,
+    );
+    expect(err).toBeInstanceOf(DocmetaError);
+    return err?.message ?? "";
+  };
+
+  /**
+   * `JSON.parse`'s own message embeds a prefix of what it was handed — on Node
+   * 24, `Unexpected token 'r', "root:x:0:0"... is not valid JSON` — and that
+   * message was interpolated verbatim. The excerpt reached stderr *and* the
+   * json/sarif reports the formats workflow uploads to code scanning, so it was
+   * readable by whoever opened the pull request: roughly ten bytes of an
+   * arbitrary readable file per run, repeatable with a different path.
+   */
+  it("does not quote the file's contents back", async () => {
+    const message = await failing("root:x:0:0:root:/root:/bin/bash\n");
+    expect(message).not.toContain("root:x:0:0");
+    expect(message).not.toContain("/bin/bash");
+    // The ref is still named, and where the parse failed is still reported —
+    // dropping the excerpt must not leave the operator with nothing.
+    expect(message).toContain("schema.json");
+    expect(message).toMatch(/line 1 column 1/);
+  });
+
+  it("reports a later position, not just the first line", async () => {
+    const message = await failing('{\n  "type": "object"\n  secret-value\n}\n');
+    expect(message).not.toContain("secret-value");
+    expect(message).toMatch(/line 3/);
+  });
+
+  it("keeps a positional message that carries no content", async () => {
+    // `Expected double-quoted property name in JSON at position 8 (line 1
+    // column 9)` quotes nothing back, so it survives as it is.
+    const message = await failing('{"a": 1,}');
+    expect(message).toMatch(/position 8/);
+    expect(message).toMatch(/line 1 column 9/);
+  });
+
+  it("still says something useful for an empty file", async () => {
+    const message = await failing("");
+    expect(message).toContain("schema.json");
+    expect(message).toMatch(/not valid JSON/);
+  });
+});
+
+describe("0015 · the remote response excerpt is deliberately kept", () => {
+  /**
+   * The counterpart to the redaction above, pinned so a later "consistency"
+   * pass does not strip both. `73c625f` put the response excerpt in front of
+   * the operator on purpose: a body from a URL the operator configured is what
+   * tells them their gateway is talking, and it is not bytes off their disk.
+   */
+  it("shows what a URL actually returned when it is not JSON", async () => {
+    const server = await startSchemaServer({
+      "/gateway.html": {
+        body: "<!doctype html><title>502 Bad Gateway</title>",
+        contentType: "application/json",
+      },
+    });
+    try {
+      const ref = `${server.url}/gateway.html`;
+      const err = await loadSchema(ref).catch((e: Error) => e);
+      expect(err).toBeInstanceOf(DocmetaError);
+      expect(err.message).toContain(ref);
+      expect(err.message).toMatch(/doctype|502/i);
+    } finally {
+      await server.close();
+    }
+  });
+});

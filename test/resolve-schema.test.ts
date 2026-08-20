@@ -160,3 +160,320 @@ describe("mapping-form schema entries (0008)", () => {
     expect(pins.has(resolve(configDir, "schema/house.json"))).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 0015 — the trust boundary for document-supplied refs
+// ---------------------------------------------------------------------------
+
+const URL_REF = "https://schemas.example.com/house/2.1.json";
+const REPO = resolve("/repo");
+/** The containment root a command core hands the resolver. */
+const ROOT = { dir: REPO, source: "git" } as const;
+
+/** Every mode, spelled the way a config spells it. */
+function trust(
+  documentRefs: "any" | "local" | "none",
+  hosts?: string[],
+): { schemaTrust: { documentRefs: "any" | "local" | "none"; hosts?: string[] } } {
+  return { schemaTrust: { documentRefs, ...(hosts ? { hosts } : {}) } };
+}
+
+describe("schemaTrust · what a document may name", () => {
+  it("defaults to `any`: all three ref kinds, exactly as before", () => {
+    for (const ref of [URL_REF, "google:okf:0.1", "./in-repo.json"]) {
+      expect(
+        resolveSchemaSet({
+          filePath: "a.md",
+          fileSchema: ref,
+          fileBase: REPO,
+          trustRoot: ROOT,
+          config: { schemas: ["x:y:1"] },
+        }),
+      ).toEqual([ref]);
+    }
+  });
+
+  it("`local` keeps a built-in id working — the self-describing document", () => {
+    // test/fixtures/schema-ref.md is exactly this shape. If `local` broke
+    // built-ins it would break the documented pattern for everyone who adopted
+    // it, a far larger blast radius than the hole being closed.
+    expect(
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: "google:okf:0.1",
+        fileBase: REPO,
+        trustRoot: ROOT,
+        config: { ...trust("local"), schemas: ["x:y:1"] },
+      }),
+    ).toEqual(["google:okf:0.1"]);
+  });
+
+  it("`local` keeps an in-repo file working", () => {
+    expect(
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: "./schema/house.json",
+        fileBase: REPO,
+        trustRoot: ROOT,
+        config: { ...trust("local"), schemas: ["x:y:1"] },
+      }),
+    ).toEqual(["./schema/house.json"]);
+  });
+
+  it("`local` refuses a URL, naming the key that refused it", () => {
+    expect(() =>
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: URL_REF,
+        fileBase: REPO,
+        trustRoot: ROOT,
+        config: { ...trust("local"), schemas: ["x:y:1"] },
+      }),
+    ).toThrow(/schemaTrust\.documentRefs/);
+  });
+
+  it("`none` ignores the ref, falls through to config, and says so", () => {
+    const notices: string[] = [];
+    const set = resolveSchemaSet({
+      filePath: "a.md",
+      fileSchema: URL_REF,
+      fileBase: REPO,
+      trustRoot: ROOT,
+      onNotice: (m) => notices.push(m),
+      config: {
+        ...trust("none"),
+        schemas: ["x:y:1"],
+        overrides: [{ files: "a.md", schemas: ["ov:er:1"] }],
+      },
+    });
+    // Falls to the next level down, not straight to config `schemas:`.
+    expect(set).toEqual(["ov:er:1"]);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatch(/a\.md/);
+    expect(notices[0]).toMatch(/ignored/);
+  });
+
+  it("`none` ignores a built-in and a local path too, not just a URL", () => {
+    for (const ref of ["google:okf:0.1", "./schema/house.json"]) {
+      expect(
+        resolveSchemaSet({
+          filePath: "a.md",
+          fileSchema: ref,
+          fileBase: REPO,
+          trustRoot: ROOT,
+          config: { ...trust("none"), schemas: ["x:y:1"] },
+        }),
+      ).toEqual(["x:y:1"]);
+    }
+  });
+
+  it("`none` with no config at all falls to the built-in default set", () => {
+    expect(
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: URL_REF,
+        fileBase: REPO,
+        trustRoot: ROOT,
+        config: trust("none"),
+      }),
+    ).toEqual([...DEFAULT_SCHEMAS]);
+  });
+
+  it("refuses a document URL whose host is not in `hosts`", () => {
+    expect(() =>
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: URL_REF,
+        fileBase: REPO,
+        trustRoot: ROOT,
+        config: trust("any", ["schemas.other.example"]),
+      }),
+    ).toThrow(/schemaTrust\.hosts/);
+  });
+
+  it("allows a document URL whose host is listed, case-insensitively and with a port", () => {
+    expect(
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: URL_REF,
+        fileBase: REPO,
+        trustRoot: ROOT,
+        config: trust("any", ["Schemas.Example.COM"]),
+      }),
+    ).toEqual([URL_REF]);
+    expect(
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: "http://127.0.0.1:8080/s.json",
+        fileBase: REPO,
+        trustRoot: ROOT,
+        config: trust("any", ["127.0.0.1:8080"]),
+      }),
+    ).toEqual(["http://127.0.0.1:8080/s.json"]);
+  });
+
+  it("does not consult `hosts` under `local` — a URL is refused outright", () => {
+    expect(() =>
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: URL_REF,
+        fileBase: REPO,
+        trustRoot: ROOT,
+        config: trust("local", ["schemas.example.com"]),
+      }),
+    ).toThrow(/documentRefs/);
+  });
+
+  // Stress test 5. `--schema` is typed by whoever runs the command, and a
+  // person who can pass a flag can also edit the config. Pinned here so a later
+  // "consistency" pass does not quietly start filtering it.
+  it("never filters --schema or a config ref, in any mode", () => {
+    for (const mode of ["any", "local", "none"] as const) {
+      expect(
+        resolveSchemaSet({
+          filePath: "a.md",
+          cliSchemas: [URL_REF, "../outside/x.json"],
+          fileBase: REPO,
+          trustRoot: ROOT,
+          config: trust(mode),
+        }),
+      ).toEqual([URL_REF, "../outside/x.json"]);
+
+      expect(
+        resolveSchemaSet({
+          filePath: "a.md",
+          fileBase: REPO,
+          trustRoot: ROOT,
+          config: { ...trust(mode), schemas: [URL_REF, "../outside/x.json"] },
+        }),
+      ).toEqual([URL_REF, "../outside/x.json"]);
+
+      expect(
+        resolveSchemaSet({
+          filePath: "a.md",
+          fileBase: REPO,
+          trustRoot: ROOT,
+          config: {
+            ...trust(mode),
+            overrides: [{ files: "a.md", schemas: [URL_REF, "../outside/x.json"] }],
+          },
+        }),
+      ).toEqual([URL_REF, "../outside/x.json"]);
+    }
+  });
+});
+
+describe("schemaTrust · containing a document-supplied local path", () => {
+  const PKG = resolve(REPO, "packages", "docs");
+
+  it("refuses a path that escapes the repository, in every mode that honors the ref", () => {
+    for (const mode of ["any", "local"] as const) {
+      expect(() =>
+        resolveSchemaSet({
+          filePath: "a.md",
+          fileSchema: "../../../../etc/passwd",
+          fileBase: PKG,
+          trustRoot: ROOT,
+          config: trust(mode),
+        }),
+      ).toThrow(/outside/);
+    }
+  });
+
+  it("refuses an absolute path outside the repository too", () => {
+    expect(() =>
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: resolve("/elsewhere/x.json"),
+        fileBase: PKG,
+        trustRoot: ROOT,
+        config: trust("any"),
+      }),
+    ).toThrow(/outside/);
+  });
+
+  // The reason the boundary is the git root and not the config directory: a
+  // monorepo package whose documents reference a schema one level up is still
+  // referencing a schema in this project.
+  it("allows a sibling package's schema inside the same repository", () => {
+    expect(
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: "../shared/house.json",
+        fileBase: PKG,
+        trustRoot: ROOT,
+        config: trust("any"),
+      }),
+    ).toEqual(["../shared/house.json"]);
+  });
+
+  it("says which boundary it applied when there is no git repository", () => {
+    let message = "";
+    try {
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: "../outside.json",
+        fileBase: REPO,
+        trustRoot: { dir: REPO, source: "config" },
+        config: trust("any"),
+      });
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toMatch(/outside/);
+    expect(message).toMatch(/no git repository/i);
+    expect(message).toMatch(/config file's own directory/);
+  });
+
+  it("does not blame a config file when there is no config file", () => {
+    // The `cwd` fallback. A boolean `fromGit` could not tell this apart from
+    // the config fallback, so both said "the config's own directory is the
+    // boundary" — sending someone with no config file looking for one.
+    let message = "";
+    try {
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: "../outside.json",
+        fileBase: REPO,
+        trustRoot: { dir: REPO, source: "cwd" },
+        config: trust("any"),
+      });
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toMatch(/no git repository and no config file/i);
+    expect(message).toMatch(/directory the command was run from/);
+    expect(message).not.toMatch(/config file's own directory/);
+  });
+
+  it("names the git root as the repository when there is one", () => {
+    let message = "";
+    try {
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: "../outside.json",
+        fileBase: REPO,
+        trustRoot: ROOT,
+        config: trust("any"),
+      });
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toMatch(/repository root/i);
+    expect(message).not.toMatch(/no git repository/i);
+  });
+
+  // The resolver is synchronous and pure; finding a git root is a filesystem
+  // walk, so the root is settled once per run by the caller. A caller that
+  // supplies none gets no containment — the command cores always do, and
+  // test/commands.test.ts proves it end to end.
+  it("skips containment when no trustRoot is supplied", () => {
+    expect(
+      resolveSchemaSet({
+        filePath: "a.md",
+        fileSchema: "../outside.json",
+        config: trust("any"),
+      }),
+    ).toEqual(["../outside.json"]);
+  });
+});

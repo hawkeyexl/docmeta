@@ -45,6 +45,46 @@ export type SchemaEntry = string | SchemaRefEntry;
 /** The keys a `schemas:` mapping entry may carry. */
 const SCHEMA_ENTRY_KEYS = ["ref", "source", "integrity"] as const;
 
+/**
+ * What a **document** is allowed to name in its own `$schema`.
+ *
+ * - `any` — the default, and today's behavior: a built-in id, a file in the
+ *   repository, or a URL. `schemaTrust.hosts` narrows the URL case.
+ * - `local` — a built-in id or a file in the repository; a URL is refused.
+ * - `none` — the document's `$schema` is ignored and config decides, with a
+ *   notice on stderr naming the file whose key was dropped.
+ */
+export type DocumentRefTrust = "any" | "local" | "none";
+
+/** The values `schemaTrust.documentRefs` accepts, in the order documented. */
+export const DOCUMENT_REF_TRUST = ["any", "local", "none"] as const;
+
+/**
+ * How far a **document** is trusted to choose the contract it is judged by.
+ *
+ * Nothing here touches a ref an *operator* supplied: `schemas:`,
+ * `overrides[].schemas`, and `-s/--schema` are never filtered, in any mode. A
+ * person who can edit the config or pass a flag is not the attacker this key
+ * has in mind — a pull request against a public docs repo is.
+ */
+export interface SchemaTrustConfig {
+  /** Defaults to `any`, which is exactly what docmeta has always done. */
+  documentRefs?: DocumentRefTrust;
+  /**
+   * Hosts a document-supplied URL may name. Consulted **only** under
+   * `documentRefs: any`; absent means any host, as before.
+   *
+   * A convenience for pointing at one known publisher, not a security
+   * boundary: `fetch` follows redirects, so an allowlisted host that answers
+   * `302` sends the fetch anywhere it likes. A repo that genuinely distrusts
+   * its contributors wants `documentRefs: local`.
+   */
+  hosts?: string[];
+}
+
+/** The keys a `schemaTrust:` mapping may carry. */
+const SCHEMA_TRUST_KEYS = ["documentRefs", "hosts"] as const;
+
 /** Defaults for the `fill` command; every key is overridable by a CLI flag. */
 export interface FillConfig {
   provider?: string;
@@ -110,6 +150,11 @@ export interface DocmetaConfig {
    * local-file references are unaffected — neither touches the network.
    */
   offline?: boolean;
+  /**
+   * How far a document's own `$schema` is trusted. Absent means `any` — every
+   * setup that exists today, unchanged. See `SchemaTrustConfig`.
+   */
+  schemaTrust?: SchemaTrustConfig;
 }
 
 const CONFIG_NAMES = ["docmeta.config.yaml", "docmeta.config.yml"];
@@ -285,6 +330,10 @@ export function parseConfig(text: string, source: string): DocmetaConfig {
     config.schemaCache = parseSchemaCache(obj.schemaCache, source);
   }
 
+  if (obj.schemaTrust !== undefined) {
+    config.schemaTrust = parseSchemaTrust(obj.schemaTrust, source);
+  }
+
   if (obj.fill !== undefined) config.fill = parseFill(obj.fill, source);
 
   return config;
@@ -323,6 +372,62 @@ function parseSchemaCache(value: unknown, source: string): SchemaCacheConfig {
   }
 
   return schemaCache;
+}
+
+/**
+ * Parse `schemaTrust:`, shaped after `parseSchemaCache` — a nested mapping with
+ * every key optional, so an absent one leaves the default in exactly one place.
+ *
+ * Unknown nested keys are rejected the way a `schemas:` mapping entry rejects
+ * them, and for the same reason: a misspelled `documentRef:` would otherwise be
+ * dropped in silence, leaving a repo that reads as guarded and is not. That
+ * cannot be done at the *top* level — `parseConfig` walks known keys and ignores
+ * the rest — so a misspelled `schemaTrust:` itself is still a silent no-op. See
+ * the version-floor note in the configuration reference.
+ */
+function parseSchemaTrust(value: unknown, source: string): SchemaTrustConfig {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new DocmetaError(
+      `${source}: "schemaTrust" must be a mapping. Write it as \`schemaTrust:\` with \`documentRefs:\` and optionally \`hosts:\` beneath it.`,
+    );
+  }
+  const raw = value as Record<string, unknown>;
+  for (const key of Object.keys(raw)) {
+    if (!(SCHEMA_TRUST_KEYS as readonly string[]).includes(key)) {
+      throw new DocmetaError(
+        `${source}: "schemaTrust" has unknown key "${key}". Supported keys: ${SCHEMA_TRUST_KEYS.join(", ")}.`,
+      );
+    }
+  }
+  const schemaTrust: SchemaTrustConfig = {};
+
+  const mode = raw.documentRefs;
+  if (mode !== undefined) {
+    if (
+      typeof mode !== "string" ||
+      !(DOCUMENT_REF_TRUST as readonly string[]).includes(mode)
+    ) {
+      throw new DocmetaError(
+        `${source}: "schemaTrust.documentRefs" must be one of: ${DOCUMENT_REF_TRUST.join(", ")}. Use \`documentRefs: any\` for today's behavior, \`local\` to refuse a URL a document names, or \`none\` to let the config decide alone.`,
+      );
+    }
+    schemaTrust.documentRefs = mode as DocumentRefTrust;
+  }
+
+  const hosts = raw.hosts;
+  if (hosts !== undefined) {
+    if (
+      !Array.isArray(hosts) ||
+      hosts.some((h) => typeof h !== "string" || h.trim() === "")
+    ) {
+      throw new DocmetaError(
+        `${source}: "schemaTrust.hosts" must be a list of host names, such as "schemas.example.com". Remove the key to allow any host.`,
+      );
+    }
+    schemaTrust.hosts = hosts as string[];
+  }
+
+  return schemaTrust;
 }
 
 function parseFill(value: unknown, source: string): FillConfig {
@@ -411,6 +516,42 @@ export function findGitRoot(cwd: string): string | null {
     if (parent === dir) return null;
     dir = parent;
   }
+}
+
+/**
+ * The directory a **document-supplied** local schema path must stay inside.
+ *
+ * The git root rather than the config's directory, so a monorepo package whose
+ * documents reference `../shared/x.json` keeps working — that path is still
+ * inside the repository, which is what "a schema in this project" means.
+ *
+ * `source` is not decoration, and it has **three** values rather than a
+ * boolean: with no repository the boundary falls back to the config's
+ * directory, and with no config either it falls back to the run's `cwd`. Those
+ * are progressively narrower and less obvious rules, and the refusal message
+ * has to name the one it actually applied — telling someone with no config file
+ * that "the config's own directory is the boundary" sends them looking for a
+ * file that is not there.
+ *
+ * Same reasoning as `SARIF_NO_GIT_ROOT`: "there is no repository" and "the
+ * repository root is where you are standing" must stay distinguishable.
+ */
+export interface SchemaTrustRoot {
+  /** Absolute directory the path must resolve inside. */
+  dir: string;
+  /** Which rule produced `dir`, so a refusal can name it accurately. */
+  source: "git" | "config" | "cwd";
+}
+
+/** Settle the containment root once per run, for `resolveSchemaSet`. */
+export function schemaTrustRoot(
+  cwd: string,
+  configDir?: string,
+): SchemaTrustRoot {
+  const git = findGitRoot(cwd);
+  if (git !== null) return { dir: git, source: "git" };
+  if (configDir !== undefined) return { dir: resolve(configDir), source: "config" };
+  return { dir: resolve(cwd), source: "cwd" };
 }
 
 /**

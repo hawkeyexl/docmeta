@@ -1,6 +1,6 @@
 ---
 title: Configuration reference
-description: Every docmeta.config.yaml key (paths, exclude, schemas, overrides), with types, defaults, discovery rules, and how config merges with CLI flags.
+description: Every docmeta.config.yaml key (paths, exclude, schemas, overrides, schemaTrust), with types, defaults, discovery rules, and how config merges with CLI flags.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -24,6 +24,7 @@ the command line.
 | `respectGitignore` | `boolean` | `true` | Skip files `.gitignore` covers when expanding directories and globs. `--no-gitignore` overrides it for one run. See [`.gitignore`](/docmeta/reference/cli/#gitignore). |
 | `offline` | `boolean` | `false` | Never fetch a remote schema. `--offline` turns it on for one run. See [Offline](#offline). |
 | `schemaCache` | `SchemaCache` | none | Settings for the [cross-run schema cache](/docmeta/reference/schema-resolution/#the-cross-run-cache). See [Schema cache](#schema-cache). |
+| `schemaTrust` | `SchemaTrust` | none | How far a document's own `$schema` is trusted. Absent means `any` — every reference kind, as docmeta has always behaved. See [Schema trust](#schema-trust). |
 | `fill` | `Fill` | none | Defaults for [`docmeta fill`](/docmeta/reference/cli/#fill). See [Fill](#fill). |
 
 The top level must be a YAML mapping. `paths` and `exclude` must be lists of
@@ -142,6 +143,88 @@ directions — which is the failure this key exists to prevent.
 The cache lives in `.docmeta/schema-cache/`, alongside the proposal cache
 `fill` keeps in `.docmeta/cache/`. Add `.docmeta/` to your `.gitignore`; neither
 directory should be committed.
+</Aside>
+
+### Schema trust
+
+`schemaTrust` decides how far a **document** is trusted to choose the schema it
+is judged against. A file's own `$schema` sits above config in the [precedence
+chain](/docmeta/reference/schema-resolution/#precedence), which is the feature
+that makes a document self-describing — and, in a repository that takes outside
+pull requests, the thing a contributor can use to opt out of the standard.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `documentRefs` | `"any" \| "local" \| "none"` | `any` | What a document's `$schema` may name. |
+| `hosts` | `string[]` | none | Hosts a document-supplied URL may name. Consulted **only** under `documentRefs: any`; absent means any host. |
+
+```yaml title="docmeta.config.yaml"
+schemaTrust:
+  documentRefs: local
+```
+
+| `documentRefs` | A document's `$schema` may name | A document's `$schema` may not |
+|---|---|---|
+| `any` (default) | A built-in id, a file inside the repository, or a URL — narrowed by `hosts` when that key is present. | A path outside the repository. |
+| `local` | A built-in id, or a file inside the repository. | Any URL. |
+| `none` | Nothing — the key is ignored and the config decides. Docmeta prints one line to stderr naming the file and the reference it dropped. | — |
+
+**This key never applies to a reference an operator supplied.** `schemas`,
+`overrides[].schemas`, and `-s/--schema` are unfiltered in every mode. Someone
+who can edit the config or pass a flag is not the person this key has in mind.
+
+A refused document is **one failing file** (exit 1), not a stopped run: the
+refusal is reported as that file's error, so in `github` and `sarif` output the
+annotation lands on the offending document in the pull request. Every other file
+in the run is validated as usual.
+
+A built-in id keeps working under `local`, which is what makes that mode safe to
+turn on: the [self-describing
+document](/docmeta/reference/schema-resolution/#the-schema-key-in-a-file)
+pattern — `$schema: google:okf:0.1` in the frontmatter — names a schema shipped
+inside docmeta, so it reaches nothing.
+
+#### Where "inside the repository" ends
+
+A document-supplied *path* must resolve inside the repository, in every mode
+that honors the reference — `any` included, because containment costs no
+existing setup anything. `$schema: ../../../../etc/passwd` is refused; a
+monorepo package's `$schema: ../shared/house.json` is not, because the boundary
+is the **git root** rather than the config's directory.
+
+With no git repository anywhere above the run, the boundary falls back to the
+config's own directory and the message says so, so "outside the repository" and
+"outside where you happen to be standing" stay distinguishable.
+
+Paths in `schemas` and on `--schema` are never contained. A schema kept beside
+the project rather than in it is an ordinary setup, and an operator wrote it.
+
+<Aside type="caution" title="`hosts` is a convenience, not a security boundary">
+`fetch` follows redirects, and nothing re-checks the host on the way. An
+allowlisted host that answers `302 https://attacker.example/permissive.json`
+therefore defeats the list, and closing that would mean re-checking every hop of
+every fetch.
+
+Use `hosts` to point at one known publisher and catch mistakes. For a repository
+that genuinely distrusts its contributors, the honest setting is
+`documentRefs: local`, which has no such hole.
+</Aside>
+
+<Aside type="caution" title="Pin the docmeta version in CI">
+docmeta reads the config keys it knows and ignores the rest, so a version older
+than 3.11 sees `schemaTrust:` and **silently does nothing** — no guard, no
+warning. That is inherent to any new guard: an old release predates it.
+
+The mitigation is a version floor wherever the gate runs:
+
+```sh
+npx -y docmeta@^3.11 validate "docs/**/*.md"
+```
+
+The same silence covers a *misspelled* key: `schemTrust:` is a no-op, not an
+error. Unknown keys **inside** the mapping are rejected (exit 2), so
+`documentRef:` and a bad `documentRefs` value both fail loudly — it is only the
+top-level name that has no such check.
 </Aside>
 
 ### Fill
@@ -302,4 +385,6 @@ Use config `overrides` when different folders need different schemas.
 {/* step {"description":"An explicit -c to a missing file exits 2 rather than falling back to discovery.","runShell":{"command":"docmeta validate -c does-not-exist.yaml test/fixtures/valid.md","exitCodes":[2],"stdio":"Config file not found"}} */}
 {/* step {"description":"A config whose paths is not a list of strings is a usage error (exit 2).","runShell":{"command":"docmeta validate -c test/fixtures/dd/bad-config.yaml test/fixtures/valid.md","exitCodes":[2],"stdio":"\"paths\" must be a list of strings"}} */}
 {/* step {"description":"--schema overrides config/file schema resolution for every file in the run.","runShell":{"command":"docmeta validate test/fixtures/missing-type.md -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"A documentRefs value outside the three modes is a usage error (exit 2), not a silently ignored key.","runShell":{"command":"docmeta validate -c test/fixtures/dd/bad-schema-trust.yaml test/fixtures/valid.md","exitCodes":[2],"stdio":"must be one of"}} */}
+{/* step {"description":"documentRefs: local keeps a built-in $schema working — the self-describing document pattern is unaffected.","runShell":{"command":"docmeta validate -c test/fixtures/dd/schema-trust-local.yaml test/fixtures/schema-ref.md","exitCodes":[0],"stdio":"1 passed"}} */}
 {/* test end */}

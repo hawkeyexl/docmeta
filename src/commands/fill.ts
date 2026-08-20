@@ -37,7 +37,7 @@ import {
   type TokenUsage,
 } from "@hawkeyexl/inference";
 import { DocmetaError, type FieldError, type MetadataPatch } from "../types.js";
-import { resolveRunConfig } from "../core/config.js";
+import { resolveRunConfig, schemaTrustRoot } from "../core/config.js";
 import {
   assertNonEmpty,
   gitignoreOptions,
@@ -52,7 +52,8 @@ import {
 } from "../extractors/index.js";
 import {
   collectSchemaPins,
-  resolveSchemaSet,
+  resolveSchemaSetWithSource,
+  type ResolvedSchemaSet,
   FILE_SCHEMA_KEY,
 } from "../core/resolve-schema.js";
 import { loadSchema, schemaLoadOptions } from "../core/schema-registry.js";
@@ -125,6 +126,9 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
     offline: opts.offline ?? config?.offline,
     pins: collectSchemaPins(config),
   });
+  // Settled once per run, not per file: finding it is a filesystem walk, and
+  // every file in one run shares the same repository.
+  const trustRoot = schemaTrustRoot(cwd, configDir);
   const usingStdin = inputs.includes(STDIN_TOKEN);
   if (inputs.length === 0) {
     throw new DocmetaError(
@@ -343,26 +347,46 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
       return errorResult(label, extractor.name, (err as Error).message);
     }
 
-    let schemaSet: string[];
+    let resolved: ResolvedSchemaSet;
     try {
-      schemaSet = resolveSchemaSet({
+      resolved = resolveSchemaSetWithSource({
         filePath: label,
         fileSchema: extracted.data[FILE_SCHEMA_KEY],
         cliSchemas: opts.cliSchemas,
         config,
+        // Same trust boundary as `validate`: `fill` writes metadata back into
+        // the document, so a schema a document chose for itself decides what
+        // gets written — if anything, a stronger reason to guard it.
+        fileBase: cwd,
+        trustRoot,
+        onNotice: opts.onNotice,
       });
     } catch (err) {
       return errorResult(label, extractor.name, (err as Error).message);
     }
 
-    const schemas = await Promise.all(
-      schemaSet.map((ref) => loadSchema(ref, schemaOptions)),
-    );
-    const existingErrors = await validator.validate(
-      extracted.data,
-      schemaSet,
-      extracted.lineFor,
-    );
+    const schemaSet = resolved.schemas;
+    let schemas: Record<string, unknown>[];
+    let existingErrors;
+    try {
+      schemas = await Promise.all(
+        schemaSet.map((ref) => loadSchema(ref, schemaOptions)),
+      );
+      existingErrors = await validator.validate(
+        extracted.data,
+        schemaSet,
+        extracted.lineFor,
+      );
+    } catch (err) {
+      // Same rule as `validate`: a schema the *document* chose failing to load
+      // is that document's failure and is reported as one, so one file cannot
+      // abort the run. Every other source stays operational, because a schema
+      // the operator configured invalidates every file, not just this one.
+      if (!(err instanceof DocmetaError) || resolved.source !== "document") {
+        throw err;
+      }
+      return errorResult(label, extractor.name, err.message);
+    }
     const candidates = collectCandidates(
       schemas,
       extracted.data,

@@ -4,8 +4,13 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { loadConfig, parseConfig } from "../src/core/config.js";
+import {
+  loadConfig,
+  parseConfig,
+  schemaTrustRoot,
+} from "../src/core/config.js";
 import { DocmetaError } from "../src/types.js";
+import { DOC, makeTempRepo, removeTempRepo } from "./helpers/temp-repo.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -527,5 +532,121 @@ describe("schemas: the object form (0008)", () => {
         "c.yaml",
       ),
     ).toThrow(DocmetaError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0015 — `schemaTrust:`, the trust boundary for document-supplied refs
+// ---------------------------------------------------------------------------
+
+describe("config: schemaTrust", () => {
+  it("parses documentRefs and hosts", () => {
+    expect(
+      parseConfig(
+        "schemaTrust:\n  documentRefs: local\n",
+        "docmeta.config.yaml",
+      ).schemaTrust,
+    ).toEqual({ documentRefs: "local" });
+    expect(
+      parseConfig(
+        "schemaTrust:\n  documentRefs: any\n  hosts:\n    - schemas.example.com\n",
+        "docmeta.config.yaml",
+      ).schemaTrust,
+    ).toEqual({ documentRefs: "any", hosts: ["schemas.example.com"] });
+  });
+
+  it("accepts every documented mode", () => {
+    for (const mode of ["any", "local", "none"]) {
+      expect(
+        parseConfig(`schemaTrust:\n  documentRefs: ${mode}\n`, "c.yaml")
+          .schemaTrust?.documentRefs,
+      ).toBe(mode);
+    }
+  });
+
+  it("is undefined when absent, so the default stays in one place", () => {
+    expect(
+      parseConfig("paths: ['a.md']\n", "docmeta.config.yaml").schemaTrust,
+    ).toBeUndefined();
+  });
+
+  it("rejects a non-mapping", () => {
+    expect(() => parseConfig("schemaTrust: local\n", "c.yaml")).toThrow(
+      /"schemaTrust" must be a mapping/,
+    );
+  });
+
+  // The failure worth catching: a misspelled nested key would otherwise be
+  // dropped in silence, leaving a config that reads as guarded and is not.
+  it("rejects an unknown key inside the mapping", () => {
+    expect(() =>
+      parseConfig("schemaTrust:\n  documentRef: local\n", "c.yaml"),
+    ).toThrow(/unknown key "documentRef"/);
+    expect(() =>
+      parseConfig("schemaTrust:\n  documentRef: local\n", "c.yaml"),
+    ).toThrow(/documentRefs, hosts/);
+  });
+
+  it("rejects a documentRefs value outside the three modes", () => {
+    expect(() =>
+      parseConfig("schemaTrust:\n  documentRefs: strict\n", "c.yaml"),
+    ).toThrow(/"schemaTrust.documentRefs" must be one of/);
+    expect(() =>
+      parseConfig("schemaTrust:\n  documentRefs: true\n", "c.yaml"),
+    ).toThrow(DocmetaError);
+  });
+
+  it("rejects hosts that is not a list of non-empty strings", () => {
+    expect(() =>
+      parseConfig("schemaTrust:\n  hosts: schemas.example.com\n", "c.yaml"),
+    ).toThrow(/"schemaTrust.hosts" must be a list/);
+    expect(() =>
+      parseConfig("schemaTrust:\n  hosts:\n    - 42\n", "c.yaml"),
+    ).toThrow(/"schemaTrust.hosts" must be a list/);
+    expect(() =>
+      parseConfig("schemaTrust:\n  hosts:\n    - '  '\n", "c.yaml"),
+    ).toThrow(DocmetaError);
+  });
+
+  it("carries a remedy in the message, not just a rule", () => {
+    expect(() =>
+      parseConfig("schemaTrust:\n  documentRefs: strict\n", "c.yaml"),
+    ).toThrow(/documentRefs: any/);
+  });
+});
+
+describe("schemaTrustRoot", () => {
+  let dir: string | undefined;
+  afterEach(() => {
+    removeTempRepo(dir);
+    dir = undefined;
+  });
+
+  it("reports the git root, from anywhere inside it", () => {
+    dir = makeTempRepo({ files: { "packages/docs/a.md": DOC } });
+    expect(schemaTrustRoot(dir)).toEqual({ dir, source: "git" });
+    // The monorepo case: a package deep inside still gets the repository, so a
+    // document referencing `../shared/x.json` stays inside the boundary.
+    expect(schemaTrustRoot(join(dir, "packages", "docs"))).toEqual({
+      dir,
+      source: "git",
+    });
+  });
+
+  it("falls back to the config directory when there is no repository", () => {
+    dir = makeTempRepo({ files: { "pkg/a.md": DOC }, init: false });
+    const configDir = join(dir, "pkg");
+    expect(schemaTrustRoot(dir, configDir)).toEqual({
+      dir: configDir,
+      source: "config",
+    });
+  });
+
+  it("falls back to cwd when there is neither a repository nor a config", () => {
+    dir = makeTempRepo({ files: { "a.md": DOC }, init: false });
+    // `source` distinguishes this from the config fallback above. A boolean
+    // could not, and the refusal message told someone with no config file that
+    // "the config's own directory is the boundary" — a file that is not there.
+    expect(schemaTrustRoot(dir)).toEqual({ dir, source: "cwd" });
   });
 });

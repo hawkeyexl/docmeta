@@ -31,6 +31,7 @@ export { loadConfig, parseConfig, resolveRunConfig } from "./core/config.js";
 export type {
   ConfigNotice,
   DocmetaConfig,
+  DocumentRefTrust,
   FillConfig,
   LoadedConfig,
   RunConfig,
@@ -38,6 +39,7 @@ export type {
   SchemaCacheConfig,
   SchemaEntry,
   SchemaRefEntry,
+  SchemaTrustConfig,
 } from "./core/config.js";
 export {
   listBuiltins,
