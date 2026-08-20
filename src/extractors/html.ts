@@ -16,14 +16,15 @@
  */
 import { parse, defaultTreeAdapter, type DefaultTreeAdapterMap } from "parse5";
 import { parse as parseYamlScalar } from "yaml";
+import {
+  escapePointerSegment,
+  positionForFactory,
+} from "./pointer.js";
 import type { ExtractedMetadata, MetadataExtractor } from "../types.js";
 
 type ChildNode = DefaultTreeAdapterMap["childNode"];
 type Element = DefaultTreeAdapterMap["element"];
 
-function escapePointerSegment(key: string): string {
-  return key.replace(/~/g, "~0").replace(/\//g, "~1");
-}
 
 /** Parse a raw value as a YAML scalar, falling back to the string. */
 function typeValue(raw: string): unknown {
@@ -37,33 +38,6 @@ function typeValue(raw: string): unknown {
   }
 }
 
-/**
- * Build a pointer -> position lookup over one map. Position-agnostic, so the
- * line map and the column map share exactly one resolution rule (exact hit,
- * then ancestor walk, then the document root) and cannot drift into answering
- * from different nodes.
- */
-function positionForFactory(
-  map: Map<string, number>,
-): (pointer: string) => number | undefined {
-  return (pointer: string) => {
-    // A bare top-level key (e.g. "type") maps to its "/type" JSON pointer.
-    const start =
-      pointer !== "" && !pointer.startsWith("/")
-        ? `/${escapePointerSegment(pointer)}`
-        : pointer;
-    if (map.has(start)) return map.get(start);
-    // Walk up to the nearest recorded ancestor (e.g. a nested Ajv pointer).
-    let p = start;
-    while (p.length > 0) {
-      const idx = p.lastIndexOf("/");
-      if (idx < 0) break;
-      p = p.slice(0, idx);
-      if (map.has(p)) return map.get(p);
-    }
-    return map.get("");
-  };
-}
 
 function attrValue(el: Element, name: string): string | undefined {
   return el.attrs.find((a) => a.name === name)?.value;
