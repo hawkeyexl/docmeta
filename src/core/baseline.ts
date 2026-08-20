@@ -13,6 +13,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import { DocmetaError, type FieldError, type ValidationResult } from "../types.js";
+import { stripBom } from "./json-text.js";
 import { classifyRef } from "./schema-registry.js";
 import { writeFileAtomic } from "./write-file.js";
 
@@ -167,7 +168,9 @@ function bad(source: string, detail: string): never {
 export function parseBaseline(text: string, source: string): Baseline {
   let raw: unknown;
   try {
-    raw = JSON.parse(text);
+    // A baseline is a committed file an editor may have re-saved. Nothing here
+    // hashes it, so this is purely the parsing concession. See `stripBom`.
+    raw = JSON.parse(stripBom(text));
   } catch (err) {
     bad(source, `invalid JSON: ${(err as Error).message}`);
   }

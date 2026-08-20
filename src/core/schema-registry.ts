@@ -7,6 +7,7 @@ import { readFile } from "node:fs/promises";
 import { resolve as resolvePath } from "node:path";
 import { Buffer } from "node:buffer";
 import { DocmetaError } from "../types.js";
+import { stripBom } from "./json-text.js";
 import {
   DEFAULT_TTL_HOURS,
   SchemaCache,
@@ -571,7 +572,10 @@ export async function fetchSchemaBytes(
     );
   }
 
-  const raw = bytes.toString("utf8");
+  // `bytes` is returned untouched below — `schemas vendor` hashes it and writes
+  // it, so the vendored copy is what the server actually sent. Only the string
+  // we parse loses the BOM. See `stripBom`.
+  const raw = stripBom(bytes.toString("utf8"));
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -849,7 +853,9 @@ export async function loadSchema(
   if (pin?.integrity !== undefined) {
     assertIntegrity(ref, bytes, pin, pin.integrity);
   }
-  const text = bytes.toString("utf8");
+  // After `assertIntegrity`, deliberately: the pin covers the bytes on disk,
+  // BOM and all. See `stripBom`.
+  const text = stripBom(bytes.toString("utf8"));
   try {
     return JSON.parse(text) as Record<string, unknown>;
   } catch (err) {
