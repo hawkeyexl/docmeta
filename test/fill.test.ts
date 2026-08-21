@@ -20,6 +20,7 @@ import {
   runFill,
   collectCandidates,
   collectDefs,
+  type FillOptions,
 } from "../src/commands/fill.js";
 import { buildEnvelopeSchema } from "../src/commands/fill-prompt.js";
 import { loadSchema } from "../src/core/schema-registry.js";
@@ -1238,25 +1239,23 @@ describe("provider selection", () => {
   });
 
   it("treats an omitted provider and an explicit auto identically", async () => {
-    const omitted = runFill({
-      ...base,
-      cwd: dir,
-      inputs: ["missing.md"],
-      dryRun: true,
-      inferenceProvider: propose({}),
-      model: "gpt-4o",
-    });
-    const explicit = runFill({
-      ...base,
-      cwd: dir,
-      inputs: ["missing.md"],
-      dryRun: true,
-      inferenceProvider: propose({}),
-      provider: "auto",
-      model: "gpt-4o",
-    });
-    await expect(omitted).rejects.toThrow(/--provider/);
-    await expect(explicit).rejects.toThrow(/--provider/);
+    // Awaited one at a time on purpose. Starting both first and attaching the
+    // matchers afterwards leaves the second promise rejected with no handler
+    // for the duration of the first `await`, which Node reports as an unhandled
+    // rejection and vitest turns into a failed run — intermittently, since it
+    // depends on which side settles first.
+    const run = (extra: Partial<FillOptions>) =>
+      runFill({
+        ...base,
+        cwd: dir,
+        inputs: ["missing.md"],
+        dryRun: true,
+        inferenceProvider: propose({}),
+        model: "gpt-4o",
+        ...extra,
+      });
+    await expect(run({})).rejects.toThrow(/--provider/);
+    await expect(run({ provider: "auto" })).rejects.toThrow(/--provider/);
   });
 
   it("reads the provider from config when no flag is given", async () => {
