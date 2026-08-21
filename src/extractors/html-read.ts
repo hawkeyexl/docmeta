@@ -12,7 +12,6 @@ import { parse, defaultTreeAdapter, type DefaultTreeAdapterMap } from "parse5";
 import { parse as parseYamlScalar } from "yaml";
 import { escapePointerSegment } from "./pointer.js";
 
-type ChildNode = DefaultTreeAdapterMap["childNode"];
 export type Element = DefaultTreeAdapterMap["element"];
 
 /** Where a key's winning value came from. */
@@ -46,7 +45,19 @@ export function attrValue(el: Element, name: string): string | undefined {
   return el.attrs.find((a) => a.name === name)?.value;
 }
 
-/** Read metadata, positions, and per-key provenance from HTML source. */
+/**
+ * Read metadata, positions, and per-key provenance from HTML source.
+ *
+ * **Known asymmetry:** this does not strip a leading BOM, while `applyHtml`
+ * does before it splices. Metadata still reads correctly either way — parse5
+ * recovers from the malformed markup a BOM produces, and a BOM'd document
+ * yields the same `data` as one without, measured. What a BOM does cost is
+ * *positions*: parse5 reports `<html>`/`<head>`/`<body>` as implied, with no
+ * source locations, and counts the BOM as a character so every column on line 1
+ * comes back one to the right. The writer strips for the first reason; the
+ * second is a reporting inaccuracy the reader still has. `xml-read.ts` strips
+ * and has neither problem — closing the gap here is a follow-up.
+ */
 export function readHtml(content: string): HtmlRead {
   const doc = parse(content, { sourceCodeLocationInfo: true });
 
@@ -73,7 +84,7 @@ export function readHtml(content: string): HtmlRead {
     if (col != null) colMap.set(pointer, col);
   };
 
-  const visit = (node: ChildNode): void => {
+  const visit = (node: DefaultTreeAdapterMap["childNode"]): void => {
     if (defaultTreeAdapter.isElementNode(node)) {
       const location = node.sourceCodeLocation;
       const line = location?.startLine;

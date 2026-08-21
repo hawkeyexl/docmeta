@@ -121,10 +121,11 @@ function metaEdit(
       `Refusing to write "${key}": its content attribute could not be located precisely.`,
     );
   }
+  const value = escapeAttr(emitted, span.quote);
   return {
     start: span.start,
     end: span.end,
-    text: escapeAttr(emitted, span.quote),
+    text: span.wrap ? span.quote + value + span.quote : value,
   };
 }
 
@@ -144,11 +145,16 @@ function titleEdit(
     );
   }
   // <title> is RCDATA, so markup is not parsed inside it, but an unescaped "<"
-  // still ends the element for some consumers. Escape defensively.
+  // still ends the element for some consumers. Escape defensively — including
+  // ">", which RCDATA does not require but linters and stricter parsers flag,
+  // and which `escapeAttr` already escapes on the attribute path.
   return {
     start: open.endOffset,
     end: close.startOffset,
-    text: emitted.replace(/&/g, "&amp;").replace(/</g, "&lt;"),
+    text: emitted
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;"),
   };
 }
 
@@ -190,7 +196,12 @@ function headStyle(
       };
     }
   }
-  return { eol: content.includes("\r\n") ? "\r\n" : "\n", indent: "  " };
+  // Reached only for an empty `<head></head>`, where there is no child to copy
+  // the style from. Look only at the text above the insertion point: a document
+  // that mixes endings — an LF head in a generator's CRLF body — would
+  // otherwise take its head's line ending from the body below it.
+  const above = content.slice(0, at);
+  return { eol: above.includes("\r\n") ? "\r\n" : "\n", indent: "  " };
 }
 
 function crlfAt(content: string, lineStart: number): boolean {
@@ -205,20 +216,30 @@ function attrValueSpan(
   content: string,
   start: number,
   end: number,
-): { start: number; end: number; quote: string } | undefined {
+): { start: number; end: number; quote: string; wrap: boolean } | undefined {
   const eq = content.indexOf("=", start);
   if (eq === -1 || eq >= end) return undefined;
   let i = eq + 1;
   while (i < end && /\s/.test(content[i] ?? "")) i++;
+  // Nothing but whitespace after the `=`. parse5 should never report an
+  // attribute that way, but falling through would return a zero-width span at
+  // `end`, and the write would *insert* beside the attribute rather than
+  // replace its value. `verify` would catch it; refusing here says which
+  // attribute could not be located instead of reporting a mismatch later.
+  if (i >= end) return undefined;
   const quote = content[i];
   if (quote === DQ || quote === SQ) {
     const close = content.indexOf(quote, i + 1);
     if (close === -1 || close > end) return undefined;
-    return { start: i + 1, end: close, quote };
+    return { start: i + 1, end: close, quote, wrap: false };
   }
-  // Unquoted value: it runs to the end of the attribute's range. Rewrite it
-  // quoted, since the new value may contain characters that need it.
-  return { start: i, end, quote: DQ };
+  // Unquoted value: it runs to the end of the attribute's range, and the
+  // replacement has to supply its own quotes — `wrap`. Leaving it bare would
+  // hold only while the new value had no spaces: `content=hello world`
+  // tokenizes as `content="hello"` plus a boolean `world` attribute, which the
+  // verify step then rejects with its generic message instead of the write
+  // simply working.
+  return { start: i, end, quote: DQ, wrap: true };
 }
 
 /** Emit a value the way the reader will parse it back: as a YAML scalar. */

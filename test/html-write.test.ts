@@ -63,6 +63,20 @@ describe("applyHtml — updating an existing value", () => {
     expect(read(out).type).toBe("reference");
   });
 
+  it("quotes an unquoted attribute when the new value needs it", () => {
+    // `content=hello world` would tokenize as content="hello" plus a boolean
+    // `world` attribute, so replacing an unquoted value has to supply quotes.
+    const src = "<html><head><meta name=type content=concept></head></html>";
+    const out = applyHtml(src, { type: "hello world" });
+    expect(read(out).type).toBe("hello world");
+    expect(out).toContain('content="hello world"');
+  });
+
+  it("leaves a simple unquoted replacement readable", () => {
+    const src = "<html><head><meta name=type content=concept></head></html>";
+    expect(read(applyHtml(src, { type: "reference" })).type).toBe("reference");
+  });
+
   it("writes title into the meta tag when one exists, not into <title>", () => {
     // The reader's precedence: a <meta name="title"> beats <title>, in either
     // order. Writing to <title> here would be silently ignored on read.
@@ -70,6 +84,18 @@ describe("applyHtml — updating an existing value", () => {
     const out = applyHtml(content, { title: "Chosen" });
     expect(read(out).title).toBe("Chosen");
     expect(out).toContain("<title>From the title element</title>");
+  });
+
+  it("updates a tag keyed by property= as readily as name=", () => {
+    // `readHtml` accepts either attribute for the key and records both the same
+    // way in `sources`, so `metaEdit` treats them identically by construction.
+    // This pins that, since OpenGraph-style tags are the reason `property` is
+    // read at all and nothing else exercises the write path for them.
+    const src =
+      '<html><head><meta property="og:title" content="Old"></head></html>';
+    const out = applyHtml(src, { "og:title": "New" });
+    expect(read(out)["og:title"]).toBe("New");
+    expect(out).toContain('property="og:title" content="New"');
   });
 
   it("falls back to the <title> text when the key has no meta tag", () => {
@@ -81,6 +107,13 @@ describe("applyHtml — updating an existing value", () => {
 });
 
 describe("applyHtml — inserting a new value", () => {
+  it("escapes markup characters written into <title>", () => {
+    const src = "<html><head><title>Old</title></head></html>";
+    const out = applyHtml(src, { title: 'a & b < c > d' });
+    expect(read(out).title).toBe("a & b < c > d");
+    expect(out).toContain("<title>a &amp; b &lt; c &gt; d</title>");
+  });
+
   it("inserts a meta tag after <head>, matching the existing indentation", () => {
     const content = fx("head-with-meta.html");
     const out = applyHtml(content, { audience: "developer" });
@@ -90,6 +123,19 @@ describe("applyHtml — inserting a new value", () => {
     expect(out.slice(out.indexOf("<body>"))).toBe(
       content.slice(content.indexOf("<body>")),
     );
+  });
+
+  it("takes an empty head's line ending from above it, not from the body", () => {
+    // No child inside <head> to copy the style from, so the fallback decides.
+    // Scanning the whole document would let a CRLF body dictate the ending
+    // used inside an LF head.
+    const src =
+      "<html>\n<head></head>\r\n<body>\r\n<p>x</p>\r\n</body>\r\n</html>";
+    const out = applyHtml(src, { type: "concept" });
+    expect(read(out).type).toBe("concept");
+    const head = out.slice(0, out.indexOf("</head>"));
+    expect(head).not.toContain("\r\n");
+    expect(head).toContain('\n  <meta name="type" content="concept">');
   });
 
   it("escapes markup characters in a written value", () => {
