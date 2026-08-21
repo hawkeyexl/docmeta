@@ -1494,6 +1494,7 @@ describe("usage errors exit 2 (0005 §4)", () => {
     ["get", ["get", "--nope"]],
     ["fill", ["fill", "--nope"]],
     ["schemas", ["schemas", "--nope"]],
+    ["schemas infer", ["schemas", "infer", "--nope"]],
   ])("an unknown option on %s exits 2", (_name, args) => {
     const r = runSync(args);
     expect(r.status).toBe(2);
@@ -1538,6 +1539,7 @@ describe("usage errors exit 2 (0005 §4)", () => {
     ["get --help", ["get", "--help"]],
     ["fill --help", ["fill", "--help"]],
     ["schemas --help", ["schemas", "--help"]],
+    ["schemas infer --help", ["schemas", "infer", "--help"]],
     // A third success code: commander.help, distinct from
     // commander.helpDisplayed and commander.version. Matching on `exitCode`
     // rather than a hand-written list of code strings is what covers it.
@@ -2035,5 +2037,96 @@ describe("docmeta CLI: schemaTrust (built bin)", () => {
     expect(r.stderr).toBe("");
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("1 passed");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// `docmeta schemas infer` (0010)
+// ---------------------------------------------------------------------------
+
+describe("schemas infer end to end", () => {
+  const fixtures = "test/fixtures/infer";
+
+  it("prints the coverage report and exits 0 — it reports, it does not judge", () => {
+    const r = run(["schemas", "infer", fixtures, "--no-config"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("8 files scanned");
+    // The frontmatter-free file gets its own line rather than a quieter
+    // denominator: it is the surprise the retrofit page warns about.
+    expect(r.stdout).toContain("1 with no metadata block");
+    expect(r.stdout).toMatch(/title\s+87\.5%/);
+    expect(r.stdout).toMatch(/lastReviewed\s+12\.5%/);
+    // The 4-versus-1 split reads as a data error, with a location.
+    expect(r.stdout).toContain("string ×4, number ×1");
+    expect(r.stdout).toMatch(/type-outlier\.md:4/);
+  });
+
+  /**
+   * The regression guard for a real false green: `schemas` declares its own
+   * `-f`, and commander binds a parent's option wherever it appears in the
+   * argv, so `schemas infer -f json` set the *parent's* format and the run
+   * answered in `pretty` with exit 0 — a request docmeta can honor, served in a
+   * format nobody asked for.
+   */
+  it("honors -f json written after the subcommand", () => {
+    const r = run(["schemas", "infer", fixtures, "--no-config", "-f", "json"]);
+    expect(r.status).toBe(0);
+    const report = JSON.parse(r.stdout) as {
+      filesScanned: number;
+      filesWithoutMetadata: number;
+      draft: Record<string, unknown>;
+    };
+    expect(report.filesScanned).toBe(8);
+    expect(report.filesWithoutMetadata).toBe(1);
+    expect(report.draft).not.toHaveProperty("required");
+  });
+
+  it("rejects an unsupported --format rather than falling through to pretty", () => {
+    const r = run(["schemas", "infer", fixtures, "-f", "github"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain('Unknown --format "github"');
+    expect(r.stdout).toBe("");
+  });
+
+  it("writes a draft with --out, then refuses to overwrite it", () => {
+    const repo = makeTempRepo({
+      files: { "docs/a.md": DOC, "docs/b.md": DOC },
+    });
+    try {
+      const first = run(
+        ["schemas", "infer", "docs", "--no-config", "--out", "./draft.json"],
+        undefined,
+        undefined,
+        repo,
+      );
+      expect(first.status).toBe(0);
+      expect(first.stdout).toContain("draft.json");
+      const draft = JSON.parse(
+        readFileSync(join(repo, "draft.json"), "utf8"),
+      ) as Record<string, unknown>;
+      expect(draft).not.toHaveProperty("required");
+      expect(draft.properties).toHaveProperty("title");
+
+      const again = run(
+        ["schemas", "infer", "docs", "--no-config", "--out", "./draft.json"],
+        undefined,
+        undefined,
+        repo,
+      );
+      expect(again.status).toBe(2);
+      expect(again.stderr).toMatch(/already exists/);
+      // Byte-identical: the refusal happened before anything was written.
+      expect(
+        JSON.parse(readFileSync(join(repo, "draft.json"), "utf8")),
+      ).toEqual(draft);
+    } finally {
+      removeTempRepo(repo);
+    }
+  });
+
+  it("--min-coverage must be a percentage", () => {
+    const r = run(["schemas", "infer", fixtures, "--min-coverage", "150"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("--min-coverage");
   });
 });

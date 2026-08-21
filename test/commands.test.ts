@@ -18,8 +18,11 @@ import { runFill } from "../src/commands/fill.js";
 import { MockProvider } from "@hawkeyexl/inference";
 import {
   getSchemasInfo,
+  runInferSchema,
   runVendorSchema,
   vendorFileName,
+  type InferKeyReport,
+  type InferResult,
 } from "../src/commands/schemas.js";
 import { DEFAULT_SCHEMAS } from "../src/core/resolve-schema.js";
 import { parseConfig } from "../src/core/config.js";
@@ -1440,5 +1443,440 @@ describe("0015 · a document-supplied path reaching out of the repository", () =
     // Spelled as the config wrote it: the config sits in the run's own
     // directory, so nothing is rebased, and nothing is contained either.
     expect(results[0]?.schemas).toEqual(["../outside.schema.json"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0010 — `docmeta schemas infer`
+// ---------------------------------------------------------------------------
+
+/** The committed docset with a hand-checkable key distribution. */
+const INFER_FIXTURES = join(here, "fixtures", "infer");
+
+/** Write a throwaway docset and return its directory. */
+async function makeDocset(files: Record<string, string>): Promise<string> {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), "docmeta-infer-")));
+  await Promise.all(
+    Object.entries(files).map(async ([rel, content]) => {
+      const abs = join(dir, rel);
+      await mkdir(dirname(abs), { recursive: true });
+      await writeFile(abs, content, "utf8");
+    }),
+  );
+  return dir;
+}
+
+/** Frontmatter from a plain object, so generated docsets stay one line each. */
+function doc(fields: Record<string, string>): string {
+  const body = Object.entries(fields)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join("\n");
+  return `---\n${body}\n---\n\n# Page\n`;
+}
+
+function keyNamed(result: InferResult, key: string): InferKeyReport {
+  const found = result.keys.find((k) => k.key === key);
+  if (!found) throw new Error(`no key "${key}" in the report`);
+  return found;
+}
+
+describe("runInferSchema coverage report (0010)", () => {
+  it("reports coverage per key against a known distribution", async () => {
+    const r = await runInferSchema({
+      inputs: ["."],
+      cwd: INFER_FIXTURES,
+      noConfig: true,
+    });
+    expect(r.filesScanned).toBe(8);
+    // 7 of 8 carry title and type; 5 carry owner; 2 carry tags; 1 lastReviewed.
+    expect(keyNamed(r, "title").coverage).toBeCloseTo(87.5, 5);
+    expect(keyNamed(r, "type").coverage).toBeCloseTo(87.5, 5);
+    expect(keyNamed(r, "owner").coverage).toBeCloseTo(62.5, 5);
+    expect(keyNamed(r, "tags").coverage).toBeCloseTo(25, 5);
+    expect(keyNamed(r, "lastReviewed").coverage).toBeCloseTo(12.5, 5);
+    expect(keyNamed(r, "owner").present).toBe(5);
+  });
+
+  it("counts files with no metadata block separately, not as a lower denominator", async () => {
+    const r = await runInferSchema({
+      inputs: ["."],
+      cwd: INFER_FIXTURES,
+      noConfig: true,
+    });
+    // The exact surprise retrofit.mdx warns about: these pass a
+    // require-nothing schema and fail the moment any key becomes required.
+    expect(r.filesWithoutMetadata).toBe(1);
+    // The denominator is every file scanned, so the frontmatter-free one drags
+    // coverage down rather than vanishing from the arithmetic.
+    expect(keyNamed(r, "title").present).toBe(7);
+    expect(keyNamed(r, "title").coverage).toBeCloseTo((7 / 8) * 100, 5);
+  });
+
+  it("keeps only top-level keys — `author.name` is a schema-authoring detail", async () => {
+    const dir = await makeDocset({
+      "a.md": "---\ntype: guide\nauthor:\n  name: Ada\n---\n",
+    });
+    try {
+      const r = await runInferSchema({ inputs: ["."], cwd: dir, noConfig: true });
+      expect(r.keys.map((k) => k.key).sort()).toEqual(["author", "type"]);
+      expect(keyNamed(r, "author").dominantType).toBe("object");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("hides keys below --min-coverage and says how many it hid", async () => {
+    const r = await runInferSchema({
+      inputs: ["."],
+      cwd: INFER_FIXTURES,
+      noConfig: true,
+      minCoverage: 50,
+    });
+    expect(r.keys.map((k) => k.key).sort()).toEqual(["owner", "title", "type"]);
+    expect(r.hiddenByMinCoverage).toBe(2);
+  });
+
+  it("accepts `-` for input-model parity, yielding a one-file report", async () => {
+    const r = await runInferSchema({
+      inputs: ["-"],
+      as: "markdown",
+      cwd: INFER_FIXTURES,
+      noConfig: true,
+      stdinContent: "---\ntype: guide\ntitle: Piped\n---\n",
+    });
+    expect(r.filesScanned).toBe(1);
+    expect(keyNamed(r, "title").coverage).toBe(100);
+  });
+
+  it("errors when there are no inputs and no config", async () => {
+    const dir = await makeDocset({ "a.md": doc({ type: "guide" }) });
+    try {
+      const err = await failure(
+        runInferSchema({ inputs: [], cwd: dir, noConfig: true }),
+      );
+      expect(err).toBeInstanceOf(DocmetaError);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("the inferred draft never requires anything (0010 stress test 1)", () => {
+  it("emits no `required` even where every key is at 100% coverage", async () => {
+    const dir = await makeDocset({
+      "a.md": doc({ type: "guide", title: "A" }),
+      "b.md": doc({ type: "guide", title: "B" }),
+      "c.md": doc({ type: "reference", title: "C" }),
+    });
+    try {
+      const r = await runInferSchema({ inputs: ["."], cwd: dir, noConfig: true });
+      expect(keyNamed(r, "title").coverage).toBe(100);
+      expect(keyNamed(r, "type").coverage).toBe(100);
+      // Not `[]` either: an empty `required` is still the tool speaking about
+      // policy, and the rule is that it never does. Walked rather than
+      // substring-matched, so a `required` nested under `properties` — the
+      // spelling a future subschema would use — cannot slip past.
+      const walk = (node: unknown): void => {
+        if (Array.isArray(node)) {
+          for (const item of node) walk(item);
+          return;
+        }
+        if (node !== null && typeof node === "object") {
+          expect(Object.keys(node)).not.toContain("required");
+          for (const value of Object.values(node)) walk(value);
+        }
+      };
+      walk(r.draft);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("constrains only what was observed: the type, and minLength on non-empty strings", async () => {
+    const r = await runInferSchema({
+      inputs: ["."],
+      cwd: INFER_FIXTURES,
+      noConfig: true,
+    });
+    const props = r.draft.properties as Record<string, unknown>;
+    expect(props.title).toEqual({ type: "string", minLength: 1 });
+    expect(props.tags).toEqual({ type: "array" });
+    expect(r.draft.$schema).toBe(
+      "https://json-schema.org/draft/2020-12/schema",
+    );
+  });
+
+  it("omits minLength when an empty string really was observed", async () => {
+    const dir = await makeDocset({
+      "a.md": '---\ntype: guide\nsummary: ""\n---\n',
+      "b.md": doc({ type: "guide", summary: "real" }),
+    });
+    try {
+      const r = await runInferSchema({ inputs: ["."], cwd: dir, noConfig: true });
+      const props = r.draft.properties as Record<string, unknown>;
+      expect(props.summary).toEqual({ type: "string" });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("dominant type, not a union (0010 stress test 3)", () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    const files: Record<string, string> = {};
+    // 900 files where `owner` is a string, 4 where someone wrote a number.
+    for (let i = 0; i < 900; i++) {
+      files[`s${i}.md`] = doc({ type: "guide", owner: "docs-team" });
+    }
+    for (let i = 0; i < 4; i++) {
+      files[`n${i}.md`] = doc({ type: "guide", owner: "7" });
+    }
+    dir = await makeDocset(files);
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("reports the distribution with counts and emits the dominant type alone", async () => {
+    const r = await runInferSchema({ inputs: ["."], cwd: dir, noConfig: true });
+    const owner = keyNamed(r, "owner");
+    expect(owner.types).toEqual([
+      { type: "string", count: 900 },
+      { type: "number", count: 4 },
+    ]);
+    expect(owner.dominantType).toBe("string");
+    const props = r.draft.properties as Record<string, { type?: unknown }>;
+    // A union would encode the typo as policy — stress test 1, one level down.
+    expect(props.owner?.type).toBe("string");
+  });
+
+  it("names each outlier with its file and line, so it reads as a data error", async () => {
+    const r = await runInferSchema({ inputs: ["."], cwd: dir, noConfig: true });
+    const owner = keyNamed(r, "owner");
+    expect(owner.outliers).toHaveLength(4);
+    for (const o of owner.outliers) {
+      expect(o.file).toMatch(/^n\d\.md$/);
+      expect(o.type).toBe("number");
+      // `owner:` is the third line: `---`, `type:`, `owner:`.
+      expect(o.line).toBe(3);
+    }
+  });
+});
+
+describe("enum candidates need both thresholds (0010 stress test 4)", () => {
+  const withTypes = (
+    count: number,
+    distinct: number,
+  ): Record<string, string> => {
+    const files: Record<string, string> = {};
+    for (let i = 0; i < count; i++) {
+      files[`p${i}.md`] = doc({ type: `kind-${i % distinct}` });
+    }
+    return files;
+  };
+
+  it("proposes an enum at 7 distinct values in a large docset", async () => {
+    const dir = await makeDocset(withTypes(140, 7));
+    try {
+      const r = await runInferSchema({ inputs: ["."], cwd: dir, noConfig: true });
+      const type = keyNamed(r, "type");
+      expect(type.distinct).toBe(7);
+      expect(type.enumValues).toHaveLength(7);
+      const props = r.draft.properties as Record<string, { enum?: unknown[] }>;
+      expect(props.type?.enum).toHaveLength(7);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("proposes none at 30 distinct values in a 30-file docset", async () => {
+    const dir = await makeDocset(withTypes(30, 30));
+    try {
+      const r = await runInferSchema({ inputs: ["."], cwd: dir, noConfig: true });
+      const type = keyNamed(r, "type");
+      expect(type.distinct).toBe(30);
+      expect(type.enumValues).toBeUndefined();
+      const props = r.draft.properties as Record<string, { enum?: unknown[] }>;
+      expect(props.type?.enum).toBeUndefined();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("samples the dominant type, not whichever value repeats most", async () => {
+    // Ranked across every type, a clustered outlier beats unique dominant
+    // values on count. 50 distinct string titles and three files writing
+    // `title: 42` made `42` the sample, so the row reported `string ×50,
+    // number ×3` and then offered a number as the representative value — three
+    // lines above naming those same three files as the outliers.
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 50; i++) {
+      files[`s${i}.md`] = doc({ type: "concept", title: `Unique title ${i}` });
+    }
+    for (let i = 0; i < 3; i++) {
+      files[`n${i}.md`] = doc({ type: "concept", title: "42" });
+    }
+    const dir = await makeDocset(files);
+    try {
+      const r = await runInferSchema({ inputs: ["."], cwd: dir, noConfig: true });
+      const title = keyNamed(r, "title");
+      expect(title.dominantType).toBe("string");
+      expect(title.outlierCount).toBe(3);
+      expect(typeof title.sample).toBe("string");
+      expect(title.sample).not.toBe(42);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("proposes none for a rare key whose every value is distinct", async () => {
+    // The ratio is measured against the files carrying the key, not against the
+    // corpus. Against the corpus this passed both thresholds — 5 distinct is
+    // under the absolute cap, and 5 is under 5% of 100 files — so a key used
+    // five times with five different values, which is what free text looks
+    // like, got an enum of exactly those five. The sixth value anyone wrote
+    // would then be rejected by a schema generated from their own docset.
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 100; i++) {
+      files[`f${i}.md`] =
+        i < 5
+          ? doc({ type: "concept", owner: `person-${i}` })
+          : doc({ type: "concept" });
+    }
+    const dir = await makeDocset(files);
+    try {
+      const r = await runInferSchema({ inputs: ["."], cwd: dir, noConfig: true });
+      const owner = keyNamed(r, "owner");
+      expect(owner.present).toBe(5);
+      expect(owner.distinct).toBe(5);
+      expect(owner.enumValues).toBeUndefined();
+      const props = r.draft.properties as Record<string, { enum?: unknown[] }>;
+      expect(props.owner?.enum).toBeUndefined();
+      // The control: `type` repeats across every file, so it is a vocabulary.
+      expect(props.type?.enum).toEqual(["concept"]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("proposes none at 7 distinct values in a 10-file docset — the ratio half", async () => {
+    // The absolute count alone would accept this. 7 distinct across 10 files is
+    // not a vocabulary; it is prose that happens to repeat.
+    const dir = await makeDocset(withTypes(10, 7));
+    try {
+      const r = await runInferSchema({ inputs: ["."], cwd: dir, noConfig: true });
+      expect(keyNamed(r, "type").distinct).toBe(7);
+      expect(keyNamed(r, "type").enumValues).toBeUndefined();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("schemas infer --out guards the draft it writes (0010)", () => {
+  it("refuses to overwrite an existing file, and writes nothing", async () => {
+    const dir = await makeDocset({
+      "a.md": doc({ type: "guide", title: "A" }),
+      "draft.json": '{"mine":true}\n',
+    });
+    try {
+      const err = await failure(
+        runInferSchema({
+          inputs: ["*.md"],
+          cwd: dir,
+          noConfig: true,
+          out: "draft.json",
+        }),
+      );
+      expect(err).toBeInstanceOf(DocmetaError);
+      expect(err.message).toMatch(/already exists/i);
+      expect(await readFile(join(dir, "draft.json"), "utf8")).toBe(
+        '{"mine":true}\n',
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a gitignored target, and writes nothing", async () => {
+    // A generated schema you cannot commit validates locally and is absent in
+    // CI — the same argument `vendor` makes about a vendored one.
+    const repo = makeTempRepo({
+      files: {
+        ".gitignore": "generated/\n",
+        "a.md": doc({ type: "guide", title: "A" }),
+      },
+    });
+    try {
+      const err = await failure(
+        runInferSchema({
+          inputs: ["*.md"],
+          cwd: repo,
+          noConfig: true,
+          out: "./generated/draft.json",
+        }),
+      );
+      expect(err).toBeInstanceOf(DocmetaError);
+      expect(err.message).toMatch(/ignored/i);
+      expect(err.message).toContain("generated");
+      expect(existsSync(join(repo, "generated"))).toBe(false);
+    } finally {
+      removeTempRepo(repo);
+    }
+  });
+
+  it("writes a parseable draft and reports where it landed", async () => {
+    const dir = await makeDocset({ "a.md": doc({ type: "guide", title: "A" }) });
+    try {
+      const r = await runInferSchema({
+        inputs: ["*.md"],
+        cwd: dir,
+        noConfig: true,
+        out: "./schemas/draft.json",
+      });
+      expect(r.out).toBe("schemas/draft.json");
+      const written: unknown = JSON.parse(
+        await readFile(join(dir, "schemas", "draft.json"), "utf8"),
+      );
+      expect(written).toEqual(r.draft);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("schemas infer is offline by design (0010 stress test 2)", () => {
+  let realFetch: typeof globalThis.fetch;
+  let attempted: string[];
+
+  // `infer` counts keys that are already structured; it resolves no schema and
+  // needs no provider. Failing the test on *any* request makes "no network" the
+  // assertion rather than a property of today's construction.
+  beforeEach(() => {
+    realFetch = globalThis.fetch;
+    attempted = [];
+    globalThis.fetch = ((input: Parameters<typeof fetch>[0]) => {
+      attempted.push(String(input));
+      return Promise.reject(new Error("the network is not available here"));
+    }) as typeof globalThis.fetch;
+  });
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  it("never reaches the network, even for a document naming a remote $schema", async () => {
+    const dir = await makeDocset({
+      "a.md":
+        "---\ntype: guide\n$schema: https://schemas.example.com/house/2.1.json\n---\n",
+    });
+    try {
+      const r = await runInferSchema({ inputs: ["."], cwd: dir, noConfig: true });
+      expect(r.filesScanned).toBe(1);
+      expect(attempted).toEqual([]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
