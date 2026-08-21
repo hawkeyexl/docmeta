@@ -1,3 +1,10 @@
+# [3.14.0-html-write.2](https://github.com/hawkeyexl/docmeta/compare/v3.14.0-html-write.1...v3.14.0-html-write.2) (2026-08-21)
+
+
+### Bug Fixes
+
+* **extractors:** quote an unquoted HTML attribute when rewriting it ([14c8993](https://github.com/hawkeyexl/docmeta/commit/14c8993570208b4ece8e2f0ac2317ecce589ca7d))
+
 # [3.14.0-html-write.1](https://github.com/hawkeyexl/docmeta/compare/v3.13.0...v3.14.0-html-write.1) (2026-08-21)
 
 
