@@ -117,10 +117,18 @@ the document. The test is whether you can find the exact character range the
 value occupies: fenced frontmatter can, because the write is a splice of the
 characters between the fences (`src/extractors/frontmatter-write.ts`), and so
 can HTML, because parse5 reports a byte range for every tag and attribute
-(`src/extractors/html-write.ts`). A format whose read is lossy should stay
-read-only rather than guess: `rst` and `asciidoc` write only into a fenced block
-that already exists, because their native docinfo and header syntax does not
-survive a round trip, and `xml` does not implement `apply` at all.
+(`src/extractors/html-write.ts`). XML needs one step more, because xmldom
+reports only where each attribute starts — `src/extractors/xml-locate.ts`
+rebuilds the range, and documents why its line index has to recognise six
+break forms rather than one. A format whose read is lossy should stay read-only
+rather than guess: `rst` and `asciidoc` write only into a fenced block that
+already exists, because their native docinfo and header syntax does not survive
+a round trip.
+
+A writer may also refuse a *particular* document rather than a whole format.
+`xml` writes plain XML but refuses DITA, because DITA keeps its metadata in a
+`<prolog>` element and a root attribute would fail its DTD. Refusing with a
+message that names the reason beats writing a file the user's toolchain rejects.
 
 Two rules apply to any writer you add:
 

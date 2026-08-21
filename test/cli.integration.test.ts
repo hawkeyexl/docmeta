@@ -498,7 +498,7 @@ describe("cli fill", () => {
     }[];
     expect(formats.find((f) => f.name === "markdown")?.writable).toBe(true);
     expect(formats.find((f) => f.name === "html")?.writable).toBe(true);
-    expect(formats.find((f) => f.name === "xml")?.writable).toBe(false);
+    expect(formats.find((f) => f.name === "xml")?.writable).toBe(true);
   });
 });
 
