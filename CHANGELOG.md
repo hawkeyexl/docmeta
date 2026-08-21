@@ -1,3 +1,12 @@
+# [3.14.0-dita-write.1](https://github.com/hawkeyexl/docmeta/compare/v3.13.0...v3.14.0-dita-write.1) (2026-08-21)
+
+
+### Features
+
+* **extractors:** read and write DITA prolog metadata ([1261fd9](https://github.com/hawkeyexl/docmeta/commit/1261fd95fc9d00d8dd39ae3663e6bed9cc6807bb))
+* **extractors:** write metadata back to HTML ([f085872](https://github.com/hawkeyexl/docmeta/commit/f0858726313359e6754fbb7f9d478c3ec5613326))
+* **extractors:** write metadata back to XML ([b4bf073](https://github.com/hawkeyexl/docmeta/commit/b4bf0737755c0d2ed51a0a66b9658fd0f6866213))
+
 # [3.13.0](https://github.com/hawkeyexl/docmeta/compare/v3.12.1...v3.13.0) (2026-08-21)
 
 
