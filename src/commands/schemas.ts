@@ -846,9 +846,15 @@ export async function runInferSchema(
     const outlierCount = [...stat.types.entries()]
       .filter(([type]) => type !== dominantType)
       .reduce((sum, [, count]) => sum + count, 0);
-    const sample = [...stat.values.values()].sort(
-      (a, b) => b.count - a.count,
-    )[0]?.value;
+    // From the dominant type only. Ranked across every type, a clustered
+    // *outlier* outranks unique dominant values: 50 distinct string titles and
+    // three files writing `title: 42` put `42` in the sample column, because it
+    // is the one value with a count above 1. The row then reported
+    // `string ×50, number ×3` and offered a number as the representative value,
+    // three lines above naming those same files as the outliers.
+    const sample = [...stat.values.values()]
+      .filter((v) => v.type === dominantType)
+      .sort((a, b) => b.count - a.count)[0]?.value;
     return {
       key,
       present: stat.present,

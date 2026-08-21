@@ -1705,6 +1705,32 @@ describe("enum candidates need both thresholds (0010 stress test 4)", () => {
     }
   });
 
+  it("samples the dominant type, not whichever value repeats most", async () => {
+    // Ranked across every type, a clustered outlier beats unique dominant
+    // values on count. 50 distinct string titles and three files writing
+    // `title: 42` made `42` the sample, so the row reported `string ×50,
+    // number ×3` and then offered a number as the representative value — three
+    // lines above naming those same three files as the outliers.
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 50; i++) {
+      files[`s${i}.md`] = doc({ type: "concept", title: `Unique title ${i}` });
+    }
+    for (let i = 0; i < 3; i++) {
+      files[`n${i}.md`] = doc({ type: "concept", title: "42" });
+    }
+    const dir = await makeDocset(files);
+    try {
+      const r = await runInferSchema({ inputs: ["."], cwd: dir, noConfig: true });
+      const title = keyNamed(r, "title");
+      expect(title.dominantType).toBe("string");
+      expect(title.outlierCount).toBe(3);
+      expect(typeof title.sample).toBe("string");
+      expect(title.sample).not.toBe(42);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("proposes none for a rare key whose every value is distinct", async () => {
     // The ratio is measured against the files carrying the key, not against the
     // corpus. Against the corpus this passed both thresholds — 5 distinct is
