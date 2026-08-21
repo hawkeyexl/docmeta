@@ -767,8 +767,8 @@ describe("write capability", () => {
     expect(out).toContain("description: A summary.");
   });
 
-  it("xml is read-only; html can be written", () => {
-    expect(xmlExtractor.apply).toBeUndefined();
+  it("xml and html can both be written", () => {
+    expect(typeof xmlExtractor.apply).toBe("function");
     expect(typeof htmlExtractor.apply).toBe("function");
   });
 
@@ -798,7 +798,7 @@ describe("write capability", () => {
     expect(byName.mdx).toBe(true);
     expect(byName.rst).toBe(true);
     expect(byName.asciidoc).toBe(true);
-    expect(byName.xml).toBe(false);
+    expect(byName.xml).toBe(true);
     expect(byName.html).toBe(true);
   });
 });

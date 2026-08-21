@@ -44,6 +44,13 @@ export type MetadataPatch = Record<string, unknown>;
 export interface ApplyOptions {
   /** Flavor to use when creating a block from scratch. Default "yaml". */
   newBlockFlavor?: FrontmatterFlavor;
+  /**
+   * The document's path, when the caller knows it. `extract` receives one and
+   * `apply` did not, which left a writer unable to use the extension as a
+   * signal — the XML writer needs it to tell a DITA topic from hand-rolled XML
+   * that happens to have a `<task>` root.
+   */
+  filePath?: string;
 }
 
 /** A pluggable metadata extractor for one document format. */

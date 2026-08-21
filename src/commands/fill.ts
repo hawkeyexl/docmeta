@@ -410,7 +410,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
     // metadata syntax, and finding that out afterwards means the call is
     // billed for a file that could never have been written.
     try {
-      extractor.apply(content, {});
+      extractor.apply(content, {}, { filePath: label });
     } catch (err) {
       return errorResult(label, extractor.name, (err as Error).message, schemaSet);
     }
@@ -536,7 +536,9 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
 
     let next: string;
     try {
-      next = extractor.apply(content, patchOf(writable));
+      next = extractor.apply(content, patchOf(writable), {
+        filePath: label,
+      });
     } catch (err) {
       return errorResult(
         label,

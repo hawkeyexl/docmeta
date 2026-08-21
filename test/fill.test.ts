@@ -669,6 +669,44 @@ describe("runFill — mechanical checks precede confidence", () => {
     expect(after.match(/name="timestamp"/g)).toHaveLength(1);
   });
 
+  it("writes XML metadata onto the root element, leaving the body alone", async () => {
+    const file = await stage("root-attrs.xml");
+    const before = await readFile(join(dir, file), "utf8");
+    const { results } = await runFill({
+      ...base,
+      cwd: dir,
+      inputs: [file],
+      inferenceProvider: propose({
+        description: { value: "A short summary.", confidence: 0.95 },
+      }),
+    });
+    expect(results[0]?.error).toBeUndefined();
+    const after = await readFile(join(dir, file), "utf8");
+    expect(after).toContain('description="A short summary."');
+    const marker = "<body>";
+    expect(after.slice(after.indexOf(marker))).toBe(
+      before.slice(before.indexOf(marker)),
+    );
+  });
+
+  it("refuses a DITA topic and says why, rather than breaking its DTD", async () => {
+    const file = await stage("topic.dita");
+    const before = await readFile(join(dir, file), "utf8");
+    const { results, summary } = await runFill({
+      ...base,
+      cwd: dir,
+      inputs: [file],
+      inferenceProvider: propose({
+        description: { value: "A short summary.", confidence: 0.95 },
+      }),
+    });
+    expect(results[0]?.error).toMatch(/DITA/);
+    expect(results[0]?.error).toMatch(/prolog/);
+    expect(summary.errors).toBe(1);
+    // Refused before inference, and nothing reached the disk.
+    expect(await readFile(join(dir, file), "utf8")).toBe(before);
+  });
+
   it("reports an unwritable document as a per-file error, not a run abort", async () => {
     const file = await stage("no-head.html");
     const { results, summary } = await runFill({
