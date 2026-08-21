@@ -21,6 +21,8 @@ export type HtmlSource =
 
 export interface HtmlRead {
   data: Record<string, unknown>;
+  /** The text actually parsed — the source minus any leading BOM. */
+  body: string;
   lineMap: Map<string, number>;
   colMap: Map<string, number>;
   /** The element each key's effective value was read from. */
@@ -45,21 +47,24 @@ export function attrValue(el: Element, name: string): string | undefined {
   return el.attrs.find((a) => a.name === name)?.value;
 }
 
-/**
- * Read metadata, positions, and per-key provenance from HTML source.
- *
- * **Known asymmetry:** this does not strip a leading BOM, while `applyHtml`
- * does before it splices. Metadata still reads correctly either way — parse5
- * recovers from the malformed markup a BOM produces, and a BOM'd document
- * yields the same `data` as one without, measured. What a BOM does cost is
- * *positions*: parse5 reports `<html>`/`<head>`/`<body>` as implied, with no
- * source locations, and counts the BOM as a character so every column on line 1
- * comes back one to the right. The writer strips for the first reason; the
- * second is a reporting inaccuracy the reader still has. `xml-read.ts` strips
- * and has neither problem — closing the gap here is a follow-up.
- */
-export function readHtml(content: string): HtmlRead {
-  const doc = parse(content, { sourceCodeLocationInfo: true });
+/** Read metadata, positions, and per-key provenance from HTML source. */
+export function readHtml(source: string): HtmlRead {
+  // A BOM is invisible in an editor, so letting the parser count it as a
+  // character puts every caret on line 1 one column to the right of what the
+  // reader sees. `xml-read.ts` has always stripped it for that reason.
+  //
+  // For HTML there is a second, sharper reason. The BOM is character data as
+  // far as the HTML parser is concerned, and it lands *before* `<html>` — which
+  // pushes parse5 into a mode where `<html>`, `<head>` and `<body>` are all
+  // reported as implied, with no source locations, even when the document
+  // spells them out. Everything downstream that needs to know where `<head>`
+  // is would then be looking at a document that appears not to have one.
+  //
+  // Stripping is safe for line numbers: the BOM sits on line 1 and removing it
+  // deletes no line. `body` is returned so a caller that splices — the writer —
+  // measures against the same text these positions describe.
+  const body = source.charCodeAt(0) === 0xfeff ? source.slice(1) : source;
+  const doc = parse(body, { sourceCodeLocationInfo: true });
 
   const data: Record<string, unknown> = {};
   const lineMap = new Map<string, number>();
@@ -127,5 +132,5 @@ export function readHtml(content: string): HtmlRead {
 
   for (const child of doc.childNodes) visit(child);
 
-  return { data, lineMap, colMap, sources, head };
+  return { data, body, lineMap, colMap, sources, head };
 }

@@ -660,6 +660,28 @@ describe("html extractor", () => {
     expect(r.colFor?.("/missing")).toBe(1);
   });
 
+  it("does not let a BOM shift the columns it reports", () => {
+    // A leading BOM is invisible in an editor, so counting it as a character
+    // puts every caret on line 1 one column to the right of what the reader
+    // sees. `xml-read.ts` has always stripped it for this reason; HTML did not.
+    //
+    // Only line 1 is affected, which makes this bite hardest on exactly the
+    // files most likely to carry a BOM: single-line generated or minified HTML
+    // out of a Windows toolchain.
+    //
+    // An inline string, not a fixture: git's `text=auto` can mangle a committed
+    // BOM, so a fixture would quietly stop testing what it claims
+    // (see `frontmatter-write.test.ts`).
+    const bom = String.fromCharCode(0xfeff);
+    const doc = '<html><head><meta name="type" content="concept"></head></html>';
+    const plain = htmlExtractor.extract(doc, "x.html");
+    const withBom = htmlExtractor.extract(bom + doc, "x.html");
+
+    expect(withBom.colFor?.("/type")).toBe(plain.colFor?.("/type"));
+    expect(withBom.lineFor("/type")).toBe(plain.lineFor("/type"));
+    expect(withBom.data).toEqual(plain.data);
+  });
+
   it("decodes HTML entities in values", () => {
     const r = htmlExtractor.extract(
       `<meta name="summary" content="A &amp; B">`,
