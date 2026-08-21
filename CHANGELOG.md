@@ -1,3 +1,10 @@
+# [3.13.0](https://github.com/hawkeyexl/docmeta/compare/v3.12.1...v3.13.0) (2026-08-21)
+
+
+### Features
+
+* **schemas:** report metadata coverage with `docmeta schemas infer` ([#96](https://github.com/hawkeyexl/docmeta/issues/96)) ([88492bb](https://github.com/hawkeyexl/docmeta/commit/88492bb9b1e59c749c17b33569a8f3d34aae2f26))
+
 ## [3.12.1](https://github.com/hawkeyexl/docmeta/compare/v3.12.0...v3.12.1) (2026-08-20)
 
 
