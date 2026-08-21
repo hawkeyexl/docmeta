@@ -63,6 +63,20 @@ describe("applyHtml — updating an existing value", () => {
     expect(read(out).type).toBe("reference");
   });
 
+  it("quotes an unquoted attribute when the new value needs it", () => {
+    // `content=hello world` would tokenize as content="hello" plus a boolean
+    // `world` attribute, so replacing an unquoted value has to supply quotes.
+    const src = "<html><head><meta name=type content=concept></head></html>";
+    const out = applyHtml(src, { type: "hello world" });
+    expect(read(out).type).toBe("hello world");
+    expect(out).toContain('content="hello world"');
+  });
+
+  it("leaves a simple unquoted replacement readable", () => {
+    const src = "<html><head><meta name=type content=concept></head></html>";
+    expect(read(applyHtml(src, { type: "reference" })).type).toBe("reference");
+  });
+
   it("writes title into the meta tag when one exists, not into <title>", () => {
     // The reader's precedence: a <meta name="title"> beats <title>, in either
     // order. Writing to <title> here would be silently ignored on read.

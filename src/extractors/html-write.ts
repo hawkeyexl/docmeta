@@ -121,10 +121,11 @@ function metaEdit(
       `Refusing to write "${key}": its content attribute could not be located precisely.`,
     );
   }
+  const value = escapeAttr(emitted, span.quote);
   return {
     start: span.start,
     end: span.end,
-    text: escapeAttr(emitted, span.quote),
+    text: span.wrap ? span.quote + value + span.quote : value,
   };
 }
 
@@ -205,7 +206,7 @@ function attrValueSpan(
   content: string,
   start: number,
   end: number,
-): { start: number; end: number; quote: string } | undefined {
+): { start: number; end: number; quote: string; wrap: boolean } | undefined {
   const eq = content.indexOf("=", start);
   if (eq === -1 || eq >= end) return undefined;
   let i = eq + 1;
@@ -214,11 +215,15 @@ function attrValueSpan(
   if (quote === DQ || quote === SQ) {
     const close = content.indexOf(quote, i + 1);
     if (close === -1 || close > end) return undefined;
-    return { start: i + 1, end: close, quote };
+    return { start: i + 1, end: close, quote, wrap: false };
   }
-  // Unquoted value: it runs to the end of the attribute's range. Rewrite it
-  // quoted, since the new value may contain characters that need it.
-  return { start: i, end, quote: DQ };
+  // Unquoted value: it runs to the end of the attribute's range, and the
+  // replacement has to supply its own quotes — `wrap`. Leaving it bare would
+  // hold only while the new value had no spaces: `content=hello world`
+  // tokenizes as `content="hello"` plus a boolean `world` attribute, which the
+  // verify step then rejects with its generic message instead of the write
+  // simply working.
+  return { start: i, end, quote: DQ, wrap: true };
 }
 
 /** Emit a value the way the reader will parse it back: as a YAML scalar. */
