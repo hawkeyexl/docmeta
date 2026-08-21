@@ -125,10 +125,13 @@ rather than guess: `rst` and `asciidoc` write only into a fenced block that
 already exists, because their native docinfo and header syntax does not survive
 a round trip.
 
-A writer may also refuse a *particular* document rather than a whole format.
-`xml` writes plain XML but refuses DITA, because DITA keeps its metadata in a
-`<prolog>` element and a root attribute would fail its DTD. Refusing with a
-message that names the reason beats writing a file the user's toolchain rejects.
+A writer may also need more than one strategy within a format. `xml` writes
+plain XML by setting a root attribute, but writes DITA into
+`<prolog><metadata><othermeta/></metadata></prolog>` (or `<topicmeta>` for a
+map), because DITA's DTD declares which root attributes a topic may carry and
+adding an undeclared one produces a file the user's toolchain rejects. Where a
+format has two such channels, `xml-read.ts` decides precedence once and reports
+it, and `dita-write.ts` aims at what it reports.
 
 Two rules apply to any writer you add:
 

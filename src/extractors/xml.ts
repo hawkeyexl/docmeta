@@ -27,8 +27,8 @@ export const xmlExtractor: MetadataExtractor = {
   // (`id`, `type`, `xml:lang`, …), so they need no extractor of their own.
   extensions: [".xml", ".dita", ".ditamap"],
   implemented: true,
-  extract(content): ExtractedMetadata {
-    return toExtracted(readXml(content));
+  extract(content, filePath): ExtractedMetadata {
+    return toExtracted(readXml(content, filePath));
   },
   apply: applyXml,
 };
