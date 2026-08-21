@@ -16,6 +16,7 @@ import { runGet } from "./commands/get.js";
 import {
   DEFAULT_VENDOR_DIR,
   getSchemasInfo,
+  runInferSchema,
   runVendorSchema,
 } from "./commands/schemas.js";
 import { runFill } from "./commands/fill.js";
@@ -40,6 +41,7 @@ import {
   renderFill,
 } from "./reporters/fill.js";
 import { renderGet } from "./reporters/get.js";
+import { renderInfer } from "./reporters/infer.js";
 import { shouldColor, palette } from "./reporters/color.js";
 
 function collect(value: string, prev: string[]): string[] {
@@ -65,6 +67,30 @@ function resolveColor(program: Command): boolean {
   // commander maps --no-color to opts.color === false.
   const noColor = program.opts().color === false;
   return shouldColor({ noColor, isTTY: Boolean(process.stdout.isTTY) });
+}
+
+/**
+ * The `--format` a subcommand was actually given, when its **parent** also
+ * declares one.
+ *
+ * commander lets an option declared on a parent be written anywhere in the
+ * argv, so `docmeta schemas infer -f json` binds `json` to the `schemas`
+ * command — `infer`'s own `--format` keeps its default and the run answers in
+ * `pretty`. Silently. That is the same false green `schemas -f github` was
+ * fixed for: a request docmeta could honor, answered in a format nobody asked
+ * for, with exit 0.
+ *
+ * `getOptionValueSource` is the public way to tell a typed value from a
+ * default, so this reads both commands and prefers whichever was actually
+ * typed, rather than depending on which one commander happens to bind to.
+ */
+function formatFor(command: Command, own: unknown): unknown {
+  if (command.getOptionValueSource("format") === "cli") return own;
+  const parent = command.parent;
+  if (parent && parent.getOptionValueSource("format") === "cli") {
+    return parent.opts().format;
+  }
+  return own;
 }
 
 /** A `--format` value one of the two-format commands (`get`, `schemas`) rejects. */
@@ -789,6 +815,87 @@ export function buildProgram(): Command {
           );
         }
         process.stdout.write(`${lines.join("\n")}\n`);
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  schemas
+    .command("infer")
+    .description(
+      "Report metadata coverage across a docset, and draft a schema from what is there",
+    )
+    .argument(
+      "[paths...]",
+      "files, directories, or globs to scan (use - for stdin)",
+    )
+    .option("--out <path>", "write the draft schema here")
+    // Default 0, and it must stay 0. A default that hid the long tail would
+    // hide exactly the "3% is one team's convention, not a standard" signal the
+    // report exists to surface.
+    .option(
+      "--min-coverage <pct>",
+      "hide keys below this coverage percentage",
+      parseFloat,
+      0,
+    )
+    .option("--ext <list>", "comma-separated extensions for directory walks")
+    .option("--exclude <glob>", "glob to exclude; repeatable", collect, [])
+    .option("--as <format>", "force an input format (e.g. markdown, mdx)")
+    .option(
+      "-f, --format <format>",
+      `output: ${COMMON_FORMATS.join(" | ")}`,
+      "pretty",
+    )
+    .option("-c, --config <path>", "path to a docmeta config file")
+    .option("--no-config", "ignore any discovered config file")
+    .addHelpText(
+      "after",
+      [
+        "",
+        "Examples:",
+        "  docmeta schemas infer docs/                  # what does this repo have?",
+        "  docmeta schemas infer docs/ --min-coverage 5 # drop the long tail",
+        "  docmeta schemas infer docs/ --out ./schemas/permissive.json",
+        "  docmeta schemas infer docs/ -f json",
+        "",
+        "Purely statistical and offline: no provider, no network, no model. The",
+        "draft never marks anything `required` — coverage is your decision to",
+        "make, not the tool's.",
+      ].join("\n"),
+    )
+    .action(async (paths: string[], options, command: Command) => {
+      try {
+        const format = assertCommonFormat(formatFor(command, options.format));
+        numeric("--min-coverage", options.minCoverage, 0, 100);
+        const exts: string[] | undefined = options.ext
+          ? splitList(String(options.ext))
+          : undefined;
+        const stdinContent = paths.includes(STDIN)
+          ? await readStdin()
+          : undefined;
+
+        const result = await runInferSchema({
+          inputs: paths,
+          exts,
+          exclude: options.exclude,
+          as: options.as,
+          ...configOption(options.config),
+          onConfigLoaded: reportConfig(format === "pretty", process.cwd()),
+          stdinContent,
+          out: options.out,
+          minCoverage: options.minCoverage,
+          onNotice: notice,
+        });
+
+        if (format === "json") {
+          process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+          return;
+        }
+        const text = renderInfer(result, {
+          color: resolveColor(command.parent?.parent ?? command),
+        });
+        process.stdout.write(`${text}\n`);
       } catch (err) {
         fail(err);
       }

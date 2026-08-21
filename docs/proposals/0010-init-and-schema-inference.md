@@ -1,9 +1,89 @@
 # 0010 — `docmeta init` and `docmeta schemas infer`
 
-- **Status:** Proposed
+- **Status:** Partly shipped — `schemas infer` landed; `init` deferred (see below)
 - **Serves:** Maya · M1 (the on-ramp), Sara · S1 (the missing first step)
 - **Relates to:** [0001](0001-validation-baseline.md) (infer → baseline → ratchet is the retrofit path), [0014](0014-empty-input-is-not-success.md)
-- **Touches:** new `src/commands/init.ts`, new `src/commands/infer.ts`, `src/cli.ts`
+- **Touches:** `src/commands/schemas.ts`, `src/reporters/infer.ts`, `src/cli.ts`
+
+## What shipped
+
+`docmeta schemas infer [paths...] [--out <path>] [--min-coverage <pct>]` lives in
+`src/commands/schemas.ts` beside `getSchemasInfo` and `runVendorSchema`, with the
+pretty renderer in `src/reporters/infer.ts`. Every stress test below stands, and
+each is covered by a test:
+
+- **Stress test 1** — the draft never emits `required`, at any coverage, under any
+  input. `test/commands.test.ts` walks the whole draft object rather than
+  substring-matching, so a nested `required` cannot slip past. No
+  `--require-above` flag was added, and none should be.
+- **Stress test 2** — offline is asserted, not assumed: the test replaces
+  `globalThis.fetch` with one that records and rejects, and asserts nothing was
+  attempted. `infer` resolves no schema, so a document naming a remote `$schema`
+  still costs no request.
+- **Stress test 3** — dominant type, with the distribution reported as
+  `string ×900, number ×4` and each outlier named by file and line via
+  `lineFor`.
+- **Stress test 4** — `enum` needs ≤ 20 distinct **and** ≤ 5% of files scanned.
+  Three tests: proposed at 7 distinct in 140 files, refused at 30 distinct in 30
+  files (the absolute half), refused at 7 distinct in 10 files (the ratio half).
+- **Stress test 9** — mostly paid by [0008](0008-remote-schema-durability.md)'s
+  `schemas vendor`, which made `schemas` a real group and taught
+  `scripts/check-cli-reference.mjs` to recurse. What `infer` paid is the shared
+  input model (`--ext`, `--exclude`, `--as`, `-c/--config`, `--no-config`,
+  `-f/--format`, positional `[paths...]`, `-` for stdin, config `paths:`
+  fallback), since it is the first path-taking command under the group.
+
+Two things the proposal did not anticipate:
+
+- **`runGet` was not reusable.** It is a projection — `values` is built by looping
+  over `opts.fields` and the full `extracted.data` is discarded — so the core
+  calls `extractorForExtension(...).extract(...)` and reads `data` whole.
+- **The `schemas` group swallowed `-f`.** commander binds an option declared on a
+  parent wherever it appears in the argv, so `docmeta schemas infer -f json` set
+  the *parent's* format and the run answered in `pretty`, silently, exit 0 — the
+  same false green `schemas -f github` was fixed for. `formatFor` in `src/cli.ts`
+  reads `getOptionValueSource` on both commands and prefers whichever was typed.
+  **`schemas vendor` still has the latent version of this** (`-f` on a vendor run
+  is accepted and ignored); it is harmless today because `vendor` has no format
+  to choose, but it is worth closing when that changes.
+
+Two deliberate limits, chosen rather than discovered:
+
+- **Top-level keys only.** Coverage of `author` is the standard-level question;
+  `author.name` is a schema-authoring detail settled while editing the draft.
+- **`--min-coverage` defaults to 0.** A default that hid the long tail would hide
+  exactly the "3% is one team's convention" signal the report exists to surface.
+
+The `--out` draft also emits `minLength: 1` on a string key where no empty value
+was ever observed. That is not in the proposal, and it is what makes `--out`
+produce the `schemas/permissive.json` that
+[the retrofit page](../src/content/docs/set-up/retrofit.mdx) previously asked the
+reader to hand-write — format enforcement without demanding any field be filled
+in. It is an observation, not a policy: a docset that really contains `title: ""`
+gets a bare `{"type": "string"}`.
+
+## Why `init` was deferred
+
+Not rejected — deferred, and the case for it got weaker on inspection. What it
+saves is typing a four-line `docmeta.config.yaml` that
+[retrofit](../src/content/docs/set-up/retrofit.mdx) and
+[the config reference](../src/content/docs/reference/configuration.mdx) already
+hand the reader in full, copy-pasteable. What it costs is stress tests 5 through
+8, all of which are real: refusing to overwrite an existing config, warning about
+an **ancestor** config that [0004](0004-config-upward-discovery.md)'s upward walk
+would let a new one silently shadow, sequencing detection so it never writes a
+config that [0014](0014-empty-input-is-not-success.md) then makes exit 2, and
+choosing among several plausible `paths:` candidates without guessing quietly.
+
+That is four hazards, each with a failure mode measured in confused hours, for a
+saving measured in seconds of typing. `schemas infer` was the half of this
+proposal with the asymmetry the other way round: nothing else in docmeta could
+answer "what metadata do we actually have?", and the retrofit page had a dangling
+forward reference to a coverage probe that did not exist.
+
+If `init` is revisited, stress test 10 still holds: it must not also infer a
+schema, or it produces a config plus a schema that ratifies the current state in
+one step — stress test 1's failure, automated.
 
 ## Problem
 
@@ -180,19 +260,27 @@ your own. The M1 retrofit path is then explicit and honest:
 
 ## Implementation sketch
 
-1. `test/init.test.ts` — detection picks conventional dirs; multiple candidates all
-   reported; zero candidates writes nothing and errors.
-2. `test/init.test.ts` — refuses an existing config; `--force` overwrites; warns on
-   an ancestor config.
-3. `test/init.test.ts` — `--yes` needs no TTY; output is deterministic.
-4. `test/infer.test.ts` — coverage percentages against a fixture docset with known
-   key distribution.
-5. `test/infer.test.ts` — dominant-type selection with a 900/4 split; outliers
-   named in the report; draft emits no `required` under any input.
-6. `test/infer.test.ts` — enum proposed at 7 distinct values, not proposed at 30
-   distinct in a 30-file set.
-7. Fixtures: `test/fixtures/infer/` with ~8 files covering full, partial, and rare
-   keys plus one type outlier.
-8. Docs: a new `get-started` or `set-up` page for the retrofit path, plus
-   `reference/cli.mdx` for both commands (`docs:check-cli` enforces the full
-   flag surface, including the `schemas` group restructure).
+Steps 1–3 covered `init` and are deferred with it. What shipped for
+`schemas infer`, and where it lives:
+
+1. `test/commands.test.ts` — coverage percentages against `test/fixtures/infer/`,
+   with the core called directly and an explicit `cwd:`.
+2. `test/commands.test.ts` — dominant-type selection over a generated 900/4
+   split; outliers named with file and line; the draft emits no `required` under
+   any input, asserted by walking the object.
+3. `test/commands.test.ts` — enum proposed at 7 distinct in 140 files, refused at
+   30 distinct in 30 files, refused at 7 distinct in 10 files.
+4. `test/commands.test.ts` — `--out` refuses to overwrite and refuses a gitignored
+   target, and in both cases **nothing is written**; the gitignore case uses
+   `makeTempRepo`.
+5. `test/commands.test.ts` — a `fetch` that records and rejects proves the run
+   never touches the network.
+6. `test/cli.integration.test.ts` — the report end to end, `-f json` written
+   *after* the subcommand, `--out` twice, plus the unknown-option and `--help`
+   tables.
+7. Fixtures: `test/fixtures/infer/`, eight files covering full, partial, and rare
+   keys, one type outlier on a key the default schemas do not constrain, and one
+   file with no frontmatter at all.
+8. Docs: `reference/cli.mdx` gained a `schemas infer` section, and
+   `set-up/retrofit.mdx` gained the coverage probe its own caution had already
+   promised — the dangling forward reference this work existed to close.

@@ -11,8 +11,10 @@ import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
     descriptions are free-form. */}
 
 docmeta exposes four subcommands: [`validate`](#validate) (the default),
-[`get`](#get), [`fill`](#fill), and [`schemas`](#schemas). `validate`, `get`, and
-`fill` share an [input model](#shared-input-model) and several flags with
+[`get`](#get), [`fill`](#fill), and [`schemas`](#schemas), the last of which is a
+group with its own [`infer`](#schemas-infer) and [`vendor`](#schemas-vendor)
+subcommands. `validate`, `get`, `fill`, and `schemas infer` — every command that
+takes paths — share an [input model](#shared-input-model) and several flags with
 identical semantics.
 
 ```sh
@@ -442,8 +444,9 @@ cat page.md | docmeta fill - --as markdown   # filled document to stdout
 ## `schemas`
 
 List the built-in schemas and the supported input formats. On its own it takes
-no positional arguments and reads no files. Its [`vendor`](#schemas-vendor)
-subcommand is the one that reaches the network and writes to the repository.
+no positional arguments and reads no files. Its [`infer`](#schemas-infer)
+subcommand reads your documents; its [`vendor`](#schemas-vendor) subcommand is
+the one that reaches the network and writes to the repository.
 
 ```sh
 docmeta schemas [options]
@@ -465,6 +468,104 @@ each input format with its extensions, whether it is implemented, and whether
 ```sh
 docmeta schemas
 docmeta schemas -f json
+```
+
+## `schemas infer`
+
+Report what metadata your documents already carry, and draft a schema from it.
+Purely statistical and **offline**: no inference provider, no network, no model.
+It reads the metadata blocks, counts them, and prints a table.
+
+```sh
+docmeta schemas infer [paths...] [options]
+```
+
+### Arguments
+
+| Argument | Description |
+|---|---|
+| `[paths...]` | Files, directories, or globs to scan. Use `-` to read from stdin. Optional — falls back to config `paths:`. See the [shared input model](#shared-input-model). |
+
+### Options
+
+| Option | Argument | Default | Description |
+|---|---|---|---|
+| `--out` | `<path>` | — | Write the draft schema to this file. Refuses to overwrite an existing file, and refuses a path `.gitignore` covers — see below. |
+| `--min-coverage` | `<pct>` | `0` | Hide keys below this coverage percentage. The default shows everything, deliberately: the long tail is where "one team's convention" hides. |
+| `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
+| `--exclude` | `<glob>` | — | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
+| `--as` | `<format>` | — | Force an input [format](/docmeta/reference/formats/) (extractor name, e.g. `markdown`). Required when reading from stdin. |
+| `-f, --format` | `<pretty\|json>` | `pretty` | Output format. Anything else is a usage error (exit `2`). |
+| `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). When set, the file must exist or docmeta exits 2. |
+| `--no-config` | — | off | Ignore any discovered config file. `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
+
+### Reading the report
+
+```
+1,204 files scanned · 38 with no metadata block
+
+key            coverage  types            sample
+title             99.8%  string           "Getting started"
+type              61.4%  string (7 enum)  guide | reference | how-to | …
+owner             12.0%  string           "docs-team"
+lastReviewed       3.2%  string (date)    "2026-04-01"
+```
+
+Each column answers one question:
+
+| Column | What it tells you |
+|---|---|
+| **coverage** | Near 100% means you can make it `required` today. Middling means require it behind a [baseline](#baselines) ratchet. Low single digits means it is one team's convention, not a standard. |
+| **types** | A distribution with counts. `string ×900, number ×4` is four data errors, not a type union — the four are listed by file and line beneath the table. |
+| **sample** | What the values look like, which is what tells you whether the key means what its name suggests. |
+
+**Files with no metadata block get their own line**, not a quieter denominator.
+They pass a require-nothing schema and fail the moment any key becomes
+`required`, so their count is the number you need before you ratchet.
+
+`infer` always exits `0` when it produced a report. It has no findings and no
+verdict; it is a measurement, and the decisions are yours.
+
+### The draft schema
+
+`--out` writes a schema that **requires nothing** and constrains only what was
+observed: the dominant type per key, `minLength: 1` on a string key where no
+empty value was ever seen, and an `enum` where the values are plainly a
+vocabulary.
+
+<Aside type="caution" title="`infer` never writes `required`">
+Not under any flag, and there is deliberately no `--require-above <pct>`. What
+your docset happens to contain is not the same thing as what your standard
+should demand, and a tool that turned 61% coverage into a rule would be
+laundering the status quo into policy. Promote a key into `required` yourself,
+one at a time, with [`--write-baseline`](#baselines) behind it.
+</Aside>
+
+Two more rules keep the draft honest:
+
+- **Dominant type, never a union.** A key that is a `string` in 900 files and a
+  `number` in 4 gets `"type": "string"`, and the four are named in the report as
+  the data errors they are. A union would encode the typo as the contract.
+- **`enum` only when the values are a vocabulary.** At most 20 distinct values,
+  **and** at most 5% of the files scanned. Both conditions: a 30-file repo where
+  every `title` is unique passes a ratio test alone and would produce a 30-value
+  `enum` for prose.
+
+`--out` refuses to overwrite an existing file — the draft is a starting point you
+then edit, and clobbering it would throw the edits away — and refuses a path
+`.gitignore` covers, for the same reason [`vendor`](#schemas-vendor) does: a
+generated schema you cannot commit validates on your machine and is simply
+absent in CI.
+
+Only **top-level keys** are reported. Whether `author` is present across the
+docset is the standard-level question; whether `author.name` exists is a
+schema-authoring detail you settle while editing the draft.
+
+```sh
+docmeta schemas infer docs/
+docmeta schemas infer docs/ --min-coverage 5
+docmeta schemas infer docs/ --out ./schemas/permissive.json
+docmeta schemas infer docs/ -f json
 ```
 
 ## `schemas vendor`

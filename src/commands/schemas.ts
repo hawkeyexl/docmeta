@@ -1,10 +1,11 @@
 /**
  * `schemas` command core. Reports built-in schemas and supported input formats,
- * and vendors a remote schema into the repository.
+ * vendors a remote schema into the repository, and infers a coverage report
+ * (plus a draft schema) from the metadata a docset already carries.
  */
 import { existsSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { Buffer } from "node:buffer";
 import { parseDocument, stringify } from "yaml";
 import { DocmetaError } from "../types.js";
@@ -13,10 +14,28 @@ import {
   listBuiltins,
   type BuiltinInfo,
 } from "../core/schema-registry.js";
-import { listFormats } from "../extractors/index.js";
+import {
+  extractorByName,
+  extractorForExtension,
+  listFormats,
+  supportedExtensions,
+} from "../extractors/index.js";
 import { integrityOf } from "../core/integrity.js";
 import { gitIgnored } from "../core/gitignore.js";
-import { parseConfig, loadConfig, type SchemaEntry } from "../core/config.js";
+import {
+  parseConfig,
+  loadConfig,
+  resolveRunConfig,
+  type ConfigNotice,
+  type SchemaEntry,
+} from "../core/config.js";
+import {
+  assertNonEmpty,
+  gitignoreOptions,
+  resolveTargetSet,
+  STDIN_LABEL,
+  STDIN_TOKEN,
+} from "../core/load-files.js";
 import { writeFileAtomic } from "../core/write-file.js";
 
 export interface SchemasInfo {
@@ -147,6 +166,7 @@ async function assertNotIgnored(
   absDir: string,
   cwd: string,
   onNotice: ((message: string) => void) | undefined,
+  text: IgnoreGuardText = VENDOR_IGNORE_TEXT,
 ): Promise<void> {
   const relFile = posixRelative(cwd, absFile);
   const relDir = posixRelative(cwd, absDir);
@@ -157,9 +177,7 @@ async function assertNotIgnored(
 
   const answer = await gitIgnored(candidates, cwd);
   if (!answer.available) {
-    onNotice?.(
-      `could not check .gitignore for "${relDir || "."}" (no repository here, or no git on PATH). A vendored schema must be committed — make sure this path is tracked.`,
-    );
+    onNotice?.(text.unchecked(relDir || "."));
     return;
   }
 
@@ -173,10 +191,39 @@ async function assertNotIgnored(
   // answer for the file underneath it. Which of the two matched is therefore a
   // fact about the pattern's shape, not about which rule the user should edit,
   // so the remedy names both routes rather than guessing.
-  throw new DocmetaError(
-    `Refusing to vendor into "${ignoredDir ? relDir : relFile}": git reports it as ignored. A vendored schema has to be committed — an ignored copy validates on this machine and is simply missing in CI, where the failure reads as a schema nobody changed. Vendor into a directory your repository tracks (\`--dir\`, default \`${DEFAULT_VENDOR_DIR}\`), or drop the .gitignore rule covering this path.`,
-  );
+  throw new DocmetaError(text.refusal(ignoredDir ? relDir : relFile));
 }
+
+/**
+ * The two messages the guard above needs, so the *mechanic* is shared and the
+ * *wording* is not.
+ *
+ * `vendor` and `infer --out` refuse for the same structural reason — a file git
+ * ignores is present locally and absent in CI — but the remedy differs (`--dir`
+ * versus `--out`), and a message naming the wrong flag sends the reader to the
+ * wrong place. Parameterizing beat writing a second copy of the three-state
+ * logic, which is where the subtle half of this check lives.
+ */
+interface IgnoreGuardText {
+  /** Git says the path is ignored. `target` is whichever spelling matched. */
+  refusal(target: string): string;
+  /** Git could not answer at all. `where` is the directory, or ".". */
+  unchecked(where: string): string;
+}
+
+const VENDOR_IGNORE_TEXT: IgnoreGuardText = {
+  refusal: (target) =>
+    `Refusing to vendor into "${target}": git reports it as ignored. A vendored schema has to be committed — an ignored copy validates on this machine and is simply missing in CI, where the failure reads as a schema nobody changed. Vendor into a directory your repository tracks (\`--dir\`, default \`${DEFAULT_VENDOR_DIR}\`), or drop the .gitignore rule covering this path.`,
+  unchecked: (where) =>
+    `could not check .gitignore for "${where}" (no repository here, or no git on PATH). A vendored schema must be committed — make sure this path is tracked.`,
+};
+
+const DRAFT_IGNORE_TEXT: IgnoreGuardText = {
+  refusal: (target) =>
+    `Refusing to write the draft schema into "${target}": git reports it as ignored. A generated schema you cannot commit validates on this machine and is simply absent in CI, where the failure reads as a schema nobody changed. Pass an --out path your repository tracks, or drop the .gitignore rule covering this one.`,
+  unchecked: (where) =>
+    `could not check .gitignore for "${where}" (no repository here, or no git on PATH). A draft schema has to be committed to be worth anything in CI — make sure this path is tracked.`,
+};
 
 /**
  * Fold the vendored entry into a `schemas:` list.
@@ -331,5 +378,521 @@ export async function runVendorSchema(
     configCreated: loaded === null,
     replaced: folded.replaced,
     unchanged,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// `docmeta schemas infer` (0010)
+//
+// Purely statistical and **offline**: no provider, no network, no schema
+// resolution. It counts the metadata keys a docset already carries, so the
+// question "should I require this field?" has an answer before anyone edits a
+// schema. The coverage report is the product; the draft schema is a by-product.
+//
+// Deliberate limits, stated here rather than discovered later:
+//
+// - **Top-level keys only.** Coverage of `author` is the standard-level
+//   question; `author.name` is a schema-authoring detail, and reporting both
+//   would bury the first under the second on any docset with nested metadata.
+// - **`-` (stdin) is accepted** for input-model parity, and yields a one-file
+//   report. Not useful, not wrong: excluding it would be the exceptional case
+//   needing an argument, and every other path-taking command takes it.
+// - **`--min-coverage` defaults to 0.** A default that hid the long tail would
+//   hide exactly the "3% is one team's convention, not a standard" signal the
+//   report exists to surface.
+// ---------------------------------------------------------------------------
+
+/** Draft schemas are written against the same dialect the built-ins use. */
+const DRAFT_DIALECT = "https://json-schema.org/draft/2020-12/schema";
+
+/**
+ * Enum thresholds — **both** must hold (0010 stress test 4).
+ *
+ * The absolute cap alone would turn a 10-file repo with 7 hand-written `type`
+ * values into a 7-value vocabulary; the ratio alone would turn a 30-file repo
+ * of unique titles into a 30-value enum for prose.
+ */
+const ENUM_MAX_DISTINCT = 20;
+const ENUM_MAX_DISTINCT_RATIO = 0.05;
+
+/**
+ * How many distinct values are tracked per key before counting stops.
+ *
+ * Only the report's `distinct` column is affected, and it says so via
+ * `distinctCapped`. The enum decision is unaffected: a key past this cap is
+ * orders of magnitude past `ENUM_MAX_DISTINCT` already.
+ */
+const DISTINCT_CAP = 1000;
+
+/** Outlier locations kept per non-dominant type, so one bad key cannot blow up memory. */
+const OUTLIER_SAMPLE_CAP = 20;
+
+export interface InferOptions {
+  /** Positional inputs: files, directories, globs, and `-` for stdin. */
+  inputs: string[];
+  as?: string;
+  exclude?: string[];
+  exts?: string[];
+  configPath?: string;
+  /** `--no-config`: skip config discovery and use the built-in defaults. */
+  noConfig?: boolean;
+  cwd?: string;
+  /** Content for the `-` (stdin) input, injected by the CLI/tests. */
+  stdinContent?: string;
+  /** `--out`: write the draft schema here, relative to `cwd`. */
+  out?: string;
+  /** `--min-coverage`: hide keys below this percentage. 0–100, default 0. */
+  minCoverage?: number;
+  /** Diagnostics for the user; the CLI writes these to stderr. */
+  onNotice?: (message: string) => void;
+  /** Called once when a config governs the run, so the CLI can report it. */
+  onConfigLoaded?: (info: ConfigNotice) => void;
+}
+
+/** One observed type and how many files carried the key at that type. */
+export interface InferTypeCount {
+  type: string;
+  count: number;
+}
+
+/** A file whose value for a key is not the dominant type. */
+export interface InferOutlier {
+  file: string;
+  /** 1-based source line, when the extractor knows one. */
+  line?: number;
+  type: string;
+}
+
+export interface InferKeyReport {
+  key: string;
+  /** Files carrying this key. */
+  present: number;
+  /** `present` as a percentage of every file scanned, 0–100. */
+  coverage: number;
+  /** Observed types with counts, most common first. */
+  types: InferTypeCount[];
+  /** The type the draft encodes. Never a union — see stress test 3. */
+  dominantType: string;
+  /** Files at some other type, with locations. Capped; see `outlierCount`. */
+  outliers: InferOutlier[];
+  /** Every non-dominant occurrence, including any beyond `outliers`. */
+  outlierCount: number;
+  /** Distinct values seen, across all types. */
+  distinct: number;
+  /** Whether `distinct` stopped counting at `DISTINCT_CAP`. */
+  distinctCapped: boolean;
+  /** The candidate vocabulary, when both enum thresholds hold. */
+  enumValues?: unknown[];
+  /** The most common value, for the report's sample column. */
+  sample?: unknown;
+  /** `date`, `date-time`, or `uri` when every observed string matched one. */
+  format?: string;
+}
+
+export interface InferResult {
+  /** Every file read, including those with no metadata block. */
+  filesScanned: number;
+  /**
+   * Files with no metadata block at all. Reported on its own line rather than
+   * folded into a denominator: these pass a require-nothing schema and fail the
+   * moment any key becomes required, which is the surprise worth naming.
+   */
+  filesWithoutMetadata: number;
+  /** Files whose metadata block could not be parsed, with the reason. */
+  unreadable: { file: string; message: string }[];
+  /** Keys at or above `--min-coverage`, most-covered first. */
+  keys: InferKeyReport[];
+  /** Keys `--min-coverage` removed from `keys`. */
+  hiddenByMinCoverage: number;
+  /** The draft schema. Always produced; `--out` decides whether it is written. */
+  draft: Record<string, unknown>;
+  /** Where the draft was written, posix-relative to `cwd`. Absent without `--out`. */
+  out?: string;
+  /** Candidate documents `.gitignore` removed from the walk. */
+  gitignoreSkipped: number;
+}
+
+/** Everything accumulated for one top-level key while scanning. */
+interface KeyStats {
+  present: number;
+  /** type -> files seen at that type. */
+  types: Map<string, number>;
+  /** type -> where they were, capped at OUTLIER_SAMPLE_CAP each. */
+  locations: Map<string, InferOutlier[]>;
+  /** JSON of the value -> the value, its count, and its type. */
+  values: Map<string, { value: unknown; count: number; type: string }>;
+  distinctCapped: boolean;
+  /** Whether an empty string was ever the value. Gates `minLength: 1`. */
+  sawEmptyString: boolean;
+}
+
+/**
+ * The JSON Schema type name for a runtime value.
+ *
+ * Integers are **not** split out from `number`. JSON Schema's `number` already
+ * accepts them, and separating the two would report a key written `2` in some
+ * files and `2.5` in others as having outliers it does not have.
+ *
+ * A `Date` reaches here only from TOML frontmatter, whose parser materializes
+ * timestamps. It is reported as `string`, because that is how every other
+ * frontmatter flavor carries a date and the draft describes the metadata
+ * standard rather than one parser's object graph.
+ */
+function jsonTypeOf(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  if (value instanceof Date) return "string";
+  switch (typeof value) {
+    case "string":
+      return "string";
+    case "number":
+    case "bigint":
+      return "number";
+    case "boolean":
+      return "boolean";
+    default:
+      return "object";
+  }
+}
+
+/** The comparable form of a value: a Date is its ISO spelling, per `jsonTypeOf`. */
+function normalizeValue(value: unknown): unknown {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? String(value) : value.toISOString();
+  }
+  return value;
+}
+
+const FORMAT_TESTS: [string, RegExp][] = [
+  ["date", /^\d{4}-\d{2}-\d{2}$/],
+  ["date-time", /^\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}/],
+  ["uri", /^[a-z][a-z0-9+.-]*:\/\//i],
+];
+
+/**
+ * A format annotation for the report's types column — `string (date)`.
+ *
+ * Report only. It is **not** written into the draft: whether `2026-04-01` is
+ * *required* to be a date, or merely what everyone happened to write, is a
+ * policy call, and the draft's rule is to encode only the shape it observed
+ * (stress test 1). Skipped entirely once distinct counting was capped, since a
+ * claim about "every value" cannot be made from a truncated sample.
+ */
+function formatOf(stats: KeyStats, dominantType: string): string | undefined {
+  if (dominantType !== "string" || stats.distinctCapped) return undefined;
+  const strings = [...stats.values.values()]
+    .filter((v) => v.type === "string")
+    .map((v) => String(v.value));
+  if (strings.length === 0) return undefined;
+  for (const [name, re] of FORMAT_TESTS) {
+    if (strings.every((s) => re.test(s))) return name;
+  }
+  return undefined;
+}
+
+function emptyStats(): KeyStats {
+  return {
+    present: 0,
+    types: new Map(),
+    locations: new Map(),
+    values: new Map(),
+    distinctCapped: false,
+    sawEmptyString: false,
+  };
+}
+
+function recordValue(
+  stats: KeyStats,
+  label: string,
+  value: unknown,
+  line: number | undefined,
+): void {
+  const type = jsonTypeOf(value);
+  stats.present += 1;
+  stats.types.set(type, (stats.types.get(type) ?? 0) + 1);
+
+  const where = stats.locations.get(type) ?? [];
+  if (where.length < OUTLIER_SAMPLE_CAP) {
+    where.push({ file: label, type, ...(line !== undefined ? { line } : {}) });
+  }
+  stats.locations.set(type, where);
+
+  const normalized = normalizeValue(value);
+  if (normalized === "") stats.sawEmptyString = true;
+
+  // Objects and arrays are keyed by their JSON too, so a repeated `tags: []`
+  // counts once. They are never enum candidates, so the only cost is an
+  // accurate `distinct` column.
+  const key = JSON.stringify(normalized) ?? "undefined";
+  const seen = stats.values.get(key);
+  if (seen) {
+    seen.count += 1;
+  } else if (stats.values.size < DISTINCT_CAP) {
+    stats.values.set(key, { value: normalized, count: 1, type });
+  } else {
+    stats.distinctCapped = true;
+  }
+}
+
+/** The type most files used, ties broken by name so output is deterministic. */
+function dominantTypeOf(stats: KeyStats): string {
+  return [...stats.types.entries()].sort(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+  )[0]?.[0] ?? "string";
+}
+
+/**
+ * Propose a vocabulary, or don't.
+ *
+ * Candidates are the values at the **dominant** type only. Including an
+ * outlier's value would write the typo into the contract — the same failure
+ * `dominantTypeOf` exists to avoid, one level down.
+ */
+function enumFor(
+  stats: KeyStats,
+  dominantType: string,
+  filesScanned: number,
+): unknown[] | undefined {
+  // A vocabulary is a set of scalars. An enum of objects or arrays compares by
+  // deep equality and is never what someone adopting a standard meant.
+  if (!["string", "number", "boolean"].includes(dominantType)) return undefined;
+  if (stats.distinctCapped) return undefined;
+
+  const candidates = [...stats.values.values()].filter(
+    (v) => v.type === dominantType,
+  );
+  if (candidates.length === 0) return undefined;
+  if (candidates.length > ENUM_MAX_DISTINCT) return undefined;
+  if (candidates.length > filesScanned * ENUM_MAX_DISTINCT_RATIO) {
+    return undefined;
+  }
+
+  return candidates
+    .sort(
+      (a, b) =>
+        b.count - a.count ||
+        JSON.stringify(a.value).localeCompare(JSON.stringify(b.value)),
+    )
+    .map((v) => v.value);
+}
+
+/** `sawEmptyString` is a scan detail, not part of the public report. */
+type ReportWithEmptyFlag = InferKeyReport & { sawEmptyString: boolean };
+
+/** One key's `properties` entry: the dominant type, and nothing about policy. */
+function draftPropertyFor(report: ReportWithEmptyFlag): Record<string, unknown> {
+  const property: Record<string, unknown> = { type: report.dominantType };
+  if (report.enumValues) {
+    property.enum = report.enumValues;
+  } else if (report.dominantType === "string" && !report.sawEmptyString) {
+    // Observed, not assumed: nobody in this docset wrote an empty string, so
+    // requiring a non-empty one when the key *is* present rejects the
+    // fat-fingered `title:` without demanding anybody supply a title.
+    property.minLength = 1;
+  }
+  return property;
+}
+
+export async function runInferSchema(
+  opts: InferOptions,
+): Promise<InferResult> {
+  const cwd = opts.cwd ?? process.cwd();
+
+  const minCoverage = opts.minCoverage ?? 0;
+  if (!Number.isFinite(minCoverage) || minCoverage < 0 || minCoverage > 100) {
+    throw new DocmetaError(
+      `--min-coverage must be a percentage between 0 and 100, got ${minCoverage}.`,
+    );
+  }
+
+  const { config, inputs, base } = await resolveRunConfig({
+    cwd,
+    configPath: opts.configPath,
+    noConfig: opts.noConfig,
+    inputs: opts.inputs,
+    onConfigLoaded: opts.onConfigLoaded,
+  });
+  const usingStdin = inputs.includes(STDIN_TOKEN);
+
+  if (inputs.length === 0) {
+    throw new DocmetaError(
+      "No files to scan. Pass paths/globs, or add `paths:` to docmeta.config.yaml.",
+    );
+  }
+
+  const forced = opts.as ? extractorByName(opts.as) : undefined;
+  if (opts.as && !forced) {
+    throw new DocmetaError(
+      `Unknown format "${opts.as}". Supported extensions: ${supportedExtensions().join(", ")}.`,
+    );
+  }
+  if (usingStdin && !forced) {
+    throw new DocmetaError(
+      "Reading from stdin (`-`) requires --as <format> to choose an extractor.",
+    );
+  }
+
+  // Every refusal happens **before** the scan, so a refused run leaves the
+  // working tree exactly as it found it — the ordering `vendor` established.
+  let absOut: string | undefined;
+  if (opts.out !== undefined) {
+    absOut = resolve(cwd, opts.out);
+    await assertNotIgnored(
+      absOut,
+      dirname(absOut),
+      cwd,
+      opts.onNotice,
+      DRAFT_IGNORE_TEXT,
+    );
+    if (existsSync(absOut)) {
+      throw new DocmetaError(
+        `"${posixRelative(cwd, absOut) || opts.out}" already exists, and \`schemas infer\` will not overwrite it. The draft is a starting point you then edit, so clobbering it would throw away the edits. Pass a different --out path, or remove that file first.`,
+      );
+    }
+  }
+
+  const exts = opts.exts ?? (forced ? forced.extensions : undefined);
+  const fileInputs = inputs.filter((i) => i !== STDIN_TOKEN);
+  const allowEmpty = config?.allowEmpty;
+  const exclude = [...(config?.exclude ?? []), ...(opts.exclude ?? [])];
+  const { files, gitignoreSkipped } = await resolveTargetSet({
+    inputs: fileInputs,
+    exts,
+    exclude,
+    cwd: base,
+    allowEmpty,
+    ...gitignoreOptions({
+      configured: config?.respectGitignore,
+      onNotice: opts.onNotice,
+    }),
+  });
+  assertNonEmpty({
+    files,
+    inputs: fileInputs,
+    usingStdin,
+    allowEmpty,
+    exclude,
+    exts,
+    gitignoreSkipped,
+    action: "scanned",
+  });
+
+  const stats = new Map<string, KeyStats>();
+  const unreadable: { file: string; message: string }[] = [];
+  let filesScanned = 0;
+  let filesWithoutMetadata = 0;
+
+  const scanOne = (label: string, content: string, extension: string): void => {
+    const extractor = forced ?? extractorForExtension(extension);
+    if (!extractor) {
+      throw new DocmetaError(
+        `Unsupported file type "${extension}" for "${label}". Supported: ${supportedExtensions().join(", ")}. Use --as to override.`,
+      );
+    }
+    filesScanned += 1;
+    let extracted;
+    try {
+      extracted = extractor.extract(content, label);
+    } catch (err) {
+      // One malformed block must not end the scan: the coverage question is
+      // about the rest of the docset, and the bad file is itself a finding.
+      unreadable.push({
+        file: label,
+        message: err instanceof Error ? err.message : String(err),
+      });
+      return;
+    }
+    if (!extracted.present) {
+      filesWithoutMetadata += 1;
+      return;
+    }
+    // Top-level keys only — see the note at the head of this section.
+    for (const [key, value] of Object.entries(extracted.data)) {
+      const stat = stats.get(key) ?? emptyStats();
+      recordValue(stat, label, value, extracted.lineFor(key));
+      stats.set(key, stat);
+    }
+  };
+
+  if (usingStdin && forced) {
+    scanOne(STDIN_LABEL, opts.stdinContent ?? "", forced.extensions[0] ?? "");
+  }
+  for (const file of files) {
+    const content = await readFile(resolve(base, file), "utf8");
+    scanOne(file, content, extname(file));
+  }
+
+  for (const u of unreadable) {
+    opts.onNotice?.(`could not read metadata from "${u.file}": ${u.message}`);
+  }
+
+  const all: ReportWithEmptyFlag[] = [...stats.entries()].map(([key, stat]) => {
+    const dominantType = dominantTypeOf(stat);
+    const enumValues = enumFor(stat, dominantType, filesScanned);
+    const format = formatOf(stat, dominantType);
+    const outliers = [...stat.locations.entries()]
+      .filter(([type]) => type !== dominantType)
+      .flatMap(([, where]) => where);
+    const outlierCount = [...stat.types.entries()]
+      .filter(([type]) => type !== dominantType)
+      .reduce((sum, [, count]) => sum + count, 0);
+    const sample = [...stat.values.values()].sort(
+      (a, b) => b.count - a.count,
+    )[0]?.value;
+    return {
+      key,
+      present: stat.present,
+      coverage: filesScanned === 0 ? 0 : (stat.present / filesScanned) * 100,
+      types: [...stat.types.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([type, count]) => ({ type, count })),
+      dominantType,
+      outliers,
+      outlierCount,
+      distinct: stat.values.size,
+      distinctCapped: stat.distinctCapped,
+      ...(enumValues ? { enumValues } : {}),
+      ...(sample !== undefined ? { sample } : {}),
+      ...(format !== undefined ? { format } : {}),
+      sawEmptyString: stat.sawEmptyString,
+    };
+  });
+
+  const kept = all
+    .filter((k) => k.coverage >= minCoverage)
+    .sort((a, b) => b.coverage - a.coverage || a.key.localeCompare(b.key));
+
+  // Alphabetical in the draft, not coverage order: this file is committed and
+  // hand-edited, and a stable key order keeps its diffs readable.
+  const properties: Record<string, unknown> = {};
+  for (const report of [...kept].sort((a, b) => a.key.localeCompare(b.key))) {
+    properties[report.key] = draftPropertyFor(report);
+  }
+
+  const draft: Record<string, unknown> = {
+    $schema: DRAFT_DIALECT,
+    $comment:
+      "Generated by `docmeta schemas infer`. Nothing is required, deliberately: what your docset happens to contain is not the same as what your standard should demand. Promote keys into a `required` list yourself, one at a time, behind a baseline.",
+    type: "object",
+    properties,
+  };
+
+  // Public reports carry no scan bookkeeping.
+  const keys: InferKeyReport[] = kept.map(({ sawEmptyString: _drop, ...rest }) => rest);
+
+  if (absOut !== undefined) {
+    await mkdir(dirname(absOut), { recursive: true });
+    await writeFileAtomic(absOut, `${JSON.stringify(draft, null, 2)}\n`);
+  }
+
+  return {
+    filesScanned,
+    filesWithoutMetadata,
+    unreadable,
+    keys,
+    hiddenByMinCoverage: all.length - kept.length,
+    draft,
+    ...(absOut !== undefined ? { out: posixRelative(cwd, absOut) } : {}),
+    gitignoreSkipped,
   };
 }
