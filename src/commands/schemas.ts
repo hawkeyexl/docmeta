@@ -411,6 +411,16 @@ const DRAFT_DIALECT = "https://json-schema.org/draft/2020-12/schema";
  * The absolute cap alone would turn a 10-file repo with 7 hand-written `type`
  * values into a 7-value vocabulary; the ratio alone would turn a 30-file repo
  * of unique titles into a 30-value enum for prose.
+ *
+ * The ratio is measured against the files that **carry the key**, not against
+ * every file scanned. Against the corpus, a key present in 5 files of 1,000
+ * with 5 distinct values — every single occurrence unique, which is what free
+ * text looks like — passes both thresholds and gets an enum of exactly those
+ * five. The sixth value anyone writes is then rejected by a schema generated
+ * from their own docset, which is the opposite of a draft that "constrains only
+ * what it observed". Against occurrences the same key needs 5 <= 0.25 and is
+ * correctly refused: whether a vocabulary exists is a question about this key's
+ * own values, and corpus size has no bearing on it.
  */
 const ENUM_MAX_DISTINCT = 20;
 const ENUM_MAX_DISTINCT_RATIO = 0.05;
@@ -651,7 +661,6 @@ function dominantTypeOf(stats: KeyStats): string {
 function enumFor(
   stats: KeyStats,
   dominantType: string,
-  filesScanned: number,
 ): unknown[] | undefined {
   // A vocabulary is a set of scalars. An enum of objects or arrays compares by
   // deep equality and is never what someone adopting a standard meant.
@@ -663,7 +672,8 @@ function enumFor(
   );
   if (candidates.length === 0) return undefined;
   if (candidates.length > ENUM_MAX_DISTINCT) return undefined;
-  if (candidates.length > filesScanned * ENUM_MAX_DISTINCT_RATIO) {
+  // Against occurrences of this key, not against the corpus — see the constant.
+  if (candidates.length > stats.present * ENUM_MAX_DISTINCT_RATIO) {
     return undefined;
   }
 
@@ -828,7 +838,7 @@ export async function runInferSchema(
 
   const all: ReportWithEmptyFlag[] = [...stats.entries()].map(([key, stat]) => {
     const dominantType = dominantTypeOf(stat);
-    const enumValues = enumFor(stat, dominantType, filesScanned);
+    const enumValues = enumFor(stat, dominantType);
     const format = formatOf(stat, dominantType);
     const outliers = [...stat.locations.entries()]
       .filter(([type]) => type !== dominantType)

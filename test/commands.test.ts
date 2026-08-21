@@ -1705,6 +1705,36 @@ describe("enum candidates need both thresholds (0010 stress test 4)", () => {
     }
   });
 
+  it("proposes none for a rare key whose every value is distinct", async () => {
+    // The ratio is measured against the files carrying the key, not against the
+    // corpus. Against the corpus this passed both thresholds — 5 distinct is
+    // under the absolute cap, and 5 is under 5% of 100 files — so a key used
+    // five times with five different values, which is what free text looks
+    // like, got an enum of exactly those five. The sixth value anyone wrote
+    // would then be rejected by a schema generated from their own docset.
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 100; i++) {
+      files[`f${i}.md`] =
+        i < 5
+          ? doc({ type: "concept", owner: `person-${i}` })
+          : doc({ type: "concept" });
+    }
+    const dir = await makeDocset(files);
+    try {
+      const r = await runInferSchema({ inputs: ["."], cwd: dir, noConfig: true });
+      const owner = keyNamed(r, "owner");
+      expect(owner.present).toBe(5);
+      expect(owner.distinct).toBe(5);
+      expect(owner.enumValues).toBeUndefined();
+      const props = r.draft.properties as Record<string, { enum?: unknown[] }>;
+      expect(props.owner?.enum).toBeUndefined();
+      // The control: `type` repeats across every file, so it is a vocabulary.
+      expect(props.type?.enum).toEqual(["concept"]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("proposes none at 7 distinct values in a 10-file docset — the ratio half", async () => {
     // The absolute count alone would accept this. 7 distinct across 10 files is
     // not a vocabulary; it is prose that happens to repeat.
