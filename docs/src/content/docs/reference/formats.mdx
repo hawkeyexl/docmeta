@@ -18,7 +18,7 @@ implemented and counts toward directory and glob walks.
 | `mdx` | `.mdx` | Leading fenced frontmatter — YAML, TOML, or JSON. | Yes |
 | `asciidoc` | `.adoc`, `.asciidoc` | Fenced frontmatter, or the native header: `= Title` plus `:key: value` attributes. | Only into an existing fenced block |
 | `rst` | `.rst` | Fenced frontmatter, or the native section title plus `:key: value` docinfo fields. | Only into an existing fenced block |
-| `xml` | `.xml`, `.dita`, `.ditamap` | Attributes of the root element. | Yes, except DITA |
+| `xml` | `.xml`, `.dita`, `.ditamap` | Attributes of the root element; for DITA, also `<othermeta>`. | Yes |
 | `html` | `.html`, `.htm` | `<title>` plus `<meta name="…" content="…">` tags. | Yes |
 
 ### Why some formats are read-only
@@ -44,10 +44,9 @@ and leaving every other byte alone. For HTML the parser hands those ranges over
 directly. For XML it does not — it reports only where each attribute *starts*,
 as a line and column — so docmeta rebuilds the range from that position.
 
-DITA is the exception, and not for a mechanical reason. Its metadata belongs in
-a `<prolog>` element, so adding it to the root element would produce a topic
-that its DTD rejects. docmeta refuses that write and says so, rather than
-producing an invalid file.
+DITA is written differently from plain XML, and not for a mechanical reason.
+Its metadata belongs in a `<prolog>` element, so adding it to the root element
+would produce a topic that its DTD rejects. docmeta writes the prolog instead.
 
 `fill` writes HTML and XML the same way it writes fenced frontmatter — by replacing one range and leaving every other byte alone — so
 entity spelling, attribute quoting, void elements and the doctype all survive.
@@ -200,13 +199,36 @@ their root-element attributes are the metadata:
 
 This yields `id`, `type`, and `xml:lang`; the `DOCTYPE` declaration is skipped.
 The DTD-declared entities common in DITA content (`&nbsp;`, `&mdash;`) do not
-fail the file — see above. Metadata held in a `<prolog>` element is not read.
+fail the file — see above.
 
-`fill` **will not write DITA**. Its metadata belongs in `<prolog>`, and putting
-it on the root element instead would produce a topic that fails DTD validation —
-so docmeta reports a per-file error naming the reason rather than writing an
-invalid file. Plain XML, including a `.xml` file with no DITA doctype, is
-written normally.
+DITA also carries metadata in the place the standard sets aside for it, and
+docmeta reads that too:
+
+```xml
+<prolog>
+  <metadata>
+    <othermeta name="audience" content="developer"/>
+  </metadata>
+</prolog>
+```
+
+A map uses `<topicmeta>` in place of `<prolog><metadata>`. Where a key appears
+both as a root attribute and as an `<othermeta>`, the `<othermeta>` wins: it is
+the explicit metadata channel, while root attributes are largely structural.
+
+`fill` writes DITA into that same channel. A key already present keeps its
+place — a root attribute is corrected as a root attribute, an `<othermeta>` as
+an `<othermeta>` — and only a key that appears in neither is added, as a new
+`<othermeta>`, with `<metadata>` and `<prolog>` created if the topic lacks them.
+A new `<prolog>` is placed where the content model requires: after the title,
+`titlealts`, `shortdesc` and `abstract`, and before the body.
+
+Keeping an existing key in its own tag is what makes the write safe. `fill`
+corrects values that are present but *invalid*, not only missing ones, so adding
+an `<othermeta>` beside a stale root attribute would leave the value a DITA
+processor actually reads still saying the wrong thing — with docmeta reporting
+the file as fixed. It is also why the write cannot break DTD validity: updating
+an attribute that is already there cannot make it un-declared.
 
 A file counts as DITA when its `DOCTYPE` names a DITA DTD, when its root element
 carries a DITA `class` or `DITAArchVersion` attribute, or when a `.dita` /

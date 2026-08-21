@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="has-othermeta" type="concept">
+  <title>Already carries prolog metadata</title>
+  <prolog>
+    <metadata>
+      <othermeta name="audience" content="developer"/>
+      <othermeta name="timestamp" content="last Tuesday"/>
+    </metadata>
+  </prolog>
+  <conbody>
+    <p>The prolog is where DITA keeps this.</p>
+  </conbody>
+</concept>

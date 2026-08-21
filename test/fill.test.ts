@@ -689,10 +689,11 @@ describe("runFill — mechanical checks precede confidence", () => {
     );
   });
 
-  it("refuses a DITA topic and says why, rather than breaking its DTD", async () => {
+  it("writes a DITA topic's metadata into its prolog, not onto the root", async () => {
+    // Putting it on the root element would produce a topic the user's own DITA
+    // toolchain rejects, so the value has to land in <prolog><metadata>.
     const file = await stage("topic.dita");
-    const before = await readFile(join(dir, file), "utf8");
-    const { results, summary } = await runFill({
+    const { results } = await runFill({
       ...base,
       cwd: dir,
       inputs: [file],
@@ -700,11 +701,17 @@ describe("runFill — mechanical checks precede confidence", () => {
         description: { value: "A short summary.", confidence: 0.95 },
       }),
     });
-    expect(results[0]?.error).toMatch(/DITA/);
-    expect(results[0]?.error).toMatch(/prolog/);
-    expect(summary.errors).toBe(1);
-    // Refused before inference, and nothing reached the disk.
-    expect(await readFile(join(dir, file), "utf8")).toBe(before);
+    expect(results[0]?.error).toBeUndefined();
+    const after = await readFile(join(dir, file), "utf8");
+    expect(after).toContain(
+      '<othermeta name="description" content="A short summary."/>',
+    );
+    expect(after).not.toContain('description="A short summary."');
+    // The DOCTYPE and the body are untouched.
+    expect(after).toContain('<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN"');
+    expect(after.slice(after.indexOf("<conbody>"))).toBe(
+      fixture("topic.dita").slice(fixture("topic.dita").indexOf("<conbody>")),
+    );
   });
 
   it("reports an unwritable document as a per-file error, not a run abort", async () => {

@@ -75,16 +75,15 @@ describe("applyXml — no-ops and refusals", () => {
     expect(applyXml(content, { type: undefined })).toBe(content);
   });
 
-  it("refuses a DITA document, naming the reason", () => {
-    // Root attributes are not where DITA keeps metadata, and adding one the DTD
-    // does not declare makes the topic invalid. Handled in a later change.
-    expect(() => applyXml(fx("topic.dita"), { audience: "dev" })).toThrow(
-      /DITA/,
-    );
-  });
-
-  it("refuses DITA on an empty patch too, so the pre-flight probe is honest", () => {
-    expect(() => applyXml(fx("topic.dita"), {})).toThrow(DocmetaError);
+  it("does not put DITA metadata on the root element", () => {
+    // DITA keeps metadata in <prolog>; a root attribute would fail its DTD.
+    // The prolog writer is covered in dita.test.ts — this only pins that the
+    // generic root-attribute path is not the one that runs.
+    const out = applyXml(fx("topic.dita"), { audience: "dev" }, {
+      filePath: "topic.dita",
+    });
+    expect(out).not.toContain('audience="dev"');
+    expect(out).toContain("<prolog>");
   });
 
   it("refuses malformed XML rather than guessing at offsets", () => {

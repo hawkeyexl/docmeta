@@ -83,3 +83,53 @@ export function afterElementName(
   while (i < source.length && !/[\s/>]/.test(source[i] ?? "")) i++;
   return i > tagOffset + 1 ? i : undefined;
 }
+
+/**
+ * The offset just past a start tag's closing `>`, and whether it self-closed.
+ *
+ * Attribute values can contain `>`, so this tracks quoting rather than scanning
+ * for the first one. `tagOffset` is the offset of the `<`.
+ */
+export function startTagEnd(
+  source: string,
+  tagOffset: number,
+): { end: number; selfClosing: boolean } | undefined {
+  if (source[tagOffset] !== "<") return undefined;
+  let quote: string | undefined;
+  for (let i = tagOffset + 1; i < source.length; i++) {
+    const ch = source[i];
+    if (quote !== undefined) {
+      if (ch === quote) quote = undefined;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+    } else if (ch === ">") {
+      return { end: i + 1, selfClosing: source[i - 1] === "/" };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The offset of `</name>` searching forward from `from`.
+ *
+ * Used only for the shallow, non-recursive containers DITA metadata lives in
+ * (`prolog`, `metadata`, `topicmeta`), none of which nests inside itself, so a
+ * forward search cannot find the wrong one. The verify step is the backstop if
+ * a document ever proves that assumption wrong.
+ */
+export function closeTagStart(
+  source: string,
+  from: number,
+  name: string,
+): number | undefined {
+  const needle = `</${name}`;
+  let i = source.indexOf(needle, from);
+  while (i !== -1) {
+    const after = source[i + needle.length];
+    if (after === ">" || (after !== undefined && /\s/.test(after))) return i;
+    i = source.indexOf(needle, i + 1);
+  }
+  return undefined;
+}

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="prolog-only" type="concept">
+  <title>Has a prolog but no metadata element</title>
+  <prolog>
+    <author>A. Writer</author>
+  </prolog>
+  <conbody>
+    <p>The metadata element has to be created.</p>
+  </conbody>
+</concept>

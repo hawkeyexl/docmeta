@@ -26,6 +26,7 @@ import {
 } from "../types.js";
 import { dropUndefined, deepEqual } from "./patch-util.js";
 import { readXml, isMetadataAttribute, type XmlElement } from "./xml-read.js";
+import { ditaEdits } from "./dita-write.js";
 import {
   lineStarts,
   offsetAt,
@@ -54,7 +55,7 @@ export function applyXml(
 
   let before;
   try {
-    before = readXml(original);
+    before = readXml(original, options.filePath);
   } catch (err) {
     // A document the reader rejects has no trustworthy positions, so there is
     // nothing safe to splice.
@@ -71,17 +72,20 @@ export function applyXml(
     );
   }
 
-  // Structural checks run before the empty-patch shortcut, so an empty patch is
-  // a usable pre-flight probe for "can this document be written at all?".
-  // `fill` uses it to skip paying for inference on a file it could never write.
-  if (isDita(content, root, options.filePath)) {
-    throw new DocmetaError(
-      "This looks like DITA, whose metadata belongs in a <prolog> element. Adding it to the root element would produce a topic its DTD rejects, so docmeta will not write it.",
-    );
-  }
-
   const clean = dropUndefined(patch);
   if (Object.keys(clean).length === 0) return original;
+
+  // DITA keeps its metadata in <prolog>/<topicmeta>, and its DTD declares which
+  // root attributes a topic may carry — so the generic root-attribute write
+  // below would produce a document the user's own toolchain rejects.
+  if (before.dita) {
+    const next = spliceAll(
+      content,
+      ditaEdits(content, before, before.dita, clean, emitScalar, escapeAttr),
+    );
+    verify(next, before.data, clean, options.filePath);
+    return bom ? original.slice(0, 1) + next : next;
+  }
 
   const starts = lineStarts(content);
   const quoteOffsets = new Map<string, number>();
@@ -125,7 +129,7 @@ export function applyXml(
   }
 
   const next = spliceAll(content, edits);
-  verify(next, before.data, clean);
+  verify(next, before.data, clean, options.filePath);
   return bom ? original.slice(0, 1) + next : next;
 }
 
@@ -147,51 +151,6 @@ function rootNameEnd(
     );
   }
   return at;
-}
-
-/**
- * Whether this document is DITA, which keeps its metadata somewhere else.
- *
- * Positive signals only. A root element merely *named* `map` or `task` is far
- * too weak on its own — those are ordinary names in hand-rolled XML — so the
- * name counts only when the file extension agrees.
- */
-function isDita(
-  content: string,
-  root: XmlElement,
-  filePath: string | undefined,
-): boolean {
-  if (/<!DOCTYPE[^>]*\/\/DTD DITA/i.test(content.slice(0, doctypeLimit(content)))) {
-    return true;
-  }
-  // DITA-OT output carries the specialization ancestry in @class.
-  if (/^\s*[-+]\s+(topic|map)\//.test(root.getAttribute("class") ?? "")) {
-    return true;
-  }
-  if (root.getAttribute("DITAArchVersion") != null) return true;
-  const lower = filePath?.toLowerCase() ?? "";
-  return (
-    (lower.endsWith(".dita") || lower.endsWith(".ditamap")) &&
-    DITA_ROOTS.has(root.nodeName.toLowerCase())
-  );
-}
-
-const DITA_ROOTS = new Set([
-  "topic",
-  "concept",
-  "task",
-  "reference",
-  "glossentry",
-  "glossgroup",
-  "map",
-  "bookmap",
-  "subjectscheme",
-]);
-
-/** A DOCTYPE can only precede the root element, so stop at the tag that opens it. */
-function doctypeLimit(content: string): number {
-  const match = /<[A-Za-z_]/.exec(content);
-  return match ? match.index : content.length;
 }
 
 /** Emit a value the way the reader will parse it back: as a YAML scalar. */
@@ -241,9 +200,13 @@ function verify(
   next: string,
   before: Record<string, unknown>,
   patch: MetadataPatch,
+  filePath: string | undefined,
 ): void {
   const expected = { ...before, ...patch };
-  const actual = readXml(next).data;
+  // Same path as the original read: a `.dita` file re-read as plain XML would
+  // not see the <othermeta> just written, and the check would fail for the
+  // wrong reason.
+  const actual = readXml(next, filePath).data;
   if (!deepEqual(actual, expected)) {
     throw new DocmetaError(
       "Refusing to write XML metadata: the rewritten document did not read back as expected.",
