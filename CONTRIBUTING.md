@@ -113,16 +113,29 @@ capability check: `typeof extractor.apply === "function"`. TypeScript then makes
 every call site handle the read-only case.
 
 Only implement it if the format can round-trip without disturbing the rest of
-the document. Fenced frontmatter can, because the write is a splice of the
-characters between the fences (see `src/extractors/frontmatter-write.ts`). A
-format whose read is lossy should stay read-only rather than guess: `rst` and
-`asciidoc` write only into a fenced block that already exists, because their
-native docinfo and header syntax does not survive a round trip, and `xml` and
-`html` do not implement `apply` at all.
+the document. The test is whether you can find the exact character range the
+value occupies: fenced frontmatter can, because the write is a splice of the
+characters between the fences (`src/extractors/frontmatter-write.ts`), and so
+can HTML, because parse5 reports a byte range for every tag and attribute
+(`src/extractors/html-write.ts`). A format whose read is lossy should stay
+read-only rather than guess: `rst` and `asciidoc` write only into a fenced block
+that already exists, because their native docinfo and header syntax does not
+survive a round trip, and `xml` does not implement `apply` at all.
 
-If you do add write support, cover it in `test/frontmatter-write.test.ts`, and
-make sure the merge is verified by re-parsing before it is returned. A
-serializer bug should become a refusal, not a corrupted file.
+Two rules apply to any writer you add:
+
+- **Verify by re-parsing before returning.** A serializer bug should become a
+  refusal, not a corrupted file.
+- **Write back to wherever the read took the value from.** `fill` corrects
+  values that are present but invalid, not just missing ones, so a format with
+  more than one metadata channel can otherwise gain a correction beside the
+  stale value the reader actually honors — a green report on a wrong page. Where
+  precedence is decided, decide it once and share it: `html-read.ts` exports a
+  `sources` map for exactly this, and `html-write.ts` aims at it rather than
+  carrying its own copy of the rule.
+
+Cover fenced formats in `test/frontmatter-write.test.ts` and others in their own
+file (`test/html-write.test.ts`).
 
 ## License
 

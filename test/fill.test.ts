@@ -618,15 +618,66 @@ describe("runFill — mechanical checks precede confidence", () => {
     ]);
   });
 
-  it("reports a read-only format as a per-file error, not a run abort", async () => {
-    const file = await stage("unsupported.html");
+  it("writes HTML metadata into <head> and leaves the rest byte-identical", async () => {
+    const file = await stage("head-with-meta.html");
+    const before = await readFile(join(dir, file), "utf8");
+    const { results } = await runFill({
+      ...base,
+      cwd: dir,
+      inputs: [file],
+      inferenceProvider: propose({
+        description: { value: "A short summary.", confidence: 0.95 },
+      }),
+    });
+    expect(results[0]?.error).toBeUndefined();
+    const after = await readFile(join(dir, file), "utf8");
+    expect(after).toContain('<meta name="description" content="A short summary.">');
+    // Only <head> grew; everything from <body> on is untouched.
+    expect(after.slice(after.indexOf("<body>"))).toBe(
+      before.slice(before.indexOf("<body>")),
+    );
+  });
+
+  it("corrects an invalid HTML value in the tag it was read from", async () => {
+    // fill rewrites present-but-invalid values, not just missing ones. The
+    // correction has to land in the existing tag: a second <meta> beside the
+    // stale one would leave the wrong value in the page while docmeta reports
+    // green, because the reader would never see the correction.
+    const file = "bad.html";
+    await writeFile(
+      join(dir, file),
+      fixture("head-with-meta.html").replace(
+        "  </head>",
+        `    <meta name="timestamp" content="last Tuesday">
+  </head>`,
+      ),
+      "utf8",
+    );
+    const { results } = await runFill({
+      ...base,
+      cwd: dir,
+      inputs: [file],
+      inferenceProvider: propose({
+        timestamp: { value: "2024-03-01T00:00:00Z", confidence: 0.95 },
+      }),
+    });
+    expect(results[0]?.error).toBeUndefined();
+    const after = await readFile(join(dir, file), "utf8");
+    expect(after).toContain('content="2024-03-01T00:00:00Z"');
+    expect(after).not.toContain("last Tuesday");
+    // Corrected in place, not duplicated alongside the stale tag.
+    expect(after.match(/name="timestamp"/g)).toHaveLength(1);
+  });
+
+  it("reports an unwritable document as a per-file error, not a run abort", async () => {
+    const file = await stage("no-head.html");
     const { results, summary } = await runFill({
       ...base,
       cwd: dir,
       inputs: [file],
       inferenceProvider: propose({}),
     });
-    expect(results[0]?.error).toMatch(/read-only/);
+    expect(results[0]?.error).toMatch(/<head>/);
     expect(summary.errors).toBe(1);
   });
 

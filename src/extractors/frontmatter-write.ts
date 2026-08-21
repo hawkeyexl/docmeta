@@ -36,6 +36,7 @@ import {
   locateFrontmatter,
   frontmatterInnerText,
 } from "./frontmatter.js";
+import { dropUndefined, deepEqual } from "./patch-util.js";
 
 const FENCE: Record<FrontmatterFlavor, string> = {
   yaml: "---",
@@ -120,14 +121,6 @@ export function applyFencedOnly(
   if (Object.keys(dropUndefined(patch)).length === 0) return content;
   return applyFrontmatter(content, patch, options);
 }
-
-/** Keys explicitly set to `undefined` mean "no opinion", not "set to null". */
-function dropUndefined(patch: MetadataPatch): MetadataPatch {
-  const out: MetadataPatch = {};
-  for (const [k, v] of Object.entries(patch)) if (v !== undefined) out[k] = v;
-  return out;
-}
-
 // ---------------------------------------------------------------------------
 // Block creation
 // ---------------------------------------------------------------------------
@@ -434,35 +427,4 @@ function verify(
       "Refusing to write front matter: the rewritten block did not read back as expected.",
     );
   }
-}
-
-function deepEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (a instanceof Date || b instanceof Date) {
-    const at = a instanceof Date ? a.getTime() : NaN;
-    const bt = b instanceof Date ? b.getTime() : NaN;
-    return at === bt;
-  }
-  if (Array.isArray(a) || Array.isArray(b)) {
-    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
-      return false;
-    }
-    return a.every((x, i) => deepEqual(x, b[i]));
-  }
-  if (
-    a == null ||
-    b == null ||
-    typeof a !== "object" ||
-    typeof b !== "object"
-  ) {
-    return false;
-  }
-  const ao = a as Record<string, unknown>;
-  const bo = b as Record<string, unknown>;
-  const ak = Object.keys(ao);
-  const bk = Object.keys(bo);
-  if (ak.length !== bk.length) return false;
-  return ak.every(
-    (k) => Object.prototype.hasOwnProperty.call(bo, k) && deepEqual(ao[k], bo[k]),
-  );
 }

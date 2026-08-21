@@ -13,109 +13,29 @@
  * malformed markup, so extraction never throws. Per-node — and per-attribute —
  * positions give JSON-Pointer -> source-line and -> source-column maps for
  * annotations. Both are 1-based, as parse5 reports them.
+ *
+ * The read itself lives in `html-read.ts`, shared with `html-write.ts` so that a
+ * write lands wherever the read took its value from. See that module for why
+ * the two must not each carry their own copy of the precedence rule.
  */
-import { parse, defaultTreeAdapter, type DefaultTreeAdapterMap } from "parse5";
-import { parse as parseYamlScalar } from "yaml";
-import {
-  escapePointerSegment,
-  positionForFactory,
-} from "./pointer.js";
+import { readHtml } from "./html-read.js";
+import { applyHtml } from "./html-write.js";
+import { positionForFactory } from "./pointer.js";
 import type { ExtractedMetadata, MetadataExtractor } from "../types.js";
-
-type ChildNode = DefaultTreeAdapterMap["childNode"];
-type Element = DefaultTreeAdapterMap["element"];
-
-
-/** Parse a raw value as a YAML scalar, falling back to the string. */
-function typeValue(raw: string): unknown {
-  // Empty meta content (`content=""`) is the empty string, not the YAML `null`
-  // that parsing "" would yield.
-  if (raw === "") return "";
-  try {
-    return parseYamlScalar(raw);
-  } catch {
-    return raw;
-  }
-}
-
-
-function attrValue(el: Element, name: string): string | undefined {
-  return el.attrs.find((a) => a.name === name)?.value;
-}
 
 export const htmlExtractor: MetadataExtractor = {
   name: "html",
   extensions: [".html", ".htm"],
   implemented: true,
   extract(content): ExtractedMetadata {
-    const doc = parse(content, { sourceCodeLocationInfo: true });
-
-    const data: Record<string, unknown> = {};
-    const lineMap = new Map<string, number>();
-    const colMap = new Map<string, number>();
-    // The document node has no location; anchor the root pointer at 1:1.
-    lineMap.set("", 1);
-    colMap.set("", 1);
-
-    const setKey = (
-      key: string,
-      value: unknown,
-      line: number | undefined,
-      col: number | undefined,
-    ): void => {
-      data[key] = value;
-      const pointer = `/${escapePointerSegment(key)}`;
-      if (line != null) lineMap.set(pointer, line);
-      if (col != null) colMap.set(pointer, col);
-    };
-
-    const visit = (node: ChildNode): void => {
-      if (defaultTreeAdapter.isElementNode(node)) {
-        const location = node.sourceCodeLocation;
-        const line = location?.startLine;
-        if (node.tagName === "title") {
-          // The first <title> wins; later ones (e.g. in SVG) are ignored.
-          if (data.title === undefined) {
-            const first = node.childNodes[0];
-            const text =
-              first && defaultTreeAdapter.isTextNode(first) ? first.value : "";
-            setKey("title", text, line, location?.startCol);
-          }
-        } else if (node.tagName === "meta") {
-          const key = attrValue(node, "name") ?? attrValue(node, "property");
-          const value = attrValue(node, "content");
-          if (key != null && value != null) {
-            // parse5 locates each attribute separately, so the caret can land
-            // on `content=` — the thing that failed — rather than on `<meta`.
-            //
-            // Only when it is on the *same* line as the tag, though. `line`
-            // stays the tag's opening line (changing that would move existing
-            // annotations), so borrowing a column from an attribute wrapped
-            // onto a later line would pair a real line with a column measured
-            // somewhere else, and point at nothing.
-            const attrLocation = location?.attrs?.["content"];
-            const col =
-              attrLocation != null && attrLocation.startLine === line
-                ? attrLocation.startCol
-                : location?.startCol;
-            setKey(key, typeValue(value), line, col);
-          }
-        }
-        // Same guard, same node, nothing between that could change the answer:
-        // recursion belongs inside the one check rather than behind a second.
-        for (const child of node.childNodes) visit(child);
-      }
-    };
-
-    for (const child of doc.childNodes) visit(child);
-
-    const present = Object.keys(data).length > 0;
+    const { data, lineMap, colMap } = readHtml(content);
     return {
       data,
-      present,
+      present: Object.keys(data).length > 0,
       format: "html",
       lineFor: positionForFactory(lineMap),
       colFor: positionForFactory(colMap),
     };
   },
+  apply: applyHtml,
 };
