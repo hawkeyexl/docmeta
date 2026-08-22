@@ -767,9 +767,9 @@ describe("write capability", () => {
     expect(out).toContain("description: A summary.");
   });
 
-  it("xml and html are read-only", () => {
+  it("xml is read-only; html can be written", () => {
     expect(xmlExtractor.apply).toBeUndefined();
-    expect(htmlExtractor.apply).toBeUndefined();
+    expect(typeof htmlExtractor.apply).toBe("function");
   });
 
   it("rst and asciidoc write only into an existing fenced block", () => {
@@ -799,6 +799,6 @@ describe("write capability", () => {
     expect(byName.rst).toBe(true);
     expect(byName.asciidoc).toBe(true);
     expect(byName.xml).toBe(false);
-    expect(byName.html).toBe(false);
+    expect(byName.html).toBe(true);
   });
 });
