@@ -258,6 +258,12 @@ repos:
       - id: docmeta
 ```
 
+`rev` has to be a concrete tag — pre-commit does not follow a floating major
+the way `uses: hawkeyexl/docmeta@v4` does, so this is one place a copied
+snippet really will go stale. Take the tag from
+[the latest release](https://github.com/hawkeyexl/docmeta/releases/latest), and
+let `pre-commit autoupdate` move it for you afterwards.
+
 The hook fails the commit when docmeta returns a non-zero exit code, and it
 already knows which files to look at — every extension docmeta reads, matched
 case-insensitively. You do not write a `files` pattern, which matters more than

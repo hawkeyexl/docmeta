@@ -65,7 +65,8 @@ jobs:
           schema: ./test/fixtures/requires-type.schema.json
       - name: Failing run reports exit-code 1
         run: |
-          [ "${{ steps.failing.outputs.exit-code }}" = "1" ]             || { echo "expected 1, got '${{ steps.failing.outputs.exit-code }}'"; exit 1; }
+          [ "${{ steps.failing.outputs.exit-code }}" = "1" ] \
+            || { echo "expected 1, got '${{ steps.failing.outputs.exit-code }}'"; exit 1; }
 
       # Multi-line `schema:` becoming repeated `-s` is the input handling most
       # likely to break silently: a wrong split would just drop a schema, and
@@ -85,4 +86,5 @@ jobs:
           args: --format json
       - name: The second schema line arrived as its own -s
         run: |
-          [ "${{ steps.two-schemas.outputs.exit-code }}" = "1" ]             || { echo "expected 1, got '${{ steps.two-schemas.outputs.exit-code }}' — the second schema line was dropped"; exit 1; }
+          [ "${{ steps.two-schemas.outputs.exit-code }}" = "1" ] \
+            || { echo "expected 1, got '${{ steps.two-schemas.outputs.exit-code }}' — the second schema line was dropped"; exit 1; }

@@ -26,18 +26,29 @@ import {
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parse as parseYaml } from "yaml";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** The `run:` block of the composite step, dedented to a runnable script. */
+/**
+ * The `run:` block of the composite step with `id: docmeta`, as a runnable
+ * script.
+ *
+ * Located by parsing the YAML and matching the step's `id`, not by scanning
+ * for the first `run: |` in the file. A textual scan is correct only while
+ * `action.yml` has exactly one such block; insert a cache-warm or setup step
+ * above the docmeta one and every test below would quietly assert against the
+ * wrong shell code. Parsing costs nothing and cannot pick the wrong step.
+ */
 function actionScript(): string {
-  const yaml = readFileSync(join(repoRoot, "action.yml"), "utf8");
-  const marker = "      run: |\n";
-  const body = yaml.slice(yaml.indexOf(marker) + marker.length);
-  return body
-    .split("\n")
-    .map((line) => (line.startsWith("        ") ? line.slice(8) : line))
-    .join("\n");
+  const doc = parseYaml(readFileSync(join(repoRoot, "action.yml"), "utf8")) as {
+    runs?: { steps?: Array<{ id?: string; run?: string }> };
+  };
+  const step = doc.runs?.steps?.find((s) => s.id === "docmeta");
+  if (step?.run === undefined) {
+    throw new Error("action.yml has no step with `id: docmeta` and a `run:`");
+  }
+  return step.run;
 }
 
 const hasBash = (() => {
