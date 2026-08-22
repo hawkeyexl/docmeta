@@ -117,6 +117,27 @@ function looksLikeOverflow(message: string): boolean {
   );
 }
 
+/**
+ * Add one call's usage to a running total.
+ *
+ * A chunked document costs several calls, so caching the last one's usage would
+ * understate the file by roughly the number of chunks. Nothing reads it back
+ * today, which is exactly why it is worth keeping honest now rather than after
+ * something does.
+ */
+function addUsage(
+  total: TokenUsage | undefined,
+  next: TokenUsage | undefined,
+): TokenUsage | undefined {
+  if (next === undefined) return total;
+  if (total === undefined) return next;
+  return {
+    ...total,
+    inputTokens: total.inputTokens + next.inputTokens,
+    outputTokens: total.outputTokens + next.outputTokens,
+  };
+}
+
 /** What the cache stores: the raw, *pre-gating* proposal for one file. */
 interface CachedProposal {
   proposals: ProposalSet;
@@ -485,7 +506,8 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
       let chunkChars = chunkBudget;
       let attempt = 0;
       let sets: ProposalSet[] | undefined;
-      let lastUsage;
+      let usageTotal: TokenUsage | undefined;
+      let partsRead: { read: number; total: number } | undefined;
       let failure: string | undefined;
       while (attempt < 2 && sets === undefined) {
         attempt++;
@@ -537,7 +559,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
             failure = run.error ?? "The model returned no proposal.";
             break;
           }
-          lastUsage = run.usage;
+          usageTotal = addUsage(usageTotal, run.usage);
           collected.push(run.result);
         }
         if (overflowed && attempt < 2) {
@@ -552,7 +574,14 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
             schemaSet,
           );
         }
-        if (failure !== undefined && collected.length === 0) break;
+        // Only a document read end to end is usable. Anything short of that —
+        // a transient provider error on chunk 3, or an overflow that survived
+        // the one retry — would otherwise be merged and written as though it
+        // described the whole page, which is the silent truncation this change
+        // exists to remove. `cutShort` catches the turn-cap route above; this
+        // catches the rest.
+        partsRead = { read: collected.length, total: chunks.length };
+        if (collected.length < chunks.length) break;
         sets = collected;
       }
 
@@ -564,8 +593,12 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
           schemaSet,
         );
       }
+      /* c8 ignore next 3 -- the loop only assigns a complete set. */
+      if (partsRead !== undefined && partsRead.read < partsRead.total) {
+        throw new DocmetaError("Internal error: incomplete proposal set.");
+      }
       proposals = mergeProposals(sets);
-      cache?.set(cacheKey, { proposals, ...(lastUsage ? { usage: lastUsage } : {}) });
+      cache?.set(cacheKey, { proposals, ...(usageTotal ? { usage: usageTotal } : {}) });
     }
 
     // ---- Gate -------------------------------------------------------------

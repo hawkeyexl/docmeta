@@ -965,6 +965,56 @@ describe("runFill — cost budget", () => {
     expect(provider.requests.length).toBeLessThanOrEqual(2);
   });
 
+  it("refuses a document a mid-run failure cut short", async () => {
+    // The same hole as the turn cap, by a different route: a transient error on
+    // chunk 3 used to leave the chunks that had succeeded merged and written,
+    // reported as a clean run. Measured before the fix: error undefined, one
+    // field written, inferred from 2 of 7 chunks.
+    class FailsOnThird implements InferenceProvider {
+      calls = 0;
+      provider(): string {
+        return "mock";
+      }
+      modelName(): string {
+        return "claude-haiku-4-5";
+      }
+      async completeJSON(): Promise<{
+        json: unknown;
+        usage: { inputTokens: number; outputTokens: number };
+      }> {
+        this.calls++;
+        if (this.calls >= 3) throw new Error("transient upstream failure");
+        return {
+          json: {
+            description: { value: "from an early chunk", confidence: 0.95, reasoning: "r" },
+          },
+          usage: { inputTokens: 10, outputTokens: 5 },
+        };
+      }
+    }
+
+    const nl = String.fromCharCode(10);
+    await writeFile(
+      join(dir, "long.md"),
+      fixture("missing-keys.md") + nl + ("filler line" + nl).repeat(400),
+      "utf8",
+    );
+
+    const { results } = await runFill({
+      ...base,
+      cwd: dir,
+      inputs: ["long.md"],
+      fields: ["description"],
+      dryRun: true,
+      chunkChars: 400,
+      inferenceProvider: new FailsOnThird(),
+    });
+
+    expect(results[0]?.error).toBeDefined();
+    // And nothing derived from the chunks that did succeed was written.
+    expect((results[0]?.fields ?? []).filter((f) => f.written)).toHaveLength(0);
+  });
+
   it("refuses a document the cap cut short, rather than returning part of it", async () => {
     // Merging the chunks that did run would describe part of the page while
     // reading as though it described all of it — the silent truncation this
