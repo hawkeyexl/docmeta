@@ -41,19 +41,12 @@ export function applyHtml(
   patch: MetadataPatch,
   _options: ApplyOptions = {},
 ): string {
-  // A leading BOM is character data as far as the HTML parser is concerned, and
-  // it lands *before* `<html>`. That pushes the parser into a mode where
-  // `<html>`, `<head>` and `<body>` are all reported as implied — their
-  // `startTag` locations are null — even when the source spells them out. The
-  // structural check below would then refuse every BOM'd page that has a
-  // perfectly good <head>.
-  //
-  // So splice against the text without it and put it back afterwards. Handling
-  // it as a prefix rather than as an offset adjustment means no arithmetic to
-  // get wrong, and the BOM survives by construction.
-  const bom = original.charCodeAt(0) === 0xfeff ? "\uFEFF" : "";
-  const content = bom === "" ? original : original.slice(1);
-  const before = readHtml(content);
+  // `readHtml` strips a leading BOM before parsing — see there for why parse5
+  // makes that necessary — so every position it reports is relative to the text
+  // it hands back. Splice against that same text and restore the BOM as a
+  // prefix, which leaves no offset arithmetic to get wrong.
+  const before = readHtml(original);
+  const content = before.body;
 
   // Structural checks run before the empty-patch shortcut, so an empty patch is
   // a usable pre-flight probe for "can this document be written at all?".
@@ -92,7 +85,11 @@ export function applyHtml(
 
   const next = spliceAll(content, edits);
   verify(next, before.data, clean);
-  return bom + next;
+  // `content === original` is the BOM test: `readHtml` returns `body` with any
+  // leading BOM removed, so the two are the same value exactly when there was
+  // none to remove. When there was, it is the single character at `original[0]`,
+  // put back in front of the spliced text.
+  return content === original ? next : original.slice(0, 1) + next;
 }
 
 const DQ = String.fromCharCode(34);
