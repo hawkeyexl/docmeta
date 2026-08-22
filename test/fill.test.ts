@@ -965,6 +965,77 @@ describe("runFill — cost budget", () => {
     expect(provider.requests.length).toBeLessThanOrEqual(2);
   });
 
+  it("does not treat a rate limit as an overflow", async () => {
+    // Overflow triggers a halve-and-retry, which *doubles* the number of calls.
+    // Matching "rate limit exceeded" as an overflow would therefore answer a
+    // rate limit with twice the requests that provoked it.
+    class RateLimited implements InferenceProvider {
+      calls = 0;
+      provider(): string {
+        return "mock";
+      }
+      modelName(): string {
+        return "claude-haiku-4-5";
+      }
+      async completeJSON(): Promise<{
+        json: unknown;
+        usage: { inputTokens: number; outputTokens: number };
+      }> {
+        this.calls++;
+        throw new Error("Rate limit exceeded. Please retry after 60s.");
+      }
+    }
+
+    const nl = String.fromCharCode(10);
+    await writeFile(
+      join(dir, "long.md"),
+      fixture("missing-keys.md") + nl + ("filler line" + nl).repeat(400),
+      "utf8",
+    );
+    const provider = new RateLimited();
+
+    const { results } = await runFill({
+      ...base,
+      cwd: dir,
+      inputs: ["long.md"],
+      fields: ["description"],
+      dryRun: true,
+      chunkChars: 400,
+      inferenceProvider: provider,
+    });
+
+    expect(results[0]?.error).toMatch(/[Rr]ate limit/);
+    // Two calls, not four: `completeValidatedJSON` makes its own repair attempt
+    // (`attempts = 2` in the library), and docmeta then gives up. Four would
+    // mean the document was re-chunked at half the budget — the response to an
+    // overflow, and the wrong answer to a rate limit.
+    const rateLimitCalls = provider.calls;
+    expect(rateLimitCalls).toBe(2);
+
+    // The other half of the discrimination: a genuine overflow *does* re-chunk,
+    // so the count above is evidence only alongside this one.
+    class Overflowed extends RateLimited {
+      override async completeJSON(): Promise<{
+        json: unknown;
+        usage: { inputTokens: number; outputTokens: number };
+      }> {
+        this.calls++;
+        throw new Error("This model's maximum context length is 8192 tokens.");
+      }
+    }
+    const overflow = new Overflowed();
+    await runFill({
+      ...base,
+      cwd: dir,
+      inputs: ["long.md"],
+      fields: ["description"],
+      dryRun: true,
+      chunkChars: 400,
+      inferenceProvider: overflow,
+    });
+    expect(overflow.calls).toBeGreaterThan(rateLimitCalls);
+  });
+
   it("refuses a document a mid-run failure cut short", async () => {
     // The same hole as the turn cap, by a different route: a transient error on
     // chunk 3 used to leave the chunks that had succeeded merged and written,

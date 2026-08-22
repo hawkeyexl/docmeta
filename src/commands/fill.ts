@@ -112,6 +112,17 @@ const CACHE_DIR = ".docmeta/cache";
  * error the user can act on, not a corrupted document.
  */
 function looksLikeOverflow(message: string): boolean {
+  // `exceeds`, not `exceed`, and that one letter is load-bearing. Review
+  // suggested dropping it because it would match "rate limit exceeded" and
+  // "quota exceeded" — which matters, since the response to an overflow is to
+  // halve the budget, and halving *doubles* the call count. Answering a rate
+  // limit with twice the requests would be a real fault.
+  //
+  // But it does not match them: "exceeded" does not contain "exceeds". Checked
+  // against both, plus "429 Too Many Requests" — none match. Dropping it lost a
+  // genuine overflow instead: "Your input exceeds the maximum allowed length"
+  // matched before and would not after. Kept deliberately, and written down so
+  // the next reader does not re-derive the wrong half of this.
   return /context|too long|too large|token limit|maximum.*tokens|exceeds/i.test(
     message,
   );
@@ -566,6 +577,11 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
           // rolling them back would make the cap describe something other than
           // what happened. It does mean a document that triggers the retry
           // costs more turns than its final chunk count suggests.
+          //
+          // The cached *usage* is reset, though, because it describes the
+          // document rather than the run: leaving the abandoned attempt's
+          // tokens in would double-count the content both attempts covered.
+          usageTotal = undefined;
           chunkChars = Math.max(1, Math.floor(chunkChars / 2));
           continue;
         }
