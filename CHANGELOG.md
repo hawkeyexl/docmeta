@@ -1,3 +1,10 @@
+## [4.1.1](https://github.com/hawkeyexl/docmeta/compare/v4.1.0...v4.1.1) (2026-08-22)
+
+
+### Bug Fixes
+
+* **ci:** stop squash merges from skipping the release ([#106](https://github.com/hawkeyexl/docmeta/issues/106)) ([ea27022](https://github.com/hawkeyexl/docmeta/commit/ea27022adb218a217941320b96a146aff80e1523)), closes [#103](https://github.com/hawkeyexl/docmeta/issues/103)
+
 # [4.1.0](https://github.com/hawkeyexl/docmeta/compare/v4.0.0...v4.1.0) (2026-08-22)
 
 
