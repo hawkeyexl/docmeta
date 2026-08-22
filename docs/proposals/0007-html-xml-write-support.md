@@ -1,6 +1,6 @@
 # 0007 — `fill` write support for HTML, and why XML/DITA must stay read-only
 
-- **Status:** Proposed (scope reduced by stress testing — see the verdict)
+- **Status:** Superseded by [0018](0018-write-support-shipped-for-all-three.md)
 - **Serves:** Maya · M1 (the retrofit tail), Theo · T1
 - **Touches:** `src/extractors/html.ts`, new `src/extractors/html-write.ts`, `CONTRIBUTING.md`
 - **Verdict:** implement HTML. Keep XML and DITA read-only, for a reason stronger than the current one.
