@@ -14,8 +14,15 @@
  * longer shipped.
  */
 import { describe, it, expect } from "vitest";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, chmodSync, mkdirSync, readFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import {
+  mkdtempSync,
+  writeFileSync,
+  chmodSync,
+  mkdirSync,
+  readFileSync,
+  existsSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -42,33 +49,72 @@ const hasBash = (() => {
   }
 })();
 
-/** Run the action's script with a stub `npx` that reports the argv it received. */
-function argvFor(env: Record<string, string>): string {
+interface RunResult {
+  /** The argv the stub `npx` was called with, space-joined. */
+  argv: string;
+  /** Everything the script appended to `$GITHUB_OUTPUT`. */
+  githubOutput: string;
+  /** The script's own exit status. */
+  status: number;
+}
+
+/**
+ * Run the action's script with a stub `npx` that reports the argv it received
+ * and exits with `npxExit`.
+ *
+ * Invoked the way the runner invokes it, flags and all. That is not pedantry:
+ * `-e` is precisely what a plain `bash run.sh` was missing. Under errexit the
+ * script's `code=$?` line is unreachable, so a failing docmeta aborted before
+ * anything reached `$GITHUB_OUTPUT` — and a harness without `-e` called that
+ * green while the real runner failed on it.
+ */
+function runAction(env: Record<string, string>, npxExit = 0): RunResult {
   const dir = mkdtempSync(join(tmpdir(), "docmeta-action-"));
   mkdirSync(join(dir, "bin"));
   const stub = join(dir, "bin", "npx");
-  writeFileSync(stub, '#!/bin/sh\necho "ARGV: $*"\nexit 0\n', "utf8");
+  writeFileSync(
+    stub,
+    ["#!/bin/sh", 'echo "ARGV: $*"', `exit ${npxExit}`, ""].join("\n"),
+    "utf8",
+  );
   chmodSync(stub, 0o755);
   writeFileSync(join(dir, "run.sh"), actionScript(), "utf8");
+  const outFile = join(dir, "out");
 
-  const out = execFileSync("bash", [join(dir, "run.sh")], {
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      PATH: `${join(dir, "bin")}:${process.env.PATH ?? ""}`,
-      GITHUB_OUTPUT: join(dir, "out"),
-      DOCMETA_PATHS: "",
-      DOCMETA_SCHEMA: "",
-      DOCMETA_CONFIG: "",
-      DOCMETA_FORMAT: "",
-      DOCMETA_VERSION: "4",
-      DOCMETA_ARGS: "",
-      ...env,
+  const res = spawnSync(
+    "bash",
+    ["--noprofile", "--norc", "-eo", "pipefail", join(dir, "run.sh")],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: `${join(dir, "bin")}:${process.env.PATH ?? ""}`,
+        GITHUB_OUTPUT: outFile,
+        DOCMETA_PATHS: "",
+        DOCMETA_SCHEMA: "",
+        DOCMETA_CONFIG: "",
+        DOCMETA_FORMAT: "",
+        DOCMETA_VERSION: "4",
+        DOCMETA_ARGS: "",
+        ...env,
+      },
     },
-  });
-  const line = out.split("\n").find((l) => l.startsWith("ARGV:"));
-  if (line === undefined) throw new Error(`no ARGV line in:\n${out}`);
-  return line.slice("ARGV:".length).trim();
+  );
+  const line = (res.stdout ?? "")
+    .split("\n")
+    .find((l) => l.startsWith("ARGV:"));
+  return {
+    argv: line === undefined ? "" : line.slice("ARGV:".length).trim(),
+    githubOutput: existsSync(outFile) ? readFileSync(outFile, "utf8") : "",
+    status: res.status ?? -1,
+  };
+}
+
+/** Run the action's script and return just the argv the stub `npx` saw. */
+function argvFor(env: Record<string, string>): string {
+  const { argv, status } = runAction(env);
+  if (argv === "") throw new Error(`npx was never reached (exit ${status})`);
+  return argv;
 }
 
 describe.skipIf(!hasBash)("action.yml input wiring", () => {
@@ -133,5 +179,21 @@ describe.skipIf(!hasBash)("action.yml input wiring", () => {
     const argv = argvFor({ DOCMETA_PATHS: "docs/" });
     expect(argv).not.toContain('-c ""');
     expect(argv).not.toMatch(/--format\s*$/);
+  });
+  // The `exit-code` output is the whole reason `continue-on-error: true` is
+  // usable with this action, and the failing case is the only one anybody
+  // reaches for it. Under the runner's `bash -e`, the script's `code=$?` line
+  // is unreachable once docmeta exits non-zero — so this asserted nothing at
+  // all until the harness above started passing `-e`.
+  it("reports a non-zero docmeta exit through the exit-code output", () => {
+    const res = runAction({ DOCMETA_PATHS: "docs/" }, 1);
+    expect(res.githubOutput).toContain("exit-code=1");
+    expect(res.status).toBe(1);
+  });
+
+  it("reports a clean run as exit-code 0", () => {
+    const res = runAction({ DOCMETA_PATHS: "docs/" }, 0);
+    expect(res.githubOutput).toContain("exit-code=0");
+    expect(res.status).toBe(0);
   });
 });

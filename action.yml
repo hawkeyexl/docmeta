@@ -75,7 +75,14 @@ runs:
         DOCMETA_VERSION: ${{ inputs.version }}
         DOCMETA_ARGS: ${{ inputs.args }}
       run: |
-        set -uo pipefail
+        # `+e`, deliberately. GitHub runs a composite `shell: bash` step as
+        # `bash --noprofile --norc -eo pipefail`, and errexit makes the
+        # `code=$?` line below unreachable: a failing docmeta aborts the
+        # script, `exit-code` is never written, and a consumer using
+        # `continue-on-error: true` reads an empty string for the one result
+        # they added it to see. The job still fails on a real failure — that is
+        # what the explicit `exit "$code"` at the end is for.
+        set +e -uo pipefail
         # Word-split the inputs below, but do NOT glob-expand them. A `paths:`
         # of `docs/**/*.md` must reach docmeta as that string: docmeta applies
         # its own extension filtering and gitignore rules, and bash expanding it
