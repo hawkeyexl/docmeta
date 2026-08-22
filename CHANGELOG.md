@@ -1,3 +1,10 @@
+# [4.1.0](https://github.com/hawkeyexl/docmeta/compare/v4.0.0...v4.1.0) (2026-08-22)
+
+
+### Features
+
+* ship a GitHub Action and a pre-commit hook ([#104](https://github.com/hawkeyexl/docmeta/issues/104)) ([6c5bc75](https://github.com/hawkeyexl/docmeta/commit/6c5bc75e568e6c280ea8c0150737d5bbcff7b666))
+
 # [4.1.0-action-and-precommit-hook.4](https://github.com/hawkeyexl/docmeta/compare/v4.1.0-action-and-precommit-hook.3...v4.1.0-action-and-precommit-hook.4) (2026-08-22)
 
 
