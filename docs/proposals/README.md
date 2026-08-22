@@ -30,17 +30,19 @@ changed as a result, and lists what it depends on.
 | [0004](0004-config-upward-discovery.md) | Config discovery walks up | all | Implemented |
 | [0005](0005-command-parity.md) | Command parity, flags with fallbacks | all | Implemented |
 | [0006](0006-gitignore-aware-discovery.md) | `.gitignore`-aware file discovery | all | Implemented |
-| [0007](0007-html-xml-write-support.md) | `fill` write support for HTML (XML/DITA stay read-only) | Maya · M1 | Proposed |
+| [0007](0007-html-xml-write-support.md) | `fill` write support for HTML (XML/DITA stay read-only) | Maya · M1 | Superseded by [0018](0018-write-support-shipped-for-all-three.md) |
 | [0008](0008-remote-schema-durability.md) | Remote schema durability | Devin · D2 | Implemented |
 | [0009](0009-publish-builtin-schemas.md) | Publish built-in schemas at stable URLs | Sara · S1 | Implemented |
-| [0010](0010-init-and-schema-inference.md) | `docmeta init` and schema inference | Maya · M1 / Sara · S1 | Proposed |
+| [0010](0010-init-and-schema-inference.md) | `docmeta init` and schema inference | Maya · M1 / Sara · S1 | Partly shipped — `infer` landed; `init` rejected by [0019](0019-no-docmeta-init.md) |
 | [0011](0011-fill-in-content-strategy.md) | Fold `fill` into the content strategy | strategy debt | Proposed |
 | [0012](0012-fill-cost-and-privacy.md) | `fill` cost, privacy, and offline operation | Maya · M4 / Devin · D1 | Superseded by [0017](0017-fill-egress-and-bounds.md) |
 | [0013](0013-cleanup-dead-code-and-exit-codes.md) | Dead code, unpopulated fields, usage exit codes | correctness | Implemented |
 | [0014](0014-empty-input-is-not-success.md) | An empty input set is not success | correctness | Implemented |
 | [0015](0015-schema-trust-boundary.md) | A trust boundary for document-supplied schemas | Devin · D2 / Sara · S3 | Implemented |
 | [0016](0016-flag-ownership.md) | Which command owns a flag, and where it may be written | all (CLI surface) | Accepted |
-| [0017](0017-fill-egress-and-bounds.md) | What `fill` sends, and how to bound it | Maya · M4 / Devin · D1 | Accepted |
+| [0017](0017-fill-egress-and-bounds.md) | What `fill` sends, and how to bound it | Maya · M4 / Devin · D1 | Implemented (#102) |
+| [0018](0018-write-support-shipped-for-all-three.md) | Write support shipped for HTML, XML **and** DITA | Maya · M1, M4 / Theo · T1 | Implemented (#97–#100) |
+| [0019](0019-no-docmeta-init.md) | `docmeta init` is rejected, not deferred | Maya · M1 | Accepted |
 
 0014 was not in the original review. It surfaced while stress-testing 0004 and
 is the most severe item in the set: **docmeta currently exits `0` when it
@@ -63,7 +65,7 @@ behavior rather than describing it.
 
 ## Dependency order
 
-At a glance, so a planning pass does not have to reconstruct it from 17 headers.
+At a glance, so a planning pass does not have to reconstruct it from 19 headers.
 
 ```
 0014 ──┬─> 0006          (0006 can turn a gate into a silent no-op without 0014)
@@ -82,7 +84,7 @@ At a glance, so a planning pass does not have to reconstruct it from 17 headers.
                           0017 supersedes it — the gap was real, the evidence wasn't)
 ```
 
-**Safe to start in any order, no blockers:** 0002, 0007, 0010, 0011, 0013, 0017.
+**Safe to start in any order, no blockers:** 0002, 0011.
 
 **Shipped so far:** 0001, 0003, 0004, 0005, 0006, 0008, 0014, 0015, and the
 standalone false-green guard called out in

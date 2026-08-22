@@ -1,6 +1,6 @@
 # 0010 — `docmeta init` and `docmeta schemas infer`
 
-- **Status:** Partly shipped — `schemas infer` landed; `init` deferred (see below)
+- **Status:** Partly shipped — `schemas infer` landed; `init` rejected by [0019](0019-no-docmeta-init.md)
 - **Serves:** Maya · M1 (the on-ramp), Sara · S1 (the missing first step)
 - **Relates to:** [0001](0001-validation-baseline.md) (infer → baseline → ratchet is the retrofit path), [0014](0014-empty-input-is-not-success.md)
 - **Touches:** `src/commands/schemas.ts`, `src/reporters/infer.ts`, `src/cli.ts`
