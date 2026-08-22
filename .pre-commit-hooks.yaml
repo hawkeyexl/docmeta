@@ -1,0 +1,29 @@
+# Hooks this repository publishes to pre-commit consumers.
+#
+# `language: system`, not `node`, and that is a measured decision rather than a
+# preference. A `language: node` hook installs *this repository* as a package,
+# which cannot work here: `bin` points at `dist/cli.js`, `dist/` is gitignored,
+# and building it needs devDependencies that pre-commit's environment does not
+# install (`npx canceled due to missing packages: ["tsup@8.5.1"]`). Naming the
+# published package in `additional_dependencies` does not rescue it either —
+# this repo's own unbuilt `bin` is what gets linked, and the hook fails with
+# "Executable `docmeta` not found". All three were tried against a scratch repo
+# with `pre-commit try-repo` before settling here.
+#
+# `files` is an explicit regex rather than pre-commit's `types_or`, because
+# `identify`'s tags do not map onto docmeta's formats: it has no tag for
+# AsciiDoc or reStructuredText, and `.mdx` is often untagged. A mismatch would
+# mean files silently not checked, which is the failure docmeta exists to
+# prevent. The pattern must stay in step with `supportedExtensions()`, and
+# `test/pre-commit-hook.test.ts` asserts the two agree as an exact set in both
+# directions — so adding a format fails that test rather than quietly narrowing
+# what the hook covers.
+#
+# `(?i)` because the CLI matches extensions case-insensitively; a hook that
+# skipped `README.MD` would under-check the very files it was added to guard.
+- id: docmeta
+  name: docmeta validate
+  description: Validate document metadata against JSON Schema
+  entry: npx --yes docmeta@4 validate
+  language: system
+  files: '(?i)\.(adoc|asciidoc|dita|ditamap|htm|html|markdown|md|mdx|rst|xml)$'

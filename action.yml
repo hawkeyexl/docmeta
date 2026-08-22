@@ -1,0 +1,110 @@
+# The GitHub Action consumers reference as `uses: hawkeyexl/docmeta@v4`.
+#
+# Composite rather than a bundled JS action, deliberately. A JS action ships
+# compiled JavaScript that GitHub runs directly, which means committing a built
+# `dist/` and keeping it in step with every release — a second build pipeline,
+# and the usual way an action ends up running last week's code. Shelling out to
+# `npx docmeta@<major>` keeps the npm package as the single artifact, so there
+# is exactly one thing to version.
+#
+# Six inputs, and no more. Enumerating every CLI flag would create a second CLI
+# surface with nothing like `docs:check-cli` guarding it against drift; `args`
+# is the documented way to reach anything not listed here.
+name: docmeta
+description: Validate document metadata against JSON Schema
+author: hawkeyexl
+
+branding:
+  icon: check-square
+  color: blue
+
+inputs:
+  paths:
+    description: Files, directories, or globs to validate. Defaults to `paths:` in your config.
+    required: false
+  schema:
+    description: Schema ref. One per line for several; each becomes its own `-s`.
+    required: false
+  config:
+    description: Path to a docmeta config file.
+    required: false
+  format:
+    description: "Output format: pretty, json, github, sarif, or junit."
+    required: false
+    default: github
+  version:
+    description: >-
+      npm version range for the CLI. Defaults to the major this action ships
+      with. Also accepts a path or tarball, which is how the smoke test runs the
+      action against a local build.
+    required: false
+    default: "4"
+  args:
+    description: Extra raw arguments appended verbatim, for anything the inputs above do not cover.
+    required: false
+  node-version:
+    description: Node version to set up. docmeta needs 24 or newer.
+    required: false
+    default: "24"
+
+outputs:
+  exit-code:
+    description: >-
+      docmeta's exit code — 0 clean, 1 validation failures, 2 operational error.
+      Only useful with `continue-on-error: true`; otherwise a non-zero code has
+      already failed the job.
+    value: ${{ steps.docmeta.outputs.exit-code }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - id: docmeta
+      shell: bash
+      env:
+        # Through the environment rather than interpolated into the run script:
+        # `${{ }}` is substituted before bash sees the line, so a path
+        # containing a quote would otherwise be a shell injection.
+        DOCMETA_PATHS: ${{ inputs.paths }}
+        DOCMETA_SCHEMA: ${{ inputs.schema }}
+        DOCMETA_CONFIG: ${{ inputs.config }}
+        DOCMETA_FORMAT: ${{ inputs.format }}
+        DOCMETA_VERSION: ${{ inputs.version }}
+        DOCMETA_ARGS: ${{ inputs.args }}
+      run: |
+        set -uo pipefail
+        # Word-split the inputs below, but do NOT glob-expand them. A `paths:`
+        # of `docs/**/*.md` must reach docmeta as that string: docmeta applies
+        # its own extension filtering and gitignore rules, and bash expanding it
+        # first would substitute the runner's view of the tree for docmeta's —
+        # silently, and differently depending on the working directory.
+        set -f
+
+        argv=()
+        # Paths are positional and space-separated, matching the CLI.
+        if [ -n "$DOCMETA_PATHS" ]; then
+          # shellcheck disable=SC2206
+          argv+=($DOCMETA_PATHS)
+        fi
+        # One `-s` per line: a schema ref can contain spaces, so lines are the
+        # only separator that cannot collide with a legitimate value.
+        if [ -n "$DOCMETA_SCHEMA" ]; then
+          while IFS= read -r ref; do
+            [ -n "$ref" ] && argv+=(-s "$ref")
+          done <<< "$DOCMETA_SCHEMA"
+        fi
+        [ -n "$DOCMETA_CONFIG" ] && argv+=(-c "$DOCMETA_CONFIG")
+        [ -n "$DOCMETA_FORMAT" ] && argv+=(--format "$DOCMETA_FORMAT")
+        if [ -n "$DOCMETA_ARGS" ]; then
+          # shellcheck disable=SC2206
+          argv+=($DOCMETA_ARGS)
+        fi
+
+        echo "docmeta validate ${argv[*]}"
+        npx --yes "docmeta@${DOCMETA_VERSION}" validate "${argv[@]}"
+        code=$?
+        echo "exit-code=${code}" >> "$GITHUB_OUTPUT"
+        exit "$code"

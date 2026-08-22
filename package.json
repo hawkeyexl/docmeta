@@ -48,7 +48,7 @@
     "schemas:check": "node scripts/check-builtin-schemas.mjs",
     "commitlint": "commitlint --edit",
     "semantic-release": "semantic-release",
-    "prepare": "husky",
+    "prepare": "node scripts/prepare.mjs",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

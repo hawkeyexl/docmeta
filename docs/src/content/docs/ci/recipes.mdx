@@ -130,7 +130,7 @@ validate-metadata:
 
 <Aside type="tip" title="Pin the version">
 `npx -y docmeta` resolves the latest published version on each run. Pin a
-specific version for reproducible pipelines: `npx -y docmeta@0.1.0 validate ...`.
+major for reproducible pipelines: `npx -y docmeta@4 validate ...`.
 </Aside>
 
 If you collect machine-readable reports, capture the JSON output as an artifact:
@@ -246,17 +246,35 @@ SARIF recipe: the run worth reporting is the one that failed.
 
 ## pre-commit
 
-<Aside type="caution" title="No official pre-commit hook repository">
-docmeta does **not** publish a [pre-commit](https://pre-commit.com/) hook
-repository, so you cannot reference it as a remote hook (`repo: https://...`).
-The supported approach is a **local** hook that calls the docmeta CLI directly.
-The recipes below use that approach.
+A pre-commit hook catches metadata errors before they reach CI. docmeta
+publishes a [pre-commit](https://pre-commit.com/) hook, so the whole
+configuration is three lines:
+
+```yaml title=".pre-commit-config.yaml"
+repos:
+  - repo: https://github.com/hawkeyexl/docmeta
+    rev: v4.0.0
+    hooks:
+      - id: docmeta
+```
+
+The hook fails the commit when docmeta returns a non-zero exit code, and it
+already knows which files to look at — every extension docmeta reads, matched
+case-insensitively. You do not write a `files` pattern, which matters more than
+it sounds: a hand-written one is easy to narrow to `\.md$` and then quietly stop
+checking the AsciiDoc and DITA in the same repo.
+
+<Aside type="note" title="It needs Node on the machine">
+The hook runs `npx docmeta`, so contributors need Node 24 or newer on their
+`PATH` — the same requirement as running docmeta anywhere else. pre-commit does
+not install Node for it.
 </Aside>
 
-A pre-commit hook catches metadata errors before they reach CI. Because there is
-no published hook repo, define a `local` hook in `.pre-commit-config.yaml` that
-runs docmeta through `npx`. The hook fails the commit when docmeta returns a
-non-zero exit code.
+## pre-commit without the published hook
+
+If you would rather not fetch from GitHub — an air-gapped machine, or a policy
+against remote hook repos — define a `local` hook instead. You then own the
+`files` pattern, so keep it in step with the formats you actually use.
 
 <Tabs>
 <TabItem label="Validate staged files">

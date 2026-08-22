@@ -78,6 +78,13 @@ jobs:
       - run: npm run build
       - run: npm test
 
+      # Captured before the release so the tag-move below can tell "released"
+      # from "ran and found nothing to release" — a push to `main` with only
+      # `chore:`/`docs:` commits does the latter, and moving the major tag then
+      # would aim it at a tree that was never published.
+      - id: before
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
       - name: Release
         env:
           # App token (not the default GITHUB_TOKEN): semantic-release uses it both
@@ -86,3 +93,44 @@ jobs:
           # publish authenticates via OIDC trusted publishing (id-token above).
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: npx semantic-release
+
+      # Action consumers write `uses: hawkeyexl/docmeta@v4` and expect it to
+      # track the newest 4.x. That only works because someone force-updates a
+      # `v4` tag; semantic-release creates immutable `v4.0.0` tags and nothing
+      # else, so without this step the reference resolves to nothing.
+      #
+      # Two gates, and the second is the one that is easy to miss. `main` alone
+      # is not enough: a push with no releasable commits still runs this job and
+      # releases nothing, and moving `v4` then would point it at a tree that was
+      # never published. So the step also refuses a prerelease version --
+      # `.releaserc.json` gives `next` and `feat/**` prerelease identifiers,
+      # which must never claim the major tag.
+      #
+      # The token is passed explicitly because `checkout` above sets
+      # `persist-credentials: false`: the job holds `contents: write`, but no
+      # credential is in git's config, and this App is also the only actor
+      # allowed to bypass the `main` ruleset.
+      - name: Move the major tag
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          if [ "$version" = "${{ steps.before.outputs.version }}" ]; then
+            echo "::notice::No release was produced; leaving the major tag alone."
+            exit 0
+          fi
+          case "$version" in
+            *-*)
+              echo "::notice::$version is a prerelease; leaving the major tag alone."
+              exit 0
+              ;;
+          esac
+          major="v${version%%.*}"
+          # Anchored to the concrete version tag semantic-release just created,
+          # not to HEAD: semantic-release commits the changelog and version bump
+          # itself, so HEAD here is not necessarily what it tagged.
+          echo "Moving $major to v$version"
+          git tag -f "$major" "v$version"
+          git push --force             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"             "refs/tags/${major}"
