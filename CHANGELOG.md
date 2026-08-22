@@ -1,3 +1,11 @@
+# [3.14.0-xml-write.1](https://github.com/hawkeyexl/docmeta/compare/v3.13.0...v3.14.0-xml-write.1) (2026-08-22)
+
+
+### Features
+
+* **extractors:** write metadata back to HTML ([#97](https://github.com/hawkeyexl/docmeta/issues/97)) ([43a9b0e](https://github.com/hawkeyexl/docmeta/commit/43a9b0e33aecbf6580732fe3ccfef84ed223f3db)), closes [#99](https://github.com/hawkeyexl/docmeta/issues/99) [#62](https://github.com/hawkeyexl/docmeta/issues/62)
+* **extractors:** write metadata back to XML ([8a1ba20](https://github.com/hawkeyexl/docmeta/commit/8a1ba20f7c40d1390a0a4325047abf736367b987))
+
 # [3.14.0-html-write.1](https://github.com/hawkeyexl/docmeta/compare/v3.13.0...v3.14.0-html-write.1) (2026-08-21)
 
 

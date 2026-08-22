@@ -18,7 +18,7 @@ implemented and counts toward directory and glob walks.
 | `mdx` | `.mdx` | Leading fenced frontmatter — YAML, TOML, or JSON. | Yes |
 | `asciidoc` | `.adoc`, `.asciidoc` | Fenced frontmatter, or the native header: `= Title` plus `:key: value` attributes. | Only into an existing fenced block |
 | `rst` | `.rst` | Fenced frontmatter, or the native section title plus `:key: value` docinfo fields. | Only into an existing fenced block |
-| `xml` | `.xml`, `.dita`, `.ditamap` | Attributes of the root element. | No |
+| `xml` | `.xml`, `.dita`, `.ditamap` | Attributes of the root element. | Yes, except DITA |
 | `html` | `.html`, `.htm` | `<title>` plus `<meta name="…" content="…">` tags. | Yes |
 
 ### Why some formats are read-only
@@ -39,16 +39,23 @@ block to those files: a bare `---` is a transition in reStructuredText and an
 open-block delimiter in AsciiDoc, so inventing one would change how the page
 renders.
 
-XML is read-only for a different reason: its metadata lives in the root
-element's attributes, and the parser docmeta uses reports only where each
-attribute *starts*, not where it ends, so there is no span to replace.
+HTML and XML are both written the same way, by replacing one character range
+and leaving every other byte alone. For HTML the parser hands those ranges over
+directly. For XML it does not — it reports only where each attribute *starts*,
+as a line and column — so docmeta rebuilds the range from that position.
 
-HTML has no such problem, because its parser reports an exact character range
-for every tag and attribute. `fill` writes HTML the same way it writes fenced
-frontmatter — by replacing one range and leaving every other byte alone — so
+DITA is the exception, and not for a mechanical reason. Its metadata belongs in
+a `<prolog>` element, so adding it to the root element would produce a topic
+that its DTD rejects. docmeta refuses that write and says so, rather than
+producing an invalid file.
+
+`fill` writes HTML and XML the same way it writes fenced frontmatter — by replacing one range and leaving every other byte alone — so
 entity spelling, attribute quoting, void elements and the doctype all survive.
-A new `<meta>` tag is inserted just inside `<head>`, indented to match its
-neighbours. A page with no `<head>` of its own is refused rather than guessed at.
+For XML that matters most with the DTD-declared entities common in DITA-adjacent
+content: re-serializing would turn `&nbsp;` into `&amp;nbsp;`, and splicing
+cannot. A new `<meta>` tag is inserted just inside `<head>`, indented to match
+its neighbours; a new XML attribute is added to the root element's start tag. A
+page with no `<head>` of its own is refused rather than guessed at.
 
 Run `docmeta schemas` to see the current writability of each format. Targeting a
 read-only file with `fill` is reported as a per-file error; the rest of the run
@@ -194,6 +201,17 @@ their root-element attributes are the metadata:
 This yields `id`, `type`, and `xml:lang`; the `DOCTYPE` declaration is skipped.
 The DTD-declared entities common in DITA content (`&nbsp;`, `&mdash;`) do not
 fail the file — see above. Metadata held in a `<prolog>` element is not read.
+
+`fill` **will not write DITA**. Its metadata belongs in `<prolog>`, and putting
+it on the root element instead would produce a topic that fails DTD validation —
+so docmeta reports a per-file error naming the reason rather than writing an
+invalid file. Plain XML, including a `.xml` file with no DITA doctype, is
+written normally.
+
+A file counts as DITA when its `DOCTYPE` names a DITA DTD, when its root element
+carries a DITA `class` or `DITAArchVersion` attribute, or when a `.dita` /
+`.ditamap` extension is paired with a DITA root element name. A root element
+merely *named* `map` or `task` in a `.xml` file is not enough.
 
 ### HTML
 
