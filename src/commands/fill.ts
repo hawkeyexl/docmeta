@@ -233,7 +233,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
   // by name rather than being quietly overridden.
   const providerName: ProviderSelector =
     opts.local === true && requestedProvider === "auto"
-      ? ("llama-cpp" as ProviderSelector)
+      ? "llama-cpp"
       : requestedProvider;
   const model = opts.model ?? config?.fill?.model;
   const spec = { provider: providerName, model: model ?? null };
@@ -563,6 +563,11 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
           collected.push(run.result);
         }
         if (overflowed && attempt < 2) {
+          // The calls this attempt already made stay counted against
+          // `--max-turns`. They were made — the provider billed them — so
+          // rolling them back would make the cap describe something other than
+          // what happened. It does mean a document that triggers the retry
+          // costs more turns than its final chunk count suggests.
           chunkChars = Math.max(1, Math.floor(chunkChars / 2));
           continue;
         }

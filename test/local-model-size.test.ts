@@ -19,9 +19,10 @@ import { LLAMA_MODELS, LLAMA_TIERS } from "@hawkeyexl/inference";
 const DOCUMENTED_MAX_BYTES = 10 * 1000 * 1000 * 1000;
 
 describe("the documented local-model download bound", () => {
-  const entries = Object.entries(
-    LLAMA_MODELS as Record<string, { sizeBytes: number; tier?: string }>,
-  );
+  // No cast: the library types this as `Record<string, LlamaModelEntry>` with
+  // `sizeBytes` and an optional `tier`, so asserting a shape here would only
+  // hide it drifting.
+  const entries = Object.entries(LLAMA_MODELS);
 
   it("holds for every model a tier can select", () => {
     const tiered = entries.filter(([, m]) => m.tier != null);
