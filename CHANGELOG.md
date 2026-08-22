@@ -1,3 +1,10 @@
+# [4.1.0-action-and-precommit-hook.4](https://github.com/hawkeyexl/docmeta/compare/v4.1.0-action-and-precommit-hook.3...v4.1.0-action-and-precommit-hook.4) (2026-08-22)
+
+
+### Bug Fixes
+
+* accept newline-separated paths and args, and warn on shell quotes ([9ed407d](https://github.com/hawkeyexl/docmeta/commit/9ed407daa4510edef599fb2a28f24bddcef480bf))
+
 # [4.1.0-action-and-precommit-hook.3](https://github.com/hawkeyexl/docmeta/compare/v4.1.0-action-and-precommit-hook.2...v4.1.0-action-and-precommit-hook.3) (2026-08-22)
 
 
