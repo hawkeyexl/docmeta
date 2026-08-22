@@ -15,10 +15,21 @@
 import { DOMParser } from "@xmldom/xmldom";
 import { parse as parseYamlScalar } from "yaml";
 import { escapePointerSegment, positionForFactory } from "./pointer.js";
+import {
+  ditaShape,
+  metadataContainers,
+  otherMetaEntries,
+  type DitaShape,
+} from "./dita.js";
 import type { ExtractedMetadata } from "../types.js";
 
 type XmlDocument = ReturnType<DOMParser["parseFromString"]>;
 export type XmlElement = NonNullable<XmlDocument["documentElement"]>;
+
+/** Where a key's effective value came from. */
+export type XmlSource =
+  | { kind: "attr"; name: string }
+  | { kind: "othermeta"; el: XmlElement };
 
 export interface XmlRead {
   data: Record<string, unknown>;
@@ -28,6 +39,13 @@ export interface XmlRead {
   root: XmlElement | undefined;
   /** The text actually parsed — the source minus any leading BOM. */
   body: string;
+  /**
+   * The element each key's effective value was read from, so a write can land
+   * on the same one. DITA has two channels; plain XML has one.
+   */
+  sources: Map<string, XmlSource>;
+  /** Set when the document is DITA, describing where its metadata belongs. */
+  dita: DitaShape | undefined;
 }
 
 /** Parse a raw attribute value as a YAML scalar, falling back to the string. */
@@ -51,7 +69,7 @@ export function isMetadataAttribute(name: string): boolean {
  * Parse and read. Throws for malformed XML, which the command layer records as
  * a per-file failure so the rest of the run continues (mirroring frontmatter).
  */
-export function readXml(content: string): XmlRead {
+export function readXml(content: string, filePath?: string): XmlRead {
   // A BOM stays part of line 1; it doesn't shift line numbers.
   const body = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
 
@@ -79,8 +97,19 @@ export function readXml(content: string): XmlRead {
   const lineMap = new Map<string, number>();
   const colMap = new Map<string, number>();
   const data: Record<string, unknown> = {};
+  const sources = new Map<string, XmlSource>();
   const root = doc.documentElement ?? undefined;
-  if (!root) return { data, lineMap, colMap, root: undefined, body };
+  if (!root) {
+    return {
+      data,
+      lineMap,
+      colMap,
+      root: undefined,
+      body,
+      sources,
+      dita: undefined,
+    };
+  }
 
   // Both are 1-based, verified against the parser rather than its typings:
   // `@xmldom/xmldom` documents `lineNumber` as zero-based and `columnNumber`
@@ -98,6 +127,7 @@ export function readXml(content: string): XmlRead {
     const name = attr.name;
     if (!isMetadataAttribute(name)) continue;
     data[name] = typeValue(attr.value);
+    sources.set(name, { kind: "attr", name });
     const pointer = `/${escapePointerSegment(name)}`;
     lineMap.set(pointer, attr.lineNumber ?? rootLine);
     // An attribute's `columnNumber` is the opening quote of its value, so
@@ -110,7 +140,28 @@ export function readXml(content: string): XmlRead {
     }
   }
 
-  return { data, lineMap, colMap, root, body };
+  // DITA keeps document metadata in <prolog>/<topicmeta>, not on the root
+  // element. Reading it is not optional once `fill` can write it: a value the
+  // writer puts in an <othermeta> that the reader cannot see leaves the field
+  // missing, so `validate` fails again and the next run rewrites it forever.
+  const dita = ditaShape(body, root, filePath);
+  if (dita) {
+    const { container } = metadataContainers(root, dita);
+    if (container) {
+      for (const { key, value, el } of otherMetaEntries(container)) {
+        // othermeta wins over a root attribute of the same name: it is the
+        // explicit metadata channel, while root attributes are mostly
+        // structural.
+        data[key] = typeValue(value);
+        sources.set(key, { kind: "othermeta", el });
+        const pointer = `/${escapePointerSegment(key)}`;
+        if (el.lineNumber != null) lineMap.set(pointer, el.lineNumber);
+        if (el.columnNumber != null) colMap.set(pointer, el.columnNumber);
+      }
+    }
+  }
+
+  return { data, lineMap, colMap, root, body, sources, dita };
 }
 
 /** Shape the read into the generic extractor result. */

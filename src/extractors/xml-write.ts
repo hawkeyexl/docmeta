@@ -26,6 +26,7 @@ import {
 } from "../types.js";
 import { dropUndefined, deepEqual } from "./patch-util.js";
 import { readXml, isMetadataAttribute, type XmlElement } from "./xml-read.js";
+import { ditaEdits } from "./dita-write.js";
 import {
   lineStarts,
   offsetAt,
@@ -54,7 +55,7 @@ export function applyXml(
 
   let before;
   try {
-    before = readXml(original);
+    before = readXml(original, options.filePath);
   } catch (err) {
     // A document the reader rejects has no trustworthy positions, so there is
     // nothing safe to splice.
@@ -71,17 +72,20 @@ export function applyXml(
     );
   }
 
-  // Structural checks run before the empty-patch shortcut, so an empty patch is
-  // a usable pre-flight probe for "can this document be written at all?".
-  // `fill` uses it to skip paying for inference on a file it could never write.
-  if (isDita(content, root, options.filePath)) {
-    throw new DocmetaError(
-      "This looks like DITA, whose metadata belongs in a <prolog> element. Adding it to the root element would produce a topic its DTD rejects, so docmeta will not write it.",
-    );
-  }
-
   const clean = dropUndefined(patch);
   if (Object.keys(clean).length === 0) return original;
+
+  // DITA keeps its metadata in <prolog>/<topicmeta>, and its DTD declares which
+  // root attributes a topic may carry — so the generic root-attribute write
+  // below would produce a document the user's own toolchain rejects.
+  if (before.dita) {
+    const next = spliceAll(
+      content,
+      ditaEdits(content, before, before.dita, clean, emitScalar, escapeAttr),
+    );
+    verify(next, before.data, clean, options.filePath);
+    return bom ? original.slice(0, 1) + next : next;
+  }
 
   const starts = lineStarts(content);
   const quoteOffsets = new Map<string, number>();
@@ -130,7 +134,7 @@ export function applyXml(
   }
 
   const next = spliceAll(content, edits);
-  verify(next, before.data, clean);
+  verify(next, before.data, clean, options.filePath);
   return bom ? original.slice(0, 1) + next : next;
 }
 
@@ -152,104 +156,6 @@ function rootNameEnd(
     );
   }
   return at;
-}
-
-/**
- * Whether this document is DITA, which keeps its metadata somewhere else.
- *
- * Positive signals only. A root element merely *named* `map` or `task` is far
- * too weak on its own — those are ordinary names in hand-rolled XML — so the
- * name counts only when the file extension agrees.
- */
-function isDita(
-  content: string,
-  root: XmlElement,
-  filePath: string | undefined,
-): boolean {
-  if (hasDitaDoctype(content)) return true;
-  // DITA-OT output carries the specialization ancestry in @class.
-  if (/^\s*[-+]\s+(topic|map)\//.test(root.getAttribute("class") ?? "")) {
-    return true;
-  }
-  if (root.getAttribute("DITAArchVersion") != null) return true;
-  const lower = filePath?.toLowerCase() ?? "";
-  return (
-    (lower.endsWith(".dita") || lower.endsWith(".ditamap")) &&
-    DITA_ROOTS.has(root.nodeName.toLowerCase())
-  );
-}
-
-const DITA_ROOTS = new Set([
-  "topic",
-  "concept",
-  "task",
-  "reference",
-  "glossentry",
-  "glossgroup",
-  "map",
-  "bookmap",
-  "subjectscheme",
-]);
-
-/**
- * Whether the document declares a DITA DTD.
- *
- * Comments are blanked first, at their original length so offsets still line up.
- * Two things go wrong otherwise, and both are silent: a comment containing a
- * tag-like `<word` ends the search window early — `<!-- covers <integration> -->`
- * ahead of the DOCTYPE hides it entirely — and a comment that merely *mentions*
- * a DITA DTD would announce one that isn't there.
- *
- * Missing the DOCTYPE is the dangerous direction. A hand-authored DITA topic
- * carries no `@class` or `@DITAArchVersion` to fall back on, so the file would
- * be taken for plain XML and given a root attribute its DTD does not declare.
- */
-function hasDitaDoctype(content: string): boolean {
-  const masked = content.replace(/<!--[\s\S]*?-->/g, (m) => " ".repeat(m.length));
-  const doctype = doctypeText(masked);
-  if (doctype === undefined) return false;
-
-  // A DITA public identifier is unambiguous on its own.
-  if (/\/\/DTD DITA/i.test(doctype)) return true;
-
-  // A SYSTEM-only declaration has no public identifier to match, and DITA files
-  // written against a local DTD copy use exactly that form. Two weak signals
-  // are required together, because either alone is ordinary in hand-rolled XML:
-  // the declared root element has to be a DITA type, *and* the system
-  // identifier has to name a DITA DTD.
-  const root = /<!DOCTYPE\s+([A-Za-z_][\w.-]*)/.exec(doctype)?.[1];
-  if (root === undefined || !DITA_ROOTS.has(root.toLowerCase())) return false;
-  return /\b(?:concept|task|reference|topic|map|bookmap|glossentry|glossgroup|ditabase|subjectscheme)\.dtd\b/i.test(
-    doctype,
-  );
-}
-
-/**
- * The whole `<!DOCTYPE …>` declaration, internal subset included.
- *
- * Scanning rather than matching `[^>]*`: an internal subset is full of `>` —
- * `<!ENTITY nbsp "&#160;">` is the reason most DITA files have one at all — and
- * a pattern that stopped at the first one would read only part of the
- * declaration. Quotes and `[ … ]` nesting are tracked so the `>` that ends the
- * declaration is the one actually found.
- */
-function doctypeText(masked: string): string | undefined {
-  const start = masked.indexOf("<!DOCTYPE");
-  if (start === -1) return undefined;
-  let quote: string | undefined;
-  let depth = 0;
-  for (let i = start + "<!DOCTYPE".length; i < masked.length; i++) {
-    const ch = masked[i];
-    if (quote !== undefined) {
-      if (ch === quote) quote = undefined;
-      continue;
-    }
-    if (ch === '"' || ch === "'") quote = ch;
-    else if (ch === "[") depth++;
-    else if (ch === "]") depth--;
-    else if (ch === ">" && depth === 0) return masked.slice(start, i + 1);
-  }
-  return undefined;
 }
 
 /**
@@ -323,15 +229,20 @@ function verify(
   next: string,
   before: Record<string, unknown>,
   patch: MetadataPatch,
+  filePath: string | undefined,
 ): void {
   const expected = { ...before, ...patch };
+  // Same path as the original read: a `.dita` file re-read as plain XML would
+  // not see the <othermeta> just written, and the check would fail for the
+  // wrong reason.
+  //
   // The re-parse is guarded because it is the one place a writer bug shows up
   // as a *parse* failure rather than a mismatch, and `apply`'s contract is that
   // a document it cannot rewrite safely raises `DocmetaError` — not whatever
   // the parser happened to throw.
   let actual;
   try {
-    actual = readXml(next).data;
+    actual = readXml(next, filePath).data;
   } catch (err) {
     throw new DocmetaError(
       `Refusing to write XML metadata: the rewritten document did not parse (${(err as Error).message}).`,

@@ -75,32 +75,31 @@ describe("applyXml — no-ops and refusals", () => {
     expect(applyXml(content, { type: undefined })).toBe(content);
   });
 
-  it("refuses a DITA document, naming the reason", () => {
-    // Root attributes are not where DITA keeps metadata, and adding one the DTD
-    // does not declare makes the topic invalid. Handled in a later change.
-    expect(() => applyXml(fx("topic.dita"), { audience: "dev" })).toThrow(
-      /DITA/,
-    );
-  });
-
-  it("refuses DITA on an empty patch too, so the pre-flight probe is honest", () => {
-    expect(() => applyXml(fx("topic.dita"), {})).toThrow(DocmetaError);
+  it("does not put DITA metadata on the root element", () => {
+    // DITA keeps metadata in <prolog>; a root attribute would fail its DTD.
+    // The prolog writer is covered in dita.test.ts — this only pins that the
+    // generic root-attribute path is not the one that runs.
+    const out = applyXml(fx("topic.dita"), { audience: "dev" }, {
+      filePath: "topic.dita",
+    });
+    expect(out).not.toContain('audience="dev"');
+    expect(out).toContain("<prolog>");
   });
 
   it("sees the DOCTYPE past a comment that looks like a tag", () => {
     // `<!-- covers <integration> -->` before the DOCTYPE used to end the search
     // window inside the comment, hiding the declaration. A hand-authored topic
     // has no @class or @DITAArchVersion to fall back on, so the file would be
-    // taken for plain XML and given a root attribute its DTD does not declare —
-    // exactly the write DITA detection exists to prevent.
+    // taken for plain XML and given a root attribute its DTD does not declare,
+    // instead of the prolog entry it should get.
     const src = [
       "<!-- This topic covers <integration> scenarios. -->",
       '<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">',
       '<concept id="x"><title>T</title><conbody><p>b</p></conbody></concept>',
     ].join("\n");
-    expect(() =>
-      applyXml(src, { audience: "dev" }, { filePath: "no-hint" }),
-    ).toThrow(/DITA/);
+    const out = applyXml(src, { audience: "dev" }, { filePath: "no-hint" });
+    expect(out).toContain("<prolog>");
+    expect(out).not.toContain('audience="dev"');
   });
 
   it("detects DITA by @class, with no DOCTYPE at all", () => {
@@ -113,16 +112,17 @@ describe("applyXml — no-ops and refusals", () => {
       "  <conbody><p>b</p></conbody>",
       "</concept>",
     ].join("\n");
-    expect(() =>
-      applyXml(src, { audience: "dev" }, { filePath: "no-hint.xml" }),
-    ).toThrow(/DITA/);
+    const out = applyXml(src, { audience: "dev" }, { filePath: "no-hint.xml" });
+    expect(out).toContain("<prolog>");
+    expect(out).not.toContain('audience="dev"');
   });
 
   it("detects DITA by DITAArchVersion", () => {
     const src = '<map DITAArchVersion="1.3" id="m"><title>T</title></map>';
-    expect(() =>
-      applyXml(src, { audience: "dev" }, { filePath: "no-hint.xml" }),
-    ).toThrow(/DITA/);
+    const out = applyXml(src, { audience: "dev" }, { filePath: "no-hint.xml" });
+    // A map keeps metadata in <topicmeta>, not <prolog>.
+    expect(out).toContain("<topicmeta>");
+    expect(out).not.toContain('audience="dev"');
   });
 
   it("sees a DITA doctype that declares only a SYSTEM identifier", () => {
@@ -135,9 +135,9 @@ describe("applyXml — no-ops and refusals", () => {
       "]>",
       '<concept id="c"><title>T</title><conbody><p>a&nbsp;b</p></conbody></concept>',
     ].join("\n");
-    expect(() =>
-      applyXml(src, { audience: "dev" }, { filePath: "no-hint.xml" }),
-    ).toThrow(/DITA/);
+    const out = applyXml(src, { audience: "dev" }, { filePath: "no-hint.xml" });
+    expect(out).toContain("<prolog>");
+    expect(out).not.toContain('audience="dev"');
   });
 
   it("reads past an internal subset full of > characters", () => {
@@ -151,9 +151,9 @@ describe("applyXml — no-ops and refusals", () => {
       "]>",
       '<concept id="c"><title>T</title></concept>',
     ].join("\n");
-    expect(() =>
-      applyXml(src, { audience: "dev" }, { filePath: "no-hint.xml" }),
-    ).toThrow(/DITA/);
+    const out = applyXml(src, { audience: "dev" }, { filePath: "no-hint.xml" });
+    expect(out).toContain("<prolog>");
+    expect(out).not.toContain('audience="dev"');
   });
 
   it("does not take an ordinary SYSTEM doctype for DITA", () => {
