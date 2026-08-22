@@ -20,7 +20,10 @@ branding:
 
 inputs:
   paths:
-    description: Files, directories, or globs to validate. Defaults to `paths:` in your config.
+    description: >-
+      Files, directories, or globs to validate. Space-separated, or one per line
+      — use lines for any path containing a space. Defaults to `paths:` in your
+      config.
     required: false
   schema:
     description: Schema ref. One per line for several; each becomes its own `-s`.
@@ -40,7 +43,10 @@ inputs:
     required: false
     default: "4"
   args:
-    description: Extra raw arguments appended verbatim, for anything the inputs above do not cover.
+    description: >-
+      Extra arguments appended after everything else, for anything the inputs
+      above do not cover. Space-separated, or one per line. Shell quoting is not
+      interpreted, so a value containing a space needs its own line.
     required: false
   node-version:
     description: Node version to set up. docmeta needs 24 or newer.
@@ -95,12 +101,45 @@ runs:
         # silently, and differently depending on the working directory.
         set -f
 
+        # Split a multi-value input. A value containing a newline is taken one
+        # item per line; otherwise it is word-split on whitespace, which is the
+        # form the docs show and every existing consumer writes.
+        #
+        # The line form is not decoration: word-splitting cannot express a path
+        # containing a space at all, and `schema` below already uses lines for
+        # exactly that reason. Paths are far likelier to contain a space than a
+        # schema ref is.
+        split_input() {
+          split_out=()
+          [ -n "$1" ] || return 0
+          case "$1" in
+            *$'\n'*)
+              while IFS= read -r item; do
+                [ -n "$item" ] && split_out+=("$item")
+              done <<< "$1"
+              ;;
+            *)
+              # Word-split only. Quotes are NOT shell-processed, so a consumer
+              # writing `--exclude "*.draft.md"` hands docmeta a value with the
+              # quote characters still in it — and docmeta accepts it, excludes
+              # nothing, and exits 0. Measured: that turns "4 files checked"
+              # into "5 files checked" with no diagnostic at all. Silence is the
+              # whole problem, so say something.
+              case "$1" in
+                *[\'\"]*)
+                  echo "::warning::$2 contains a quote character. Quotes are not shell-processed here, so they become part of the value — put one item per line instead." >&2
+                  ;;
+              esac
+              # shellcheck disable=SC2206
+              split_out=($1)
+              ;;
+          esac
+        }
+
         argv=()
-        # Paths are positional and space-separated, matching the CLI.
-        if [ -n "$DOCMETA_PATHS" ]; then
-          # shellcheck disable=SC2206
-          argv+=($DOCMETA_PATHS)
-        fi
+        # Paths are positional, matching the CLI.
+        split_input "$DOCMETA_PATHS" "paths"
+        argv+=("${split_out[@]}")
         # One `-s` per line: a schema ref can contain spaces, so lines are the
         # only separator that cannot collide with a legitimate value.
         if [ -n "$DOCMETA_SCHEMA" ]; then
@@ -110,16 +149,16 @@ runs:
         fi
         [ -n "$DOCMETA_CONFIG" ] && argv+=(-c "$DOCMETA_CONFIG")
         [ -n "$DOCMETA_FORMAT" ] && argv+=(--format "$DOCMETA_FORMAT")
-        if [ -n "$DOCMETA_ARGS" ]; then
-          # shellcheck disable=SC2206
-          argv+=($DOCMETA_ARGS)
-        fi
+        split_input "$DOCMETA_ARGS" "args"
+        argv+=("${split_out[@]}")
 
         # `%q` per element, because the point of this line is to tell a
         # consumer what actually ran. Neither `${argv[*]}` nor `${argv[@]}`
         # would: echo rejoins on single spaces either way, so a path
         # containing a space logs identically to two separate paths.
-        printf 'docmeta validate'; printf ' %q' "${argv[@]}"; echo
+        printf 'docmeta validate'
+        [ ${#argv[@]} -gt 0 ] && printf ' %q' "${argv[@]}"
+        echo
         npx --yes "docmeta@${DOCMETA_VERSION}" validate "${argv[@]}"
         code=$?
         echo "exit-code=${code}" >> "$GITHUB_OUTPUT"

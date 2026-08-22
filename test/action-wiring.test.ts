@@ -61,10 +61,18 @@ const hasBash = (() => {
 })();
 
 interface RunResult {
-  /** The argv the stub `npx` was called with, space-joined. */
+  /** Each argument the stub `npx` received, boundaries intact. */
+  args: string[];
+  /** Whether the stub ran at all (it may be unreachable under errexit). */
+  reached: boolean;
+  /** The same arguments space-joined, for assertions that do not care. */
   argv: string;
   /** Everything the script appended to `$GITHUB_OUTPUT`. */
   githubOutput: string;
+  /** The script's stdout, including the logged invocation line. */
+  stdout: string;
+  /** The script's stderr, where workflow-command warnings go. */
+  stderr: string;
   /** The script's own exit status. */
   status: number;
 }
@@ -85,7 +93,17 @@ function runAction(env: Record<string, string>, npxExit = 0): RunResult {
   const stub = join(dir, "bin", "npx");
   writeFileSync(
     stub,
-    ["#!/bin/sh", 'echo "ARGV: $*"', `exit ${npxExit}`, ""].join("\n"),
+    [
+      "#!/bin/sh",
+      // One line per argument, not `$*`. Joining on a space destroys the
+      // boundaries — `a b` and `a`,`b` print identically — and the boundaries
+      // are the whole subject here. Two tests passed against a script that
+      // split them wrongly before this changed.
+      'for a in "$@"; do echo "ARG:$a"; done',
+      "echo END",
+      `exit ${npxExit}`,
+      "",
+    ].join("\n"),
     "utf8",
   );
   chmodSync(stub, 0o755);
@@ -111,21 +129,31 @@ function runAction(env: Record<string, string>, npxExit = 0): RunResult {
       },
     },
   );
-  const line = (res.stdout ?? "")
+  const args = (res.stdout ?? "")
     .split("\n")
-    .find((l) => l.startsWith("ARGV:"));
+    .filter((l) => l.startsWith("ARG:"))
+    .map((l) => l.slice("ARG:".length));
   return {
-    argv: line === undefined ? "" : line.slice("ARGV:".length).trim(),
+    args,
+    reached: (res.stdout ?? "").includes("END"),
+    argv: args.join(" "),
     githubOutput: existsSync(outFile) ? readFileSync(outFile, "utf8") : "",
+    stdout: res.stdout ?? "",
+    stderr: res.stderr ?? "",
     status: res.status ?? -1,
   };
 }
 
 /** Run the action's script and return just the argv the stub `npx` saw. */
 function argvFor(env: Record<string, string>): string {
-  const { argv, status } = runAction(env);
-  if (argv === "") throw new Error(`npx was never reached (exit ${status})`);
-  return argv;
+  return argsFor(env).join(" ");
+}
+
+/** Run the action's script and return the arguments the stub `npx` saw. */
+function argsFor(env: Record<string, string>): string[] {
+  const { args, reached, status } = runAction(env);
+  if (!reached) throw new Error(`npx was never reached (exit ${status})`);
+  return args;
 }
 
 describe.skipIf(!hasBash)("action.yml input wiring", () => {
@@ -206,5 +234,65 @@ describe.skipIf(!hasBash)("action.yml input wiring", () => {
     const res = runAction({ DOCMETA_PATHS: "docs/" }, 0);
     expect(res.githubOutput).toContain("exit-code=0");
     expect(res.status).toBe(0);
+  });
+  it("takes a newline-separated paths input one path per line", () => {
+    // Word-splitting cannot express a path containing a space at all, and
+    // `schema` already uses lines for exactly that reason. Without this,
+    // `docs/my notes/*.md` silently becomes `docs/my` and `notes/*.md` — two
+    // paths the consumer never named, neither of which exists.
+    const args = argsFor({ DOCMETA_PATHS: "docs/my notes/*.md\nREADME.md" });
+    expect(args).toEqual([
+      "--yes",
+      "docmeta@4",
+      "validate",
+      "docs/my notes/*.md",
+      "README.md",
+    ]);
+  });
+
+  it("takes a newline-separated args input one argument per line", () => {
+    const args = argsFor({
+      DOCMETA_PATHS: "docs/",
+      DOCMETA_ARGS: "--exclude\n*.draft.md",
+    });
+    expect(args.slice(-2)).toEqual(["--exclude", "*.draft.md"]);
+  });
+
+  it("still word-splits a single-line input, as the docs show", () => {
+    expect(argvFor({ DOCMETA_PATHS: "docs/ README.md" })).toContain(
+      "validate docs/ README.md",
+    );
+  });
+
+  it("warns when a single-line input carries shell quotes", () => {
+    // The silent failure this replaces, measured against the real CLI:
+    // `--exclude '**/recipes.mdx'` reports "4 files checked";
+    // `--exclude '"**/recipes.mdx"'` reports "5 files checked". docmeta
+    // accepts the quoted value, excludes nothing, and exits 0. Nothing can
+    // recover the intent at this layer, so the least it can do is say so.
+    const res = runAction({
+      DOCMETA_PATHS: "docs/",
+      DOCMETA_ARGS: '--exclude "*.draft.md"',
+    });
+    expect(res.stderr).toContain("::warning::");
+    expect(res.stderr).toContain("args contains a quote character");
+  });
+
+  it("does not warn on an unquoted input", () => {
+    const res = runAction({
+      DOCMETA_PATHS: "docs/",
+      DOCMETA_ARGS: "--exclude *.draft.md",
+    });
+    expect(res.stderr).not.toContain("::warning::");
+  });
+
+  it("logs no phantom argument when argv is empty", () => {
+    // A consumer relying entirely on `paths:` in docmeta.config.yaml, with
+    // `format: ""`, reaches npx with no arguments. `printf ' %q'` on an empty
+    // array prints `''`, which reads as an empty positional argument being
+    // passed — and this line exists to tell them what actually ran.
+    const res = runAction({});
+    expect(res.stdout).toContain("docmeta validate\n");
+    expect(res.stdout).not.toContain("validate ''");
   });
 });

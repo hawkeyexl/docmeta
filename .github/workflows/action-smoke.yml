@@ -18,6 +18,13 @@ on:
       - .github/workflows/action-smoke.yml
       - src/**
       - package.json
+      # The fixtures the assertions below read. Leaving them out meant a change
+      # to an input could merge without running this job, and surface later as
+      # a red on an unrelated `action.yml` PR.
+      - test/fixtures/action-smoke-clean.md
+      - test/fixtures/missing-type.md
+      - test/fixtures/requires-type.schema.json
+      - test/fixtures/extra.schema.json
   workflow_dispatch:
 
 jobs:
@@ -48,13 +55,19 @@ jobs:
       - id: pack
         run: echo "tarball=./$(npm pack --silent)" >> "$GITHUB_OUTPUT"
 
-      # The happy path: a clean tree exits 0 and reports it.
+      # The happy path: a clean document exits 0 and reports it.
+      #
+      # Both cases use fixtures this job owns, deliberately. Pointing the clean
+      # case at a live docs page and the docs schema meant this workflow read
+      # two files that do not appear in its `paths:` filter — so tightening the
+      # docs schema would skip the smoke job entirely, then fail the next
+      # `action.yml` PR for a reason that had nothing to do with it.
       - id: clean
         uses: ./
         with:
           version: ${{ steps.pack.outputs.tarball }}
-          paths: docs/src/content/docs/index.mdx
-          schema: ./docs/doc-frontmatter.schema.json
+          paths: test/fixtures/action-smoke-clean.md
+          schema: ./test/fixtures/requires-type.schema.json
       - name: Clean run reports exit-code 0
         run: |
           [ "${{ steps.clean.outputs.exit-code }}" = "0" ] \

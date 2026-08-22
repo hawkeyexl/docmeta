@@ -114,10 +114,17 @@ jobs:
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # Through the environment, not `${{ }}`. `action.yml` documents why:
+          # `${{ }}` is substituted textually before bash parses the line, so
+          # the value is code rather than data. It reaches `main` only through
+          # a merge, which makes this narrow — but this is the job holding the
+          # App token, npm publish rights, and a ruleset bypass, so it is the
+          # last place to make an exception.
+          VERSION_BEFORE: ${{ steps.before.outputs.version }}
         run: |
           set -euo pipefail
           version="$(node -p "require('./package.json').version")"
-          if [ "$version" = "${{ steps.before.outputs.version }}" ]; then
+          if [ "$version" = "$VERSION_BEFORE" ]; then
             echo "::notice::No release was produced; leaving the major tag alone."
             exit 0
           fi

@@ -24,6 +24,22 @@ defaults to inline PR annotations:
     paths: "docs/**/*.md"
 ```
 
+`paths`, `schema` and `args` each accept one item per line as well as a single
+space-separated line. Use lines whenever a value contains a space — shell
+quoting is not interpreted, so `args: --exclude "*.draft.md"` would hand docmeta
+a pattern with the quote marks still in it:
+
+```yaml
+- uses: hawkeyexl/docmeta@v4
+  with:
+    paths: |
+      docs/**/*.md
+      guides/my notes/*.mdx
+    args: |
+      --exclude
+      *.draft.md
+```
+
 Everything below explains what that runs, and applies to any CI platform.
 [`examples/docmeta.yml`](https://github.com/hawkeyexl/docmeta/blob/main/examples/docmeta.yml)
 is the same thing written out by hand, for when you want to own the steps.
