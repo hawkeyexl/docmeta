@@ -23,7 +23,12 @@
 let husky;
 try {
   ({ default: husky } = await import("husky"));
-} catch {
+} catch (err) {
+  // Only a *missing* husky is the quiet case. A bare `catch` would also
+  // swallow an installed-but-broken one — a corrupted package, a bad export
+  // map — and a contributor would then get no git hooks and no signal, which
+  // is the failure this file was written to avoid rather than cause.
+  if (err?.code !== "ERR_MODULE_NOT_FOUND") throw err;
   process.exit(0);
 }
 // husky() returns "HUSKY=0 skip install" rather than throwing when the env var

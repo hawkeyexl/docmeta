@@ -133,4 +133,6 @@ jobs:
           # itself, so HEAD here is not necessarily what it tagged.
           echo "Moving $major to v$version"
           git tag -f "$major" "v$version"
-          git push --force             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"             "refs/tags/${major}"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/tags/${major}"
