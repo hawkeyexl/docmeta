@@ -36,6 +36,32 @@ Requirements baked into the workflow: a GitHub-hosted runner, npm CLI ≥ 11.5.1
 `registry-url` to `setup-node` or any `NPM_TOKEN`/`NODE_AUTH_TOKEN`: a written-out
 auth token in `.npmrc` shadows OIDC and breaks the publish.
 
+## The moving major tag
+
+`uses: hawkeyexl/docmeta@v4` works because the release job force-updates a `v4`
+tag on each stable release. semantic-release creates immutable `vX.Y.Z` tags and
+nothing else, so without that step the reference resolves to nothing.
+
+The step is gated three ways, and each gate closes a distinct way of aiming the
+tag at something unreleased:
+
+| Gate | Without it |
+|---|---|
+| `github.ref == 'refs/heads/main'` | a `next` or `feat/**` prerelease claims the major tag |
+| the version changed during the run | a push of only `chore:`/`docs:` commits releases nothing, and the tag moves to an unpublished tree |
+| the version has no `-` suffix | belt and braces on the first, since prerelease identifiers come from the branch name |
+
+It tags `v$version` rather than `HEAD`, because semantic-release commits the
+changelog and version bump itself, so `HEAD` is not necessarily what it tagged.
+
+It force-pushes with the GitHub App token explicitly, because the `checkout`
+step sets `persist-credentials: false` — the job holds `contents: write`, but no
+credential sits in git's config, and the App is also the only actor allowed to
+bypass the `main` ruleset.
+
+Consumers wanting an immutable reference pin `@v4.1.0` instead; that is the usual
+trade and needs nothing here.
+
 ## Pushing the release commit past branch protection
 
 `main` has a ruleset requiring all changes to go through a pull request. The

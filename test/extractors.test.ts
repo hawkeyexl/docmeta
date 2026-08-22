@@ -744,14 +744,26 @@ describe("extractor registry", () => {
     expect(extractorByName("markdown")?.name).toBe("markdown");
   });
 
-  it("lists supported (implemented) extensions", () => {
-    expect(supportedExtensions()).toContain(".md");
-    expect(supportedExtensions()).toContain(".adoc");
-    expect(supportedExtensions()).toContain(".rst");
-    expect(supportedExtensions()).toContain(".xml");
-    expect(supportedExtensions()).toContain(".dita");
-    expect(supportedExtensions()).toContain(".ditamap");
-    expect(supportedExtensions()).toContain(".html");
+  // An exact set, not `toContain`. Containment is what let `.markdown` and
+  // `.asciidoc` go unnoticed for long enough to reach a proposed pre-commit
+  // `files:` pattern that omitted both — the list read as complete because
+  // every extension anyone thought to assert was in it.
+  // `test/pre-commit-hook.test.ts` derives the hook regex from this same call,
+  // so an addition here has to reach the hook too.
+  it("lists supported (implemented) extensions, exactly", () => {
+    expect([...supportedExtensions()].sort()).toEqual([
+      ".adoc",
+      ".asciidoc",
+      ".dita",
+      ".ditamap",
+      ".htm",
+      ".html",
+      ".markdown",
+      ".md",
+      ".mdx",
+      ".rst",
+      ".xml",
+    ]);
   });
 
   it("returns undefined for an unsupported extension", () => {
