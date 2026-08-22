@@ -304,7 +304,7 @@ one**, taking the first of these that your machine can actually use:
 
 1. `anthropic` — `ANTHROPIC_API_KEY` is set
 2. `openai` — `OPENAI_API_KEY` is set
-3. `claude-cli` — a signed-in `claude` CLI is on your `PATH`
+3. `claude-cli` — a `claude` CLI on your `PATH` that runs (`claude --version` succeeds; sign-in is not checked, so an unauthenticated CLI is still selected and fails at the first call)
 4. `llama-cpp` — a local model, needing no key and costing nothing
 
 Pass `--provider` to pin one instead. `fill` reports which provider and model it
@@ -312,8 +312,8 @@ used, in both output formats.
 
 <Aside type="caution" title="The local fallback downloads">
   If detection gets all the way to `llama-cpp`, the first run fetches model
-  weights — between 2.6 GB and 6.7 GB, sized to your machine — and, if the
-  `node-llama-cpp` binding is missing, installs that too. Both warn once before
+  weights — under 10 GB, sized to your machine — and, if the `node-llama-cpp`
+  binding is missing, installs that too (roughly 700 MB). Both warn once before
   starting, and both go into `~/.hawkeyexl-inference/`, never your project.
 
   Set `INFERENCE_NO_AUTO_INSTALL=1` to refuse the binding install, or pass an
@@ -341,7 +341,9 @@ used, in both output formats.
 | `--provider` | `<name>` | `auto` | Inference provider: `auto`, `anthropic`, `openai`, `claude-cli`, `llama-cpp`, or `mock`. `auto` detects one — see [above](#fill). An unknown name is an error (exit 2). |
 | `--model` | `<model>` | provider default | Model override. **Needs a named provider**, from either `--provider` or config `fill.provider` — a model name does not say which provider owns it, so pairing it with `auto` (including the default) is an error (exit 2). |
 | `--no-cache` | — | cache on | Bypass the proposal cache in `.docmeta/cache`. |
-| `--max-cost-usd` | `<usd>` | — | Stop scheduling new files once this much has been spent. |
+| `--local` | — | off | Run inference on this machine. Refuses a hosted provider even when `auto` would have picked one — including `claude-cli`, whose binary is local but whose inference is not. Errors (exit 2) if no local model is available. |
+| `--max-turns` | `<n>` | — | Stop after this many inference calls. Counts **calls, not files**: a document too long for one call is split across several. |
+| `--chunk-chars` | `<n>` | `12000` | Characters of document sent per call. The whole file is always sent; this decides how many calls that takes. |
 | `--concurrency` | `<n>` | `4` | Files inferred in parallel. |
 | `-f, --format` | `<pretty\|json\|github>` | `pretty` | Output format. `github` emits [one annotation per required property that could not be filled](#github-annotations). `sarif` and `junit` stay `validate`-only: they describe *findings in files*, and a skipped optional property is a proposal with a confidence score, not a finding. An unknown value is an error (exit 2). |
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). |
@@ -349,7 +351,7 @@ used, in both output formats.
 | `-q, --quiet` | — | off | In `pretty` output, hide files with nothing written **and** nothing left undone. A file whose required property could not be filled, or that errored, always prints — those are the files that make the run exit 1. Has no effect on `json` or `github`. |
 | `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
 | `--no-gitignore` | — | on | Fill files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
-| `--offline` | — | off | Never fetch a remote schema, exactly as on [`validate`](#validate). It governs schema loading only — the inference provider is a separate network dependency, controlled by `--provider` and `--dry-run`. Overrides config `offline:`. |
+| `--offline` | — | off | Never fetch a remote schema, exactly as on [`validate`](#validate). It governs schema loading only — the inference provider is a separate network dependency. Pass [`--local`](#fill) to keep document content on this machine; the two flags bound different boundaries and are usually wanted together. Overrides config `offline:`. |
 
 ### Which properties get filled
 

@@ -15,7 +15,7 @@ Home — "What do you want to do?" router + 30-second proof
 │
 ├─ Get started                     (universal on-ramp → feeds M1)
 │
-├─ Set up validation  (Maya)       → M1, M2, M3
+├─ Set up validation  (Maya)       → M1, M2, M3, M4
 │
 ├─ Run it in CI       (Devin)      → D1, D2, D3
 │
@@ -62,6 +62,7 @@ Home — "What do you want to do?" router + 30-second proof
 | Apply different schemas to different folders | M3 | ★ | Overrides, glob precedence, multi-schema per file. |
 | Roll out a new required field without breaking the build | M2 | | Tool-supported ratchet (0001): the field goes `required` immediately and `--write-baseline` records the backlog. Rewritten from the four-stage manual rollout, whose hand-maintained `overrides:` glob list the baseline replaces. |
 | Retrofit docmeta into an existing docs repo | M1/M2 | | Start lenient, tighten over time. Cross-cutting guide. Step 5 now ratchets via the baseline, in step with the M2 page. |
+| Run `fill` under a data-egress policy | M4 | | The security-review answers for the step 7 `fill` pass: what each inference call transmits (path as matched, the whole metadata block, the whole file including front matter, each candidate's lifted subschema with its `description`, and every `$defs`/`definitions` block referenced or not), what the pre-gating cache retains, and the `--local` / `--offline` / `--max-turns` bounds. Consequences and decisions only — the flag surface stays in the drift-checked CLI reference. Source of truth: `src/commands/fill-prompt.ts`, `src/commands/fill.ts`. |
 
 ### Run it in CI (Devin)
 
@@ -134,7 +135,7 @@ Reference pages must never contradict the source code. Before writing any Refere
 ## Phased rollout
 
 - **Phase 1 — Launch (★):** home + on-ramp, M1 anchor guide + config page, M3 overrides page, D1 CI recipes + exit codes page, S1 + S2 schemas pages, T1 fix-it page, full Reference shelf (6 pages).
-- **Phase 2 — Depth:** M2, M-cross retrofit, D2, D3, S3, OKF explained, FAQ, Glossary.
+- **Phase 2 — Depth:** M2, M-cross retrofit, M4 egress page, D2, D3, S3, OKF explained, FAQ, Glossary.
 - **Phase 3 — Polish:** CONTRIBUTING, case studies, cross-persona refinements.
 
 ---

@@ -1045,7 +1045,7 @@ describe("reporters: fill", () => {
     dryRun: true,
     provider: "mock",
     model: "mock-1",
-    budgetExhausted: false,
+    turnsSpent: false,
   };
 
   it("pretty prints every file when quiet is off", () => {

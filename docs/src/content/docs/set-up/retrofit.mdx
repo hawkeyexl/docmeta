@@ -192,6 +192,8 @@ Ratcheting works because new pages arrive already compliant. It does nothing for
 
 [`docmeta fill`](/docmeta/reference/cli/#fill) works that backlog down. For each page it resolves the same schema set the gate uses, asks an LLM to infer the properties that are missing or invalid, and writes back only the values it is confident about. Because the schema drives the prompt, the fields it proposes are exactly the ones you are about to require.
 
+That inference is the one part of docmeta that leaves your machine, so before you point it at a whole docset, read [Run `fill` under a data-egress policy](/docmeta/set-up/fill-providers/) for what each call transmits, what the proposal cache keeps afterwards, and how to keep inference local.
+
 Preview before you trust it:
 
 ```sh

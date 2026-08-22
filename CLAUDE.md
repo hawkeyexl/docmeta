@@ -213,6 +213,36 @@ to LinkedIn or any other account, and never draft-and-send on someone's behalf.
 Writing the suggested caption text is fine and useful. Publishing it is the
 user's call, every time.
 
+### Proposals are historical records: supersede, never amend
+
+`docs/proposals/` is an ADR log. Each file records what was decided **at the
+time it was written**, on the evidence available then. That makes the wrong ones
+as valuable as the right ones — they are the only account of why a decision
+looked correct before it wasn't.
+
+So when reality moves past a proposal, **write a new one that supersedes it**.
+Do not edit the old file to match what shipped. Rewriting a verdict destroys the
+record of the reasoning that produced it, and leaves no trace that the question
+was ever open.
+
+0007 is the worked example. It concluded "implement HTML, keep XML and DITA
+read-only, permanently", and shipped all three — because the two objections
+behind that verdict turned out to be answerable (xmldom positions are
+reconstructible into offsets; DITA has a DTD-valid metadata channel in
+`<prolog>`). The right response is a superseding proposal that states what
+changed and why, not a patch to 0007's title and verdict. Reading 0007 as
+written is how the next person learns that "permanently" was a judgment about
+effort, not a fact about the format.
+
+A superseding proposal should say what it supersedes, and the superseded one is
+left exactly as it was.
+
+The one exception is the `Status:` line, which is an index entry rather than
+part of the record — `0004` went `Proposed` → `Implemented (#74)` in the PR that
+implemented it, and that is how you find out a proposal was acted on. Mark a
+superseded proposal `Superseded by NNNN` and change nothing else: not the title,
+not the verdict, not the reasoning, however wrong they read afterwards.
+
 ### Other conventions
 
 - **Strict TypeScript.** `tsconfig` enables strict settings including

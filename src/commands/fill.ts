@@ -64,6 +64,9 @@ import {
   FILL_SYSTEM_PROMPT,
   buildEnvelopeSchema,
   buildUserPrompt,
+  splitBody,
+  mergeProposals,
+  DEFAULT_CHUNK_CHARS,
 } from "./fill-prompt.js";
 import type {
   Candidate,
@@ -97,6 +100,54 @@ const DEFAULT_CONCURRENCY = 4;
  */
 const DEFAULT_PROVIDER = "auto";
 const CACHE_DIR = ".docmeta/cache";
+
+/**
+ * Whether a provider error reads like "the prompt did not fit".
+ *
+ * Deliberately loose, and deliberately a *safety net* rather than the mechanism:
+ * chunking is bounded by docmeta's own budget, and this only catches the case
+ * where that budget was still too generous for the model in play. No provider
+ * exposes its input limit ahead of time, and four providers word the failure
+ * four ways, so matching on wording is the only option — a miss costs a per-file
+ * error the user can act on, not a corrupted document.
+ */
+function looksLikeOverflow(message: string): boolean {
+  // `exceeds`, not `exceed`, and that one letter is load-bearing. Review
+  // suggested dropping it because it would match "rate limit exceeded" and
+  // "quota exceeded" — which matters, since the response to an overflow is to
+  // halve the budget, and halving *doubles* the call count. Answering a rate
+  // limit with twice the requests would be a real fault.
+  //
+  // But it does not match them: "exceeded" does not contain "exceeds". Checked
+  // against both, plus "429 Too Many Requests" — none match. Dropping it lost a
+  // genuine overflow instead: "Your input exceeds the maximum allowed length"
+  // matched before and would not after. Kept deliberately, and written down so
+  // the next reader does not re-derive the wrong half of this.
+  return /context|too long|too large|token limit|maximum.*tokens|exceeds/i.test(
+    message,
+  );
+}
+
+/**
+ * Add one call's usage to a running total.
+ *
+ * A chunked document costs several calls, so caching the last one's usage would
+ * understate the file by roughly the number of chunks. Nothing reads it back
+ * today, which is exactly why it is worth keeping honest now rather than after
+ * something does.
+ */
+function addUsage(
+  total: TokenUsage | undefined,
+  next: TokenUsage | undefined,
+): TokenUsage | undefined {
+  if (next === undefined) return total;
+  if (total === undefined) return next;
+  return {
+    ...total,
+    inputTokens: total.inputTokens + next.inputTokens,
+    outputTokens: total.outputTokens + next.outputTokens,
+  };
+}
 
 /** What the cache stores: the raw, *pre-gating* proposal for one file. */
 interface CachedProposal {
@@ -166,16 +217,35 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
     "concurrency",
     { min: 1, max: 64, integer: true },
   );
-  const maxCostUsd = opts.maxCostUsd ?? config?.fill?.maxCostUsd;
-  if (maxCostUsd !== undefined) {
-    requireNumber(maxCostUsd, "maxCostUsd", { min: 0, max: Number.MAX_SAFE_INTEGER });
+  const maxTurns = opts.maxTurns ?? config?.fill?.maxTurns;
+  if (maxTurns !== undefined) {
+    requireNumber(maxTurns, "maxTurns", {
+      min: 1,
+      max: Number.MAX_SAFE_INTEGER,
+      integer: true,
+    });
   }
+  const chunkBudget = requireNumber(
+    opts.chunkChars ?? config?.fill?.chunkChars ?? DEFAULT_CHUNK_CHARS,
+    "chunkChars",
+    { min: 1, max: Number.MAX_SAFE_INTEGER, integer: true },
+  );
   const dryRun = Boolean(opts.dryRun);
   const only = opts.fields != null ? new Set(opts.fields) : undefined;
 
-  const providerName = (opts.provider ??
+  const requestedProvider = (opts.provider ??
     config?.fill?.provider ??
     DEFAULT_PROVIDER) as ProviderSelector;
+  // `--local` with no explicit provider *is* the choice: resolve to the local
+  // one directly rather than letting detection pick a hosted provider and then
+  // refusing it. Detection would otherwise announce `auto-selected "openai"`
+  // immediately before the refusal, which reads as though it had been used.
+  // An explicit `--provider` is left alone so a contradictory pair still errors
+  // by name rather than being quietly overridden.
+  const providerName: ProviderSelector =
+    opts.local === true && requestedProvider === "auto"
+      ? "llama-cpp"
+      : requestedProvider;
   const model = opts.model ?? config?.fill?.model;
   const spec = { provider: providerName, model: model ?? null };
 
@@ -184,6 +254,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
   // on any run where no file happened to need inference.
   assertKnownProvider(providerName);
   assertModelHasProvider(providerName, model);
+  if (opts.local === true) assertLocalProvider(providerName);
 
   // Resolve targets BEFORE identity. Under `auto`, resolving identity probes the
   // environment, the Claude CLI and the local runtime, and that last probe is
@@ -238,6 +309,9 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
     construct = () => injected;
   } else {
     const resolved = await resolveIdentity(spec);
+    // `--local` under `auto` can only be enforced here: detection is what picks
+    // the provider, so the check has to sit after it rather than on the spec.
+    if (opts.local === true) assertLocalProvider(resolved.provider);
     identity = resolved;
     // Build from the RESOLVED identity, never the spec we started with: under
     // `auto` that spec still says "auto", and the synchronous `makeProvider`
@@ -278,46 +352,20 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
   const validator = new Validator(schemaOptions);
   let costUsd = 0;
   let cachedCount = 0;
-  let budgetExhausted = false;
+  let turnsSpent = false;
+  let turnsUsed = 0;
   let inFlight = 0;
-  let billedCalls = 0;
 
   /**
-   * Spend already incurred, plus a reservation for the calls currently in
-   * flight. Without the reservation, `concurrency` calls could all clear a
-   * check made against a total that none of them had contributed to yet, and
-   * the budget would overshoot by that many calls.
+   * Whether the call cap is spent.
    *
-   * The check and the `inFlight++` that follows it are not separated by an
-   * await, so they are atomic with respect to the event loop — two workers
-   * cannot both pass a check that only one of them fits into.
+   * Counts **calls, not files**: chunking a long document costs several, and a
+   * cap that counted files would silently under-count exactly the pages that
+   * cost the most. Checked before each call rather than each file for the same
+   * reason.
    */
-  const projectedCost = (): number =>
-    costUsd + (billedCalls > 0 ? (costUsd / billedCalls) * inFlight : 0);
-
-  const overBudget = (): boolean =>
-    maxCostUsd != null && projectedCost() >= maxCostUsd;
-
-  // The reservation needs an observed per-call cost, which does not exist until
-  // one call has finished. So when a budget is set, the first call runs alone
-  // and the rest wait for it; without this the entire first wave clears a check
-  // against $0 and the budget is meaningless for its first `concurrency` files.
-  let primingDone: Promise<void> | null = null;
-  let releasePriming: (() => void) | null = null;
-  const awaitPriming = async (): Promise<void> => {
-    if (maxCostUsd == null || billedCalls > 0) return;
-    if (primingDone === null) {
-      primingDone = new Promise<void>((res) => {
-        releasePriming = res;
-      });
-      return; // this worker is the primer
-    }
-    await primingDone;
-  };
-  const finishPriming = (): void => {
-    releasePriming?.();
-    releasePriming = null;
-  };
+  const turnsExhausted = (): boolean =>
+    maxTurns != null && turnsUsed + inFlight >= maxTurns;
 
   const processOne = async (
     label: string,
@@ -420,6 +468,11 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
       identity.provider,
       identity.model,
       `fill-v${FILL_PROMPT_VERSION}`,
+      // The chunk budget decides how the document was split, and so which
+      // proposals came back. Without it two runs at different budgets share a
+      // key and the second silently replays the first — and the halve-and-retry
+      // path above makes that a real collision, not a hypothetical one.
+      `chunk-${chunkBudget}`,
       schemaSet.join(","),
       candidates.map((c) => c.key).join(","),
       sha256(content),
@@ -431,15 +484,12 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
       cachedCount++;
       proposals = hit.proposals;
     } else {
-      // Wait behind the priming call, if one is in progress, so the budget
-      // check below sees a real per-call cost rather than $0.
-      await awaitPriming();
-      if (overBudget()) {
-        budgetExhausted = true;
+      if (turnsExhausted()) {
+        turnsSpent = true;
         return errorResult(
           label,
           extractor.name,
-          "Skipped: cost budget reached before this file was processed.",
+          "Skipped: --max-turns reached before this file was processed.",
           schemaSet,
         );
       }
@@ -459,42 +509,115 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
           schemaSet,
         );
       }
-      inFlight++;
-      let run;
-      try {
-        run = await completeValidatedJSON<ProposalSet>({
-          provider: getProvider(),
-          system: FILL_SYSTEM_PROMPT,
-          user: buildUserPrompt({
-            filePath: label,
-            existing: extracted.data,
-            candidates,
-            // Whole file as context; truncation happens in buildUserPrompt.
-            body: content,
-          }),
-          schema: envelope,
-          validate,
-        });
-        // Bank the cost before releasing waiters, so the first of them sees a
-        // real per-call figure rather than the $0 it started with.
-        costUsd += costOfUsage(run.usage, pricing);
-        billedCalls++;
-      } finally {
-        inFlight--;
-        // In the finally so a throw (e.g. a missing API key surfacing from
-        // getProvider) cannot leave the other workers waiting forever.
-        finishPriming();
+      // The whole file goes out, in as many calls as the chunk budget takes.
+      // An overflow means the budget was too generous for this model — there is
+      // no way to ask a model its input limit ahead of time — so halve it once
+      // and retry rather than failing a file for being long.
+      let chunkChars = chunkBudget;
+      let attempt = 0;
+      let sets: ProposalSet[] | undefined;
+      let usageTotal: TokenUsage | undefined;
+      let partsRead: { read: number; total: number } | undefined;
+      let failure: string | undefined;
+      while (attempt < 2 && sets === undefined) {
+        attempt++;
+        const chunks = splitBody(content, chunkChars);
+        const collected: ProposalSet[] = [];
+        let overflowed = false;
+        let cutShort = false;
+        for (const [i, chunk] of chunks.entries()) {
+          if (turnsExhausted()) {
+            turnsSpent = true;
+            // Stopping mid-document is not a partial success. Proposals merged
+            // from the chunks that did run would describe part of the page
+            // while reading as though they described all of it — the silent
+            // truncation this change exists to remove, reintroduced by another
+            // route. Report the file as not processed instead.
+            cutShort = true;
+            break;
+          }
+          inFlight++;
+          let run;
+          try {
+            run = await completeValidatedJSON<ProposalSet>({
+              provider: getProvider(),
+              system: FILL_SYSTEM_PROMPT,
+              user: buildUserPrompt({
+                filePath: label,
+                existing: extracted.data,
+                candidates,
+                body: chunk,
+                ...(chunks.length > 1
+                  ? { part: { index: i + 1, total: chunks.length } }
+                  : {}),
+              }),
+              schema: envelope,
+              validate,
+            });
+            costUsd += costOfUsage(run.usage, pricing);
+            turnsUsed++;
+          } finally {
+            inFlight--;
+          }
+          if (run.error != null && looksLikeOverflow(run.error)) {
+            overflowed = true;
+            failure = run.error;
+            break;
+          }
+          if (run.error != null || run.result == null) {
+            failure = run.error ?? "The model returned no proposal.";
+            break;
+          }
+          usageTotal = addUsage(usageTotal, run.usage);
+          collected.push(run.result);
+        }
+        if (overflowed && attempt < 2) {
+          // The calls this attempt already made stay counted against
+          // `--max-turns`. They were made — the provider billed them — so
+          // rolling them back would make the cap describe something other than
+          // what happened. It does mean a document that triggers the retry
+          // costs more turns than its final chunk count suggests.
+          //
+          // The cached *usage* is reset, though, because it describes the
+          // document rather than the run: leaving the abandoned attempt's
+          // tokens in would double-count the content both attempts covered.
+          usageTotal = undefined;
+          chunkChars = Math.max(1, Math.floor(chunkChars / 2));
+          continue;
+        }
+        if (cutShort) {
+          return errorResult(
+            label,
+            extractor.name,
+            `Skipped: --max-turns reached ${chunks.length > 1 ? `part-way through this document (${collected.length} of ${chunks.length} parts read)` : "before this file was processed"}.`,
+            schemaSet,
+          );
+        }
+        // Only a document read end to end is usable. Anything short of that —
+        // a transient provider error on chunk 3, or an overflow that survived
+        // the one retry — would otherwise be merged and written as though it
+        // described the whole page, which is the silent truncation this change
+        // exists to remove. `cutShort` catches the turn-cap route above; this
+        // catches the rest.
+        partsRead = { read: collected.length, total: chunks.length };
+        if (collected.length < chunks.length) break;
+        sets = collected;
       }
-      if (run.error != null || run.result == null) {
+
+      if (sets === undefined || sets.length === 0) {
         return errorResult(
           label,
           extractor.name,
-          run.error ?? "The model returned no proposal.",
+          failure ?? "The model returned no proposal.",
           schemaSet,
         );
       }
-      proposals = run.result;
-      cache?.set(cacheKey, { proposals, ...(run.usage ? { usage: run.usage } : {}) });
+      /* c8 ignore next 3 -- the loop only assigns a complete set. */
+      if (partsRead !== undefined && partsRead.read < partsRead.total) {
+        throw new DocmetaError("Internal error: incomplete proposal set.");
+      }
+      proposals = mergeProposals(sets);
+      cache?.set(cacheKey, { proposals, ...(usageTotal ? { usage: usageTotal } : {}) });
     }
 
     // ---- Gate -------------------------------------------------------------
@@ -591,7 +714,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
     dryRun,
     provider: identity.provider,
     model: identity.model,
-    budgetExhausted,
+    turnsSpent,
   };
 }
 
@@ -1052,6 +1175,25 @@ function requireNumber(
  * added upstream; deriving it means a new provider works the day it ships.
  */
 const PROVIDERS = new Set<string>([...Object.keys(DEFAULT_MODELS), "auto"]);
+
+/**
+ * Refuse a provider that would send content off the machine.
+ *
+ * `claude-cli` is the one that has to be named. The binary runs locally, so it
+ * reads as local; the inference does not, so it is not. It sits third in the
+ * detection order, which makes it exactly the fallback `--local` would
+ * otherwise pick up by accident — the flag would keep working and stop meaning
+ * anything.
+ */
+function assertLocalProvider(name: string): void {
+  if (name === "llama-cpp" || name === "mock") return;
+  if (name === "auto") return; // narrowed below, once detection has run
+  throw new DocmetaError(
+    name === "claude-cli"
+      ? `--local cannot use "claude-cli": the CLI runs on this machine but its inference does not. Use --provider llama-cpp.`
+      : `--local cannot use "${name}", which sends document content to a hosted API. Use --provider llama-cpp, or drop --local.`,
+  );
+}
 
 function assertKnownProvider(name: string): void {
   if (PROVIDERS.has(name)) return;

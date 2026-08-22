@@ -310,12 +310,49 @@ describe("cli fill", () => {
       "--provider",
       "--model",
       "--no-cache",
-      "--max-cost-usd",
+      "--max-turns",
+      "--chunk-chars",
+      "--local",
       "--concurrency",
       "--fields",
     ]) {
       expect(r.stdout).toContain(flag);
     }
+  });
+
+  it("--local refuses a hosted provider, naming it", () => {
+    const r = run(["fill", "x.md", "--local", "--provider", "openai"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/--local cannot use "openai"/);
+    expect(r.stderr).toMatch(/hosted/);
+  });
+
+  it("--local refuses claude-cli, whose inference is not local", () => {
+    // The case that matters: the binary runs here, the inference does not, and
+    // it sits third in the detection order — so it is exactly what --local
+    // would otherwise pick up while appearing to work.
+    const r = run(["fill", "x.md", "--local", "--provider", "claude-cli"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/--local cannot use "claude-cli"/);
+    expect(r.stderr).toMatch(/its inference does not/);
+  });
+
+  it("--local ignores a stray key rather than detecting and then refusing", () => {
+    // With OPENAI_API_KEY set, plain `fill` auto-selects openai. Under --local
+    // detection must not run at all: announcing `auto-selected "openai"` and
+    // refusing on the next line reads as though the key had been used.
+    const r = run(["fill", "no-such-file.md", "--local"], undefined, {
+      OPENAI_API_KEY: "sk-fake",
+    });
+    expect(r.stderr).not.toMatch(/auto-selected "openai"/);
+    expect(r.stderr).not.toMatch(/--local cannot use/);
+  });
+
+  it("--local accepts llama-cpp", () => {
+    // Not a network call: it fails on the missing file, having cleared the
+    // provider check, which is what this pins.
+    const r = run(["fill", "no-such-file.md", "--local", "--provider", "llama-cpp"]);
+    expect(r.stderr).not.toMatch(/--local cannot use/);
   });
 
   it("exits 2 when given no paths and no config", () => {

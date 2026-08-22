@@ -1,6 +1,6 @@
 # 0012 — `fill`: what it transmits, what it costs, how to run it offline
 
-- **Status:** Proposed
+- **Status:** Superseded by [0017](0017-fill-egress-and-bounds.md)
 - **Serves:** Maya · M4 (per [0011](0011-fill-in-content-strategy.md)), Devin · D1
 - **Touches:** new `docs/src/content/docs/set-up/fill-providers.mdx`, `src/commands/fill.ts` (one flag), `reference/cli.mdx`
 - **Relates to:** [0008](0008-remote-schema-durability.md) (`--offline` should mean one thing tool-wide)

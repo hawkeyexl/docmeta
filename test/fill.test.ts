@@ -901,102 +901,216 @@ describe("runFill — cost budget", () => {
       "claude-haiku-4-5",
     );
 
-  it("stops scheduling new files once the budget is reached", async () => {
+  it("stops starting new calls once --max-turns is reached", async () => {
     await writeFile(join(dir, "a.md"), fixture("missing-keys.md"), "utf8");
     await writeFile(join(dir, "b.md"), fixture("missing-keys.md"), "utf8");
 
-    const { results, summary, budgetExhausted } = await runFill({
+    const { results, summary, turnsSpent } = await runFill({
       ...base,
       cwd: dir,
       inputs: ["a.md", "b.md"],
       fields: ["description"],
       dryRun: true,
-      // Serial, so the first call's cost is banked before the second is
-      // considered — otherwise both would clear the check concurrently.
       concurrency: 1,
-      maxCostUsd: 0.0005, // less than one call
+      maxTurns: 1,
       inferenceProvider: priced(),
     });
 
-    expect(budgetExhausted).toBe(true);
+    expect(turnsSpent).toBe(true);
     expect(summary.costUsd).toBeGreaterThan(0);
     expect(results[0]?.error).toBeUndefined();
-    expect(results[1]?.error).toMatch(/cost budget reached/);
+    expect(results[1]?.error).toMatch(/max-turns/);
   });
 
-  it("processes everything when the budget is ample", async () => {
+  it("processes everything when the cap is ample", async () => {
     await writeFile(join(dir, "a.md"), fixture("missing-keys.md"), "utf8");
     await writeFile(join(dir, "b.md"), fixture("missing-keys.md"), "utf8");
 
-    const { results, budgetExhausted } = await runFill({
+    const { results, turnsSpent } = await runFill({
       ...base,
       cwd: dir,
       inputs: ["a.md", "b.md"],
       fields: ["description"],
       dryRun: true,
       concurrency: 1,
-      maxCostUsd: 10,
+      maxTurns: 10,
       inferenceProvider: priced(),
     });
 
-    expect(budgetExhausted).toBe(false);
+    expect(turnsSpent).toBe(false);
     expect(results.every((r) => r.error === undefined)).toBe(true);
   });
 
-  /**
-   * MockProvider resolves within a microtask, so workers never actually
-   * overlap and the concurrency behavior is untestable with it. This provider
-   * takes real time, which lets every worker reach the budget check before any
-   * call has completed — the situation a network provider creates and the one
-   * the priming gate exists for.
-   */
-  class SlowProvider implements InferenceProvider {
-    readonly requests: unknown[] = [];
-    provider(): string {
-      return "mock";
-    }
-    modelName(): string {
-      return "claude-haiku-4-5";
-    }
-    async completeJSON(req: unknown): Promise<{
-      json: unknown;
-      usage: { inputTokens: number; outputTokens: number };
-    }> {
-      this.requests.push(req);
-      await new Promise((r) => setTimeout(r, 25));
-      return {
-        json: { description: { value: "A.", confidence: 0.9, reasoning: "r" } },
-        usage: { inputTokens: 500, outputTokens: 100 },
-      };
-    }
-  }
+  it("counts calls rather than files, so a chunked page is charged in full", async () => {
+    // The reason the cap counts calls: a long page costs several, and a
+    // file-counting cap would under-count exactly the pages that cost most.
+    const nl = String.fromCharCode(10);
+    const long =
+      fixture("missing-keys.md") + nl + ("filler line" + nl).repeat(400);
+    await writeFile(join(dir, "long.md"), long, "utf8");
+    const provider = priced();
 
-  it("does not let a parallel first wave blow past the budget", async () => {
-    // Four files, concurrency 4, budget 0.0015 — room for one $0.001 call, not
-    // two. Every worker reaches the budget check before any call has completed,
-    // so without the priming gate all four would clear a check made against $0
-    // and bill $0.004. With it, the first call runs alone; the rest then see a
-    // real per-call cost and only one more fits.
-    for (const n of ["a", "b", "c", "d"]) {
-      await writeFile(join(dir, `${n}.md`), fixture("missing-keys.md"), "utf8");
-    }
-    const provider = new SlowProvider();
-    const { summary, budgetExhausted } = await runFill({
+    await runFill({
       ...base,
       cwd: dir,
-      inputs: ["a.md", "b.md", "c.md", "d.md"],
+      inputs: ["long.md"],
       fields: ["description"],
       dryRun: true,
-      concurrency: 4,
-      maxCostUsd: 0.0015,
+      chunkChars: 500,
+      maxTurns: 2,
       inferenceProvider: provider,
     });
 
-    // Exactly two: the primer, then one more that fits before the reservation
-    // for it pushes the projection over the limit.
-    expect(provider.requests).toHaveLength(2);
-    expect(summary.costUsd).toBeCloseTo(0.002, 6);
-    expect(budgetExhausted).toBe(true);
+    // Capped at two calls even though the document needed more chunks.
+    expect(provider.requests.length).toBeLessThanOrEqual(2);
+  });
+
+  it("does not treat a rate limit as an overflow", async () => {
+    // Overflow triggers a halve-and-retry, which *doubles* the number of calls.
+    // Matching "rate limit exceeded" as an overflow would therefore answer a
+    // rate limit with twice the requests that provoked it.
+    class RateLimited implements InferenceProvider {
+      calls = 0;
+      provider(): string {
+        return "mock";
+      }
+      modelName(): string {
+        return "claude-haiku-4-5";
+      }
+      async completeJSON(): Promise<{
+        json: unknown;
+        usage: { inputTokens: number; outputTokens: number };
+      }> {
+        this.calls++;
+        throw new Error("Rate limit exceeded. Please retry after 60s.");
+      }
+    }
+
+    const nl = String.fromCharCode(10);
+    await writeFile(
+      join(dir, "long.md"),
+      fixture("missing-keys.md") + nl + ("filler line" + nl).repeat(400),
+      "utf8",
+    );
+    const provider = new RateLimited();
+
+    const { results } = await runFill({
+      ...base,
+      cwd: dir,
+      inputs: ["long.md"],
+      fields: ["description"],
+      dryRun: true,
+      chunkChars: 400,
+      inferenceProvider: provider,
+    });
+
+    expect(results[0]?.error).toMatch(/[Rr]ate limit/);
+    // Two calls, not four: `completeValidatedJSON` makes its own repair attempt
+    // (`attempts = 2` in the library), and docmeta then gives up. Four would
+    // mean the document was re-chunked at half the budget — the response to an
+    // overflow, and the wrong answer to a rate limit.
+    const rateLimitCalls = provider.calls;
+    expect(rateLimitCalls).toBe(2);
+
+    // The other half of the discrimination: a genuine overflow *does* re-chunk,
+    // so the count above is evidence only alongside this one.
+    class Overflowed extends RateLimited {
+      override async completeJSON(): Promise<{
+        json: unknown;
+        usage: { inputTokens: number; outputTokens: number };
+      }> {
+        this.calls++;
+        throw new Error("This model's maximum context length is 8192 tokens.");
+      }
+    }
+    const overflow = new Overflowed();
+    await runFill({
+      ...base,
+      cwd: dir,
+      inputs: ["long.md"],
+      fields: ["description"],
+      dryRun: true,
+      chunkChars: 400,
+      inferenceProvider: overflow,
+    });
+    expect(overflow.calls).toBeGreaterThan(rateLimitCalls);
+  });
+
+  it("refuses a document a mid-run failure cut short", async () => {
+    // The same hole as the turn cap, by a different route: a transient error on
+    // chunk 3 used to leave the chunks that had succeeded merged and written,
+    // reported as a clean run. Measured before the fix: error undefined, one
+    // field written, inferred from 2 of 7 chunks.
+    class FailsOnThird implements InferenceProvider {
+      calls = 0;
+      provider(): string {
+        return "mock";
+      }
+      modelName(): string {
+        return "claude-haiku-4-5";
+      }
+      async completeJSON(): Promise<{
+        json: unknown;
+        usage: { inputTokens: number; outputTokens: number };
+      }> {
+        this.calls++;
+        if (this.calls >= 3) throw new Error("transient upstream failure");
+        return {
+          json: {
+            description: { value: "from an early chunk", confidence: 0.95, reasoning: "r" },
+          },
+          usage: { inputTokens: 10, outputTokens: 5 },
+        };
+      }
+    }
+
+    const nl = String.fromCharCode(10);
+    await writeFile(
+      join(dir, "long.md"),
+      fixture("missing-keys.md") + nl + ("filler line" + nl).repeat(400),
+      "utf8",
+    );
+
+    const { results } = await runFill({
+      ...base,
+      cwd: dir,
+      inputs: ["long.md"],
+      fields: ["description"],
+      dryRun: true,
+      chunkChars: 400,
+      inferenceProvider: new FailsOnThird(),
+    });
+
+    expect(results[0]?.error).toBeDefined();
+    // And nothing derived from the chunks that did succeed was written.
+    expect((results[0]?.fields ?? []).filter((f) => f.written)).toHaveLength(0);
+  });
+
+  it("refuses a document the cap cut short, rather than returning part of it", async () => {
+    // Merging the chunks that did run would describe part of the page while
+    // reading as though it described all of it — the silent truncation this
+    // whole change removes, arriving by another route.
+    const nl = String.fromCharCode(10);
+    const long =
+      fixture("missing-keys.md") + nl + ("filler line" + nl).repeat(400);
+    await writeFile(join(dir, "long.md"), long, "utf8");
+
+    const { results, summary } = await runFill({
+      ...base,
+      cwd: dir,
+      inputs: ["long.md"],
+      fields: ["description"],
+      dryRun: true,
+      chunkChars: 500,
+      maxTurns: 2,
+      inferenceProvider: priced(),
+    });
+
+    expect(results[0]?.error).toMatch(/part-way through this document/);
+    expect(results[0]?.error).toMatch(/2 of \d+ parts read/);
+    expect(summary.errors).toBe(1);
+    // No half-read proposal was written or reported as a skip.
+    expect(results[0]?.fields ?? []).toHaveLength(0);
   });
 });
 
@@ -1076,8 +1190,14 @@ describe("runFill — operational errors", () => {
       /whole number/,
     );
     await expect(
-      runFill({ ...bad, maxCostUsd: Number.POSITIVE_INFINITY }),
-    ).rejects.toThrow(/maxCostUsd/);
+      runFill({ ...bad, maxTurns: Number.POSITIVE_INFINITY }),
+    ).rejects.toThrow(/maxTurns/);
+    await expect(runFill({ ...bad, maxTurns: 2.5 })).rejects.toThrow(
+      /whole number/,
+    );
+    await expect(runFill({ ...bad, chunkChars: 0 })).rejects.toThrow(
+      /chunkChars/,
+    );
   });
 
   it("errors on an unknown --as format, naming extractors not extensions", async () => {

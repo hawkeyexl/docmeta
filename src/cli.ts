@@ -32,7 +32,6 @@ import {
   isReportFormat,
   render,
   type CommonFormat,
-  type ReportFormat,
 } from "./reporters/index.js";
 import {
   FILL_FORMATS,
@@ -649,7 +648,16 @@ export function buildProgram(): Command {
       "model override; needs a named provider, from here or config",
     )
     .option("--no-cache", "bypass the proposal cache")
-    .option("--max-cost-usd <usd>", "proposal cost budget", parseFloat)
+    .option(
+      "--local",
+      "run inference on this machine; refuses any hosted provider, claude-cli included",
+    )
+    .option("--max-turns <n>", "stop after this many inference calls", parseFloat)
+    .option(
+      "--chunk-chars <n>",
+      "characters of document per call (default 12000)",
+      parseFloat,
+    )
     // parseFloat, not parseInt: parseInt("3.5") silently yields 3, which would
     // defeat runFill's integer check and hide the mistake from the user.
     .option("--concurrency <n>", "files inferred in parallel", parseFloat)
@@ -693,10 +701,11 @@ export function buildProgram(): Command {
         // parseFloat("abc") is NaN, and every comparison against NaN is false,
         // so a bare range check would silently accept garbage.
         numeric("--confidence", options.confidence, 0, 1);
+        numeric("--max-turns", options.maxTurns, 1, Number.MAX_SAFE_INTEGER);
         numeric(
-          "--max-cost-usd",
-          options.maxCostUsd,
-          0,
+          "--chunk-chars",
+          options.chunkChars,
+          1,
           Number.MAX_SAFE_INTEGER,
         );
         numeric("--concurrency", options.concurrency, 1, 64);
@@ -743,7 +752,9 @@ export function buildProgram(): Command {
           provider: options.provider,
           model: options.model,
           cache: options.cache,
-          maxCostUsd: options.maxCostUsd,
+          local: Boolean(options.local),
+          maxTurns: options.maxTurns,
+          chunkChars: options.chunkChars,
           concurrency: options.concurrency,
           includeContent: usingStdin,
         });
