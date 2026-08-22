@@ -135,8 +135,10 @@ export function renderFillPretty(
       ),
     );
   }
-  if (run.budgetExhausted) {
-    lines.push(c.yellow("Cost budget reached; some files were not processed."));
+  if (run.turnsSpent) {
+    lines.push(
+      c.yellow("--max-turns reached; some files were not processed."),
+    );
   }
 
   return lines.join("\n");

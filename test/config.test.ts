@@ -152,7 +152,7 @@ describe("config", () => {
           "  provider: anthropic",
           "  model: claude-sonnet-4-5",
           "  confidenceThreshold: 0.9",
-          "  maxCostUsd: 5",
+          "  maxTurns: 5",
           "  concurrency: 8",
         ].join("\n"),
         "x.yaml",
@@ -161,7 +161,7 @@ describe("config", () => {
         provider: "anthropic",
         model: "claude-sonnet-4-5",
         confidenceThreshold: 0.9,
-        maxCostUsd: 5,
+        maxTurns: 5,
         concurrency: 8,
       });
     });
@@ -179,11 +179,14 @@ describe("config", () => {
       ).toThrow(DocmetaError);
     });
 
-    it("rejects a non-finite maxCostUsd", () => {
+    it("rejects a non-finite maxTurns", () => {
       // YAML parses 1e999 as Infinity, which a bare range check would accept.
-      expect(() =>
-        parseConfig("fill:\n  maxCostUsd: 1e999", "x.yaml"),
-      ).toThrow(DocmetaError);
+      // Assert on the message, not just the type: with the key name wrong this
+      // still throws — for "unknown key" — and would pass without testing the
+      // range check at all.
+      expect(() => parseConfig("fill:\n  maxTurns: 1e999", "x.yaml")).toThrow(
+        /"fill.maxTurns" must be a number/,
+      );
     });
 
     it("rejects a fractional concurrency", () => {

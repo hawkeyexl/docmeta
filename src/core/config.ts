@@ -96,7 +96,8 @@ const FILL_KEYS = [
   "provider",
   "model",
   "confidenceThreshold",
-  "maxCostUsd",
+  "maxTurns",
+  "chunkChars",
   "concurrency",
 ] as const;
 
@@ -155,7 +156,10 @@ export interface FillConfig {
   model?: string;
   /** Minimum self-reported confidence to write a value (0-1). */
   confidenceThreshold?: number;
-  maxCostUsd?: number;
+  /** Stop after this many inference calls. Counts calls, not files. */
+  maxTurns?: number;
+  /** Characters of document per call. Default 12000. */
+  chunkChars?: number;
   concurrency?: number;
 }
 
@@ -513,7 +517,7 @@ function parseFill(value: unknown, source: string): FillConfig {
   asString("model");
 
   const asNumber = (
-    key: "confidenceThreshold" | "maxCostUsd" | "concurrency",
+    key: "confidenceThreshold" | "maxTurns" | "chunkChars" | "concurrency",
     min: number,
     max: number,
     integer = false,
@@ -537,7 +541,8 @@ function parseFill(value: unknown, source: string): FillConfig {
     fill[key] = v;
   };
   asNumber("confidenceThreshold", 0, 1);
-  asNumber("maxCostUsd", 0, Number.MAX_SAFE_INTEGER);
+  asNumber("maxTurns", 1, Number.MAX_SAFE_INTEGER, true);
+  asNumber("chunkChars", 1, Number.MAX_SAFE_INTEGER, true);
   asNumber("concurrency", 1, 64, true);
 
   return fill;

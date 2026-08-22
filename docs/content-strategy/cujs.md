@@ -24,6 +24,10 @@ Maya wants to add a new required field (or make an existing optional field requi
 
 Maya's repo has heterogeneous content: `/api` docs need a `type: api-reference` field; `/guides` have different required fields. She needs to assign different schemas to different directory subtrees via config overrides, understand glob precedence, and handle a file that matches multiple schemas.
 
+### M4 · Retrofit a docset that never had metadata, without breaking our data policy
+
+Maya's older pages predate the standard, so the fields her gate now requires are missing from most of them. `fill` is what closes that backlog, and it is the only command that sends her documents to a third party. She needs to know what leaves on each call, how much of each document goes, and what the cache keeps afterwards — then pin a provider she chose, or keep inference on her own hardware.
+
 ---
 
 ## Devin, Platform / CI Engineer

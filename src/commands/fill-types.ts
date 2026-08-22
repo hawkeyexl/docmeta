@@ -80,8 +80,8 @@ export interface FillRun {
   dryRun: boolean;
   provider: string;
   model: string;
-  /** True when the cost budget stopped the run before every file was seen. */
-  budgetExhausted: boolean;
+  /** True when the call cap stopped the run before every file was seen. */
+  turnsSpent: boolean;
 }
 
 export interface FillOptions {
@@ -127,8 +127,12 @@ export interface FillOptions {
   model?: string;
   /** Use the on-disk proposal cache. Default true. */
   cache?: boolean;
-  /** Stop scheduling new files past this spend. */
-  maxCostUsd?: number;
+  /** Refuse a hosted provider: inference must run on this machine. */
+  local?: boolean;
+  /** Stop after this many inference calls. Counts calls, not files. */
+  maxTurns?: number;
+  /** Characters of document per call. Default 12000. */
+  chunkChars?: number;
   /** Files inferred in parallel. Default 4. */
   concurrency?: number;
   /** Include the filled document on each result (used for stdin and tests). */
