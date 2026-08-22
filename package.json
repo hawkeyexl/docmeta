@@ -1,6 +1,6 @@
 {
   "name": "docmeta",
-  "version": "3.14.0-dita-write.1",
+  "version": "4.0.0-fill-local-and-chunking.1",
   "description": "Validate the presence and format of document metadata (Markdown frontmatter and more) against JSON Schema. CI-friendly.",
   "type": "module",
   "bin": {
