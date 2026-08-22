@@ -38,7 +38,7 @@ jobs:
       # workflow's dependencies, so it follows the convention every other
       # workflow here uses. (`release.yml` pins too, because it holds the App
       # token and publish rights; this job holds neither.)
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - uses: actions/setup-node@v6
         with:
           node-version: 24
