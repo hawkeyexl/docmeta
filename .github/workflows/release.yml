@@ -47,6 +47,25 @@ permissions:
 
 jobs:
   release:
+    # Don't re-release semantic-release's own release commit.
+    #
+    # This used to be `[skip ci]` in the commit message (`.releaserc.json`),
+    # which worked on that commit and silently broke every squash merge. GitHub
+    # honours the marker anywhere in the pushed commit's message, and a squash
+    # concatenates the branch's commit messages — so a `feat/**` branch, which
+    # accumulates `chore(release): ...-<branch>.N [skip ci]` prerelease commits
+    # by design, carried the marker into `main` and skipped Release and Docs
+    # both. Seven of the eight merges before this one released nothing at merge
+    # time; 4.0.0 shipped only because #103 happened to be the one branch with
+    # no prerelease commits, and swept up everything behind it.
+    #
+    # Matching on the subject alone is what makes the difference: a real release
+    # commit *starts* with the prefix, while an inherited marker is buried in a
+    # squash body. `test/release-config.test.ts` pins this string to the message
+    # template it has to match.
+    if: >-
+      github.event_name != 'push' ||
+      !startsWith(github.event.head_commit.message, 'chore(release):')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # The husky commit-msg hook isn't useful in CI, and semantic-release's
