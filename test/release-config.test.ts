@@ -56,7 +56,13 @@ describe("the release commit guard", () => {
     expect(match, `guard does not test a subject prefix: ${guard}`).not.toBeNull();
     const prefix = match?.[1] ?? "";
 
-    const subject = releaseCommitTemplate().split("\\n")[0] ?? "";
+    const template = releaseCommitTemplate();
+    const subject = template.split("\n")[0] ?? "";
+    // The template is multi-line (subject, blank, notes), so a subject equal to
+    // the whole template means the delimiter never matched — which is exactly
+    // what a literal `\\n` here did, leaving the assertion below testing the
+    // full string while reading as though it tested the subject.
+    expect(subject).not.toBe(template);
     expect(
       subject.startsWith(prefix),
       `release commit subject ${JSON.stringify(subject)} does not start with the guarded prefix ${JSON.stringify(prefix)}`,
