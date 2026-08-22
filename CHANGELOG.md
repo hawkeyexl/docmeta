@@ -1,3 +1,15 @@
+# [4.1.0-action-and-precommit-hook.1](https://github.com/hawkeyexl/docmeta/compare/v4.0.0...v4.1.0-action-and-precommit-hook.1) (2026-08-22)
+
+
+### Bug Fixes
+
+* write exit-code before the action's script aborts ([e7edb32](https://github.com/hawkeyexl/docmeta/commit/e7edb323433b63742d0f23e2dd1ae4018f632510))
+
+
+### Features
+
+* ship a GitHub Action and a pre-commit hook ([7ccab63](https://github.com/hawkeyexl/docmeta/commit/7ccab6302da9d0840b863c3d110fdce614057126))
+
 # [4.0.0](https://github.com/hawkeyexl/docmeta/compare/v3.13.0...v4.0.0) (2026-08-22)
 
 
