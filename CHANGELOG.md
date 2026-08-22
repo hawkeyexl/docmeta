@@ -1,3 +1,10 @@
+# [4.1.0-action-and-precommit-hook.3](https://github.com/hawkeyexl/docmeta/compare/v4.1.0-action-and-precommit-hook.2...v4.1.0-action-and-precommit-hook.3) (2026-08-22)
+
+
+### Bug Fixes
+
+* let a broken husky fail loudly in the prepare guard ([510121d](https://github.com/hawkeyexl/docmeta/commit/510121d9d5ab30f23f1e40459bc4bb5449197553)), closes [#104](https://github.com/hawkeyexl/docmeta/issues/104)
+
 # [4.1.0-action-and-precommit-hook.2](https://github.com/hawkeyexl/docmeta/compare/v4.1.0-action-and-precommit-hook.1...v4.1.0-action-and-precommit-hook.2) (2026-08-22)
 
 
