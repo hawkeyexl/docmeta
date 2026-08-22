@@ -1,3 +1,10 @@
+# [4.1.0-action-and-precommit-hook.2](https://github.com/hawkeyexl/docmeta/compare/v4.1.0-action-and-precommit-hook.1...v4.1.0-action-and-precommit-hook.2) (2026-08-22)
+
+
+### Bug Fixes
+
+* pin setup-node in the action, and locate the run block by id ([e39cff7](https://github.com/hawkeyexl/docmeta/commit/e39cff721baedaff627322abd098e9d3c8e30cb8)), closes [#104](https://github.com/hawkeyexl/docmeta/issues/104)
+
 # [4.1.0-action-and-precommit-hook.1](https://github.com/hawkeyexl/docmeta/compare/v4.0.0...v4.1.0-action-and-precommit-hook.1) (2026-08-22)
 
 
