@@ -18,7 +18,7 @@ jobs:
       # Validate all Markdown. `--format github` turns failures into inline PR
       # annotations; the nonzero exit code fails the job.
       - name: Validate frontmatter
-        run: npx -y docmeta validate "**/*.md" --format github
+        run: npx -y docmeta@4 validate "**/*.md" --format github
 
       # Or, with a docmeta.config.yaml at the repo root, simply:
-      # - run: npx -y docmeta validate --format github
+      # - run: npx -y docmeta@4 validate --format github

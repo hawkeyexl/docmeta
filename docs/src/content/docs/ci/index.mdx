@@ -13,11 +13,36 @@ You do not need to install docmeta into your repository. The recipes here run it
 with `npx`, which fetches the published `docmeta` package on demand. The only
 requirement on the runner is Node.js 24 or newer.
 
-<Aside type="tip" title="Just want the workflow?">
-The repository ships a ready-made workflow at
-[`examples/docmeta.yml`](https://github.com/hawkeyexl/docmeta/blob/main/examples/docmeta.yml).
-Copy it into `.github/workflows/` and you have a working gate. The sections
-below walk through that file and adapt it.
+<Aside type="tip" title="Just want the gate?">
+On GitHub Actions, use the packaged action — it sets up Node, pins the CLI, and
+defaults to inline PR annotations:
+
+```yaml
+- uses: actions/checkout@v4
+- uses: hawkeyexl/docmeta@v4
+  with:
+    paths: "docs/**/*.md"
+```
+
+`paths`, `schema` and `args` each accept one item per line as well as a single
+space-separated line. Use lines whenever a value contains a space — shell
+quoting is not interpreted, so `args: --exclude "*.draft.md"` would hand docmeta
+a pattern with the quote marks still in it:
+
+```yaml
+- uses: hawkeyexl/docmeta@v4
+  with:
+    paths: |
+      docs/**/*.md
+      guides/my notes/*.mdx
+    args: |
+      --exclude
+      *.draft.md
+```
+
+Everything below explains what that runs, and applies to any CI platform.
+[`examples/docmeta.yml`](https://github.com/hawkeyexl/docmeta/blob/main/examples/docmeta.yml)
+is the same thing written out by hand, for when you want to own the steps.
 </Aside>
 
 ## How the gate works
@@ -83,7 +108,7 @@ from [`examples/docmeta.yml`](https://github.com/hawkeyexl/docmeta/blob/main/exa
 
 <Aside type="note" title="Pin the version for reproducible runs">
 `npx -y docmeta` resolves the latest published version each run. To keep CI
-reproducible, pin a version, as in `npx -y docmeta@0.1.0 validate ...`, and bump it
+reproducible, pin the major, as in `npx -y docmeta@4 validate ...`, and bump it
 deliberately.
 </Aside>
 

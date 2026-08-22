@@ -1,0 +1,110 @@
+name: Action smoke
+
+# `action.yml` is the one thing in this repo that nothing else executes. The
+# unit tests in `test/action-wiring.test.ts` extract its `run:` block and run it
+# against a stub `npx`, which pins the input→argv wiring cheaply — but a stub
+# cannot tell us whether GitHub accepts `runs.using: composite`, whether
+# `setup-node` gets a usable `node-version`, or whether `$GITHUB_OUTPUT` is
+# actually written. Only the runner can, and only by calling the action for
+# real.
+#
+# It runs against a *local* tarball, not the published package. Pointing
+# `version:` at npm would test whatever is on the registry, which is the last
+# release rather than this PR — so a PR that broke the action would go green.
+on:
+  pull_request:
+    paths:
+      - action.yml
+      - .github/workflows/action-smoke.yml
+      - src/**
+      - package.json
+      # The fixtures the assertions below read. Leaving them out meant a change
+      # to an input could merge without running this job, and surface later as
+      # a red on an unrelated `action.yml` PR.
+      - test/fixtures/action-smoke-clean.md
+      - test/fixtures/missing-type.md
+      - test/fixtures/requires-type.schema.json
+      - test/fixtures/extra.schema.json
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      # Floating majors here, SHA pins in `action.yml` — and the difference is
+      # the point rather than an oversight. That pin exists because a consumer
+      # writing `uses: hawkeyexl/docmeta@v4` inherits whatever the action
+      # resolves to and cannot audit or override it. Nobody inherits this
+      # workflow's dependencies, so it follows the convention every other
+      # workflow here uses. (`release.yml` pins too, because it holds the App
+      # token and publish rights; this job holds neither.)
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+      # `npm pack` gives npx an installable spec, so the action exercises this
+      # commit's CLI rather than the registry's. The path stays *relative*:
+      # `npx docmeta@<absolute path>` is rejected outright on Windows, where the
+      # drive letter's colon collides with the `name@spec` separator, and a
+      # relative path avoids the question on every platform. Composite `run:`
+      # steps and `npm pack` both use the workspace root, so they agree.
+      - id: pack
+        run: echo "tarball=./$(npm pack --silent)" >> "$GITHUB_OUTPUT"
+
+      # The happy path: a clean document exits 0 and reports it.
+      #
+      # Both cases use fixtures this job owns, deliberately. Pointing the clean
+      # case at a live docs page and the docs schema meant this workflow read
+      # two files that do not appear in its `paths:` filter — so tightening the
+      # docs schema would skip the smoke job entirely, then fail the next
+      # `action.yml` PR for a reason that had nothing to do with it.
+      - id: clean
+        uses: ./
+        with:
+          version: ${{ steps.pack.outputs.tarball }}
+          paths: test/fixtures/action-smoke-clean.md
+          schema: ./test/fixtures/requires-type.schema.json
+      - name: Clean run reports exit-code 0
+        run: |
+          [ "${{ steps.clean.outputs.exit-code }}" = "0" ] \
+            || { echo "expected 0, got '${{ steps.clean.outputs.exit-code }}'"; exit 1; }
+
+      # A failing document must surface as exit 1, and `continue-on-error` is
+      # the only way `exit-code` is observable at all — a non-zero code has
+      # otherwise already failed the job.
+      - id: failing
+        uses: ./
+        continue-on-error: true
+        with:
+          version: ${{ steps.pack.outputs.tarball }}
+          paths: test/fixtures/missing-type.md
+          schema: ./test/fixtures/requires-type.schema.json
+      - name: Failing run reports exit-code 1
+        run: |
+          [ "${{ steps.failing.outputs.exit-code }}" = "1" ] \
+            || { echo "expected 1, got '${{ steps.failing.outputs.exit-code }}'"; exit 1; }
+
+      # Multi-line `schema:` becoming repeated `-s` is the input handling most
+      # likely to break silently: a wrong split would just drop a schema, and
+      # the run would pass with less checked than the consumer asked for. So
+      # the two lines are chosen to discriminate — the file *passes* the first
+      # and *fails* the second, which makes exit 1 reachable only if the second
+      # line arrived as its own `-s`.
+      - id: two-schemas
+        uses: ./
+        continue-on-error: true
+        with:
+          version: ${{ steps.pack.outputs.tarball }}
+          paths: test/fixtures/missing-type.md
+          schema: |
+            ./test/fixtures/extra.schema.json
+            ./test/fixtures/requires-type.schema.json
+          args: --format json
+      - name: The second schema line arrived as its own -s
+        run: |
+          [ "${{ steps.two-schemas.outputs.exit-code }}" = "1" ] \
+            || { echo "expected 1, got '${{ steps.two-schemas.outputs.exit-code }}' — the second schema line was dropped"; exit 1; }

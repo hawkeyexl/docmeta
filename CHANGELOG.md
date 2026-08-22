@@ -1,3 +1,36 @@
+# [4.1.0-action-and-precommit-hook.4](https://github.com/hawkeyexl/docmeta/compare/v4.1.0-action-and-precommit-hook.3...v4.1.0-action-and-precommit-hook.4) (2026-08-22)
+
+
+### Bug Fixes
+
+* accept newline-separated paths and args, and warn on shell quotes ([9ed407d](https://github.com/hawkeyexl/docmeta/commit/9ed407daa4510edef599fb2a28f24bddcef480bf))
+
+# [4.1.0-action-and-precommit-hook.3](https://github.com/hawkeyexl/docmeta/compare/v4.1.0-action-and-precommit-hook.2...v4.1.0-action-and-precommit-hook.3) (2026-08-22)
+
+
+### Bug Fixes
+
+* let a broken husky fail loudly in the prepare guard ([510121d](https://github.com/hawkeyexl/docmeta/commit/510121d9d5ab30f23f1e40459bc4bb5449197553)), closes [#104](https://github.com/hawkeyexl/docmeta/issues/104)
+
+# [4.1.0-action-and-precommit-hook.2](https://github.com/hawkeyexl/docmeta/compare/v4.1.0-action-and-precommit-hook.1...v4.1.0-action-and-precommit-hook.2) (2026-08-22)
+
+
+### Bug Fixes
+
+* pin setup-node in the action, and locate the run block by id ([e39cff7](https://github.com/hawkeyexl/docmeta/commit/e39cff721baedaff627322abd098e9d3c8e30cb8)), closes [#104](https://github.com/hawkeyexl/docmeta/issues/104)
+
+# [4.1.0-action-and-precommit-hook.1](https://github.com/hawkeyexl/docmeta/compare/v4.0.0...v4.1.0-action-and-precommit-hook.1) (2026-08-22)
+
+
+### Bug Fixes
+
+* write exit-code before the action's script aborts ([e7edb32](https://github.com/hawkeyexl/docmeta/commit/e7edb323433b63742d0f23e2dd1ae4018f632510))
+
+
+### Features
+
+* ship a GitHub Action and a pre-commit hook ([7ccab63](https://github.com/hawkeyexl/docmeta/commit/7ccab6302da9d0840b863c3d110fdce614057126))
+
 # [4.0.0](https://github.com/hawkeyexl/docmeta/compare/v3.13.0...v4.0.0) (2026-08-22)
 
 
