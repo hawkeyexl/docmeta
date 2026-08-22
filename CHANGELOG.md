@@ -1,3 +1,163 @@
+# [4.0.0-action-and-precommit-hook.1](https://github.com/hawkeyexl/docmeta/compare/v3.13.0...v4.0.0-action-and-precommit-hook.1) (2026-08-22)
+
+
+* feat(fill)!: send the whole document, and add --local ([#102](https://github.com/hawkeyexl/docmeta/issues/102)) ([37d19d3](https://github.com/hawkeyexl/docmeta/commit/37d19d34accb1651018f55d13106f0fcc0cbbd18)), closes [#74](https://github.com/hawkeyexl/docmeta/issues/74) [97-#99](https://github.com/97-/issues/99)
+
+
+### Bug Fixes
+
+* **extractors:** stop a BOM shifting the columns HTML reports ([#100](https://github.com/hawkeyexl/docmeta/issues/100)) ([e1a1483](https://github.com/hawkeyexl/docmeta/commit/e1a1483a2ad6595c5b5d3ce4301babf4d45bebde)), closes [#99](https://github.com/hawkeyexl/docmeta/issues/99)
+
+
+### Features
+
+* **extractors:** read and write DITA prolog metadata ([#99](https://github.com/hawkeyexl/docmeta/issues/99)) ([d56cc84](https://github.com/hawkeyexl/docmeta/commit/d56cc84c13a0069e232be4b210ce0e23f7a7ccdd))
+* **extractors:** write metadata back to HTML ([#97](https://github.com/hawkeyexl/docmeta/issues/97)) ([43a9b0e](https://github.com/hawkeyexl/docmeta/commit/43a9b0e33aecbf6580732fe3ccfef84ed223f3db)), closes [#99](https://github.com/hawkeyexl/docmeta/issues/99) [#62](https://github.com/hawkeyexl/docmeta/issues/62)
+* **extractors:** write metadata back to XML ([#98](https://github.com/hawkeyexl/docmeta/issues/98)) ([c2036e3](https://github.com/hawkeyexl/docmeta/commit/c2036e37b84f1acb4c0c45cc55118d2c7b0c79c1))
+* ship a GitHub Action and a pre-commit hook ([3a6f958](https://github.com/hawkeyexl/docmeta/commit/3a6f958a91d4dda1425e4c1331f29ba77fd3a2af))
+
+
+### BREAKING CHANGES
+
+* `--max-cost-usd` and the `fill.maxCostUsd` config key are
+removed. Use `--max-turns` / `fill.maxTurns` to bound a run, or `--local`, which
+costs nothing.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+* chore(release): 4.0.0-fill-local-and-chunking.1 [skip ci]
+
+# [4.0.0-fill-local-and-chunking.1](https://github.com/hawkeyexl/docmeta/compare/v3.13.0...v4.0.0-fill-local-and-chunking.1) (2026-08-22)
+
+* feat(fill)!: send the whole document, and add --local ([a92953e](https://github.com/hawkeyexl/docmeta/commit/a92953e3c8d8e6ed1fae1fada47a2ca9c56247f2)), closes [97-#99](https://github.com/97-/issues/99)
+
+### Bug Fixes
+
+* **extractors:** stop a BOM shifting the columns HTML reports ([#100](https://github.com/hawkeyexl/docmeta/issues/100)) ([e1a1483](https://github.com/hawkeyexl/docmeta/commit/e1a1483a2ad6595c5b5d3ce4301babf4d45bebde)), closes [#99](https://github.com/hawkeyexl/docmeta/issues/99)
+
+### Features
+
+* **extractors:** read and write DITA prolog metadata ([#99](https://github.com/hawkeyexl/docmeta/issues/99)) ([d56cc84](https://github.com/hawkeyexl/docmeta/commit/d56cc84c13a0069e232be4b210ce0e23f7a7ccdd))
+* **extractors:** write metadata back to HTML ([#97](https://github.com/hawkeyexl/docmeta/issues/97)) ([43a9b0e](https://github.com/hawkeyexl/docmeta/commit/43a9b0e33aecbf6580732fe3ccfef84ed223f3db)), closes [#99](https://github.com/hawkeyexl/docmeta/issues/99) [#62](https://github.com/hawkeyexl/docmeta/issues/62)
+* **extractors:** write metadata back to XML ([#98](https://github.com/hawkeyexl/docmeta/issues/98)) ([c2036e3](https://github.com/hawkeyexl/docmeta/commit/c2036e37b84f1acb4c0c45cc55118d2c7b0c79c1))
+
+### BREAKING CHANGES
+
+* `--max-cost-usd` and the `fill.maxCostUsd` config key are
+removed. Use `--max-turns` / `fill.maxTurns` to bound a run, or `--local`, which
+costs nothing.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+* fix(fill): refuse a document any failure cut short, not just the turn cap
+
+Review found the same hole the turn-cap guard closed, reachable by a second
+route. When a chunk failed part-way through a document, the guard only refused
+if *nothing* had been collected — so one or more successful chunks were merged
+and written as though they described the whole page.
+
+Measured against a provider that succeeds twice then errors, on a file needing
+seven chunks: the run reported no error and wrote a field inferred from two of
+them. A transient upstream error on chunk three of a long reference page
+therefore produced a `description` derived from its introduction, written into
+the user's file, with nothing in the output saying the rest was never read.
+
+The overflow path had it too: once the single halve-and-retry is spent, control
+falls through and whatever chunks succeeded are accepted.
+
+The guard is now "every chunk was read, or the document is refused", which
+covers both routes and the turn cap, and a mutation test pins it.
+
+Also sums token usage across chunks rather than caching the last call's, which
+understated a chunked file by roughly its chunk count. Nothing reads it back
+today — which is why it was worth correcting before something does.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+* chore(release): 4.0.0-fill-local-and-chunking.2 [skip ci]
+
+# [4.0.0-fill-local-and-chunking.2](https://github.com/hawkeyexl/docmeta/compare/v4.0.0-fill-local-and-chunking.1...v4.0.0-fill-local-and-chunking.2) (2026-08-22)
+
+### Bug Fixes
+
+* **fill:** refuse a document any failure cut short, not just the turn cap ([787607f](https://github.com/hawkeyexl/docmeta/commit/787607ff11db786cf168e4c3d0c852c068cd55d8))
+
+* refactor(fill): drop two casts the library already types
+
+Both were unnecessary rather than merely noisy, which is the reason to remove
+them: `ProviderName` includes `"llama-cpp"`, so the literal is assignable to
+`ProviderSelector` on its own, and `LLAMA_MODELS` is exported as
+`Record<string, LlamaModelEntry>` with `sizeBytes` and an optional `tier`. Each
+cast asserted a shape the compiler could already prove — and would have gone on
+asserting it after the library changed.
+
+Also records why the halve-and-retry path does not roll back its turn count:
+those calls were made and billed, so un-counting them would make `--max-turns`
+describe something other than what happened. It does mean a document that
+triggers the retry costs more turns than its final chunk count suggests, which
+is worth saying where the retry happens rather than leaving to be rediscovered.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+* refactor(fill): drop dead billedCalls, and let the compiler find the next one
+
+`billedCalls` was read only by `projectedCost()`, which computed the cost
+reservation for `--max-cost-usd`. That function went with the priming machinery;
+the declaration and the increment stayed, accumulating on every chunk call and
+being discarded at the end of the run.
+
+Enabling `noUnusedLocals` matters more than the deletion. `strict` does not
+cover this class, so the only way to find it was to grep — which is not a check
+anyone runs, and is exactly how it survived the removal that orphaned it. The
+whole tree had two other violations, both unused imports (`ReportFormat` in
+`cli.ts`, `Buffer` in `schemas.ts`), so the flag costs nothing and turns a
+manual catch into a compiler guarantee. Verified against a deliberate write-only
+local, which now fails the typecheck.
+
+`noUnusedParameters` is left off: it still has one violation, and clearing it is
+unrelated to this PR.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+* fix(fill): reset cached usage on retry, and pin the overflow matcher
+
+Two review nits. One was right, one was not, and the second is the more useful
+of the two to write down.
+
+`usageTotal` accumulated across the halve-and-retry, so a document whose first
+attempt overflowed part-way through had those chunks' tokens counted again by
+the second attempt. Reset before the retry: the figure describes the document,
+not the run, and nothing reads it back yet — which is the moment to make it
+right rather than after something does.
+
+The other nit proposed dropping bare `exceeds` from `looksLikeOverflow`, because
+it would match "rate limit exceeded" and "quota exceeded". The consequence would
+have been real: overflow triggers a halve-and-retry, and halving *doubles* the
+call count, so answering a rate limit that way would send twice the requests
+that provoked it.
+
+It does not match them. "exceeded" does not contain "exceeds". Checked against
+both, plus "429 Too Many Requests" — none match, before or after. Dropping it
+cost a genuine overflow instead: "Your input exceeds the maximum allowed length"
+matched before and would not after. So the change is reverted, and the one
+letter now has a comment explaining why it is deliberate.
+
+The regression test that came out of this is the part worth keeping. It asserts
+both directions — a rate limit does not re-chunk, a real overflow does — because
+the first assertion alone passed with the matcher broken, which is how the wrong
+fix looked correct for a few minutes. Loosening `exceeds` to `exceed` now fails
+it.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+* chore(release): 4.0.0-fill-local-and-chunking.3 [skip ci]
+
+# [4.0.0-fill-local-and-chunking.3](https://github.com/hawkeyexl/docmeta/compare/v4.0.0-fill-local-and-chunking.2...v4.0.0-fill-local-and-chunking.3) (2026-08-22)
+
+### Bug Fixes
+
+* **fill:** reset cached usage on retry, and pin the overflow matcher ([e86767d](https://github.com/hawkeyexl/docmeta/commit/e86767da91eff25c75f04caabaa97d964b88c48a))
+
 # [4.0.0-fill-local-and-chunking.3](https://github.com/hawkeyexl/docmeta/compare/v4.0.0-fill-local-and-chunking.2...v4.0.0-fill-local-and-chunking.3) (2026-08-22)
 
 

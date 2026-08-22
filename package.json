@@ -1,6 +1,6 @@
 {
   "name": "docmeta",
-  "version": "4.0.0-fill-local-and-chunking.3",
+  "version": "4.0.0-action-and-precommit-hook.1",
   "description": "Validate the presence and format of document metadata (Markdown frontmatter and more) against JSON Schema. CI-friendly.",
   "type": "module",
   "bin": {
