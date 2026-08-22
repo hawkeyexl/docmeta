@@ -24,6 +24,13 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
+      # Floating majors here, SHA pins in `action.yml` — and the difference is
+      # the point rather than an oversight. That pin exists because a consumer
+      # writing `uses: hawkeyexl/docmeta@v4` inherits whatever the action
+      # resolves to and cannot audit or override it. Nobody inherits this
+      # workflow's dependencies, so it follows the convention every other
+      # workflow here uses. (`release.yml` pins too, because it holds the App
+      # token and publish rights; this job holds neither.)
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
