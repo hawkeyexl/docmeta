@@ -6,7 +6,6 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { Buffer } from "node:buffer";
 import { parseDocument, stringify } from "yaml";
 import { DocmetaError } from "../types.js";
 import {

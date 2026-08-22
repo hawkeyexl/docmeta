@@ -32,7 +32,6 @@ import {
   isReportFormat,
   render,
   type CommonFormat,
-  type ReportFormat,
 } from "./reporters/index.js";
 import {
   FILL_FORMATS,

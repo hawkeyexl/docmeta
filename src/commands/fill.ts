@@ -344,7 +344,6 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
   let turnsSpent = false;
   let turnsUsed = 0;
   let inFlight = 0;
-  let billedCalls = 0;
 
   /**
    * Whether the call cap is spent.
@@ -545,7 +544,6 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
               validate,
             });
             costUsd += costOfUsage(run.usage, pricing);
-            billedCalls++;
             turnsUsed++;
           } finally {
             inFlight--;

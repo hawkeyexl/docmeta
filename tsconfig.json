@@ -7,6 +7,10 @@
     "types": ["node"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    // Added after review found a write-only `billedCalls` left behind when the
+    // cost-budget machinery was removed. `strict` does not cover it, so the
+    // class was only findable by grep — which is not a check anyone runs.
+    "noUnusedLocals": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
