@@ -1,3 +1,10 @@
+## [4.1.2](https://github.com/hawkeyexl/docmeta/compare/v4.1.1...v4.1.2) (2026-08-22)
+
+
+### Bug Fixes
+
+* **deps:** require @hawkeyexl/inference 0.3.1 so --local works ([#107](https://github.com/hawkeyexl/docmeta/issues/107)) ([ad8db25](https://github.com/hawkeyexl/docmeta/commit/ad8db254cb76678f1b8ad713be0a384157860146)), closes [hawkeyexl/moose-inference#9](https://github.com/hawkeyexl/moose-inference/issues/9)
+
 ## [4.1.1](https://github.com/hawkeyexl/docmeta/compare/v4.1.0...v4.1.1) (2026-08-22)
 
 
