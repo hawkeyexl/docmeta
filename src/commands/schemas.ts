@@ -35,6 +35,7 @@ import {
   STDIN_LABEL,
   STDIN_TOKEN,
 } from "../core/load-files.js";
+import { toJsonText } from "../core/json-text.js";
 import { writeFileAtomic } from "../core/write-file.js";
 
 export interface SchemasInfo {
@@ -632,7 +633,9 @@ function recordValue(
   // Objects and arrays are keyed by their JSON too, so a repeated `tags: []`
   // counts once. They are never enum candidates, so the only cost is an
   // accurate `distinct` column.
-  const key = JSON.stringify(normalized) ?? "undefined";
+  // `toJsonText`, not `JSON.stringify`, so the `?? "undefined"` stays visibly
+  // reachable: a hand-written value can stringify to nothing. See there.
+  const key = toJsonText(normalized) ?? "undefined";
   const seen = stats.values.get(key);
   if (seen) {
     seen.count += 1;

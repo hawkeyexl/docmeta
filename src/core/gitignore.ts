@@ -82,7 +82,9 @@ export function gitIgnored(
     // Drain stderr so a chatty git cannot fill the pipe and stall.
     child.stderr.resume();
     // No binary on PATH lands here rather than throwing from spawn().
-    child.on("error", () => finish(unavailable()));
+    child.on("error", () => {
+      finish(unavailable());
+    });
     // A dead child makes the pipe write fail; that is reported by 'error'/'close'.
     child.stdin.on("error", () => {});
 

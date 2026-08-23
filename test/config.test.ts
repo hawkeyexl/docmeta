@@ -9,6 +9,10 @@ import {
   parseConfig,
   schemaTrustRoot,
 } from "../src/core/config.js";
+import {
+  DEFAULT_SCHEMAS,
+  resolveSchemaSet,
+} from "../src/core/resolve-schema.js";
 import { DocmetaError } from "../src/types.js";
 import { DOC, makeTempRepo, removeTempRepo } from "./helpers/temp-repo.js";
 
@@ -733,5 +737,52 @@ describe("schemaTrustRoot", () => {
     // could not, and the refusal message told someone with no config file that
     // "the config's own directory is the boundary" — a file that is not there.
     expect(schemaTrustRoot(dir)).toEqual({ dir, source: "cwd" });
+  });
+});
+
+/**
+ * docmeta validating its own docs, guarded.
+ *
+ * These read the **real** root `docmeta.config.yaml` rather than a fixture, on
+ * purpose: the thing under test is that the project dogfoods its own discovery
+ * path, and a fixture copy would keep passing after the real file rotted.
+ */
+describe("the repository's own docmeta.config.yaml", () => {
+  const repoRoot = resolve(here, "..");
+
+  it("is what discovery finds from the repo root, and names a schema that is there", async () => {
+    const loaded = await loadConfig(undefined, repoRoot);
+    expect(loaded?.path).toBe(join(repoRoot, "docmeta.config.yaml"));
+    expect(loaded?.dir).toBe(repoRoot);
+    expect(loaded?.config.paths).toEqual([
+      "docs/src/content/docs/**/*.{md,mdx}",
+    ]);
+
+    const ref = loaded?.config.overrides?.[0]?.schemas[0];
+    expect(ref).toBe("./docs/doc-frontmatter.schema.json");
+    // Resolved the way a config-supplied file ref is: against the config's own
+    // directory. The `?? ` guard is not decoration — `resolve(repoRoot, "")` is
+    // `repoRoot`, which exists, so a missing ref would otherwise pass.
+    expect(existsSync(resolve(repoRoot, ref ?? "<missing>"))).toBe(true);
+  });
+
+  it("scopes the docs schema to the docs and leaves everything else on the defaults", async () => {
+    // The reason the schema hangs off `overrides:` instead of top-level
+    // `schemas:`. A root config is discovered by every docmeta run beneath it,
+    // this suite's included, and `schemas:` is the default set for *every*
+    // validated file — so spelling it there would judge the fixtures under
+    // `test/` against the docs frontmatter contract.
+    const config = (await loadConfig(undefined, repoRoot))?.config;
+    expect(config?.schemas).toBeUndefined();
+
+    expect(
+      resolveSchemaSet({
+        filePath: "docs/src/content/docs/index.mdx",
+        config,
+      }),
+    ).toEqual(["./docs/doc-frontmatter.schema.json"]);
+    expect(
+      resolveSchemaSet({ filePath: "test/fixtures/valid.md", config }),
+    ).toEqual([...DEFAULT_SCHEMAS]);
   });
 });

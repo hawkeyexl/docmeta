@@ -17,6 +17,7 @@
  * becomes required, which is the surprise the report exists to prevent.
  */
 import type { InferKeyReport, InferResult } from "../commands/schemas.js";
+import { toJsonText } from "../core/json-text.js";
 import { palette } from "./color.js";
 
 export interface InferReportOptions {
@@ -54,7 +55,9 @@ export function sampleCell(key: InferKeyReport): string {
     return truncate(shown.join(" | "), SAMPLE_WIDTH);
   }
   if (key.sample === undefined) return "";
-  return truncate(JSON.stringify(key.sample) ?? "", SAMPLE_WIDTH);
+  // `toJsonText`, not `JSON.stringify`, so the `?? ""` stays visibly
+  // reachable — see there.
+  return truncate(toJsonText(key.sample) ?? "", SAMPLE_WIDTH);
 }
 
 /** `string`, `string (date)`, `string (7 enum)`, or `string ×900, number ×4`. */
@@ -144,9 +147,7 @@ export function renderInfer(
   }
 
   if (result.out !== undefined) {
-    const properties = Object.keys(
-      (result.draft.properties ?? {}) as Record<string, unknown>,
-    ).length;
+    const properties = Object.keys(result.draft.properties ?? {}).length;
     lines.push(
       "",
       `Wrote a draft schema to ${c.cyan(result.out)} — ${count(properties)} propert${properties === 1 ? "y" : "ies"}, nothing required.`,

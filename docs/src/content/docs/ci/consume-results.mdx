@@ -270,20 +270,10 @@ for (const result of results) {
 It resolves to a `ValidateRun` of `{{ results, summary }}`, using the
 `ValidationResult` and `RunSummary` shapes that the JSON format serializes.
 
-Alongside `runValidate`, the entry point exports the other cores and helpers:
-
-| Export | Purpose |
-|---|---|
-| `runValidate` | Run the validation pipeline; returns `{ results, summary }`. |
-| `runGet` | Read metadata field values from files; returns one result per file. |
-| `getSchemasInfo` | List built-in schemas and supported input formats. |
-| `Validator` | The Ajv-backed validation engine, for validating already-extracted metadata. |
-| `resolveSchemaSet`, `DEFAULT_SCHEMAS` | Resolve a file's schema set; the built-in default set. |
-| `loadConfig`, `parseConfig` | Load or parse a `docmeta.config.yaml`. |
-| `listBuiltins`, `loadSchema`, `classifyRef` | Enumerate, fetch, and classify schema references. |
-| `render` | Format a result set as `pretty`, `json`, `github`, `sarif`, or `junit` text. `sarif` also takes the run's `frame`, which `runValidate` returns. |
-| `renderGet`, `renderFill` | The reporters behind `docmeta get` and `docmeta fill`. `--quiet` lives here, not in the cores: `runGet` and `runFill` always return every file they saw, so a programmatic caller can never mistake a filtered run for an empty one. |
-| `DocmetaError` and the result types | The operational-error class and `ValidationResult` / `RunSummary` / `FieldError` interfaces. |
+Alongside `runValidate`, the entry point exports the other command cores,
+the schema-resolution and config helpers, the reporters, the extractors, and
+every result type they use. The [TypeScript API
+reference](/docmeta/reference/api/) lists all of them.
 
 <Aside type="caution" title="Operational failures throw DocmetaError">
 The cores throw a `DocmetaError` for operational problems: no inputs and no

@@ -389,7 +389,7 @@ function parseBlock(
     case "toml":
       return text.trim() === ""
         ? {}
-        : (parseToml(text) as Record<string, unknown>);
+        : parseToml(text);
     case "yaml": {
       const doc = parseDocument(text);
       if (doc.errors.length > 0) {

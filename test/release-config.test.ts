@@ -53,7 +53,10 @@ describe("the release commit guard", () => {
     const match = /startsWith\(github\.event\.head_commit\.message,\s*'([^']+)'\)/.exec(
       guard ?? "",
     );
-    expect(match, `guard does not test a subject prefix: ${guard}`).not.toBeNull();
+    expect(
+      match,
+      `guard does not test a subject prefix: ${guard ?? "(no guard)"}`,
+    ).not.toBeNull();
     const prefix = match?.[1] ?? "";
 
     const template = releaseCommitTemplate();

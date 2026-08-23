@@ -12,6 +12,7 @@
  */
 import { DocmetaError } from "../types.js";
 import type { FillRun } from "../commands/fill-types.js";
+import { toJsonText } from "../core/json-text.js";
 import { palette } from "./color.js";
 import {
   escapeWorkflowCommandMessage,
@@ -147,7 +148,9 @@ export function renderFillPretty(
 /** Named to avoid shadowing `renderFill`'s `format` parameter. */
 function formatValue(value: unknown): string {
   if (typeof value === "string") return value;
-  return JSON.stringify(value) ?? String(value);
+  // `toJsonText`, not `JSON.stringify`, so the `String(value)` fallback stays
+  // visibly reachable — see there.
+  return toJsonText(value) ?? String(value);
 }
 
 /**

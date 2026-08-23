@@ -443,7 +443,7 @@ describe("the reference page matches the shipped schemas", () => {
         for (const word of claimed) {
           expect(
             allowed.has(word),
-            `${id} documents \`${field}\` as "${cell}" but the schema allows ${[...allowed].join(", ")}`,
+            `${id} documents \`${field}\` as "${cell ?? "(missing)"}" but the schema allows ${[...allowed].join(", ")}`,
           ).toBe(true);
         }
       }

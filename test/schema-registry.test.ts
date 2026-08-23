@@ -221,7 +221,7 @@ describe("loadSchema over http(s) — payload guard", () => {
     const ref = `${server.url}/guard-envelope.json`;
     // One call, then assert on the captured error. A rejection deliberately
     // stays retryable, so calling twice would make a second real round-trip.
-    const err = await loadSchema(ref).catch((e: Error) => e);
+    const err = await loadSchema(ref).catch((e: unknown) => e as Error);
     expect(err).toBeInstanceOf(DocmetaError);
     // Names the URL and shows what actually came back, so the operator can see
     // it is their gateway talking and not a schema at all.
@@ -292,7 +292,7 @@ describe("loadSchema over http(s) — response size cap", () => {
   it("rejects a body past the cap, counting bytes rather than content-length", async () => {
     const ref = `${server.url}/cap-huge.json`;
     const err = await loadSchema(ref, { maxBytes: 8 * 1024 }).catch(
-      (e: Error) => e,
+      (e: unknown) => e as Error,
     );
     expect(err).toBeInstanceOf(DocmetaError);
     expect(err.message).toContain(ref);
@@ -326,7 +326,7 @@ describe("loadSchema over http(s) — timeout during the body", () => {
     // which points the operator at the schema author instead of the network.
     const ref = `${server.url}/body-timeout.json`;
     const err = await loadSchema(ref, { timeoutMs: 100 }).catch(
-      (e: Error) => e,
+      (e: unknown) => e as Error,
     );
     expect(err).toBeInstanceOf(DocmetaError);
     expect(err.message).toMatch(/timed out/i);
@@ -593,7 +593,7 @@ describe("loadSchema over http(s) — cross-run cache", () => {
   it("--offline fails naming the URL when it is not cached", async () => {
     const ref = `${server.url}/offline-cold.json`;
     const err = await loadSchema(ref, { cacheDir: dir, offline: true }).catch(
-      (e: Error) => e,
+      (e: unknown) => e as Error,
     );
     expect(err).toBeInstanceOf(DocmetaError);
     expect(err.message).toContain(ref);
@@ -748,7 +748,7 @@ describe("loadSchema over http(s) — offline with the cache disabled", () => {
         cacheDir: dir,
         ttlHours: 0,
         offline: true,
-      }).catch((e: Error) => e);
+      }).catch((e: unknown) => e as Error);
       expect(err).toBeInstanceOf(DocmetaError);
       expect(err.message).toMatch(/ttlHours: 0/);
       expect(err.message).not.toMatch(/Run once without --offline/);
@@ -763,7 +763,7 @@ describe("loadSchema over http(s) — offline with the cache disabled", () => {
     // always supplies a directory — which is exactly why it needs its own test.
     const err = await loadSchema("http://127.0.0.1:9/nodir.json", {
       offline: true,
-    }).catch((e: Error) => e);
+    }).catch((e: unknown) => e as Error);
     expect(err).toBeInstanceOf(DocmetaError);
     expect(err.message).toMatch(/No schema cache is configured/);
     expect(err.message).not.toMatch(/ttlHours: 0/);
@@ -776,7 +776,7 @@ describe("loadSchema over http(s) — offline with the cache disabled", () => {
         cacheDir: dir,
         ttlHours: 24,
         offline: true,
-      }).catch((e: Error) => e);
+      }).catch((e: unknown) => e as Error);
       expect(err).toBeInstanceOf(DocmetaError);
       expect(err.message).toMatch(/Run once without --offline/);
     } finally {
@@ -831,7 +831,7 @@ describe("a schema file saved with a UTF-8 BOM", () => {
     const wrong = `sha256-${createHash("sha256").update(Buffer.from(stripped, "utf8")).digest("hex")}`;
     const err = await loadSchema(fixture, {
       pins: new Map([[fixture, { integrity: wrong }]]),
-    }).catch((e: Error) => e);
+    }).catch((e: unknown) => e as Error);
     expect(err).toBeInstanceOf(DocmetaError);
     // On the message, not just the type: before the fix this rejected as
     // invalid JSON, which is also a DocmetaError — so a type-only assertion
@@ -877,7 +877,9 @@ describe("integrity pins (0008)", () => {
     file = join(dir, "house.json");
     writeFileSync(file, BODY);
   });
-  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
 
   const pinFor = (contents: string): string =>
     `sha256-${createHash("sha256").update(Buffer.from(contents, "utf8")).digest("hex")}`;
@@ -908,7 +910,7 @@ describe("integrity pins (0008)", () => {
         integrity: pinFor(BODY),
         source: "https://e.example/house.json",
       }),
-    }).catch((e: Error) => e);
+    }).catch((e: unknown) => e as Error);
     expect(err).toBeInstanceOf(DocmetaError);
     expect(err.message).toMatch(/does not match its recorded integrity/);
     expect(err.message).toContain(pinFor(BODY));
@@ -924,7 +926,7 @@ describe("integrity pins (0008)", () => {
     writeFileSync(file, BODY.replace(/\n/g, "\r\n"));
     const err = await loadSchema(file, {
       pins: pins({ integrity: pinFor(BODY) }),
-    }).catch((e: Error) => e);
+    }).catch((e: unknown) => e as Error);
     expect(err.message).toMatch(/differ only in line endings/);
     expect(err.message).toContain(".gitattributes");
     expect(err.message).not.toMatch(/contents have changed/);
@@ -935,7 +937,7 @@ describe("integrity pins (0008)", () => {
     writeFileSync(file, BODY);
     const err = await loadSchema(file, {
       pins: pins({ integrity: pinFor(BODY.replace(/\n/g, "\r\n")) }),
-    }).catch((e: Error) => e);
+    }).catch((e: unknown) => e as Error);
     expect(err.message).toMatch(/differ only in line endings/);
   });
 
@@ -943,7 +945,7 @@ describe("integrity pins (0008)", () => {
     writeFileSync(file, '{"type":"string"}');
     const err = await loadSchema(file, {
       pins: pins({ integrity: pinFor(BODY) }),
-    }).catch((e: Error) => e);
+    }).catch((e: unknown) => e as Error);
     expect(err.message).toMatch(/Restore the file from version control/);
     expect(err.message).not.toMatch(/vendor https/);
   });
@@ -955,7 +957,7 @@ describe("integrity pins (0008)", () => {
         integrity: pinFor(BODY),
         source: "https://e.example/house.json",
       }),
-    }).catch((e: Error) => e);
+    }).catch((e: unknown) => e as Error);
     expect(err.message).toMatch(/Schema file not found/);
     expect(err.message).toContain("vendored from https://e.example/house.json");
   });
@@ -963,7 +965,7 @@ describe("integrity pins (0008)", () => {
   it("rejects an unverifiable pin rather than ignoring it", async () => {
     const err = await loadSchema(file, {
       pins: pins({ integrity: "sha512-abc" }),
-    }).catch((e: Error) => e);
+    }).catch((e: unknown) => e as Error);
     expect(err).toBeInstanceOf(DocmetaError);
     expect(err.message).toMatch(/cannot verify/);
   });
@@ -975,13 +977,13 @@ describe("integrity pins (0008)", () => {
       pins: new Map([
         ["https://e.example/s.json", { integrity: pinFor(BODY) }],
       ]),
-    }).catch((e: Error) => e);
+    }).catch((e: unknown) => e as Error);
     expect(onUrl).toBeInstanceOf(DocmetaError);
     expect(onUrl.message).toMatch(/only be verified against a local file/);
 
     const onBuiltin = await loadSchema("google:okf:0.1", {
       pins: new Map([["google:okf:0.1", { integrity: pinFor(BODY) }]]),
-    }).catch((e: Error) => e);
+    }).catch((e: unknown) => e as Error);
     expect(onBuiltin).toBeInstanceOf(DocmetaError);
     expect(onBuiltin.message).toMatch(/built-in id/);
   });
@@ -1029,6 +1031,15 @@ describe("fetchSchemaBytes (0008)", () => {
 describe("0015 · a schema file that is not JSON", () => {
   let dir: string | undefined;
 
+  /**
+   * `dir`, or a failure that names the cause. The suite clears it after every
+   * test, so it really can be `undefined` here.
+   */
+  const tempDir = (): string => {
+    if (dir === undefined) throw new Error("the temp directory was never made");
+    return dir;
+  };
+
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "docmeta-not-json-"));
   });
@@ -1038,7 +1049,7 @@ describe("0015 · a schema file that is not JSON", () => {
   });
 
   const failing = async (content: string): Promise<string> => {
-    const file = join(dir!, "schema.json");
+    const file = join(tempDir(), "schema.json");
     writeFileSync(file, content, "utf8");
     const err = await loadSchema(file, {}).then(
       () => null,
@@ -1103,7 +1114,7 @@ describe("0015 · the remote response excerpt is deliberately kept", () => {
     });
     try {
       const ref = `${server.url}/gateway.html`;
-      const err = await loadSchema(ref).catch((e: Error) => e);
+      const err = await loadSchema(ref).catch((e: unknown) => e as Error);
       expect(err).toBeInstanceOf(DocmetaError);
       expect(err.message).toContain(ref);
       expect(err.message).toMatch(/doctype|502/i);
@@ -1140,7 +1151,7 @@ describe("0009 · a published built-in URL resolves from the bundle", () => {
 
   beforeEach(() => {
     realFetch = globalThis.fetch;
-    globalThis.fetch = ((
+    globalThis.fetch = (
       input: Parameters<typeof fetch>[0],
       init?: Parameters<typeof fetch>[1],
     ) => {
@@ -1155,7 +1166,7 @@ describe("0009 · a published built-in URL resolves from the bundle", () => {
         new URL(target.pathname + target.search, server.url),
         init,
       );
-    }) as typeof globalThis.fetch;
+    };
   });
 
   afterEach(() => {

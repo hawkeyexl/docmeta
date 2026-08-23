@@ -1,0 +1,60 @@
+name: Published schemas
+
+# The published built-in schemas are the one promise this repo makes that no
+# PR check can keep. `schemas:check` proves src/schemas, docs/public/schemas and
+# the manifest agree with each other — and passes happily while the docs site
+# serves 404s, because it never leaves the disk.
+#
+# The people relying on those URLs are not necessarily running docmeta, so a
+# broken deploy reaches them as a failing build with no way to tell us. Hence a
+# schedule: nobody has to remember, and the blast radius of a bad Pages deploy
+# is a day rather than however long until someone happens to look.
+#
+# Daily, not weekly, because it is seven HTTP GETs and the thing it protects is
+# other people's CI.
+#
+# It does not gate merges. A contributor should never see red for an outage they
+# did not cause, and more importantly this check *cannot* pass on the PR that
+# needs it most: adding a built-in schema means adding its `manifest.json` entry
+# in the same commit, and the URL that entry names does not exist until the
+# change merges and the docs site redeploys. Gating on it would deadlock the
+# repo's own documented way of adding a schema.
+#
+# The `pull_request` trigger below is deliberately narrow for that reason: it
+# fires only on changes to this workflow or to the checker itself, so a change
+# to *how* the check works is exercised before merging, while a change to *what*
+# it checks is left to the schedule — by which time the deploy has happened.
+on:
+  schedule:
+    # 06:20 UTC. Off the hour on purpose — GitHub queues the top of the hour
+    # heavily, and a liveness check that is itself delayed is a confusing one.
+    - cron: "20 6 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/check-published-schemas.mjs
+      - .github/workflows/published-schemas.yml
+
+permissions:
+  contents: read
+
+# Same posture as ci.yml. The daily run is idempotent so stacking would be
+# harmless, but back-to-back `workflow_dispatch` runs while diagnosing an outage
+# are exactly when several copies hitting the same host is least useful.
+concurrency:
+  group: published-schemas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: published schema URLs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      # No `npm ci`: the checker uses only node: builtins and global fetch, so
+      # installing 700 packages to make seven requests would be the slowest and
+      # most fragile part of this workflow.
+      - run: npm run schemas:check-published

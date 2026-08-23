@@ -20,7 +20,7 @@ const RENAME_ATTEMPTS = 3;
 
 function errorCode(err: unknown): string | undefined {
   return typeof err === "object" && err !== null && "code" in err
-    ? String((err as { code: unknown }).code)
+    ? String(err.code)
     : undefined;
 }
 
