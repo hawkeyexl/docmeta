@@ -60,35 +60,55 @@ if (entries.length === 0) {
 
 const sha256 = (buf) => `sha256-${createHash("sha256").update(buf).digest("hex")}`;
 
+/** Attempts per URL, and the pause before each retry. */
+const ATTEMPTS = 3;
+const BACKOFF_MS = [500, 1500];
+
 /**
- * Fetch one URL, retrying a *thrown* request exactly once.
+ * Is this response the server saying "not now" rather than answering?
  *
- * The asymmetry is the point. A 404 and a hash mismatch are deterministic
- * answers — asking again just gets the same answer more slowly, and retrying
- * them would paper over the very drift this exists to report. A thrown `fetch`
- * is not an answer at all: it is a DNS hiccup, a TLS reset, a cold edge node.
+ * The line worth drawing is transient vs deterministic, and it does **not**
+ * fall between "threw" and "returned a response" — which is how the first
+ * version of this got it wrong, and CI caught it within the hour: GitHub Pages
+ * answered one URL with a 503 and the check reported the published schemas as
+ * broken. A 5xx and a 429 are the server declining to answer yet, exactly like
+ * a DNS hiccup or a TLS reset, and they deserve the same second chance.
  *
- * That distinction matters more here than it would in a PR check, because this
- * runs unattended and GitHub emails on a failed scheduled run. A check that
- * cries wolf on every transient blip is one nobody reads by the third month,
- * which would cost exactly the coverage it was added for.
+ * A 404 and a hash mismatch are on the other side of that line. They are real
+ * answers, and asking again only gets the same one more slowly — retrying them
+ * would paper over the very drift this exists to report.
  */
+const isTransientStatus = (status) => status === 429 || status >= 500;
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 async function fetchOnce(url) {
   return await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
 }
 
+/**
+ * Fetch one URL, retrying only the transient cases above.
+ *
+ * This matters more here than it would in a PR check, because it runs
+ * unattended and GitHub emails on a failed scheduled run. A check that cries
+ * wolf on every blip is one nobody reads by the third month, which would cost
+ * exactly the coverage it was added for.
+ */
 async function fetchWithRetry(url) {
-  try {
-    return { res: await fetchOnce(url) };
-  } catch {
+  let last;
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    if (attempt > 1) await sleep(BACKOFF_MS[attempt - 2] ?? 1500);
     try {
-      return { res: await fetchOnce(url) };
+      const res = await fetchOnce(url);
+      // Last word wins: on the final attempt the answer stands whatever it is.
+      if (!isTransientStatus(res.status) || attempt === ATTEMPTS) return { res };
+      last = { res };
     } catch (err) {
-      // The second failure is the one reported: if the two differ, it is the
-      // one that still described reality when we gave up.
-      return { err };
+      if (attempt === ATTEMPTS) return { err };
+      last = { err };
     }
   }
+  return last;
 }
 
 /**
