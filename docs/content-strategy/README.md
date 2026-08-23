@@ -12,6 +12,7 @@ These files live inside `docs/` but outside `docs/src/content/docs/**`, so they 
 | `personas.md` | Full profiles for Maya, Devin, Sara, and Theo. |
 | `cujs.md` | Critical User Journeys per persona — the end-to-end outcomes the docs must support. |
 | `information-architecture.md` | The CUJ-based IA and nav tree, plus the full content-set map (which page serves which CUJ, with ★ launch markers). |
+| `design.md` | The visual rules the docs site and the demo videos both follow — palette, type, capture geometry, composition — and the measurements behind them. |
 
 ## How to use this during writing tasks
 
@@ -28,6 +29,8 @@ Before drafting or editing any user-facing documentation:
 5. **Check the IA map.** `information-architecture.md` lists every planned page, the CUJ it serves, and whether it is a ★ launch priority. If you are adding a new page, record it there.
 
 6. **Frontmatter.** Every page in `docs/src/content/docs/**` must have `title` and `description` in its frontmatter. No exceptions.
+
+7. **Anything visual goes through `design.md`.** A page that adds a screenshot, a diagram, a code-block style, or a demo video is a design change as well as a content one. The palette is not decorative: docmeta's own output already assigns meaning to red, green, yellow and cyan, so chrome that reuses one of them makes a reader see a relationship that is not there.
 
 ## Verifying technical claims
 

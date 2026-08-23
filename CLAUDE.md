@@ -83,6 +83,9 @@ Before any user-facing writing or docs task, consult `docs/content-strategy/`:
 3. Link into the **Reference shelf** (`reference/`) for exhaustive detail (flag tables, config keys, precedence chain). Journey pages explain the path; they don't duplicate reference.
 4. Check `information-architecture.md` for the page's place in the content set and its ★ launch status.
 5. Every page in `docs/src/content/docs/**` needs `title` and `description` frontmatter.
+6. Anything **visual** — a screenshot, a diagram, a code-block style, an embedded
+   video — follows `docs/content-strategy/design.md`, which governs the docs site
+   and the demo videos alike.
 
 ### Changing a dependency: splice the lockfile, never regenerate it
 
@@ -175,6 +178,13 @@ Aim for **20–45 seconds**. Use `test/fixtures/` as the material wherever it
 fits, so the demo stays true to what CI actually runs. Keep the terminal legible
 at phone size: large font, short lines, no scrollback noise, `--no-color` off (the
 color is worth showing). Add a one-line caption per step rather than narration.
+
+**How it should look.** `docs/content-strategy/design.md` is the spec — frame,
+capture geometry, bands, type, timing, and the palette. Read it before shooting.
+The rule that is least obvious and most often broken: the accent colour may not be
+red, green, yellow or cyan, because docmeta's own output already uses all four to
+mean something. Two of the first three videos shipped with an accent that collided
+with the product output in the same frame.
 
 **How to make it.** The tooling is **not in this repo** — it comes from plugin
 skills, which you invoke with the Skill tool. Do not go looking for a vendored
