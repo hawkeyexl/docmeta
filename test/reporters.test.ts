@@ -337,7 +337,11 @@ function expectValidSarif(text: string): SarifLog {
   const log = parseSarif(text);
   const ok = validateSarif(log);
   expect(
-    ok ? [] : (validateSarif.errors ?? []).map((e) => `${e.instancePath} ${e.message}`),
+    ok
+      ? []
+      : (validateSarif.errors ?? []).map(
+          (e) => `${e.instancePath} ${e.message ?? "(no message)"}`,
+        ),
   ).toEqual([]);
   return log;
 }

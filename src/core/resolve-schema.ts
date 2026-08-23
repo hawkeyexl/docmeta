@@ -196,7 +196,7 @@ function coerceFileSchema(value: unknown): string[] | undefined {
   if (value === undefined || value === null) return undefined;
   if (typeof value === "string") return [value];
   if (Array.isArray(value) && value.every((v) => typeof v === "string")) {
-    return value as string[];
+    return value;
   }
   throw new Error(
     `Invalid "${FILE_SCHEMA_KEY}": must be a string or a list of strings.`,

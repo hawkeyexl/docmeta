@@ -459,10 +459,20 @@ describe("a user schema $ref-ing a built-in (0009)", () => {
   beforeAll(() => {
     realFetch = globalThis.fetch;
     attempted = [];
-    globalThis.fetch = ((input: Parameters<typeof fetch>[0]) => {
-      attempted.push(String(input));
+    globalThis.fetch = (input: Parameters<typeof fetch>[0]) => {
+      // Not `String(input)`. `fetch` takes a string, a `URL`, **or** a
+      // `Request`, and a `Request` has no useful `toString` — it records as
+      // "[object Request]", so the assertion below would be about a placeholder
+      // rather than about the address something tried to reach.
+      attempted.push(
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url,
+      );
       return Promise.reject(new Error("the network is not available here"));
-    }) as typeof globalThis.fetch;
+    };
   });
 
   afterAll(() => {

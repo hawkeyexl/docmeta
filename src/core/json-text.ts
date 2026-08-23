@@ -1,9 +1,10 @@
 /**
- * Concessions that belong to **parsing** decoded text, and to nothing else.
+ * Concessions that belong to **JSON as text**, and to nothing else: reading it
+ * into a value, and writing a value back out.
  *
- * Its own module so the rule below has one statement rather than three, and so
- * the constraint that makes it subtle is written down once, next to the code it
- * constrains.
+ * Its own module so each rule below has one statement rather than several, and
+ * so the constraint that makes it subtle is written down once, next to the code
+ * it constrains.
  */
 
 /**
@@ -31,4 +32,22 @@
  */
 export function stripBom(text: string): string {
   return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+}
+
+/**
+ * `JSON.stringify`, with the return type it actually has.
+ *
+ * `lib.es5.d.ts` declares the common overload as returning `string`, and that
+ * is a lie the language ships with: `undefined`, a function and a symbol each
+ * stringify to `undefined`, as does any value whose `toJSON` returns one. Four
+ * places in this repo already handle that with `?? fallback` — and against the
+ * declared type every one of those fallbacks reads as dead code, which is
+ * exactly how a live guard eventually gets tidied away.
+ *
+ * The fallback stays the caller's decision, because it differs: `infer` samples
+ * want an empty cell, `fill`'s canonical form wants the values kept *distinct*
+ * from each other. This only makes the possibility visible.
+ */
+export function toJsonText(value: unknown): string | undefined {
+  return JSON.stringify(value);
 }

@@ -20,7 +20,7 @@ export interface ExtractedMetadata {
    * key to its 1-based source line, for precise annotations. Returns undefined
    * when no position is known.
    */
-  lineFor(pointer: string): number | undefined;
+  lineFor: (pointer: string) => number | undefined;
   /**
    * The column counterpart of {@link lineFor}, 1-based, resolving the same
    * pointer forms.
@@ -32,7 +32,7 @@ export interface ExtractedMetadata {
    * extractor, whose `yaml` node offsets would need an offset -> line/col
    * conversion first. `html` and `xml` implement it.
    */
-  colFor?(pointer: string): number | undefined;
+  colFor?: (pointer: string) => number | undefined;
 }
 
 /** Fenced front matter flavors, in fence order: `---`, `+++`, `;;;`. */
@@ -67,8 +67,17 @@ export interface MetadataExtractor {
    * added could be declared before it can do either.
    */
   implemented: boolean;
-  /** Extract metadata from raw file content. */
-  extract(content: string, filePath: string): ExtractedMetadata;
+  /**
+  * Extract metadata from raw file content.
+  *
+  * Declared as a property holding a function, not as a method, and the same
+  * goes for `apply` below and for `ExtractedMetadata`'s `lineFor`/`colFor`.
+  * Every implementation in this repo is a plain function in an object literal
+  * — none of them reads `this` — and the property form is what says so, so
+  * that pulling one out (`const apply = extractor.apply`) stays the ordinary
+  * thing it is rather than a `this`-binding hazard.
+  */
+  extract: (content: string, filePath: string) => ExtractedMetadata;
   /**
    * Return new content with every key in `patch` set at the top level. Pure:
    * no IO, no mutation, deterministic; returns `content` itself for a no-op.
@@ -76,7 +85,11 @@ export interface MetadataExtractor {
    * Absent means the format is read-only. Present but throwing `DocmetaError`
    * means this particular document cannot be rewritten safely.
    */
-  apply?(content: string, patch: MetadataPatch, options?: ApplyOptions): string;
+  apply?: (
+    content: string,
+    patch: MetadataPatch,
+    options?: ApplyOptions,
+  ) => string;
 }
 
 /** A single schema violation for one file, attributed to one schema. */

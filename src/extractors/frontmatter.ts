@@ -154,8 +154,11 @@ function buildLineMap(
           ? String(pair.key.value)
           : String(pair.key);
         const ptr = `${pointer}/${escapePointerSegment(key)}`;
+        // `| null` in the asserted type, not decoration: `yaml` types a
+        // Pair's key as nullable, and asserting it away would make the `?.`
+        // below read as dead code while the null it guards is still reachable.
         const line = lineAt(
-          (pair.key as { range?: [number, number, number] })?.range?.[0],
+          (pair.key as { range?: [number, number, number] } | null)?.range?.[0],
         );
         if (line != null) map.set(ptr, line);
         if (pair.value) walk(pair.value, ptr);
@@ -163,8 +166,9 @@ function buildLineMap(
     } else if (isSeq(node)) {
       node.items.forEach((item, i) => {
         const ptr = `${pointer}/${i}`;
+        // `| null` for the same reason as the Pair key above.
         const line = lineAt(
-          (item as { range?: [number, number, number] })?.range?.[0],
+          (item as { range?: [number, number, number] } | null)?.range?.[0],
         );
         if (line != null) map.set(ptr, line);
         walk(item, ptr);

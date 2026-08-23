@@ -129,7 +129,7 @@ describe("collectCandidates", () => {
     }
   });
 
-  it("keeps every schema's constraints on a shared key, in either order", async () => {
+  it("keeps every schema's constraints on a shared key, in either order", () => {
     const long = {
       type: "object",
       properties: { title: { type: "string", minLength: 5 } },
@@ -154,7 +154,7 @@ describe("collectCandidates", () => {
     }
   });
 
-  it("keeps a description on a merged subschema so the prompt still has one", async () => {
+  it("keeps a description on a merged subschema so the prompt still has one", () => {
     // `fill` describes each candidate to the model from `subschema.description`.
     // Merging must not bury it where the prompt builder cannot see it.
     const described = {
@@ -193,7 +193,7 @@ describe("collectCandidates", () => {
     expect(merged).toContain("Diataxis forms"); // and the vocabulary's
   });
 
-  it("does not repeat itself when a third schema joins the merge", async () => {
+  it("does not repeat itself when a third schema joins the merge", () => {
     // Each merge folds the previous result back in, so the combined description
     // has to be built from distinct sentences rather than from whatever the last
     // wrapper happened to be carrying.
@@ -215,7 +215,7 @@ describe("collectCandidates", () => {
     expect(describes([c, b, a])).toBe("Alpha. Beta. Gamma.");
   });
 
-  it("keeps a description that sits on an `allOf` wrapper", async () => {
+  it("keeps a description that sits on an `allOf` wrapper", () => {
     // A subschema may already be `{description, allOf: [...]}`. Unwrapping it
     // for the merge must not leave the description behind, or the prompt loses
     // the only sentence saying what the property is for.
@@ -235,7 +235,7 @@ describe("collectCandidates", () => {
     expect(found?.subschema.description).toBe("Human-readable display name.");
   });
 
-  it("keeps two schemas' same-named `$defs` apart", async () => {
+  it("keeps two schemas' same-named `$defs` apart", () => {
     // Both schemas point `type` at `#/$defs/Slug`, but at different `Slug`s.
     // The envelope holds one `$defs` block, so without renaming both refs
     // resolve to whichever schema was named first and the other's rule is lost
@@ -270,7 +270,7 @@ describe("collectCandidates", () => {
     }
   });
 
-  it("follows a renamed definition from inside another definition", async () => {
+  it("follows a renamed definition from inside another definition", () => {
     // `Outer` is written identically by both schemas, but it points at `Inner`,
     // which is not. A definition is only interchangeable if what it resolves to
     // is interchangeable too, so sharing it on the strength of matching text
@@ -300,7 +300,7 @@ describe("collectCandidates", () => {
     expect(validate(proposal("beta", "alpha"))).toBe(false);
   });
 
-  it("keeps a `false` branch of an `allOf`, which nothing satisfies", async () => {
+  it("keeps a `false` branch of an `allOf`, which nothing satisfies", () => {
     // JSON Schema allows a boolean where a schema is expected. Dropping `false`
     // on the way into the merge would turn a property nothing can satisfy into
     // one `fill` happily proposes for.
@@ -318,7 +318,7 @@ describe("collectCandidates", () => {
     expect(validate(null)).toBe(false);
   });
 
-  it("does not share a definition that resolves through `$dynamicRef`", async () => {
+  it("does not share a definition that resolves through `$dynamicRef`", () => {
     // Same text, but what it resolves to depends on the schema it was written
     // in, so the two are no more interchangeable than a plain `$ref` chain.
     const dynamic = (values: string[]) => ({
@@ -334,7 +334,7 @@ describe("collectCandidates", () => {
     expect(Object.keys(defs.$defs)).toContain("Tone__1");
   });
 
-  it("shares a definition two schemas write identically", async () => {
+  it("shares a definition two schemas write identically", () => {
     // Nothing to tell apart, so nothing to rename — the envelope stays small.
     const tone = { type: "string", enum: ["formal", "plain"] };
     const one = { $defs: { Tone: tone }, properties: { x: { $ref: "#/$defs/Tone" } } };
@@ -342,7 +342,7 @@ describe("collectCandidates", () => {
     expect(Object.keys(collectDefs([one, two]).$defs)).toEqual(["Tone"]);
   });
 
-  it("does not overwrite a definition whose name a rename wants", async () => {
+  it("does not overwrite a definition whose name a rename wants", () => {
     // The renamed slot for the second `Slug` is `Slug__1`, which the first
     // schema already uses for something else. Taking it would silently swap one
     // schema's rule for another's — the very failure the rename exists to stop.
@@ -380,7 +380,7 @@ describe("collectCandidates", () => {
     expect(validate(proposal("taken", "already-here"))).toBe(true);
   });
 
-  it("leaves non-colliding `$defs` under their own names", async () => {
+  it("leaves non-colliding `$defs` under their own names", () => {
     const one = { $defs: { Slug: { type: "string" } }, properties: {} };
     const two = { $defs: { Tag: { type: "string" } }, properties: {} };
     expect(Object.keys(collectDefs([one, two]).$defs).sort()).toEqual([
@@ -402,7 +402,7 @@ describe("collectCandidates", () => {
     );
   });
 
-  it("never proposes the $schema wiring key", async () => {
+  it("never proposes the $schema wiring key", () => {
     const schema = {
       type: "object",
       properties: { $schema: { type: "string" }, title: { type: "string" } },
@@ -977,12 +977,17 @@ describe("runFill — cost budget", () => {
       modelName(): string {
         return "claude-haiku-4-5";
       }
-      async completeJSON(): Promise<{
+      // Not `async`: nothing is awaited, and a promise-returning method that
+      // *throws* synchronously behaves differently from one that rejects. The
+      // rejection is what the real provider does.
+      completeJSON(): Promise<{
         json: unknown;
         usage: { inputTokens: number; outputTokens: number };
       }> {
         this.calls++;
-        throw new Error("Rate limit exceeded. Please retry after 60s.");
+        return Promise.reject(
+          new Error("Rate limit exceeded. Please retry after 60s."),
+        );
       }
     }
 
@@ -1015,12 +1020,14 @@ describe("runFill — cost budget", () => {
     // The other half of the discrimination: a genuine overflow *does* re-chunk,
     // so the count above is evidence only alongside this one.
     class Overflowed extends RateLimited {
-      override async completeJSON(): Promise<{
+      override completeJSON(): Promise<{
         json: unknown;
         usage: { inputTokens: number; outputTokens: number };
       }> {
         this.calls++;
-        throw new Error("This model's maximum context length is 8192 tokens.");
+        return Promise.reject(
+          new Error("This model's maximum context length is 8192 tokens."),
+        );
       }
     }
     const overflow = new Overflowed();
@@ -1049,18 +1056,20 @@ describe("runFill — cost budget", () => {
       modelName(): string {
         return "claude-haiku-4-5";
       }
-      async completeJSON(): Promise<{
+      completeJSON(): Promise<{
         json: unknown;
         usage: { inputTokens: number; outputTokens: number };
       }> {
         this.calls++;
-        if (this.calls >= 3) throw new Error("transient upstream failure");
-        return {
+        if (this.calls >= 3) {
+          return Promise.reject(new Error("transient upstream failure"));
+        }
+        return Promise.resolve({
           json: {
             description: { value: "from an early chunk", confidence: 0.95, reasoning: "r" },
           },
           usage: { inputTokens: 10, outputTokens: 5 },
-        };
+        });
       }
     }
 
@@ -1312,7 +1321,7 @@ describe("provider selection", () => {
     }
   });
 
-  it("still gets `mock` from the library, which docmeta's own tests rely on", async () => {
+  it("still gets `mock` from the library, which docmeta's own tests rely on", () => {
     // The accepted names are derived from DEFAULT_MODELS rather than hardcoded,
     // which is what stopped the list going stale — but it also means docmeta
     // silently inherits whatever the library drops. `mock` is the one entry
@@ -1462,6 +1471,7 @@ describe("the llama-cpp provider", () => {
 
   afterEach(() => {
     for (const v of VARS) {
+      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- `delete process.env[k]` is the only way to unset an environment variable in Node; assigning undefined sets the string "undefined".
       if (saved[v] === undefined) delete process.env[v];
       else process.env[v] = saved[v];
     }

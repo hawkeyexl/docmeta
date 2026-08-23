@@ -62,8 +62,14 @@ export type ReportFormat = (typeof REPORT_FORMATS)[number];
  * to "pretty, or json".
  */
 export function formatList(formats: readonly string[]): string {
-  if (formats.length < 2) return formats[0] ?? "";
-  if (formats.length === 2) return `${formats[0]} or ${formats[1]}`;
+  // Destructured and guarded rather than indexed. `noUncheckedIndexedAccess`
+  // types `formats[0]` as `string | undefined` however the length was checked,
+  // so the interpolation below would happily print "undefined" — these two
+  // guards say what `length < 2` said, in a form the compiler can carry.
+  const [first, second] = formats;
+  if (first === undefined) return "";
+  if (second === undefined) return first;
+  if (formats.length === 2) return `${first} or ${second}`;
   return formats
     .map((format, i) => (i === formats.length - 1 ? `or ${format}` : format))
     .join(", ");

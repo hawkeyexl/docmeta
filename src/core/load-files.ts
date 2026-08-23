@@ -103,7 +103,11 @@ export function gitignoreOptions(opts: {
   return {
     respectGitignore: opts.flag ?? opts.configured ?? true,
     ...(asked && notice
-      ? { onGitignoreUnavailable: () => notice(GITIGNORE_UNAVAILABLE) }
+      ? {
+          onGitignoreUnavailable: () => {
+            notice(GITIGNORE_UNAVAILABLE);
+          },
+        }
       : {}),
   };
 }
