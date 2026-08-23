@@ -395,9 +395,10 @@ machine-local and safe to delete at any time. Add `.docmeta/` to your
 the document. `markdown` and `mdx` are always writable. `rst` and `asciidoc` are
 writable **only when the file already has a fenced front matter block**, because their
 native docinfo and header syntax is lossy to read back, and a bare `---` means
-something else in both languages. `xml` and `html` are read-only. Run
-`docmeta schemas` to see which is which. Targeting a read-only file is reported
-as a per-file error, not a failed run.
+something else in both languages. `xml` (including `.dita` and `.ditamap`) and
+`html` are writable. Run `docmeta schemas` to see the current writability of each
+format. A file docmeta cannot write is reported as a per-file error, not a failed
+run.
 
 ### Exit codes
 

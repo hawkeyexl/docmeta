@@ -21,7 +21,7 @@ implemented and counts toward directory and glob walks.
 | `xml` | `.xml`, `.dita`, `.ditamap` | Attributes of the root element; for DITA, also `<othermeta>`. | Yes |
 | `html` | `.html`, `.htm` | `<title>` plus `<meta name="…" content="…">` tags. | Yes |
 
-### Why some formats are read-only
+### Why writing is conditional
 
 Writing metadata back is a harder problem than reading it. `fill` will only write
 a format it can round-trip without disturbing the rest of the document.
@@ -56,9 +56,9 @@ cannot. A new `<meta>` tag is inserted just inside `<head>`, indented to match
 its neighbours; a new XML attribute is added to the root element's start tag. A
 page with no `<head>` of its own is refused rather than guessed at.
 
-Run `docmeta schemas` to see the current writability of each format. Targeting a
-read-only file with `fill` is reported as a per-file error; the rest of the run
-continues.
+Run `docmeta schemas` to see the current writability of each format. A file
+docmeta cannot write — an `.rst` with no fenced block, an HTML page with no
+`<head>` — is reported as a per-file error; the rest of the run continues.
 
 When a format keeps metadata in more than one place — HTML can carry a `title`
 in both `<title>` and a `<meta name="title">` — `fill` writes back to whichever

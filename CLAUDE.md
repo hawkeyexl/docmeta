@@ -274,6 +274,7 @@ npm test            # vitest run (unit + built-bin CLI integration)
 npm run build       # tsup -> dist/ (needed before CLI integration tests)
 npm run check:deps  # deps installed here, at locked versions (auto-runs before the three above)
 npm run docs:check-cli  # CLI reference must match src/cli.ts
+npm run docs:check-action  # Action reference must match action.yml
 
 # After editing anything under docs/, run the dogfood check too. docmeta
 # validates its own docs, and the Docs deploy is gated on it.

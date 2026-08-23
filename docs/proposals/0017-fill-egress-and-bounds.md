@@ -1,6 +1,6 @@
 # 0017 — What `fill` sends, and how to bound it
 
-- **Status:** Accepted
+- **Status:** Implemented (#102)
 - **Serves:** Maya · M4; Devin · D1
 - **Touches:** `src/commands/fill-prompt.ts`, `src/commands/fill.ts`,
   `src/commands/fill-types.ts`, `src/cli.ts`, `src/core/config.ts`,

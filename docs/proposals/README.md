@@ -25,7 +25,7 @@ changed as a result, and lists what it depends on.
 | # | Proposal | Serves | Status |
 |---|---|---|---|
 | [0001](0001-validation-baseline.md) | Validation baseline (ratchet) | Maya · M2 | Implemented |
-| [0002](0002-ci-distribution-artifacts.md) | Packaged Action, pre-commit hook, container | Devin · D1 | Proposed |
+| [0002](0002-ci-distribution-artifacts.md) | Packaged Action, pre-commit hook, container | Devin · D1 | Implemented (#104) |
 | [0003](0003-sarif-and-junit-reporters.md) | SARIF and JUnit reporters | Devin · D3 | Implemented |
 | [0004](0004-config-upward-discovery.md) | Config discovery walks up | all | Implemented |
 | [0005](0005-command-parity.md) | Command parity, flags with fallbacks | all | Implemented |

@@ -102,6 +102,7 @@ Home — "What do you want to do?" router + 30-second proof
 | Schema resolution reference | S2, D2 | ★ | Precedence chain + ref kinds + dialects. Source of truth: `resolve-schema.ts`, `schema-registry.ts`, `validator.ts`. |
 | Supported formats reference | All | ★ | Extractor/extension/metadata-model table: Markdown, MDX, AsciiDoc, RST, XML, HTML. Source of truth: `src/extractors/`. |
 | Output formats & exit codes | D1, D3 | ★ | `pretty`/`json`/`github` shapes; `NO_COLOR`/TTY behavior. Source of truth: `src/reporters/index.ts`. |
+| GitHub Action reference | D1 | ★ | Every input and output of `hawkeyexl/docmeta@v4`, with defaults, the one-item-per-line rule for multi-value inputs, and why globs reach docmeta unexpanded. Source of truth: `action.yml`, guarded by `npm run docs:check-action`. |
 | Glossary | All | | frontmatter, extractor, schema set, dialect, `$schema`, OKF. |
 
 ### Supporting / project
@@ -134,7 +135,7 @@ Reference pages must never contradict the source code. Before writing any Refere
 
 ## Phased rollout
 
-- **Phase 1 — Launch (★):** home + on-ramp, M1 anchor guide + config page, M3 overrides page, D1 CI recipes + exit codes page, S1 + S2 schemas pages, T1 fix-it page, full Reference shelf (6 pages).
+- **Phase 1 — Launch (★):** home + on-ramp, M1 anchor guide + config page, M3 overrides page, D1 CI recipes + exit codes page, S1 + S2 schemas pages, T1 fix-it page, full Reference shelf (7 pages).
 - **Phase 2 — Depth:** M2, M-cross retrofit, M4 egress page, D2, D3, S3, OKF explained, FAQ, Glossary.
 - **Phase 3 — Polish:** CONTRIBUTING, case studies, cross-persona refinements.
 
