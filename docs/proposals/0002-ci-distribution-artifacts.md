@@ -1,6 +1,6 @@
 # 0002 — Packaged Action, pre-commit hook, container
 
-- **Status:** Proposed
+- **Status:** Implemented (#104) — Action and pre-commit hook; the container image was declined
 - **Serves:** Devin · D1 "Add the gate to our CI platform"
 - **Touches:** new `action.yml`, new `.pre-commit-hooks.yaml`, `.github/workflows/release.yml`, `docs/src/content/docs/ci/recipes.mdx`, `docs/maintainers/releasing.md`
 
