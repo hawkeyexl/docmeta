@@ -16,6 +16,11 @@
  * hoisting, and no false alarm from an optional transitive package npm
  * legitimately skipped on this platform.
  *
+ * It also asserts that the npm running it is new enough to write a complete
+ * lockfile — see MIN_NPM below. Both are questions about the environment rather
+ * than the code, and both produce failures that read as code bugs when left
+ * unnamed, which is why they share a guard.
+ *
  * Usage:
  *   node scripts/check-deps.mjs [path/to/root]
  * Exit 0 = dependencies are sound, 1 = problems found, 2 = setup error.
@@ -25,6 +30,53 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SELF = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+/**
+ * The oldest npm that writes a complete `package-lock.json` for this tree.
+ *
+ * At 11.6.2 and below, npm drops the top-level entries for the peer
+ * dependencies of an optional package — here `@emnapi/core` and
+ * `@emnapi/runtime`, reached through `@rolldown/binding-wasm32-wasi` — while
+ * keeping the dependency edges that point at them. The lockfile still installs,
+ * so nothing looks wrong locally; `npm ci` rejects it, so on the next push
+ * every CI job fails at once with `Missing: @emnapi/core@<ver> from lock file`.
+ * Nothing in that message names npm's version, and the fault is not
+ * platform-specific — 11.6.2 does it on Linux, macOS and Windows alike — so it
+ * is very hard to reach from the symptom.
+ *
+ * The floor is exact rather than rounded up to the next minor: 11.6.3 and
+ * 11.6.4 both write a complete lockfile, and rejecting them would block a
+ * contributor whose npm is fine.
+ */
+export const MIN_NPM = "11.6.3";
+
+/** Compare two `major.minor.patch` strings; negative when `a` is the older. */
+function compareVersions(a, b) {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+/**
+ * The too-old npm behind `userAgent`, or null if there is nothing to report.
+ *
+ * `npm_config_user_agent` is set by npm for every lifecycle script, and this
+ * runs as a `pre*` hook, so reading it costs nothing — an `npm --version`
+ * subprocess would cost more than the rest of this script put together. When it
+ * is absent or belongs to another package manager there is no npm version to
+ * judge, and inventing a failure for one would fail a run that is fine.
+ */
+export function checkNpm(userAgent) {
+  const version = /^npm\/(\d+\.\d+\.\d+)/.exec(userAgent ?? "")?.[1];
+  if (!version) return null;
+  return compareVersions(version, MIN_NPM) < 0
+    ? { actual: version, expected: MIN_NPM }
+    : null;
+}
 
 /** Read a package.json, or null if it is absent or unreadable. */
 function readJson(file) {
@@ -131,6 +183,25 @@ if (
   process.argv[1] &&
   realOf(process.argv[1]) === realOf(fileURLToPath(import.meta.url))
 ) {
+  // First: an npm that cannot write a correct lockfile makes every other
+  // answer here provisional, and it is the cheaper question to settle.
+  const npm = checkNpm(process.env.npm_config_user_agent);
+  if (npm) {
+    console.error(
+      `check-deps: npm ${npm.actual} writes an incomplete package-lock.json — this repo needs npm >= ${npm.expected}.
+
+At 11.6.2 and below, npm drops the top-level entries for the peer dependencies
+of an optional package (@emnapi/core and @emnapi/runtime, reached through
+@rolldown/binding-wasm32-wasi) while keeping the edges that point at them. The
+lockfile still installs here, and \`npm ci\` rejects it — so the first sign is
+every CI job failing at once with \`Missing: @emnapi/core@<ver> from lock file\`.
+
+Run \`npm install -g npm@11\`. If package-lock.json was already written by this
+npm, rewrite it afterwards with \`npm install --package-lock-only\`.`,
+    );
+    process.exit(1);
+  }
+
   const root = path.resolve(process.argv[2] ?? SELF);
   const { ok, setupError, problems } = checkDeps(root);
 
