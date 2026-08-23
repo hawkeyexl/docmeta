@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
 import { execFile, execFileSync, execSync, spawnSync } from "node:child_process";
-import type { SpawnSyncReturns } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -15,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { DOC, makeTempRepo, removeTempRepo } from "./helpers/temp-repo.js";
 import { startSchemaServer } from "./helpers/schema-server.js";
+import { spawnText } from "./helpers/spawn.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
@@ -37,28 +37,6 @@ interface Run {
   stdout: string;
   stderr: string;
   status: number;
-}
-
-/**
- * A `spawnSync` result, with the types Node actually produces.
- *
- * `@types/node` promises `stdout: string` once `encoding` is set. Node really
- * hands back `null` for both streams whenever the *spawn itself* failed — no
- * interpreter on PATH, a signal kill — and every `?? ""` below depends on that.
- * Something has to say so, or a type-aware reader takes those guards for dead
- * code and strips them.
- *
- * A function rather than an annotated `const`: TypeScript narrows an annotated
- * `const` straight back to its initializer's type, so the annotation buys
- * nothing at the use site.
- */
-interface SpawnText {
-  stdout: string | null;
-  stderr: string | null;
-  status: number | null;
-}
-function spawnText(result: SpawnSyncReturns<string>): SpawnText {
-  return result;
 }
 
 function run(

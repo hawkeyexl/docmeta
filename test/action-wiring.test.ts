@@ -15,7 +15,6 @@
  */
 import { describe, it, expect } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
-import type { SpawnSyncReturns } from "node:child_process";
 import {
   mkdtempSync,
   writeFileSync,
@@ -28,6 +27,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
+import { spawnText } from "./helpers/spawn.js";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -41,28 +41,6 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
  * above the docmeta one and every test below would quietly assert against the
  * wrong shell code. Parsing costs nothing and cannot pick the wrong step.
  */
-/**
- * A `spawnSync` result, with the types Node actually produces.
- *
- * `@types/node` promises `stdout: string` once `encoding` is set. Node really
- * hands back `null` for both streams whenever the *spawn itself* failed — no
- * interpreter on PATH, a signal kill — and every `?? ""` below depends on that.
- * Something has to say so, or a type-aware reader takes those guards for dead
- * code and strips them.
- *
- * A function rather than an annotated `const`: TypeScript narrows an annotated
- * `const` straight back to its initializer's type, so the annotation buys
- * nothing at the use site.
- */
-interface SpawnText {
-  stdout: string | null;
-  stderr: string | null;
-  status: number | null;
-}
-function spawnText(result: SpawnSyncReturns<string>): SpawnText {
-  return result;
-}
-
 function actionScript(): string {
   const doc = parseYaml(readFileSync(join(repoRoot, "action.yml"), "utf8")) as {
     runs?: { steps?: Array<{ id?: string; run?: string }> };
