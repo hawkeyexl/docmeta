@@ -46,6 +46,21 @@ const houseRules = {
   // an interface requires but the implementation ignores. `tsc`'s
   // `noUnusedLocals`/`noUnusedParameters` honour the same convention, so
   // matching it here keeps one rule instead of two that disagree.
+  // `this: void` on an interface method is the language's way of saying "no
+  // implementation of this uses `this`" — which is exactly what `unbound-method`
+  // wants to hear, and it says so without changing the method's *variance*.
+  // Rewriting the method as a property-typed function would silence the same
+  // rule, but property positions are contravariant in their parameters where
+  // method shorthand is bivariant, and `MetadataExtractor` is exported: that
+  // swap is a semver-visible change to a published type in return for a lint
+  // fix. This is the cheaper half of the trade.
+  //
+  // `no-invalid-void-type` rejects `void` outside a return position by default;
+  // `allowAsThisParameter` is the rule's own carve-out for this exact idiom.
+  "@typescript-eslint/no-invalid-void-type": [
+    "error",
+    { allowAsThisParameter: true },
+  ],
   "@typescript-eslint/no-unused-vars": [
     "error",
     {

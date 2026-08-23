@@ -20,7 +20,7 @@ export interface ExtractedMetadata {
    * key to its 1-based source line, for precise annotations. Returns undefined
    * when no position is known.
    */
-  lineFor: (pointer: string) => number | undefined;
+  lineFor(this: void, pointer: string): number | undefined;
   /**
    * The column counterpart of {@link lineFor}, 1-based, resolving the same
    * pointer forms.
@@ -32,7 +32,7 @@ export interface ExtractedMetadata {
    * extractor, whose `yaml` node offsets would need an offset -> line/col
    * conversion first. `html` and `xml` implement it.
    */
-  colFor?: (pointer: string) => number | undefined;
+  colFor?(this: void, pointer: string): number | undefined;
 }
 
 /** Fenced front matter flavors, in fence order: `---`, `+++`, `;;;`. */
@@ -68,16 +68,23 @@ export interface MetadataExtractor {
    */
   implemented: boolean;
   /**
-  * Extract metadata from raw file content.
-  *
-  * Declared as a property holding a function, not as a method, and the same
-  * goes for `apply` below and for `ExtractedMetadata`'s `lineFor`/`colFor`.
-  * Every implementation in this repo is a plain function in an object literal
-  * — none of them reads `this` — and the property form is what says so, so
-  * that pulling one out (`const apply = extractor.apply`) stays the ordinary
-  * thing it is rather than a `this`-binding hazard.
-  */
-  extract: (content: string, filePath: string) => ExtractedMetadata;
+   * Extract metadata from raw file content.
+   *
+   * `this: void` — as on `apply` below, and on `ExtractedMetadata`'s
+   * `lineFor`/`colFor`. Every implementation in this repo is a plain function
+   * in an object literal and none of them reads `this`, so pulling one out
+   * (`const apply = extractor.apply`) is the ordinary thing it looks like
+   * rather than a binding hazard. Declaring that is what lets a reader — and
+   * `unbound-method` — know it.
+   *
+   * Retyping these as properties holding functions would say the same thing,
+   * and was tried first. It is the more expensive way: a property's parameters
+   * are contravariant where a method's are bivariant, so on an *exported*
+   * interface that swap silently narrows what an outside implementation may
+   * be, which is a semver-visible change bought for a lint fix. `this: void`
+   * leaves assignability exactly as it was.
+   */
+  extract(this: void, content: string, filePath: string): ExtractedMetadata;
   /**
    * Return new content with every key in `patch` set at the top level. Pure:
    * no IO, no mutation, deterministic; returns `content` itself for a no-op.
@@ -85,11 +92,12 @@ export interface MetadataExtractor {
    * Absent means the format is read-only. Present but throwing `DocmetaError`
    * means this particular document cannot be rewritten safely.
    */
-  apply?: (
+  apply?(
+    this: void,
     content: string,
     patch: MetadataPatch,
     options?: ApplyOptions,
-  ) => string;
+  ): string;
 }
 
 /** A single schema violation for one file, attributed to one schema. */
