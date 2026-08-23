@@ -129,12 +129,18 @@ for (const [key, expected] of entries) {
         ? `timed out after ${TIMEOUT_MS}ms`
         : (err?.message ?? String(err));
     problems.push(
-      `${key}: could not be fetched, twice (${why})\n      ${url}`,
+      `${key}: could not be fetched after ${ATTEMPTS} attempts (${why})\n      ${url}`,
     );
     continue;
   }
   if (!res.ok) {
-    problems.push(`${key}: HTTP ${res.status} ${res.statusText}\n      ${url}`);
+    // Name the transient case for what it is. A 503 that survived every retry
+    // is the site being down, not the schema being wrong, and the two want
+    // different responses from whoever reads this.
+    const kind = isTransientStatus(res.status)
+      ? `HTTP ${res.status} ${res.statusText} on all ${ATTEMPTS} attempts — the site looks down rather than wrong`
+      : `HTTP ${res.status} ${res.statusText}`;
+    problems.push(`${key}: ${kind}\n      ${url}`);
     continue;
   }
   const actual = sha256(Buffer.from(await res.arrayBuffer()));
@@ -154,8 +160,10 @@ if (problems.length > 0) {
     `schemas:check-published: ${problems.length} of ${entries.length} published schema URLs are wrong:\n` +
       problems.map((p) => `  - ${p}`).join("\n") +
       "\n\nA published URL is a promise its content never changes. A 404 or a hash\n" +
-      "mismatch means the docs deploy is broken or served something it should not;\n" +
-      "re-run the Docs workflow and compare against docs/public/schemas/**.",
+      "mismatch means the docs deploy is broken or served something it should not:\n" +
+      "re-run the Docs workflow and compare against docs/public/schemas/**.\n" +
+      "A 5xx or a timeout that outlived every retry usually means Pages itself is\n" +
+      "having a bad day — check githubstatus.com before changing anything here.",
   );
   process.exit(1);
 }

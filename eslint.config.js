@@ -115,6 +115,13 @@ export default tseslint.config(
       "@typescript-eslint/no-unsafe-call": "off",
       "@typescript-eslint/no-unsafe-member-access": "off",
       "@typescript-eslint/no-unsafe-return": "off",
+      // `delete process.env[name]` is the only way to *unset* an environment
+      // variable in Node — assigning `undefined` sets the literal string
+      // "undefined", which is worse than leaving it alone. Suites that save and
+      // restore the environment around a case have no alternative, and the rule
+      // has nothing to say about a `Record<string, string | undefined>` keyed by
+      // a variable name.
+      "@typescript-eslint/no-dynamic-delete": "off",
     },
   },
 

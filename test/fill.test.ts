@@ -1471,7 +1471,6 @@ describe("the llama-cpp provider", () => {
 
   afterEach(() => {
     for (const v of VARS) {
-      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- `delete process.env[k]` is the only way to unset an environment variable in Node; assigning undefined sets the string "undefined".
       if (saved[v] === undefined) delete process.env[v];
       else process.env[v] = saved[v];
     }
