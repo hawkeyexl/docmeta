@@ -80,7 +80,11 @@ jobs:
       - run: npm ci
       # First, because it needs no build and fails fastest.
       - run: npm run lint
-      # The three docs guards and the dogfood step all read dist/.
+      # The three docs guards and the dogfood step all read dist/. This repeats
+      # the matrix's build rather than sharing an artifact, on purpose: uploading
+      # and downloading dist/ costs more wall-clock than the 8s build does, and
+      # a shared artifact would couple this job to a matrix leg it does not
+      # otherwise need. Not an oversight — please leave it.
       - run: npm run build
       - run: npm run docs:check-cli
       # `action.yml` is a second public surface. It had no guard, so three of its

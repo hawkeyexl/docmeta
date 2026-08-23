@@ -38,6 +38,13 @@ on:
 permissions:
   contents: read
 
+# Same posture as ci.yml. The daily run is idempotent so stacking would be
+# harmless, but back-to-back `workflow_dispatch` runs while diagnosing an outage
+# are exactly when several copies hitting the same host is least useful.
+concurrency:
+  group: published-schemas-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     name: published schema URLs

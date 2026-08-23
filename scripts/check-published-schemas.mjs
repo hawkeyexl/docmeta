@@ -95,20 +95,21 @@ async function fetchOnce(url) {
  * exactly the coverage it was added for.
  */
 async function fetchWithRetry(url) {
-  let last;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     if (attempt > 1) await sleep(BACKOFF_MS[attempt - 2] ?? 1500);
     try {
       const res = await fetchOnce(url);
       // Last word wins: on the final attempt the answer stands whatever it is.
       if (!isTransientStatus(res.status) || attempt === ATTEMPTS) return { res };
-      last = { res };
     } catch (err) {
       if (attempt === ATTEMPTS) return { err };
-      last = { err };
     }
   }
-  return last;
+  // Unreachable while ATTEMPTS >= 1, since the final iteration always returns.
+  // An explicit error rather than falling off the end: that would hand the
+  // caller `undefined` and throw on the destructure at the call site, turning a
+  // one-character edit to ATTEMPTS into a crash nowhere near its cause.
+  return { err: new Error(`ATTEMPTS is ${ATTEMPTS}; no request was made`) };
 }
 
 /**
