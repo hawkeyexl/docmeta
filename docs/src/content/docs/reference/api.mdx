@@ -1,0 +1,217 @@
+---
+title: TypeScript API reference
+description: Every symbol docmeta publishes from its programmatic entry point — command cores, schema resolution, config, cache, reporters, extractors, and result types.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+{/* The Export columns on this page are drift-checked against the built
+    dist/index.d.ts by scripts/check-api-reference.mjs (npm run docs:check-api),
+    enforced in CI. Every published symbol must appear in an `Export` cell;
+    purposes are free-form. */}
+
+docmeta publishes a programmatic entry point alongside the CLI, so a Node.js or
+TypeScript tool can call the same cores the CLI is built on without spawning a
+process or parsing stdout. [Consume docmeta
+results](/docmeta/ci/consume-results/) shows the worked example; this page is
+the exhaustive list.
+
+```ts
+import { runValidate } from "docmeta";
+```
+
+<Aside type="note" title="ESM, Node 24+">
+docmeta is an ES module targeting Node.js 24 or newer. Import it from ESM (or a
+`.mts` / `.ts` file compiled to ESM); there is no CommonJS `require` entry.
+Type-only exports are marked as such in the tables below and erase at compile
+time.
+</Aside>
+
+## Command cores
+
+One function per subcommand, each taking an options object and resolving to a
+structured result. The cores contain no CLI or IO plumbing: they do not read
+`process.argv`, do not write to stdout, and do not call `process.exit`. Turning
+a result into text is the [reporters'](#reporters) job, and mapping it to an
+exit code is the caller's.
+
+| Export | Purpose |
+|---|---|
+| `runValidate` | Run the validation pipeline over the resolved inputs. Backs `docmeta validate`. |
+| `ValidateOptions` (type) | Input to `runValidate`. Mirrors the CLI: `inputs`, `cliSchemas`, `exts`, `exclude`, `as`, `configPath`, `stdinContent`, baseline and offline settings. |
+| `ValidateRun` (type) | What `runValidate` resolves to: `results`, `summary`, and the `frame` describing where the run stood. |
+| `runGet` | Read named metadata fields from each input. Backs `docmeta get`. Always returns every file it saw — `--quiet` filtering lives in the reporter. |
+| `GetOptions` (type) | Input to `runGet`: the same input model plus the `fields` to read. |
+| `GetFileResult` (type) | One `runGet` result: the file, whether metadata was `present`, and the resolved `values`. |
+| `runFill` | Propose and write missing metadata with an inference provider. Backs `docmeta fill`. |
+| `FillOptions` (type) | Input to `runFill`: provider, model, confidence threshold, cost ceiling, concurrency, and whether to write. |
+| `FillRun` (type) | What `runFill` resolves to: per-file results plus the run summary. |
+| `FillFileResult` (type) | One file's fill outcome: the fields considered and whether the document was rewritten. |
+| `FillSummary` (type) | Aggregate fill counts, including cost and the required fields left unfilled. |
+| `FilledField` (type) | One proposed field: JSON Pointer, `required`, `confidence`, `reasoning`, the `value`, and whether it was `written`. |
+| `SkipReason` (type) | Why a proposal was not written: `low-confidence`, `schema-mismatch`, or `no-proposal`. |
+| `getSchemasInfo` | The built-in schema registry and the supported input formats, as data. Backs `docmeta schemas`. |
+| `runVendorSchema` | Fetch a remote schema, write it into the repository, and record its integrity pin. Backs `docmeta schemas vendor`. |
+| `VendorOptions` (type) | Input to `runVendorSchema`: the URL, the destination directory, and whether to update the config. |
+| `VendorResult` (type) | What was written: the file path, the integrity digest, and the config edit that was made. |
+| `vendorFileName` | The file name `schemas vendor` derives from a schema URL. |
+| `DEFAULT_VENDOR_DIR` | The default destination directory for vendored schemas (`./schema`). |
+
+<Aside type="caution" title="Operational failures throw DocmetaError">
+The cores throw a [`DocmetaError`](#errors) for operational problems: no inputs
+and no config, an unknown `--as` format, an unreadable config, an unresolvable
+schema. That is the same condition the CLI maps to [exit
+`2`](/docmeta/reference/output-and-exit-codes/#exit-codes). A validation
+*failure* is not thrown — it comes back as a result with `ok: false`.
+</Aside>
+
+## Validation engine and results
+
+The shapes below are the ones `--format json` serializes, so a programmatic
+caller and a subprocess caller are reading the same data model.
+
+| Export | Purpose |
+|---|---|
+| `Validator` | The Ajv-backed engine. Validate already-extracted metadata against a schema set without going through the file pipeline. |
+| `ValidationResult` (type) | One file's outcome: the file label, `ok`, the schemas applied, the `errors`, and how many findings a baseline suppressed. |
+| `FieldError` (type) | One violation: the JSON Pointer, the message, the failing keyword, and the schema that produced it. |
+| `RunSummary` (type) | Aggregate counts for a run: files, passed, failed, errors, plus optional `gitignoreSkipped` and `baseline` blocks. |
+| `BaselineSummary` (type) | How a baseline shaped the run: its path, whether it was written, and the recorded, suppressed, and stale counts. |
+| `FingerprintContext` (type) | The `frame` a `ValidateRun` returns: the working directory, the directory canonical paths are measured from, and the directory result labels are relative to. Pass it back into `render` for SARIF. |
+
+## Schema resolution
+
+The precedence chain that decides which schemas apply to a given file. See
+[Schema resolution](/docmeta/reference/schema-resolution/) for the rules these
+implement.
+
+| Export | Purpose |
+|---|---|
+| `resolveSchemaSet` | Resolve the schema set for one file from CLI refs, the document's `$schema`, config overrides, and the defaults. |
+| `DEFAULT_SCHEMAS` | The built-in default schema set, used when nothing else selects one. |
+| `collectSchemaPins` | Gather the integrity pins a config declares, keyed by schema reference. |
+| `schemaEntryRef` | Narrow a config `schemas:` entry — a bare string or an object — to its reference string. |
+| `rebaseConfigSchemaRefs` | Rewrite a config's relative file refs so they resolve against the config's own directory rather than the process working directory. |
+
+## Schema loading and integrity
+
+| Export | Purpose |
+|---|---|
+| `listBuiltins` | Enumerate the schemas docmeta ships, with their ids and titles. |
+| `classifyRef` | Decide whether a reference is a `builtin` id, a `file` path, or a `url`. |
+| `loadSchema` | Resolve any reference to a parsed JSON Schema object, going through the cache and integrity check. |
+| `fetchSchemaBytes` | The lower-level fetch: the raw bytes plus their provenance, for callers that need the exact payload (integrity pinning does). |
+| `FetchedSchema` (type) | What `fetchSchemaBytes` returns: the bytes, the resolved URL, and whether the cache served them. |
+| `schemaLoadOptions` | Build a `LoadSchemaOptions` from run-level settings — trust, pins, offline, cache — so every call site derives them the same way. |
+| `LoadSchemaOptions` (type) | Loader settings: pins, trust policy, cache behavior, and offline mode. |
+| `SchemaPin` (type) | An integrity pin: the reference and the digest it must hash to. |
+| `integrityOf` | The `sha256-…` digest of a byte payload, in the form a pin records. |
+| `isIntegrity` | Whether a string is a well-formed integrity digest. |
+| `INTEGRITY_SHAPE` | The human-readable description of that form, for error messages. |
+
+## Schema cache
+
+The on-disk cache for schemas fetched over `http(s)`, shared across runs.
+
+| Export | Purpose |
+|---|---|
+| `SchemaCache` | Read and write cached remote schemas. Freshness is measured on file mtime, not an embedded timestamp. |
+| `ReadOptions` (type) | Per-read cache behavior, notably `ignoreTtl` — what `--offline` needs when no re-fetch is available. |
+| `SchemaCacheEntry` (type) | One cache record: version, source URL, fetch time, and the parsed schema. |
+| `schemaCacheDir` | The cache directory for a given project root. |
+| `SCHEMA_CACHE_DIR` | The cache path relative to the root (`.docmeta/schema-cache`). |
+| `SCHEMA_CACHE_VERSION` | The entry-format version; a mismatch invalidates an entry. |
+| `DEFAULT_TTL_HOURS` | How long a cached schema is served before re-fetching, when config says nothing. |
+
+## Configuration
+
+Loading, parsing, and merging `docmeta.config.yaml`. See the [configuration
+reference](/docmeta/reference/configuration/) for what each key means.
+
+| Export | Purpose |
+|---|---|
+| `loadConfig` | Discover (or take an explicit path to) a config file and parse it. Resolves to `null` when discovery finds none. |
+| `parseConfig` | Parse config text that you already have, with a source label for error messages. |
+| `LoadedConfig` (type) | A parsed config plus where it came from. |
+| `DocmetaConfig` (type) | The config document itself: `paths`, `exclude`, `schemas`, `overrides`, `fill`, `schemaTrust`, `schemaCache`, and the rest. |
+| `resolveRunConfig` | Merge config with the run's inputs and flags into the settings a core actually uses. This is the precedence chain, in one place. |
+| `RunConfigOptions` (type) | Input to `resolveRunConfig`: cwd, `configPath`, `noConfig`, the positional `inputs`, and a load callback. |
+| `RunConfig` (type) | The merged result: the rebased config, the effective inputs, and the resolved run settings. |
+| `ConfigNotice` (type) | Told to the caller once when a run turns out to be governed by a config: its path and directory. |
+| `SchemaEntry` (type) | A `schemas:` entry — either a bare reference string or a `SchemaRefEntry`. |
+| `SchemaRefEntry` (type) | The object form: a reference plus its integrity pin. |
+| `SchemaTrustConfig` (type) | How far a document is trusted to choose its own contract: `documentRefs` and the optional host allowlist. |
+| `DocumentRefTrust` (type) | The three trust levels: `any`, `local`, `none`. |
+| `FillConfig` (type) | Config defaults for `fill`: provider, model, confidence threshold, cost ceiling, concurrency. |
+| `SchemaCacheConfig` (type) | Config for the remote-schema cache, currently `ttlHours`. |
+
+## Reporters
+
+Pure formatting: a reporter turns a core's result into text and never writes it
+anywhere. `--quiet` lives here rather than in the cores, so a programmatic
+caller can never mistake a filtered run for an empty one.
+
+| Export | Purpose |
+|---|---|
+| `render` | Format a validation run in any [report format](/docmeta/reference/output-and-exit-codes/). SARIF also wants the run's `frame`. |
+| `renderSarif` | The SARIF reporter on its own, for callers that only want that one. |
+| `renderJunit` | The JUnit XML reporter on its own. |
+| `REPORT_FORMATS` | The formats `validate` accepts: `pretty`, `json`, `github`, `sarif`, `junit`. |
+| `ReportFormat` (type) | The union of those names. |
+| `isReportFormat` | Type guard for a user-supplied format string. |
+| `ReportOptions` (type) | Options passed to `render`: color, and everything `SarifOptions` carries. |
+| `SarifOptions` (type) | SARIF-specific options, notably the `frame` used to build repository-relative URIs. |
+| `COMMON_FORMATS` | The two formats every command supports: `pretty` and `json`. |
+| `CommonFormat` (type) | The union of those two names. |
+| `isCommonFormat` | Type guard for the narrower set, used by `get`. |
+| `renderGet` | The reporter behind `docmeta get`. |
+| `GetReportOptions` (type) | `color` and `quiet` for `renderGet`. |
+| `stringifyValue` | How a single field value is spelled: `(unset)` when missing, JSON for anything that is not a string. |
+| `renderFill` | The reporter behind `docmeta fill`, across the fill formats. |
+| `renderFillGithub` | GitHub Actions annotations for the work `fill` could not do — one `::error` per unfilled required property. |
+| `FILL_FORMATS` | The formats `fill` accepts: `pretty`, `json`, `github`. |
+| `FillReportFormat` (type) | The union of those names. |
+| `isFillFormat` | Type guard for a user-supplied fill format string. |
+| `FillReportOptions` (type) | `color` and `quiet` for `renderFill`. |
+
+## Extractors
+
+The per-format metadata layer. Everything after extraction operates on the
+generic `ExtractedMetadata` shape, which is why a new input format never touches
+validation, resolution, or reporting. See [supported
+formats](/docmeta/reference/formats/).
+
+| Export | Purpose |
+|---|---|
+| `extractorForExtension` | The implemented extractor for a file extension (including the dot), or `undefined`. |
+| `supportedExtensions` | Every extension an implemented extractor handles — the default set for directory and glob walks. |
+| `MetadataExtractor` (type) | The extractor interface: name, extensions, and the read and write entry points. |
+| `ExtractedMetadata` (type) | The format-independent result of extraction: whether metadata was present, the parsed data, and any parse error. |
+
+### Frontmatter
+
+The fenced-block path shared by Markdown, MDX, and the fenced form of AsciiDoc
+and reStructuredText.
+
+| Export | Purpose |
+|---|---|
+| `extractFrontmatter` | Read a leading fenced block into `ExtractedMetadata`, detecting the flavor from the fence. |
+| `locateFrontmatter` | Locate the block without parsing it: its fence style and the character offsets it spans. |
+| `frontmatterInnerText` | The block's inner text for a located block, LF-normalized with the final terminator removed. |
+| `FrontmatterLocation` (type) | What `locateFrontmatter` returns: the flavor and the offsets. |
+| `FrontmatterFlavor` (type) | The three interchangeable fence flavors: `yaml`, `toml`, `json`. |
+| `applyFrontmatter` | Merge a patch into a document's leading block and return the new content. Pure — the input string is returned unchanged for a no-op patch. |
+| `MetadataPatch` (type) | Top-level keys to set. Keys whose value is `undefined` are ignored. |
+| `ApplyOptions` (type) | Options for `applyFrontmatter`, currently the flavor used when creating a block from scratch. |
+
+### Writing files
+
+| Export | Purpose |
+|---|---|
+| `writeFileAtomic` | Replace a file atomically, falling back to a direct write with a warning when the rename keeps failing on a locked target. Accepts a `Uint8Array` so vendored bytes are written byte-for-byte. |
+
+## Errors
+
+| Export | Purpose |
+|---|---|
+| `DocmetaError` | The operational/usage failure the CLI maps to exit code `2`. Catch it to distinguish "docmeta could not run" from "the documents did not pass". |

@@ -258,6 +258,14 @@ not the verdict, not the reasoning, however wrong they read afterwards.
 - **Strict TypeScript.** `tsconfig` enables strict settings including
   `noUncheckedIndexedAccess`. Avoid unsound casts and non-null assertions; guard
   indexed access and regex capture groups.
+- **Type-aware lint.** `npm run lint` runs `typescript-eslint`'s
+  `strictTypeChecked` set over `src/` and `test/`. It needs type information, so
+  it is slower than a syntax linter and worth the cost: the thing it catches that
+  `tsc` does not is an *inferred* `any` crossing a boundary — a commander
+  callback parameter, a `JSON.parse`, a `ReadableStream<any>` — which never
+  appears as the word `any` in the source and so cannot be grepped for. When a
+  rule is genuinely wrong here, turn it off in `eslint.config.js` with a comment
+  saying why, rather than scattering inline disables.
 - **Conventional Commits.** Commit messages are linted by commitlint and drive
   semantic-release (`fix:` → patch, `feat:` → minor, `feat!:`/`BREAKING CHANGE`
   → major). Scope extractor work as `feat(extractors): …`.
@@ -273,13 +281,21 @@ npm run typecheck   # tsc --noEmit (strict)
 npm test            # vitest run (unit + built-bin CLI integration)
 npm run build       # tsup -> dist/ (needed before CLI integration tests)
 npm run check:deps  # deps installed here, at locked versions (auto-runs before the three above)
+npm run lint        # eslint, type-aware (strictTypeChecked) over src/ and test/
+npm run test:coverage  # vitest with v8 coverage; reported, not gated
 npm run docs:check-cli  # CLI reference must match src/cli.ts
 npm run docs:check-action  # Action reference must match action.yml
+npm run docs:check-api  # API reference must match the built dist/index.d.ts
+npm run schemas:check   # published built-in schemas immutable and in sync (local)
+npm run schemas:check-published  # ...and the live URLs still serve those bytes.
+                        # Hits the network, so it runs on a daily schedule
+                        # rather than in PR CI — see published-schemas.yml.
 
 # After editing anything under docs/, run the dogfood check too. docmeta
-# validates its own docs, and the Docs deploy is gated on it.
-node dist/cli.js validate "docs/src/content/docs/**/*.{md,mdx}" \
-  -s ./docs/doc-frontmatter.schema.json
+# validates its own docs, and the Docs deploy is gated on it. No paths and no
+# -s: both come from the repo's own docmeta.config.yaml, so this exercises
+# config discovery rather than stepping around it.
+node dist/cli.js validate
 ```
 
 Command cores are tested directly in `test/*.test.ts`; the full CLI is exercised

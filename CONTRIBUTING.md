@@ -2,6 +2,8 @@
 
 Thanks for your interest in improving docmeta. This guide covers local setup, the development loop, and the conventions the project follows. Whether you're fixing a bug or adding support for a new input format, the steps below should get you productive quickly.
 
+Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Prerequisites
 
 - **Node.js 24 or later** (see `engines` in `package.json`).
@@ -19,10 +21,11 @@ npm install
 
 ## Development loop
 
-Three scripts cover everyday work:
+Four scripts cover everyday work:
 
 ```bash
 npm run typecheck   # tsc --noEmit (strict)
+npm run lint        # eslint, type-aware
 npm test            # vitest run
 npm run build       # tsup -> dist/
 ```
@@ -32,7 +35,10 @@ A couple of things worth knowing:
 - **Command cores are unit-tested directly.** Tests in `test/*.test.ts` exercise the command cores (`validate`, `get`, `fill`, `schemas`) and the shared core modules without going through the CLI. `fill` reaches an LLM provider, so its tests inject a `MockProvider` and never touch the network.
 - **CLI integration tests run against the built `dist/`.** `test/cli.integration.test.ts` invokes the compiled binary, so run `npm run build` before `npm test` if you've changed anything the integration tests depend on. Otherwise those tests run against a stale (or missing) build.
 
-Before opening a pull request, make sure `npm run typecheck` and `npm test` both pass.
+- **Lint is type-aware.** eslint runs `typescript-eslint`'s `strictTypeChecked` set over `src/` and `test/`, so it needs type information and is slower than a syntax-only linter. It catches a class `tsc` does not: an *inferred* `any` crossing a boundary — a commander callback parameter, a `JSON.parse`, a `ReadableStream<any>` — where the unsafety never appears as the word `any` in the source.
+- **Coverage is reported, not gated.** `npm run test:coverage` prints a summary; there are no thresholds to trip over. Treat a number that drops sharply as worth a look, not as a build failure.
+
+Before opening a pull request, make sure `npm run typecheck`, `npm run lint`, and `npm test` all pass.
 
 ## Test-first development (red/green)
 
@@ -71,7 +77,7 @@ Scope work where it helps readers. New input formats use the `extractors` scope:
 feat(extractors): add TOML frontmatter support
 ```
 
-This is pre-1.0, so breaking CLI changes are acceptable when they improve the tool. Call them out with `feat!:` or a `BREAKING CHANGE:` footer so the release tooling bumps the major version.
+docmeta is past 1.0 and published to npm, so a breaking change is not free: semantic-release turns it into a major version and a release note. That is a cost worth paying when a change genuinely improves the tool, but not one to absorb by accident. Call breaking changes out with `feat!:` or a `BREAKING CHANGE:` footer so the release tooling bumps the major version — and prefer making the change cleanly over softening it with a deprecated alias, which leaves a permanent second surface behind.
 
 ## Keeping commands consistent
 
@@ -147,6 +153,10 @@ Two rules apply to any writer you add:
 
 Cover fenced formats in `test/frontmatter-write.test.ts` and others in their own
 file (`test/html-write.test.ts`).
+
+## Reporting a security issue
+
+Not as a public issue. docmeta fetches schemas over the network and runs inside other people's CI pipelines, so a public report is a disclosure to every one of them before there is a version to upgrade to. Use [private vulnerability reporting](https://github.com/hawkeyexl/docmeta/security/advisories/new) instead; [SECURITY.md](SECURITY.md) covers the supported versions, the trust boundaries, and what is already a documented decision rather than a bug.
 
 ## License
 
