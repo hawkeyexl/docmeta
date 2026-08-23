@@ -220,5 +220,5 @@ npx -y docmeta validate "docs/**/*.md"
 {/* test {"testId":"ci-github","description":"The two properties the GitHub integration rests on, run against the local CLI build."} */}
 {/* step {"description":"Clean run exits 0 so the job stays green.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md --format github","exitCodes":[0]}} */}
 {/* step {"description":"A failure exits 1 (fails the job) and emits a ::error workflow command pinned to file and line.","runShell":{"command":"npx docmeta validate test/fixtures/missing-type.md --format github","exitCodes":[1],"stdio":"/::error file=.*line=/"}} */}
-{/* step {"description":"An operational error (no inputs, no config) exits 2, distinct from a validation failure.","runShell":{"command":"npx docmeta validate","exitCodes":[2],"stdio":"No files to validate"}} */}
+{/* step {"description":"An operational error (no inputs, no config) exits 2, distinct from a validation failure.","runShell":{"command":"npx docmeta validate --no-config","exitCodes":[2],"stdio":"No files to validate"}} */}
 {/* test end */}
