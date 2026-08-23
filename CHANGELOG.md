@@ -1,3 +1,11 @@
+## [4.1.3](https://github.com/hawkeyexl/docmeta/compare/v4.1.2...v4.1.3) (2026-08-23)
+
+
+### Bug Fixes
+
+* **action:** stop the composite step aborting on bash 3.2 ([1885871](https://github.com/hawkeyexl/docmeta/commit/188587139b39f0bcb2b4c7f754765c50ba680a3f))
+* **ci:** retry a transient HTTP status, not just a thrown fetch ([af45550](https://github.com/hawkeyexl/docmeta/commit/af45550ed319c4946d7a3d4ce23214f40831a25a))
+
 ## [4.1.2](https://github.com/hawkeyexl/docmeta/compare/v4.1.1...v4.1.2) (2026-08-22)
 
 
