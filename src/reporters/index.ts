@@ -69,6 +69,9 @@ export function formatList(formats: readonly string[]): string {
   const [first, second] = formats;
   if (first === undefined) return "";
   if (second === undefined) return first;
+  // Still needed, and not redundant however it reads: a defined `second` proves
+  // there are *at least* two, not exactly two. Three or more falls through to
+  // the comma-joined form below.
   if (formats.length === 2) return `${first} or ${second}`;
   return formats
     .map((format, i) => (i === formats.length - 1 ? `or ${format}` : format))

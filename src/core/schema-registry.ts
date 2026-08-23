@@ -511,10 +511,11 @@ async function readCappedBody(
   try {
     for (;;) {
       // Annotated `value?:` rather than taking `ReadableStreamReadResult`'s
-      // word for it. That type promises a value whenever `done` is false, but
-      // the promise is the *stream implementation's* to keep, not something the
-      // reader enforces — and the guard below is only meaningful while the type
-      // admits the case it guards.
+      // word for it. That type is the more precise of the two — a discriminated
+      // union promising a value whenever `done` is false — and it is deliberately
+      // not used here: the promise is the *stream implementation's* to keep, not
+      // something the reader enforces, and the guard below is only meaningful
+      // while the type admits the case it guards.
       const { done, value }: { done: boolean; value?: Uint8Array } =
         await reader.read();
       if (done) break;
