@@ -36,6 +36,36 @@ docmeta validate docs/intro.md
 
 A clean run exits `0`; validation failures exit `1`; operational errors (no input, unknown schema, parse error) exit `2`.
 
+## Run it in CI
+
+On GitHub Actions, use the packaged action. It sets up Node, pins the CLI, and
+defaults to inline PR annotations:
+
+```yaml
+- uses: actions/checkout@v4
+- uses: hawkeyexl/docmeta@v4
+  with:
+    paths: "docs/**/*.md"
+```
+
+Every input is in the [Action reference](https://hawkeyexl.github.io/docmeta/reference/action/).
+Other platforms run the CLI directly — see the
+[CI recipes](https://hawkeyexl.github.io/docmeta/ci/recipes/) for GitLab CI,
+Jenkins, and the rest.
+
+To catch problems before they reach CI, docmeta publishes a
+[pre-commit](https://pre-commit.com/) hook. The whole configuration is three
+lines, and the file-matching pattern is derived from the extensions docmeta
+actually reads rather than hand-written:
+
+```yaml
+repos:
+  - repo: https://github.com/hawkeyexl/docmeta
+    rev: v4.1.2
+    hooks:
+      - id: docmeta
+```
+
 ## Fill in what's missing
 
 `docmeta fill` infers the metadata properties your schema asks for but a page
@@ -69,15 +99,23 @@ It picks an LLM provider by detecting one: `ANTHROPIC_API_KEY`, then
 credentials at all — so it works with whatever you have, and reports which it
 used. Pass `--provider` to pin one, which is worth doing in CI: left to detect, a
 runner that loses its key falls back to the local model and downloads it rather
-than failing the build. See the
+than failing the build.
+
+Pass `--local` when the document must not leave the machine. It runs inference
+on-device and **refuses every hosted provider**, a signed-in `claude` CLI
+included — that CLI runs locally, but its inference does not. See the
 [`fill` reference](https://hawkeyexl.github.io/docmeta/reference/cli/#fill) for
 every flag and for what the local fallback costs.
 
 ## Supported formats
 
-Markdown, MDX, AsciiDoc, reStructuredText, XML, and HTML. Run `docmeta schemas`
-to list the built-in schemas, every supported format, and which formats `fill`
-can write back to.
+Markdown, MDX, AsciiDoc, reStructuredText, XML (including DITA topics and maps),
+and HTML. Run `docmeta schemas` to list the built-in schemas, every supported
+format, and which formats `fill` can write back to.
+
+`fill` writes to all of them, by splicing the exact character range of the value
+rather than re-serializing the document — so comments, entity spellings,
+attribute order, indentation, and a DOCTYPE all survive untouched.
 
 ## Documentation
 
@@ -91,7 +129,7 @@ Full guides, recipes, and reference live on the documentation site:
 | [Set up validation](https://hawkeyexl.github.io/docmeta/set-up/) | Stand up validation for a repo: `docmeta.config.yaml`, per-folder schema overrides. |
 | [Run it in CI](https://hawkeyexl.github.io/docmeta/ci/) | GitHub Actions and other CI recipes, exit codes, and PR annotations. |
 | [Define & evolve schemas](https://hawkeyexl.github.io/docmeta/schemas/) | Author a schema, wire up resolution, and version it without breaking the build. |
-| [Reference](https://hawkeyexl.github.io/docmeta/reference/cli/) | Every CLI flag, config key, the schema-resolution precedence chain, and output formats. |
+| [Reference](https://hawkeyexl.github.io/docmeta/reference/cli/) | Every CLI flag, Action input, config key, the schema-resolution precedence chain, and output formats. |
 
 ## Contributing
 

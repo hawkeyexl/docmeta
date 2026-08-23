@@ -21,6 +21,9 @@ jobs:
       - run: npm run build
       - run: npm test
       - run: npm run docs:check-cli
+      # `action.yml` is a second public surface. It had no guard, so three of its
+      # seven inputs were undocumented and its one output was invisible.
+      - run: npm run docs:check-action
       # A published schema URL is a promise: its content never changes. This
       # fails if an already-published `src/schemas/<dir>/<version>.json` was
       # edited in place, or if the copies the docs site serves have drifted
