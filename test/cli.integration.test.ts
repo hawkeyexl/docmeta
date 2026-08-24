@@ -156,6 +156,7 @@ describe("docmeta CLI (built bin)", () => {
       "ogp:article:1.0",
       "dcmi:elements:1.1",
       "microsoft:learn:1.0",
+      "oasis:dita-metadata:1.3",
     ]);
   });
 

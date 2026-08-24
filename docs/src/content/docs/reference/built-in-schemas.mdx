@@ -5,7 +5,7 @@ description: Every schema shipped with docmeta in one table, showing what each c
 
 import { Aside, Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-docmeta bundles fourteen schemas. You reference any of them by id, with no file
+docmeta bundles fifteen schemas. You reference any of them by id, with no file
 to write, no URL to host, and no network call at validation time. This page is
 the registry: what each one constrains, whether it requires anything, and which
 are applied when you pass no flags at all.
@@ -31,8 +31,9 @@ installed.
 | `ogp:article:1.0` | 17 Open Graph and `article:*` properties | `og:title`, `og:type`, `og:url`, `og:image` | No | [`ogp/1.0.json`](/docmeta/schemas/ogp/1.0.json) | [Metadata vocabularies](/docmeta/reference/metadata-vocabularies/) |
 | `dcmi:elements:1.1` | the 15 Dublin Core elements | nothing | No | [`dcmi/1.1.json`](/docmeta/schemas/dcmi/1.1.json) | [Metadata vocabularies](/docmeta/reference/metadata-vocabularies/) |
 | `microsoft:learn:1.0` | 16 Microsoft Learn attributes | `title`, `description`, `author`, `ms.author`, `ms.date` | No | [`microsoft-learn/1.0.json`](/docmeta/schemas/microsoft-learn/1.0.json) | [Metadata vocabularies](/docmeta/reference/metadata-vocabularies/) |
+| `oasis:dita-metadata:1.3` | 17 DITA prolog and topicmeta keys | nothing | No | [`dita/1.3.json`](/docmeta/schemas/dita/1.3.json) | [DITA schema](/docmeta/reference/dita-schema/) |
 
-All fourteen use [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects),
+All fifteen use [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects),
 allow additional properties, and are [built-in
 references](/docmeta/reference/schema-resolution/#reference-kinds), so a typo in
 an id is reported as an unknown built-in rather than a missing file.
@@ -57,6 +58,7 @@ https://hawkeyexl.github.io/docmeta/schemas/myst/1.10.json
 https://hawkeyexl.github.io/docmeta/schemas/ogp/1.0.json
 https://hawkeyexl.github.io/docmeta/schemas/dcmi/1.1.json
 https://hawkeyexl.github.io/docmeta/schemas/microsoft-learn/1.0.json
+https://hawkeyexl.github.io/docmeta/schemas/dita/1.3.json
 ```
 
 They exist for three jobs: `$ref`-ing a built-in from a schema of your own,
@@ -197,7 +199,7 @@ compose](/docmeta/reference/taxonomy-schemas/#which-ones-compose).
 
 ## What runs when you pass no flags
 
-Only two of the fourteen are in the default set:
+Only two of the fifteen are in the default set:
 
 ```text
 google:okf:0.1 + passo-uno:seven-action:1.0

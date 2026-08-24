@@ -1,0 +1,112 @@
+---
+title: Built-in DITA schema
+description: The oasis dita-metadata schema shipped with docmeta, its prolog and topicmeta keys, why topics and maps spell some of them differently, and what fill will create.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`oasis:dita-metadata:1.3` describes the typed metadata elements OASIS defines
+for a DITA topic or map — the `<prolog>` and `<topicmeta>` contents that docmeta
+reads through the [element metadata
+rule](/docmeta/reference/element-metadata/).
+
+It is named `dita-metadata` rather than `dita-prolog` because it constrains
+`topicmeta.*` too, and a name saying prolog would be wrong for every map.
+
+## Keys
+
+Cardinality comes from the content model, not from a guess: `author*` is a list,
+`source?` is a scalar.
+
+| Key | Source in a topic | Type |
+|---|---|---|
+| `prolog.author` | `<prolog><author>` | list |
+| `prolog.source` | `<prolog><source>` | string |
+| `prolog.publisher` | `<prolog><publisher>` | string |
+| `prolog.permissions` | `<permissions @entitlement>` | string |
+| `prolog.resourceid` | `<resourceid @id>` | list |
+| `critdates.created` | `<critdates><created @date>` | date string |
+| `critdates.revised` | `<critdates><revised @modified>` | list of date strings |
+| `metadata.audience` | `<metadata><audience @type>` | list |
+| `metadata.category` | `<metadata><category>` | list |
+| `prodinfo.prodname` | `<prodinfo><prodname>` | string |
+
+In a **map** the five `prolog.*` keys are `topicmeta.*`, and `audience` and
+`category` are `topicmeta.audience` and `topicmeta.category`. `critdates.*` and
+`prodinfo.prodname` are identical in both.
+
+<Aside type="note" title="Why a map spells some keys differently">
+Not a quirk of docmeta. The OASIS content model makes `<audience>`,
+`<category>`, `<prodinfo>` and `<othermeta>` **direct children** of
+`<topicmeta>`, where a topic nests them inside `<prolog><metadata>`. The key
+names where the value actually is, so it follows the document.
+
+The practical consequence: a schema that wants "the author of this file" names
+**both** `prolog.author` and `topicmeta.author`. `critdates.created` needs
+naming only once, because the containing element is the same in both.
+</Aside>
+
+## It requires nothing
+
+DITA marks no metadata element mandatory, so neither does this. Turning it on
+cannot fail a topic that was building — it checks the *shape* of what a topic
+already carries.
+
+The one format rule it does impose is on dates. `@date` and `@modified` are
+CDATA in the DTD, so DITA itself accepts anything; the schema requires
+`YYYY-MM-DD`, which is what DITA-OT and the toolchains around it assume. A date
+nothing validates is a date that drifts.
+
+## Both metadata channels are validated
+
+A topic may carry the same fact twice:
+
+```xml
+<prolog>
+  <metadata>
+    <audience type="programmer"/>
+    <othermeta name="audience" content="42"/>
+  </metadata>
+</prolog>
+```
+
+That is two keys — `metadata.audience` and the flat `audience` — and both are
+checked. Neither wins. A precedence rule would discard one, and the discarded
+one is exactly the one nobody is looking at.
+
+`<othermeta>` keys are not described by this schema, because their names are
+yours. Pair it with a schema of your own if you want them constrained.
+
+## What `fill` writes
+
+```bash
+docmeta fill docs/**/*.dita -s oasis:dita-metadata:1.3
+```
+
+- **An element that exists** has its text or attribute value replaced. That
+  cannot change whether the topic is valid, because it changes content and not
+  shape.
+- **An element that is missing is created**, along with any containers it needs,
+  at the position the content model requires — `<critdates>` after `<author>`
+  and before `</prolog>`, not merely appended.
+- **A key with no place in the content model** still goes to an `<othermeta>`,
+  which is where a key the DTD has no home for belongs.
+- **Adding or removing a repeated element is refused.** Writing three authors
+  over two `<author>` elements changes the topic's shape, which docmeta will not
+  do on your behalf.
+
+<Aside type="caution" title="What this schema deliberately leaves out">
+Three parts of the prolog are not described, each for a stated reason:
+
+- **`<copyright>`** nests `copyrholder` and `copyryear @year` — two levels and
+  two value shapes.
+- **`<keywords>`** contains `<indexterm>` and `<keyword>` children rather than
+  text, so it is not a value the element rule can lift.
+- **The `<prodinfo>` tail** — `vrmlist`, `brand`, `component`, `featnum`,
+  `platform`, `prognum`, `series` — is long and rarely carries document
+  metadata.
+
+They are readable through an [`elements:`
+path](/docmeta/reference/element-metadata/#elements--reaching-what-the-convention-does-not)
+if your repo needs them.
+</Aside>

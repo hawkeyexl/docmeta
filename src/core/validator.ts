@@ -112,7 +112,7 @@ function buildAjv(dialect: Dialect): InstanceType<AjvCtor> {
  *   the draft-07 Ajv and needs the built-ins registered there too.
  *
  * Registration is lazy — Ajv compiles a stored schema only when something
- * references it — so this costs a map insert per built-in, not fourteen compiles.
+ * references it — so this costs a map insert per built-in, not fifteen compiles.
  *
  * Called from `buildAjv` rather than from `Validator`, deliberately:
  * `compileWithFormats` builds its own throwaway instance for `fill`'s proposal

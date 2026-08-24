@@ -1,0 +1,178 @@
+---
+title: Element metadata in XML and HTML
+description: How docmeta reads metadata held in elements rather than attributes, the key-naming rule, the elements config key, and what a write will and will not do.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Some documents keep their metadata in attributes. Many keep it in elements —
+an XML article with a `<title>` child, a DITA topic with a full `<prolog>`, an
+HTML page whose `<title>` is the only place the page names itself. docmeta reads
+both.
+
+## The rule
+
+A value held in an element is keyed **`<immediate parent>.<element name>`**. The
+containing element is the namespace.
+
+```xml
+<article><byline>Ada Lovelace</byline></article>   →  article.byline
+<prolog><author>Ada Lovelace</author></prolog>     →  prolog.author
+<critdates><created date="2026-01-15"/></critdates> →  critdates.created
+<head><title>Docs</title></head>                    →  head.title
+```
+
+**Existing flat keys do not move.** Root attributes, `<meta>` tags,
+`<othermeta>` entries and HTML's `<title>` keep the names they have always had.
+A document can carry the same fact in two places and **both are validated** —
+neither wins, because a value that wins silently discards the other, and the
+discarded one is exactly the one nobody is checking.
+
+<Aside type="note" title="Why dots in keys and slashes in paths">
+An element name may legally contain a dot — `.` is an XML NameChar — so a dotted
+*path* cannot be parsed: `a.b.c` could be `<a.b><c>`, `<a><b.c>` or `<a><b><c>`.
+That ambiguity never reaches a key, because nothing parses a key back into a
+path; a schema names the exact string. It only reaches config, which has to
+parse, so `elements:` paths use `/`, which cannot appear in an element name.
+
+docmeta already printed exactly this split. Its error paths are JSON Pointer:
+`/tableOfContents/maxHeadingLevel` separates structure with slashes, and
+`/ms.date` carries a dot inside one segment.
+</Aside>
+
+## What each format lifts by convention
+
+| Format | Region | Yields |
+|---|---|---|
+| Generic XML | the root's direct text-bearing children | `<root>.<child>` |
+| HTML | text-bearing `<head>` children | `head.title` |
+| DITA topic | `<prolog>` and its nested containers | `prolog.*`, `critdates.*`, `metadata.*`, `prodinfo.*` |
+| DITA map | `<topicmeta>` and its nested containers | `topicmeta.*`, `critdates.*`, … |
+
+Two exclusions keep the key set honest, and both are why the convention can work
+without a hardcoded ignore list:
+
+- **An element with element children is structure, not a value.** `<body>` full
+  of `<p>` is a container. Lifting it would concatenate a document's prose into
+  one key.
+- **Whitespace-only text is indentation, not content.** Every container in an
+  indented file holds a newline and some spaces.
+
+HTML additionally skips `<script>` and `<style>`: both are text-bearing and
+neither is metadata. Void elements — `<meta>`, `<link>`, `<base>` — hold their
+value in an attribute and are not lifted by convention, because `<link>` repeats
+and collapsing a canonical URL together with three stylesheets would discard the
+`rel` that told them apart. Reach those with a config path.
+
+### Lists, and why generic XML always uses one
+
+Plain XML states no cardinality, so docmeta cannot know whether a second `<tag>`
+is coming. A type that changed with document content could not be written
+against, so the convention commits to a list:
+
+```json
+"article.title": { "type": "array", "items": { "type": "string" }, "maxItems": 1 }
+```
+
+`maxItems: 1` is how a schema says "there should be exactly one", which is a
+check that was not expressible before.
+
+Where a content model *does* state the cardinality, the key follows it.
+`head.title` is a scalar because HTML permits one `<title>`;
+[DITA's keys](/docmeta/reference/dita-schema/) are typed element by element
+because the OASIS content model says which repeat.
+
+## `elements:` — reaching what the convention does not
+
+The convention stops short on purpose. Naming a path is how a repo says "this
+one, specifically".
+
+```yaml title="docmeta.config.yaml"
+elements:
+  - article/byline/author      # → byline.author
+  - html/head/link@href        # → head.link
+overrides:
+  - files: "specs/**"
+    elements:
+      - spec/revision          # → spec.revision
+```
+
+A path is **slash-separated and absolute from the document root** — a deliberate
+subset of XPath's child axis, so predicates and axes are not coming. `@attr`
+selects an attribute instead of the element's text, which is the only way to
+reach a void element.
+
+The key is still derived by the rule and is never spelled in config. Two ways to
+name one key is the ambiguity this design removes.
+
+Four behaviours worth knowing:
+
+- **Config extends the convention.** A path producing a key the convention
+  already filled is a no-op, so naming `concept/prolog/source` cannot retype it
+  from the scalar its content model says it is.
+- **`elements:` accumulates where `schemas:` replaces.** A schema set is a
+  complete statement about how a file is judged; element paths are a list of
+  extra places to look, so the repo-wide list and *every* matching override all
+  contribute.
+- **A named path lifts an empty element**, as `[""]`. The convention skips one;
+  someone who names it wants "present but empty" checked.
+- **Paths are validated when the config loads.** A typo left to extraction would
+  match nothing, produce no key, and silently never run the check it was meant
+  to.
+
+## What a write does
+
+`fill` writes element metadata back **where it was read from**. That is not a
+nicety: if a value were written anywhere else, the field would stay invalid, the
+next run would propose it again, and CI would never go green.
+
+<Tabs>
+<TabItem label="Updating">
+
+Replacing the text between an element's tags, or the value inside an attribute's
+quotes, **cannot change whether the document is valid** — it changes content,
+not shape. So it works in any dialect, including ones docmeta knows nothing
+about.
+
+</TabItem>
+<TabItem label="Creating">
+
+Adding an element that is not there needs to know where the element is legal.
+docmeta does that only for [DITA](/docmeta/reference/dita-schema/), whose
+content model can answer, placing the new element — and any containers it needs
+— at the position the model requires.
+
+</TabItem>
+<TabItem label="Refusing">
+
+A key backed by *N* elements receiving *M* values is only unambiguous when the
+two match: each value replaces one element, in document order. Fewer would mean
+deleting elements and more would mean creating them, so both are refused by
+name. A `fill` that quietly dropped an `<author>` is worse than one that
+declines.
+
+</TabItem>
+</Tabs>
+
+<Aside type="caution" title="A dotted key is not created as a root attribute">
+A dot is legal in an XML Name, so nothing structural stops `article.summary`
+being written as an attribute of `<article>`. docmeta refuses it, because the
+moment the document grows an `<article><summary>` the reader takes that key from
+the element and the attribute goes unread.
+
+The guard is narrow: only a first segment matching *this* document's root
+element can collide, so `dc.title` and `ms.date` stay writable as they always
+have been.
+</Aside>
+
+## Addressing a lifted key from `get`
+
+Both spellings work:
+
+```bash
+docmeta get article.title docs/api.xml
+docmeta get /article.title docs/api.xml
+```
+
+Dot-notation tries nested traversal first — right for a frontmatter object like
+`author.name` — and falls back to the literal key when that misses.

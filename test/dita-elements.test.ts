@@ -28,6 +28,10 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
 import { readFileSync } from "node:fs";
 import { xmlExtractor } from "../src/extractors/xml.js";
+import { runValidate } from "../src/commands/validate.js";
+import { loadSchema } from "../src/core/schema-registry.js";
+import { getSchemasInfo } from "../src/commands/schemas.js";
+import { DEFAULT_SCHEMAS } from "../src/core/resolve-schema.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -135,5 +139,68 @@ describe("a topic with less than a full prolog", () => {
     for (const key of Object.keys(r.data)) {
       expect(key.startsWith("prolog."), key).toBe(false);
     }
+  });
+});
+
+describe("oasis:dita-metadata:1.3", () => {
+  const DITA_SCHEMA = "oasis:dita-metadata:1.3";
+
+  it("accepts a topic carrying every element it describes", async () => {
+    const { results } = await runValidate({
+      inputs: ["test/fixtures/dita/full-prolog.dita"],
+      cliSchemas: [DITA_SCHEMA],
+      cwd: root,
+    });
+    expect(results[0]?.errors).toEqual([]);
+    expect(results[0]?.ok).toBe(true);
+  });
+
+  it("accepts the map spelling of the same facts", async () => {
+    const { results } = await runValidate({
+      inputs: ["test/fixtures/dita/topicmeta-map.ditamap"],
+      cliSchemas: [DITA_SCHEMA],
+      cwd: root,
+    });
+    expect(results[0]?.ok).toBe(true);
+  });
+
+  it("requires nothing, because DITA marks no metadata element mandatory", async () => {
+    const { results } = await runValidate({
+      inputs: ["test/fixtures/dita/no-prolog.dita"],
+      cliSchemas: [DITA_SCHEMA],
+      cwd: root,
+    });
+    expect(results[0]?.ok).toBe(true);
+  });
+
+  it("catches a malformed critical date, at the element that carries it", async () => {
+    const bad = readFileSync(
+      join(root, "test", "fixtures", "dita", "full-prolog.dita"),
+      "utf8",
+    ).replace('date="2026-01-15"', 'date="15 January 2026"');
+    const { results } = await runValidate({
+      inputs: ["-"],
+      as: "xml",
+      stdinContent: bad,
+      cliSchemas: [DITA_SCHEMA],
+      cwd: root,
+    });
+    expect(results[0]?.ok).toBe(false);
+    expect(results[0]?.errors[0]?.instancePath).toBe("/critdates.created");
+  });
+
+  it("types a scalar as a scalar and a list as a list", async () => {
+    // `source?` versus `author*`. Getting this backwards would make every
+    // schema written against it wrong in one direction or the other.
+    const schema = (await loadSchema(DITA_SCHEMA)) as {
+      properties: Record<string, { type?: string; $ref?: string }>;
+    };
+    expect(schema.properties["prolog.source"]?.type).toBe("string");
+    expect(schema.properties["prolog.author"]?.$ref).toContain("textList");
+  });
+
+  it("is opt-in and listed by the schemas command", () => {
+    expect(DEFAULT_SCHEMAS).not.toContain(DITA_SCHEMA);
+    expect(getSchemasInfo().builtins.map((b) => b.id)).toContain(DITA_SCHEMA);
   });
 });

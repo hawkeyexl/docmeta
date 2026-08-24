@@ -34,6 +34,7 @@ import myst110 from "../schemas/myst/1.10.json" with { type: "json" };
 import ogp10 from "../schemas/ogp/1.0.json" with { type: "json" };
 import dcmi11 from "../schemas/dcmi/1.1.json" with { type: "json" };
 import microsoftLearn10 from "../schemas/microsoft-learn/1.0.json" with { type: "json" };
+import ditaMetadata13 from "../schemas/dita/1.3.json" with { type: "json" };
 
 export interface BuiltinInfo {
   id: string;
@@ -57,6 +58,7 @@ const BUILTINS = new Map<string, Record<string, unknown>>([
   ["ogp:article:1.0", ogp10 as Record<string, unknown>],
   ["dcmi:elements:1.1", dcmi11 as Record<string, unknown>],
   ["microsoft:learn:1.0", microsoftLearn10 as Record<string, unknown>],
+  ["oasis:dita-metadata:1.3", ditaMetadata13 as Record<string, unknown>],
 ]);
 
 export function listBuiltins(): BuiltinInfo[] {
@@ -107,6 +109,7 @@ const PUBLISHED_ALIAS: ReadonlyMap<string, string> = new Map([
   [`${PUBLISHED_BASE}ogp/1.0.json`, "ogp:article:1.0"],
   [`${PUBLISHED_BASE}dcmi/1.1.json`, "dcmi:elements:1.1"],
   [`${PUBLISHED_BASE}microsoft-learn/1.0.json`, "microsoft:learn:1.0"],
+  [`${PUBLISHED_BASE}dita/1.3.json`, "oasis:dita-metadata:1.3"],
 ]);
 
 /**
