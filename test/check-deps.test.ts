@@ -28,10 +28,18 @@ interface Run {
   status: number;
 }
 
-/** `via` names the copy of the script to invoke, for the symlink case. */
-function run(root: string, via: string = script): Run {
+/**
+ * `via` names the copy of the script to invoke, for the symlink case. `env`
+ * replaces the whole environment, so a test can control what npm reports about
+ * itself — or say that npm is not in the picture at all.
+ */
+function run(root: string, via: string = script, env?: NodeJS.ProcessEnv): Run {
   try {
-    execFileSync("node", [via, root], { encoding: "utf8", cwd: repoRoot });
+    execFileSync("node", [via, root], {
+      encoding: "utf8",
+      cwd: repoRoot,
+      env: env ?? process.env,
+    });
     return { stderr: "", status: 0 };
   } catch (e) {
     const err = e as { stderr?: string; status?: number };
@@ -185,5 +193,90 @@ describe("check-deps", () => {
 
   it("passes on this checkout, which is what the pre* hooks rely on", () => {
     expect(run(repoRoot).status).toBe(0);
+  });
+});
+
+/**
+ * The second thing this guard asserts: that the npm running it is new enough to
+ * write a complete `package-lock.json`.
+ *
+ * npm 11.6.2 and below drop the top-level entries for the peer dependencies of
+ * an optional package — here `@emnapi/core` and `@emnapi/runtime`, reached through
+ * `@rolldown/binding-wasm32-wasi` — while keeping the edges that point at them.
+ * The result installs fine and `npm ci` rejects it, so the first sign of trouble
+ * is every CI job failing at once with `Missing: @emnapi/core@<ver> from lock
+ * file`. Nothing about that message points at npm's version, which is why the
+ * check is here rather than left to be rediscovered.
+ */
+
+/**
+ * This process's environment with npm's user-agent set to `userAgent`, or
+ * removed when it is null.
+ *
+ * Every case-variant of the name has to be stripped first. Windows environment
+ * variables are case-insensitive, but a spread of `process.env` inside a vitest
+ * worker carries `NPM_CONFIG_USER_AGENT` and `npm_config_user_agent` as two
+ * separate keys — so overriding only the lower-case one leaves the real value
+ * behind under the other spelling, and the child reads the npm that launched
+ * the test run instead of the one the test is describing. Every assertion below
+ * then passes while testing nothing, which is the one way a guard's tests must
+ * not fail.
+ */
+function withUserAgent(userAgent: string | null): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([k]) => k.toLowerCase() !== "npm_config_user_agent",
+    ),
+  );
+  if (userAgent !== null) env.npm_config_user_agent = userAgent;
+  return env;
+}
+
+/** The environment npm exports to a lifecycle script, for a given npm version. */
+function underNpm(version: string): NodeJS.ProcessEnv {
+  return withUserAgent(`npm/${version} node/v24.11.0 win32 x64 workspaces/false`);
+}
+
+describe("check-deps: npm version floor", () => {
+  beforeEach(async () => {
+    // Both dependencies present, so the only thing left that can fail is npm.
+    await install(proj, "@scope/dep-a", "0.2.0");
+    await install(proj, "dep-b", "1.0.0");
+  });
+
+  it("fails on an npm old enough to write an incomplete lockfile", () => {
+    const r = run(proj, script, underNpm("11.6.2"));
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("11.6.2"); // what you have
+    expect(r.stderr).toContain("11.6.3"); // what you need
+    expect(r.stderr).toMatch(/npm install -g npm/); // how to get there
+  });
+
+  it("passes at exactly the floor", () => {
+    expect(run(proj, script, underNpm("11.6.3")).status).toBe(0);
+  });
+
+  it("passes on the rest of the 11.6 line above the floor", () => {
+    // The floor is a patch release, not a minor. Rounding it up to 11.7.0 —
+    // the first version this was confirmed good on — would have rejected an
+    // npm that writes a perfectly complete lockfile, and blocked the whole
+    // `pre*` chain for someone whose environment was fine.
+    expect(run(proj, script, underNpm("11.6.4")).status).toBe(0);
+  });
+
+  it("passes above the floor, including across a major", () => {
+    expect(run(proj, script, underNpm("11.19.0")).status).toBe(0);
+    expect(run(proj, script, underNpm("12.0.2")).status).toBe(0);
+  });
+
+  it("says nothing when npm is not the thing running it", () => {
+    // Invoked by hand, or by another package manager. There is no npm version
+    // to judge, and inventing a failure for one is worse than staying quiet.
+    expect(run(proj, script, withUserAgent(null)).status).toBe(0);
+  });
+
+  it("ignores a user agent that is not npm's", () => {
+    const env = withUserAgent("pnpm/10.4.1 node/v24.11.0");
+    expect(run(proj, script, env).status).toBe(0);
   });
 });
