@@ -207,11 +207,10 @@ export interface DitaLift {
  * `topicmeta.audience` in a map and `metadata.audience` in a topic, and both are
  * correct, because each key names where the value actually is.
  *
- * Deliberately absent, each for a reason: `<copyright>` nests
- * `copyrholder`/`copyryear @year`, two levels and two shapes; `<keywords>`
- * contains `<indexterm>`/`<keyword>` children rather than text; and the
- * `<prodinfo>` tail (`vrmlist`, `brand`, `component`, `featnum`, `platform`,
- * `prognum`, `series`) is long and rarely carries document metadata.
+ * Covers the whole prolog vocabulary docmeta reads. An earlier draft deferred
+ * `<copyright>`, `<keywords>` and the `<prodinfo>` tail; proposal 0020 records
+ * why each turned out to be reachable by the same mechanism that was said not
+ * to reach it.
  */
 export const DITA_LIFTS: Readonly<
   Record<string, Readonly<Record<string, DitaLift>>>

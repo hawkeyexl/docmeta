@@ -131,7 +131,6 @@ function liftableHeadChildren(
   return out;
 }
 
-
 /** Every element a config path selects, walked down the child axis. */
 function matchHtmlPath(
   doc: DefaultTreeAdapterMap["document"],
