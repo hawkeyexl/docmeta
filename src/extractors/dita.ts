@@ -291,6 +291,64 @@ export const DITA_CONTENT_MODEL: Readonly<Record<string, readonly string[]>> = {
 };
 
 /**
+ * The container an element of this name lives inside, or `undefined` when it
+ * hangs directly off the root.
+ *
+ * A map is flatter than a topic. `<topicmeta>` holds `audience`, `category` and
+ * `prodinfo` as direct children, where a topic nests the first two inside
+ * `<prolog><metadata>` and `prodinfo` one deeper still. Encoding it here keeps
+ * that asymmetry in the one file that already knows about it.
+ */
+export function ditaContainerParent(
+  shape: DitaShape,
+  name: string,
+): string | undefined {
+  if (name === "prolog" || name === "topicmeta") return undefined;
+  if (shape.kind === "map") return "topicmeta";
+  return name === "prodinfo" ? "metadata" : "prolog";
+}
+
+/**
+ * Where a new child goes inside a container, by content-model position.
+ *
+ * Returns the element it should be inserted *before*, or `undefined` for "at the
+ * end", which the caller turns into an offset.
+ *
+ * Children the model does not list are skipped rather than used as anchors.
+ * They are specializations docmeta has never seen, and inserting before one
+ * would be a guess about a model it does not understand; going last is at least
+ * a position the author can see and move.
+ */
+export function childAnchor(
+  container: XmlElement,
+  containerName: string,
+  childName: string,
+): XmlElement | undefined {
+  const model = DITA_CONTENT_MODEL[containerName] ?? [];
+  const target = model.indexOf(childName);
+  if (target === -1) return undefined;
+  for (const child of childElements(container)) {
+    const at = model.indexOf(child.nodeName.toLowerCase());
+    if (at === -1) continue;
+    if (at > target) return child;
+  }
+  return undefined;
+}
+
+/** Find a metadata container by name, searching down from the lift root. */
+export function findContainer(
+  from: XmlElement,
+  name: string,
+): XmlElement | undefined {
+  if (from.nodeName.toLowerCase() === name) return from;
+  for (const child of childElements(from)) {
+    const found = findContainer(child, name);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/**
  * The element a document's typed metadata hangs off: `<prolog>` in a topic,
  * `<topicmeta>` in a map. Undefined when the document has neither.
  *

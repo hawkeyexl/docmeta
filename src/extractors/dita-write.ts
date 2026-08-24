@@ -29,8 +29,19 @@ import {
   DocmetaError,
   type MetadataPatch,
 } from "../types.js";
-import { childElements, metadataContainers, type DitaShape } from "./dita.js";
-import { elementEdits } from "./element-write.js";
+import {
+  childAnchor,
+  childElements,
+  ditaContainerParent,
+  findContainer,
+  liftRoot,
+  metadataContainers,
+  DITA_CONTENT_MODEL,
+  DITA_LIFTS,
+  type DitaLift,
+  type DitaShape,
+} from "./dita.js";
+import { elementEdits, escapeText } from "./element-write.js";
 import type { XmlElement, XmlRead } from "./xml-read.js";
 import {
   lineStarts,
@@ -67,6 +78,7 @@ export function ditaEdits(
   const starts = lineStarts(content);
   const edits: Edit[] = [];
   const fresh: { key: string; value: string }[] = [];
+  const freshElements: FreshElement[] = [];
 
   for (const [key, raw] of Object.entries(patch)) {
     const source = read.sources.get(key);
@@ -92,14 +104,207 @@ export function ditaEdits(
       // allows it: the element exists, so only its value changes.
       edits.push(...elementEdits(content, starts, source, key, raw, emit, escape));
     } else {
-      fresh.push({ key, value: emit(key, raw) });
+      // A key naming a typed element docmeta knows — `prolog.author` — is
+      // created as that element. Anything else keeps the othermeta channel,
+      // which is where a key with no place in the content model belongs.
+      const dot = key.indexOf(".");
+      const container = dot === -1 ? "" : key.slice(0, dot);
+      const element = dot === -1 ? "" : key.slice(dot + 1);
+      const spec = DITA_LIFTS[container]?.[element];
+      if (spec) {
+        freshElements.push({ key, container, element, spec, value: raw });
+      } else {
+        fresh.push({ key, value: emit(key, raw) });
+      }
     }
   }
 
   if (fresh.length > 0) {
     edits.push(insertEdit(content, starts, root, shape, fresh, escape));
   }
+  if (freshElements.length > 0) {
+    edits.push(
+      ...newElementEdits(
+        content,
+        starts,
+        root,
+        shape,
+        freshElements,
+        emit,
+        escape,
+      ),
+    );
+  }
   return edits;
+}
+
+/** A typed element the document does not have yet. */
+interface FreshElement {
+  key: string;
+  container: string;
+  element: string;
+  spec: DitaLift;
+  value: unknown;
+}
+
+/**
+ * Create typed elements the document is missing, in content-model order.
+ *
+ * This is the one place in the DITA writer that adds structure rather than
+ * replacing a span, so it is the one place that can produce a topic the user's
+ * DTD rejects. Three things keep it honest:
+ *
+ * - **Position comes from the content model, not from convenience.** A DITA
+ *   container is a sequence, so `<critdates>` after `<metadata>` is invalid even
+ *   though both are allowed. `childAnchor` finds the first existing child that
+ *   must follow the new one, and the element goes immediately before it.
+ * - **Missing ancestors are created together.** Adding `critdates.created` to a
+ *   topic with no `<critdates>` emits the whole nest at the position
+ *   `<critdates>` itself belongs in.
+ * - **Blocks are grouped by anchor, not by container.** Two containers can
+ *   resolve to one insertion point, and two edits at one offset overlap —
+ *   which `spliceAll` refuses, turning a legitimate multi-field `fill` into an
+ *   internal error.
+ */
+function newElementEdits(
+  content: string,
+  starts: number[],
+  root: XmlElement,
+  shape: DitaShape,
+  items: FreshElement[],
+  emit: (key: string, value: unknown) => string,
+  escape: (value: string, quote: string) => string,
+): Edit[] {
+  const eol = content.includes(CRLF) ? CRLF : LF;
+  const liftRootEl = liftRoot(root, shape);
+
+  /** `<author>Ada</author>` or `<created date="…"/>`, one per value. */
+  const tagsFor = (item: FreshElement): string[] => {
+    const values = Array.isArray(item.value) ? item.value : [item.value];
+    return values.map((v) => {
+      const emitted = emit(item.key, v);
+      return item.spec.attr
+        ? `<${item.element} ${item.spec.attr}="${escape(emitted, DQ)}"/>`
+        : `<${item.element}>${escapeText(emitted)}</${item.element}>`;
+    });
+  };
+
+  const byContainer = new Map<string, FreshElement[]>();
+  for (const item of items) {
+    const group = byContainer.get(item.container);
+    if (group) group.push(item);
+    else byContainer.set(item.container, [item]);
+  }
+
+  // One placement per container, then merged by anchor. Two containers can
+  // resolve to the *same* insertion point — adding `critdates.created` and
+  // `metadata.audience` to a topic that has neither puts both at the end of
+  // `<prolog>` — and two edits at one offset overlap, which `spliceAll`
+  // refuses outright. Grouping by container alone is not enough.
+  const placements: Placement[] = [];
+  for (const [containerName, group] of byContainer) {
+    const missing: string[] = [];
+    let name: string | undefined = containerName;
+    let host: XmlElement | undefined;
+    while (name !== undefined) {
+      const found = liftRootEl ? findContainer(liftRootEl, name) : undefined;
+      if (found) {
+        host = found;
+        break;
+      }
+      missing.unshift(name);
+      name = ditaContainerParent(shape, name);
+    }
+
+    const tags = group.flatMap(tagsFor);
+    const outermost = missing[0] ?? group[0]?.element ?? "";
+
+    if (host) {
+      const hostName = host.nodeName.toLowerCase();
+      const before = childAnchor(host, hostName, outermost);
+      const at = before
+        ? offsetAt(starts, before.lineNumber ?? 1, before.columnNumber ?? 1)
+        : closeOf(content, starts, host, host.nodeName);
+      placements.push({
+        at,
+        base: "",
+        missing,
+        tags,
+        order: modelIndex(hostName, outermost),
+        atClose: before === undefined,
+      });
+    } else {
+      placements.push({
+        at: newContainerAnchor(content, starts, root, shape),
+        base: siblingIndent(content, starts, root),
+        missing,
+        tags,
+        order: modelIndex("", outermost),
+        atClose: false,
+      });
+    }
+  }
+
+  const byAnchor = new Map<number, Placement[]>();
+  for (const p of placements) {
+    const group = byAnchor.get(p.at);
+    if (group) group.push(p);
+    else byAnchor.set(p.at, [p]);
+  }
+
+  const edits: Edit[] = [];
+  for (const [at, group] of byAnchor) {
+    const base = group.find((p) => p.base !== "")?.base ?? "";
+    const anchor = anchorBefore(content, at, base || "  ");
+    const lines: string[] = [];
+    // Content-model order among themselves, so two created siblings do not
+    // land in an order the DTD rejects.
+    for (const p of [...group].sort((a, b) => a.order - b.order)) {
+      const indent = base || anchor.indent + (p.atClose ? "  " : "");
+      if (p.missing.length === 0) {
+        for (const tag of p.tags) lines.push(indent + tag);
+        continue;
+      }
+      p.missing.forEach((n, depth) => {
+        lines.push(indent + "  ".repeat(depth) + `<${n}>`);
+      });
+      for (const tag of p.tags) {
+        lines.push(indent + "  ".repeat(p.missing.length) + tag);
+      }
+      [...p.missing].reverse().forEach((n, i) => {
+        lines.push(indent + "  ".repeat(p.missing.length - 1 - i) + `</${n}>`);
+      });
+    }
+    edits.push({
+      start: anchor.start,
+      end: anchor.end,
+      text: (anchor.lead ? eol : "") + lines.join(eol) + eol + anchor.indent,
+    });
+  }
+  return edits;
+}
+
+/** One block of new markup, and where it goes. */
+interface Placement {
+  at: number;
+  base: string;
+  missing: string[];
+  tags: string[];
+  order: number;
+  /**
+   * Whether the anchor is the container's closing tag rather than an existing
+   * sibling. It changes the indent by one level: a sibling already sits where
+   * the new block goes, but a closing tag sits a level out from the children it
+   * closes over.
+   */
+  atClose: boolean;
+}
+
+/** Position of `name` in `container`'s content model; unknown sorts last. */
+function modelIndex(container: string, name: string): number {
+  const model = DITA_CONTENT_MODEL[container] ?? [];
+  const at = model.indexOf(name);
+  return at === -1 ? Number.MAX_SAFE_INTEGER : at;
 }
 
 /** Replace a root attribute's value span — case 1. */
@@ -277,6 +482,8 @@ function siblingIndent(
 }
 
 const DQ = String.fromCharCode(34);
+const CRLF = String.fromCharCode(13, 10);
+const LF = String.fromCharCode(10);
 
 /**
  * The offset of a container's close tag, which is where new children go.

@@ -20,6 +20,7 @@ import { readFileSync } from "node:fs";
 import { xmlExtractor } from "../src/extractors/xml.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const LF = String.fromCharCode(10);
 
 const apply = (content: string, patch: Record<string, unknown>, filePath = "a.xml") =>
   xmlExtractor.apply?.(content, patch, { filePath }) ?? "";
@@ -183,4 +184,83 @@ describe("idempotence — the loop guard", () => {
       expect(twice).toBe(once);
     });
   }
+});
+
+describe("creating a DITA element that is not there yet", () => {
+  const PROLOG_ONLY = readFileSync(
+    join(root, "test/fixtures/dita/prolog-no-metadata.dita"),
+    "utf8",
+  );
+  const P_PATH = "test/fixtures/dita/prolog-no-metadata.dita";
+
+  it("adds a child to a container that exists, in content-model order", () => {
+    // <prolog> holds only <author>. `source?` follows `author*` in the model,
+    // so the new element goes after it, not merely at the end by luck.
+    const next = apply(PROLOG_ONLY, { "prolog.source": "Notes" }, P_PATH);
+    expect(next).toContain("<source>Notes</source>");
+    expect(next.indexOf("<author>")).toBeLessThan(next.indexOf("<source>"));
+  });
+
+  it("builds a missing container along with the element inside it", () => {
+    const next = apply(PROLOG_ONLY, { "critdates.created": "2026-01-15" }, P_PATH);
+    expect(next).toContain("<critdates>");
+    expect(next).toContain('<created date="2026-01-15"/>');
+    expect(next).toContain("</critdates>");
+  });
+
+  it("places a created container where the content model requires", () => {
+    // prolog: author*, source?, publisher?, copyright*, critdates?, …
+    // so <critdates> must come after <author>, and before a </prolog>.
+    const next = apply(PROLOG_ONLY, { "critdates.created": "2026-01-15" }, P_PATH);
+    expect(next.indexOf("<author>")).toBeLessThan(next.indexOf("<critdates>"));
+    expect(next.indexOf("<critdates>")).toBeLessThan(next.indexOf("</prolog>"));
+  });
+
+  it("round-trips what it created", () => {
+    const next = apply(PROLOG_ONLY, { "critdates.created": "2026-01-15" }, P_PATH);
+    const r = xmlExtractor.extract(next, P_PATH);
+    expect(r.data["critdates.created"]).toBe("2026-01-15");
+  });
+
+  it("creates it once — writing twice is byte-identical", () => {
+    const once = apply(PROLOG_ONLY, { "critdates.created": "2026-01-15" }, P_PATH);
+    const twice = apply(once, { "critdates.created": "2026-01-15" }, P_PATH);
+    expect(twice).toBe(once);
+  });
+
+  it("creates several containers at one anchor without overlapping edits", () => {
+    // The regression this exists for. Three new keys resolve to three
+    // containers, and all three land at the end of <prolog> — one insertion
+    // point, three edits, which `spliceAll` refuses as overlapping. Grouping by
+    // container is not enough; they have to be grouped by anchor.
+    const next = apply(
+      PROLOG_ONLY,
+      {
+        "critdates.created": "2026-01-15",
+        "prolog.source": "Notes",
+        "metadata.audience": ["writer"],
+      },
+      P_PATH,
+    );
+    // Content-model order among the created siblings, and the right indent:
+    // the anchor is </prolog>, which sits a level out from its children.
+    expect(next).toContain(
+      [
+        "    <author>A. Writer</author>",
+        "    <source>Notes</source>",
+        "    <critdates>",
+        '      <created date="2026-01-15"/>',
+        "    </critdates>",
+        "    <metadata>",
+        '      <audience type="writer"/>',
+        "    </metadata>",
+        "  </prolog>",
+      ].join(LF),
+    );
+  });
+
+  it("still uses othermeta for a key with no place in the content model", () => {
+    const next = apply(PROLOG_ONLY, { audience: "writer" }, P_PATH);
+    expect(next).toContain('<othermeta name="audience" content="writer"/>');
+  });
 });
