@@ -11,10 +11,20 @@ import { DocmetaError } from "../types.js";
 import { rebaseConfigSchemaRefs } from "./resolve-schema.js";
 import { classifyRef } from "./schema-registry.js";
 import { INTEGRITY_SHAPE, isIntegrity } from "./integrity.js";
+import { parseElementPath } from "../extractors/element-key.js";
 
 export interface SchemaOverride {
   files: string;
   schemas: string[];
+  /**
+   * Extra element paths for files matching `files`. Unlike `schemas`, which the
+   * first matching override *replaces* because a schema set is a complete
+   * statement, these accumulate: every matching override contributes, on top of
+   * the top-level `elements:`. A list of extra places to look is additive by
+   * nature, and an override that silently dropped the repo-wide ones would be a
+   * trap.
+   */
+  elements?: string[];
 }
 
 /**
@@ -88,8 +98,32 @@ const SCHEMA_TRUST_KEYS = ["documentRefs", "hosts"] as const;
 /** The keys a `schemaCache:` mapping may carry. */
 const SCHEMA_CACHE_KEYS = ["ttlHours"] as const;
 
+/**
+ * Validate an `elements:` list, rejecting a path that cannot produce a key.
+ *
+ * Parsed here rather than at extraction so a typo is an error when the config
+ * loads, naming the file and the key. Left to extraction it would be a silent
+ * no-op: the path would match nothing, no key would appear, and the check the
+ * author thought they had configured would simply never run.
+ */
+function asElementPaths(
+  value: unknown,
+  where: string,
+  source: string,
+): string[] {
+  const list = asStringList(value, where, source);
+  for (const path of list) {
+    try {
+      parseElementPath(path);
+    } catch (err) {
+      throw new DocmetaError(`${source}: ${where} — ${(err as Error).message}`);
+    }
+  }
+  return list;
+}
+
 /** The keys one `overrides:` entry may carry. */
-const OVERRIDE_KEYS = ["files", "schemas"] as const;
+const OVERRIDE_KEYS = ["files", "schemas", "elements"] as const;
 
 /** The keys a `fill:` mapping may carry. */
 const FILL_KEYS = [
@@ -120,6 +154,7 @@ const CONFIG_KEYS = [
   "schemaCache",
   "schemaTrust",
   "fill",
+  "elements",
 ] as const;
 
 /**
@@ -191,6 +226,11 @@ export interface DocmetaConfig {
    */
   schemas?: SchemaEntry[];
   overrides?: SchemaOverride[];
+  /**
+   * Element paths to lift in addition to each format's convention. See
+   * `parseElementPath` for the syntax.
+   */
+  elements?: string[];
   fill?: FillConfig;
   /**
    * Path to a validation baseline, relative to **this config file**. Setting it
@@ -359,11 +399,28 @@ export function parseConfig(text: string, source: string): DocmetaConfig {
           `${source}: overrides[${i}].files must be a string glob.`,
         );
       }
-      return {
-        files: e.files,
-        schemas: asStringList(e.schemas, `overrides[${i}].schemas`, source),
-      };
+      const schemas =
+        e.schemas === undefined
+          ? []
+          : asStringList(e.schemas, `overrides[${i}].schemas`, source);
+      const elements =
+        e.elements === undefined
+          ? undefined
+          : asElementPaths(e.elements, `overrides[${i}].elements`, source);
+      // An override naming neither is a rule that does nothing, which reads as
+      // configured and is not — the same silence `rejectUnknownKeys` exists to
+      // end, one level down.
+      if (schemas.length === 0 && (elements === undefined || elements.length === 0)) {
+        throw new DocmetaError(
+          `${source}: overrides[${i}] sets neither "schemas" nor "elements", so it has no effect.`,
+        );
+      }
+      return { files: e.files, schemas, ...(elements ? { elements } : {}) };
     });
+  }
+
+  if (obj.elements !== undefined) {
+    config.elements = asElementPaths(obj.elements, "elements", source);
   }
 
   if (obj.baseline !== undefined) {

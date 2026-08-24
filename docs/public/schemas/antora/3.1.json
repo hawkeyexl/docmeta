@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "antora:page:3.1",
+  "title": "Antora page header attributes v3.1",
+  "description": "The AsciiDoc document header attributes Antora 3.1 reads from a page, plus the two AsciiDoc built-ins (`description`, `keywords`) it carries into page metadata. `title` is required because the page title is the only mandatory header element in Antora. Values are the *typed* results of AsciiDoc attribute entries: a bare `:page-partial:` is `true`, an unset `:!page-partial:` is `false`, and `:page-toclevels: 3` is the number 3. Custom `page-*` attributes are yours to define and are tolerated. See https://docs.antora.org/antora/latest/page/page-attributes/",
+  "type": "object",
+  "required": ["title"],
+  "additionalProperties": true,
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The page title, written as the `= Title` line. The only required header element."
+    },
+    "description": {
+      "type": "string",
+      "description": "AsciiDoc built-in. Stored in an HTML meta tag on the published page."
+    },
+    "keywords": {
+      "type": "string",
+      "description": "AsciiDoc built-in. A comma-separated list *as a single string* — AsciiDoc attribute values are text, so this is never a YAML array."
+    },
+    "navtitle": {
+      "type": "string",
+      "description": "Link text used when the navigation references this page. Defaults to the page reftext."
+    },
+    "page-aliases": {
+      "type": "string",
+      "description": "Comma-separated alternate resource IDs that should redirect to this page."
+    },
+    "page-layout": {
+      "type": "string",
+      "description": "Which UI template renders this page. Defaults to the `default` layout."
+    },
+    "page-partial": {
+      "type": "boolean",
+      "description": "Marks the page as a partial, kept unconverted for inclusion elsewhere. Set with a bare `:page-partial:` and cleared with `:!page-partial:`."
+    },
+    "page-role": {
+      "type": "string",
+      "description": "Space-separated classes added to the page body. The default UI reserves `-toc`, which hides the table-of-contents sidebar."
+    },
+    "page-toclevels": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5,
+      "description": "How many heading levels the sidebar table of contents shows. The default UI shows 2."
+    },
+    "page-tags": {
+      "type": "string",
+      "description": "Comma-separated tags as a single string, following the same attribute-entry typing as `keywords`."
+    }
+  }
+}

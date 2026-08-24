@@ -1,6 +1,6 @@
 # 0018 — write support shipped for HTML, XML **and** DITA
 
-- **Status:** Implemented (#97, #98, #99, #100)
+- **Status:** Superseded by [0020](0020-element-metadata.md)
 - **Supersedes:** [0007](0007-html-xml-write-support.md), whose verdict was "implement HTML; keep XML and DITA read-only, permanently"
 - **Serves:** Maya · M1, M4 · Theo · T1
 - **Touches:** `src/extractors/{html,xml,dita}*`, `reference/formats.mdx`, `CONTRIBUTING.md`

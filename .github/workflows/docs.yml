@@ -3,22 +3,36 @@ name: Docs
 # Build the Starlight docs site and publish it to GitHub Pages on every push to
 # main. The deploy is gated on docmeta validating its own docs frontmatter
 # (dogfooding): if a page is missing a required field, the site does not ship.
+#
+# Pull requests run the same validate and build, and stop there. `ci.yml`
+# already runs the dogfood on PRs — the frontmatter half was covered — but the
+# **Astro build** only ever ran on main, so a PR could break the site itself
+# (a bad MDX import, a component that no longer exists, a broken `<LinkCard>`)
+# and fail only after merge, with nothing left to review. That is the same
+# shape as #52, one level up: a gate that runs after the decision instead of
+# before it.
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
-# Least privilege for the deploy: read the repo, write Pages, mint the OIDC
-# token deploy-pages needs.
+# Least privilege. `pages: write` and the OIDC token belong to the one job that
+# deploys, not to the workflow — pull requests run here now, and a token that
+# can publish Pages has no business existing in a run whose whole purpose is to
+# check that the site builds.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # Only one Pages deploy at a time; let an in-flight run finish rather than
 # cancelling it (avoids leaving Pages in a half-deployed state).
+#
+# Keyed by ref rather than a bare `pages` since PRs run here too. A shared group
+# would make every PR queue behind main's deploy and behind each other, for runs
+# that never deploy anything. Pushes to main all share `refs/heads/main`, so the
+# serialization the deploy actually needs is unchanged.
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -46,6 +60,10 @@ jobs:
         run: node dist/cli.js validate --format github
 
   # Build the Astro/Starlight static site and upload it as a Pages artifact.
+  #
+  # Runs on pull requests too, where it is the point of the run: this is the
+  # only place the site is actually built before merge. The artifact upload is
+  # skipped there, since nothing downstream consumes it.
   build:
     needs: validate-docs
     runs-on: ubuntu-latest
@@ -63,13 +81,22 @@ jobs:
         run: npm run build
         working-directory: docs
       - uses: actions/upload-pages-artifact@v5
+        if: github.event_name != 'pull_request'
         with:
           path: docs/dist
 
-  # Deploy the uploaded artifact to GitHub Pages.
+  # Deploy the uploaded artifact to GitHub Pages. Never from a pull request —
+  # a PR build is a check, not a release, and `pages: write` on PR-triggered
+  # runs is the shape that lets a fork publish over the live site.
   deploy:
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    # The only job that needs more than `contents: read`.
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

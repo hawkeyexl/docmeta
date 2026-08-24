@@ -25,7 +25,12 @@ import {
   type MetadataPatch,
 } from "../types.js";
 import { dropUndefined, deepEqual } from "./patch-util.js";
-import { readXml, isMetadataAttribute, type XmlElement } from "./xml-read.js";
+import {
+  readXml,
+  isMetadataAttribute,
+  type XmlElement,
+} from "./xml-read.js";
+import { elementEdits } from "./element-write.js";
 import { ditaEdits } from "./dita-write.js";
 import {
   lineStarts,
@@ -55,7 +60,7 @@ export function applyXml(
 
   let before;
   try {
-    before = readXml(original, options.filePath);
+    before = readXml(original, options.filePath, { elements: options.elements });
   } catch (err) {
     // A document the reader rejects has no trustworthy positions, so there is
     // nothing safe to splice.
@@ -83,7 +88,7 @@ export function applyXml(
       content,
       ditaEdits(content, before, before.dita, clean, emitScalar, escapeAttr),
     );
-    verify(next, before.data, clean, options.filePath);
+    verify(next, before.data, clean, options);
     return bom ? original.slice(0, 1) + next : next;
   }
 
@@ -104,6 +109,19 @@ export function applyXml(
   const edits: Edit[] = [];
   const inserts: string[] = [];
   for (const [key, value] of Object.entries(clean)) {
+    // Element-derived keys first. Without this the key falls through to the
+    // attribute branch below and `article.title` is written as a *root
+    // attribute* — a legal XML Name, so nothing would stop it — while the
+    // reader keeps taking that key from the element. Proposal 0018 calls that
+    // asymmetry a loop.
+    const source = before.sources.get(key);
+    if (source && source.kind !== "attr") {
+      edits.push(
+        ...elementEdits(content, starts, source, key, value, emitScalar, escapeAttr),
+      );
+      continue;
+    }
+
     const emitted = emitScalar(key, value);
     const quoteOffset = quoteOffsets.get(key);
     if (quoteOffset === undefined) {
@@ -112,6 +130,7 @@ export function applyXml(
       // document that no longer parses, and the failure would surface from the
       // parser rather than from here.
       assertWritableName(key);
+      assertNoElementCollision(key, root);
       inserts.push(`${key}="${escapeAttr(emitted, DQ)}"`);
       continue;
     }
@@ -134,7 +153,7 @@ export function applyXml(
   }
 
   const next = spliceAll(content, edits);
-  verify(next, before.data, clean, options.filePath);
+  verify(next, before.data, clean, options);
   return bom ? original.slice(0, 1) + next : next;
 }
 
@@ -180,6 +199,28 @@ function assertWritableName(key: string): void {
       `Refusing to write "${key}": it is not a valid XML attribute name, or uses a namespace prefix docmeta cannot declare. Writing it would produce a document that no longer parses. Rename the property, or set it manually.`,
     );
   }
+}
+
+/**
+ * Refuse to *create* an attribute whose name collides with an element-derived
+ * key on this document.
+ *
+ * A dot is legal in an XML Name, so nothing in `assertWritableName` stops
+ * `article.title` becoming a root attribute on `<article>`. It must not: the
+ * convention lifts the root's children as `<root>.<child>`, so the moment the
+ * document grows an `<article><title>`, the reader takes that key from the
+ * element and the attribute written here goes silently unread — one key meaning
+ * two places depending on what the document happens to contain.
+ *
+ * Narrow on purpose. Only a first segment matching *this* root's name can
+ * collide, so `dc.title` and `ms.date` stay writable, as they have always been.
+ */
+function assertNoElementCollision(key: string, root: XmlElement): void {
+  const [head, ...rest] = key.split(".");
+  if (rest.length === 0 || head !== root.nodeName.toLowerCase()) return;
+  throw new DocmetaError(
+    `Refusing to create "${key}" as an attribute of <${root.nodeName}>: that name is how docmeta reads <${root.nodeName}><${rest.join(".")}>, so an attribute here would go unread as soon as the element exists. Add the element to the document and docmeta will update it in place.`,
+  );
 }
 
 /** Emit a value the way the reader will parse it back: as a YAML scalar. */
@@ -229,7 +270,7 @@ function verify(
   next: string,
   before: Record<string, unknown>,
   patch: MetadataPatch,
-  filePath: string | undefined,
+  options: ApplyOptions,
 ): void {
   const expected = { ...before, ...patch };
   // Same path as the original read: a `.dita` file re-read as plain XML would
@@ -242,7 +283,12 @@ function verify(
   // the parser happened to throw.
   let actual;
   try {
-    actual = readXml(next, filePath).data;
+    // Re-read with the *same* options the write used. Without the config
+    // element paths this cannot see a key an `elements:` path produced, so it
+    // would find the key missing and refuse every write to one.
+    actual = readXml(next, options.filePath, {
+      elements: options.elements,
+    }).data;
   } catch (err) {
     throw new DocmetaError(
       `Refusing to write XML metadata: the rewritten document did not parse (${(err as Error).message}).`,

@@ -45,6 +45,7 @@ import {
   resolveSchemaSetWithSource,
   FILE_SCHEMA_KEY,
   type ResolvedSchemaSet,
+  resolveElements,
 } from "../core/resolve-schema.js";
 import { Validator } from "../core/validator.js";
 import { schemaLoadOptions } from "../core/schema-registry.js";
@@ -299,7 +300,9 @@ export async function runValidate(
 
     let extracted;
     try {
-      extracted = extractor.extract(content, label);
+      extracted = extractor.extract(content, label, {
+        elements: resolveElements(label, config),
+      });
     } catch (err) {
       // A `DocmetaError` out of an extractor is operational, not a bad
       // document — it aborts the run rather than counting as a file failure.

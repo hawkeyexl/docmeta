@@ -7,6 +7,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parseDocument, stringify } from "yaml";
+import { resolveElements } from "../core/resolve-schema.js";
 import { DocmetaError } from "../types.js";
 import {
   fetchSchemaBytes,
@@ -804,7 +805,9 @@ export async function runInferSchema(
     filesScanned += 1;
     let extracted;
     try {
-      extracted = extractor.extract(content, label);
+      extracted = extractor.extract(content, label, {
+        elements: resolveElements(label, config),
+      });
     } catch (err) {
       // One malformed block must not end the scan: the coverage question is
       // about the rest of the docset, and the bad file is itself a finding.

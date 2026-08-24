@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sphinx:docinfo:9.1",
+  "title": "Sphinx file-wide metadata v9.1",
+  "description": "The file-wide metadata fields Sphinx reads from a document's leading field list (docinfo), as of Sphinx 9.1. Sphinx requires none of them. The set is deliberately small because docinfo values are always parsed as strings by Sphinx itself — a field list cannot carry a list or a mapping — so anything richer belongs in front matter, not here. Flag fields are written bare (`:orphan:`), which reaches the validator as `true`. See https://www.sphinx-doc.org/en/master/usage/restructuredtext/field-lists.html",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "tocdepth": {
+      "type": "integer",
+      "description": "Maximum depth of the table of contents for this file. Affects the local toctree only, not the global sidebar."
+    },
+    "orphan": {
+      "type": "boolean",
+      "description": "Suppresses the warning raised when this file is in no toctree. Written bare as `:orphan:`."
+    },
+    "nocomments": {
+      "type": "boolean",
+      "description": "Suppresses the comment form on the generated page. Written bare as `:nocomments:`."
+    },
+    "no-search": {
+      "type": "boolean",
+      "description": "Excludes this document from full-text search. Object search still applies. Written bare as `:no-search:`."
+    },
+    "nosearch": {
+      "type": "boolean",
+      "deprecated": true,
+      "description": "The pre-7.3 spelling of `no-search`. Sphinx renamed it in 7.3 and still accepts this form, so it is annotated rather than rejected — a schema that failed the build on a spelling the tool accepts would assert something untrue about the tool. Prefer `no-search`."
+    }
+  }
+}

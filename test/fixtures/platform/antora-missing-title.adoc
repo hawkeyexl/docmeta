@@ -1,0 +1,4 @@
+:description: An attribute entry with no page title above it.
+:page-layout: default
+
+Body.

@@ -138,6 +138,10 @@ describe("docmeta CLI (built bin)", () => {
     const r = run(["schemas", "-f", "json"]);
     expect(r.status).toBe(0);
     const ids = JSON.parse(r.stdout).builtins.map((b: { id: string }) => b.id);
+    // Registration order, which is also the order `docmeta schemas` prints:
+    // the two editorial vocabularies that make up the default set first, then
+    // the taxonomies, then the platform contracts, then the vocabularies that
+    // describe a document to something outside the docs site.
     expect(ids).toEqual([
       "google:okf:0.1",
       "diataxis:diataxis:1.0",
@@ -146,6 +150,14 @@ describe("docmeta CLI (built bin)", () => {
       "docusaurus:docs:3.10",
       "docusaurus:blog:3.10",
       "docusaurus:pages:3.10",
+      "astro:starlight:0.41",
+      "antora:page:3.1",
+      "sphinx:docinfo:9.1",
+      "myst:frontmatter:1.10",
+      "ogp:article:1.0",
+      "dcmi:elements:1.1",
+      "microsoft:learn:1.0",
+      "oasis:dita-metadata:1.3",
     ]);
   });
 

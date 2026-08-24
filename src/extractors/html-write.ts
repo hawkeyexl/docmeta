@@ -27,7 +27,8 @@ import {
   type MetadataPatch,
 } from "../types.js";
 import { dropUndefined, deepEqual } from "./patch-util.js";
-import { readHtml, type Element } from "./html-read.js";
+import { readHtml, type Element, type HtmlRead } from "./html-read.js";
+import { escapeText, valuesFor } from "./element-write.js";
 
 /** One character-range replacement in the source. */
 interface Edit {
@@ -39,13 +40,13 @@ interface Edit {
 export function applyHtml(
   original: string,
   patch: MetadataPatch,
-  _options: ApplyOptions = {},
+  options: ApplyOptions = {},
 ): string {
   // `readHtml` strips a leading BOM before parsing — see there for why parse5
   // makes that necessary — so every position it reports is relative to the text
   // it hands back. Splice against that same text and restore the BOM as a
   // prefix, which leaves no offset arithmetic to get wrong.
-  const before = readHtml(original);
+  const before = readHtml(original, { elements: options.elements });
   const content = before.body;
 
   // Structural checks run before the empty-patch shortcut, so an empty patch is
@@ -63,19 +64,41 @@ export function applyHtml(
 
   const edits: Edit[] = [];
   const inserts: string[] = [];
+  /** Elements this write touches, so `verify` knows which keys move with them. */
+  const moved = new Set<Element>();
   for (const [key, value] of Object.entries(clean)) {
-    const emitted = emitScalar(key, value);
     const source = before.sources.get(key);
+    // Emitted per branch rather than up front. A list-valued key is emitted one
+    // item at a time below; emitting the whole array here would serialize it as
+    // a YAML block and refuse it as "needs more than one line" — a write that
+    // is perfectly expressible as one value per element.
     if (source === undefined) {
       const name = escapeAttr(key, DQ);
       inserts.push(
         "<meta name=" + DQ + name + DQ + " content=" + DQ +
-          escapeAttr(emitted, DQ) + DQ + ">",
+          escapeAttr(emitScalar(key, value), DQ) + DQ + ">",
       );
     } else if (source.kind === "meta") {
-      edits.push(metaEdit(content, source.el, key, emitted));
+      edits.push(metaEdit(content, source.el, key, emitScalar(key, value)));
+      moved.add(source.el);
+    } else if (source.kind === "title") {
+      edits.push(elementTextEdit(source.el, key, emitScalar(key, value)));
+      moved.add(source.el);
     } else {
-      edits.push(titleEdit(content, source.el, key, emitted));
+      // An element-derived key — `head.title`, or a config `@attr` path.
+      // Written where it was read, exactly as the XML side does: both replace
+      // a span that already exists, which changes content and not shape and so
+      // cannot make the document invalid.
+      const values = valuesFor(key, value, source.els.length);
+      source.els.forEach((el, i) => {
+        const one = emitScalar(key, values[i]);
+        edits.push(
+          source.kind === "element-attr"
+            ? headAttrEdit(content, el, source.name, key, one)
+            : elementTextEdit(el, key, one),
+        );
+        moved.add(el);
+      });
     }
   }
 
@@ -84,7 +107,7 @@ export function applyHtml(
   }
 
   const next = spliceAll(content, edits);
-  verify(next, before.data, clean);
+  verify(next, before, clean, moved, options);
   // `content === original` is the BOM test: `readHtml` returns `body` with any
   // leading BOM removed, so the two are the same value exactly when there was
   // none to remove. When there was, it is the single character at `original[0]`,
@@ -102,10 +125,32 @@ function metaEdit(
   key: string,
   emitted: string,
 ): Edit {
-  const attrLocation = el.sourceCodeLocation?.attrs?.["content"];
+  return headAttrEdit(content, el, "content", key, emitted);
+}
+
+/**
+ * Replace the value span of a named attribute on any element.
+ *
+ * Named apart from `element-write.ts`'s exported `elementAttrEdit`, which this
+ * module already imports from. The two do the same job on different trees —
+ * parse5 nodes here, xmldom nodes there — and cannot be shared, so they should
+ * at least not read as the same function.
+ */
+function headAttrEdit(
+  content: string,
+  el: Element,
+  attrName: string,
+  key: string,
+  emitted: string,
+): Edit {
+  const attrs = el.sourceCodeLocation?.attrs;
+  const attrLocation =
+    attrs && Object.prototype.hasOwnProperty.call(attrs, attrName)
+      ? attrs[attrName]
+      : undefined;
   if (attrLocation == null) {
     throw new DocmetaError(
-      `Refusing to write "${key}": its <meta> tag has no locatable content attribute.`,
+      `Refusing to write "${key}": <${el.tagName}> has no locatable "${attrName}" attribute.`,
     );
   }
   const span = attrValueSpan(
@@ -115,7 +160,7 @@ function metaEdit(
   );
   if (span === undefined) {
     throw new DocmetaError(
-      `Refusing to write "${key}": its content attribute could not be located precisely.`,
+      `Refusing to write "${key}": its "${attrName}" attribute could not be located precisely.`,
     );
   }
   const value = escapeAttr(emitted, span.quote);
@@ -126,32 +171,28 @@ function metaEdit(
   };
 }
 
-/** Replace the text span of a `<title>` element. */
-function titleEdit(
-  content: string,
-  el: Element,
-  key: string,
-  emitted: string,
-): Edit {
+/**
+ * Replace the text span of an element — `<title>`, or any `<head>` child a
+ * lifted key was read from.
+ *
+ * `<title>` is RCDATA, so markup is not parsed inside it, but an unescaped "<"
+ * still ends the element for some consumers. `escapeText` escapes ">" too,
+ * which RCDATA does not require but linters and stricter parsers flag, and
+ * which the attribute path already does.
+ */
+function elementTextEdit(el: Element, key: string, emitted: string): Edit {
   const location = el.sourceCodeLocation;
   const open = location?.startTag;
   const close = location?.endTag;
   if (open == null || close == null) {
     throw new DocmetaError(
-      `Refusing to write "${key}": the <title> element is not explicitly closed.`,
+      `Refusing to write "${key}": the <${el.tagName}> element is not explicitly closed.`,
     );
   }
-  // <title> is RCDATA, so markup is not parsed inside it, but an unescaped "<"
-  // still ends the element for some consumers. Escape defensively — including
-  // ">", which RCDATA does not require but linters and stricter parsers flag,
-  // and which `escapeAttr` already escapes on the attribute path.
   return {
     start: open.endOffset,
     end: close.startOffset,
-    text: emitted
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;"),
+    text: escapeText(emitted),
   };
 }
 
@@ -282,14 +323,38 @@ function spliceAll(content: string, edits: Edit[]): string {
  * Re-read the written document and confirm it says exactly what it should. This
  * is the difference between a bug here being a refusal and a bug here being a
  * corrupted page.
+ *
+ * `moved` names the elements this write edited. Since element-derived metadata
+ * arrived, one element can back **two** keys — `<title>` is read as both the
+ * flat `title` and as `head.title` — so writing one of them necessarily moves
+ * the other. Holding the co-derived key to its *old* value would fail every
+ * `<title>` write, which is exactly what it did before this argument existed.
+ *
+ * The invariant is not weakened by exempting them. A co-derived key reads from
+ * the same text as the key that was written, and that key is still checked
+ * strictly: if the element had not been updated, the written key would mismatch
+ * and this would still throw. Everything sourced from an element the write did
+ * not touch is still held to its old value exactly.
  */
 function verify(
   next: string,
-  before: Record<string, unknown>,
+  before: HtmlRead,
   patch: MetadataPatch,
+  moved: Set<Element>,
+  options: ApplyOptions,
 ): void {
-  const expected = { ...before, ...patch };
-  const actual = readHtml(next).data;
+  // Re-read with the *same* options the write used, or a key an `elements:`
+  // path produced is invisible here and every write to one is refused.
+  const actual = readHtml(next, { elements: options.elements }).data;
+  const expected: Record<string, unknown> = { ...before.data, ...patch };
+  for (const [key, source] of before.sources) {
+    if (key in patch) continue;
+    const els =
+      source.kind === "element-text" || source.kind === "element-attr"
+        ? source.els
+        : [source.el];
+    if (els.some((el: Element) => moved.has(el))) expected[key] = actual[key];
+  }
   if (!deepEqual(actual, expected)) {
     throw new DocmetaError(
       "Refusing to write HTML metadata: the rewritten document did not read back as expected.",

@@ -51,6 +51,27 @@ export interface ApplyOptions {
    * that happens to have a `<task>` root.
    */
   filePath?: string;
+  /**
+   * The same `elements:` paths extraction was given.
+   *
+   * A writer re-reads the document to find where each key came from, and a read
+   * without these paths would not produce a config-declared key at all — so the
+   * writer would treat it as absent and create it somewhere else. That is the
+   * asymmetry proposal 0018 calls a loop, arriving through the options object
+   * rather than through the code.
+   */
+  elements?: readonly string[];
+}
+
+/** Per-run inputs to extraction, beyond the document itself. */
+export interface ExtractOptions {
+  /**
+   * Extra element paths to lift, from `elements:` config. Slash-separated from
+   * the document root, optionally ending in `@attribute`. These *extend* the
+   * per-format convention: a path producing a key the convention already filled
+   * is a no-op, so naming one cannot retype a key a content model typed exactly.
+   */
+  elements?: readonly string[];
 }
 
 /** A pluggable metadata extractor for one document format. */
@@ -84,7 +105,12 @@ export interface MetadataExtractor {
    * be, which is a semver-visible change bought for a lint fix. `this: void`
    * leaves assignability exactly as it was.
    */
-  extract(this: void, content: string, filePath: string): ExtractedMetadata;
+  extract(
+    this: void,
+    content: string,
+    filePath: string,
+    options?: ExtractOptions,
+  ): ExtractedMetadata;
   /**
    * Return new content with every key in `patch` set at the top level. Pure:
    * no IO, no mutation, deterministic; returns `content` itself for a no-op.

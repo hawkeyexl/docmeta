@@ -11,6 +11,7 @@
  * why the metadata channel and not the root element is the place to write.
  */
 import type { XmlElement } from "./xml-read.js";
+import { liftKey } from "./element-key.js";
 
 /** Which flavour of DITA a document is, and where its metadata belongs. */
 export interface DitaShape {
@@ -103,6 +104,13 @@ export function ditaShape(
  * not declare, which is the one outcome this whole module exists to avoid.
  */
 function hasDitaDoctype(content: string): boolean {
+  // Cheap exit before the expensive one. Masking allocates a same-length string
+  // per comment match, and this runs once per file — including on DITA-OT
+  // output, which is already identified by `@class` and rarely carries a
+  // DOCTYPE at all. Sound in one direction only, which is the direction needed:
+  // masking replaces text with spaces and never introduces any, so a document
+  // whose raw bytes hold no `<!DOCTYPE` cannot have one after masking either.
+  if (!content.includes("<!DOCTYPE")) return false;
   const masked = content.replace(/<!--[\s\S]*?-->/g, (m) => " ".repeat(m.length));
   const doctype = doctypeText(masked);
   if (doctype === undefined) return false;
@@ -150,6 +158,286 @@ function doctypeText(masked: string): string | undefined {
     else if (ch === ">" && depth === 0) return masked.slice(start, i + 1);
   }
   return undefined;
+}
+
+/**
+ * One element docmeta lifts out of DITA's typed metadata, and how.
+ *
+ * `repeatable` is not a guess. It is read straight off the OASIS content model:
+ * `author*` is a list, `source?` is a scalar. Generic XML defaults everything to
+ * a list because it has no such statement to consult; DITA does, so its keys are
+ * typed exactly and a schema can say `format: date` on a scalar rather than
+ * reaching through a one-item array.
+ */
+export interface DitaLift {
+  /** Attribute carrying the value. Absent means the element's text. */
+  attr?: string;
+  /**
+   * Attributes that are each a value in their own right, rather than one
+   * attribute being where the element's single value happens to sit.
+   *
+   * `<created date="…"/>` is the first case: the element means one thing and
+   * `@date` is where it lives, so the key stays `critdates.created`. `<vrm
+   * version="2" release="1" modification="0"/>` is the second: three separate
+   * facts on one EMPTY element, and keying it `vrmlist.vrm` would have to pick
+   * one and discard two.
+   *
+   * The naming rule does not change to accommodate it — it applies one level
+   * down. For an attribute the containing thing is the *element*, so these are
+   * `vrm.version`, `vrm.release`, `vrm.modification`.
+   */
+  attrKeys?: readonly string[];
+  /** Whether the content model permits more than one. */
+  repeatable: boolean;
+}
+
+/**
+ * The typed metadata elements docmeta reads, keyed by the element that contains
+ * them — which is also the namespace their key takes.
+ *
+ * A container appearing as a key here is descended into, so `<prolog>` reaches
+ * `<critdates>`, `<metadata>` and `<prodinfo>` without any of them being named
+ * as a special case in the walker.
+ *
+ * `topicmeta` repeats most of `prolog` rather than deferring to it because the
+ * two models genuinely differ: `<topicmeta>` holds `audience`, `category`,
+ * `prodinfo`, `othermeta` and `resourceid` as **direct children**, where a topic
+ * nests them inside `<prolog><metadata>`. Verified against the OASIS
+ * content-model appendix rather than assumed — the same fact reads as
+ * `topicmeta.audience` in a map and `metadata.audience` in a topic, and both are
+ * correct, because each key names where the value actually is.
+ *
+ * Covers the whole prolog vocabulary docmeta reads. An earlier draft deferred
+ * `<copyright>`, `<keywords>` and the `<prodinfo>` tail; proposal 0020 records
+ * why each turned out to be reachable by the same mechanism that was said not
+ * to reach it.
+ */
+export const DITA_LIFTS: Readonly<
+  Record<string, Readonly<Record<string, DitaLift>>>
+> = {
+  prolog: {
+    author: { repeatable: true },
+    source: { repeatable: false },
+    publisher: { repeatable: false },
+    permissions: { attr: "entitlement", repeatable: false },
+    resourceid: { attr: "id", repeatable: true },
+  },
+  topicmeta: {
+    author: { repeatable: true },
+    source: { repeatable: false },
+    publisher: { repeatable: false },
+    permissions: { attr: "entitlement", repeatable: false },
+    resourceid: { attr: "id", repeatable: true },
+    audience: { attr: "type", repeatable: true },
+    category: { repeatable: true },
+  },
+  critdates: {
+    created: { attr: "date", repeatable: false },
+    revised: { attr: "modified", repeatable: true },
+  },
+  metadata: {
+    audience: { attr: "type", repeatable: true },
+    category: { repeatable: true },
+  },
+  copyright: {
+    copyryear: { attr: "year", repeatable: true },
+    copyrholder: { repeatable: false },
+  },
+  keywords: {
+    keyword: { repeatable: true },
+    indexterm: { repeatable: true },
+  },
+  prodinfo: {
+    prodname: { repeatable: false },
+    brand: { repeatable: true },
+    component: { repeatable: true },
+    featnum: { repeatable: true },
+    platform: { repeatable: true },
+    prognum: { repeatable: true },
+    series: { repeatable: true },
+  },
+  vrmlist: {
+    vrm: {
+      attrKeys: ["version", "release", "modification"],
+      repeatable: true,
+    },
+  },
+};
+
+/**
+ * Keys produced by {@link DitaLift.attrKeys} — `vrm.version` and friends.
+ *
+ * Derived rather than written out, so the two cannot disagree. The writer needs
+ * it to tell such a key apart from an ordinary `container.element` one: they
+ * look identical, and creating `vrm.version` would mean synthesising a
+ * `<vrmlist><vrm/></vrmlist>` and folding three keys into one element, which is
+ * not what the create path does.
+ */
+export const DITA_ATTR_KEYS: ReadonlySet<string> = new Set(
+  Object.entries(DITA_LIFTS).flatMap(([, lifts]) =>
+    Object.entries(lifts).flatMap(([element, spec]) =>
+      (spec.attrKeys ?? []).map((attr) => liftKey(element, attr)),
+    ),
+  ),
+);
+
+/**
+ * The ordered content models, for placing an element that does not exist yet.
+ *
+ * A DITA container is a *sequence*, not a set: `<critdates>` after `<metadata>`
+ * is invalid even though both are allowed, so a writer creating an element has
+ * to know what may precede it. `shape.preamble` answers that question for one
+ * position — where a whole new `<prolog>` goes — and this answers it for every
+ * position inside one.
+ *
+ * Names not listed for a container are unknown to docmeta and sort last, which
+ * keeps a specialization docmeta has never seen from being inserted in the
+ * middle of a model it does not understand.
+ */
+export const DITA_CONTENT_MODEL: Readonly<Record<string, readonly string[]>> = {
+  prolog: [
+    "author",
+    "source",
+    "publisher",
+    "copyright",
+    "critdates",
+    "permissions",
+    "metadata",
+    "resourceid",
+    "data",
+  ],
+  topicmeta: [
+    "navtitle",
+    "linktext",
+    "searchtitle",
+    "shortdesc",
+    "author",
+    "source",
+    "publisher",
+    "copyright",
+    "critdates",
+    "permissions",
+    "metadata",
+    "audience",
+    "category",
+    "keywords",
+    "exportanchors",
+    "prodinfo",
+    "othermeta",
+    "resourceid",
+    "ux-window",
+    "data",
+  ],
+  critdates: ["created", "revised"],
+  metadata: [
+    "audience",
+    "category",
+    "keywords",
+    "prodinfo",
+    "othermeta",
+    "data",
+  ],
+  copyright: ["copyryear", "copyrholder"],
+  // `(indexterm | keyword)*` — a repeatable *choice*, so any interleaving is
+  // valid and the order here only decides where a created element lands.
+  keywords: ["indexterm", "keyword"],
+  vrmlist: ["vrm"],
+  // `prodname, vrmlist?, (brand | component | featnum | platform | prognum |
+  // series)*`. The tail is a choice group too, so its internal order is
+  // likewise a placement preference rather than a rule.
+  prodinfo: [
+    "prodname",
+    "vrmlist",
+    "brand",
+    "component",
+    "featnum",
+    "platform",
+    "prognum",
+    "series",
+  ],
+};
+
+/**
+ * The container an element of this name lives inside, or `undefined` when it
+ * hangs directly off the root.
+ *
+ * A map is flatter than a topic. `<topicmeta>` holds `audience`, `category` and
+ * `prodinfo` as direct children, where a topic nests the first two inside
+ * `<prolog><metadata>` and `prodinfo` one deeper still. Encoding it here keeps
+ * that asymmetry in the one file that already knows about it.
+ */
+export function ditaContainerParent(
+  shape: DitaShape,
+  name: string,
+): string | undefined {
+  if (name === "prolog" || name === "topicmeta") return undefined;
+  // Two levels below the root are the same in both flavours: `<keywords>` and
+  // `<prodinfo>` hang off `<metadata>`, and `<vrmlist>` off `<prodinfo>`. Only
+  // the *top* level differs, which is what the fallthrough handles.
+  if (name === "vrmlist") return "prodinfo";
+  if (name === "keywords" || name === "prodinfo") {
+    // A map may hold these directly under `<topicmeta>` or nest them in a
+    // `<metadata>`; both are legal. Creating one goes to `<metadata>` in a
+    // topic, where it is the only option, and directly under `<topicmeta>` in
+    // a map, where it is the shorter of the two.
+    return shape.kind === "map" ? "topicmeta" : "metadata";
+  }
+  return shape.kind === "map" ? "topicmeta" : "prolog";
+}
+
+/**
+ * Where a new child goes inside a container, by content-model position.
+ *
+ * Returns the element it should be inserted *before*, or `undefined` for "at the
+ * end", which the caller turns into an offset.
+ *
+ * Children the model does not list are skipped rather than used as anchors.
+ * They are specializations docmeta has never seen, and inserting before one
+ * would be a guess about a model it does not understand; going last is at least
+ * a position the author can see and move.
+ */
+export function childAnchor(
+  container: XmlElement,
+  containerName: string,
+  childName: string,
+): XmlElement | undefined {
+  const model = DITA_CONTENT_MODEL[containerName] ?? [];
+  const target = model.indexOf(childName);
+  if (target === -1) return undefined;
+  for (const child of childElements(container)) {
+    const at = model.indexOf(child.nodeName.toLowerCase());
+    if (at === -1) continue;
+    if (at > target) return child;
+  }
+  return undefined;
+}
+
+/** Find a metadata container by name, searching down from the lift root. */
+export function findContainer(
+  from: XmlElement,
+  name: string,
+): XmlElement | undefined {
+  if (from.nodeName.toLowerCase() === name) return from;
+  for (const child of childElements(from)) {
+    const found = findContainer(child, name);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/**
+ * The element a document's typed metadata hangs off: `<prolog>` in a topic,
+ * `<topicmeta>` in a map. Undefined when the document has neither.
+ *
+ * Distinct from {@link metadataContainers}, which finds the element holding
+ * `<othermeta>` — one level deeper in a topic.
+ */
+export function liftRoot(
+  root: XmlElement,
+  shape: DitaShape,
+): XmlElement | undefined {
+  const { prolog, container } = metadataContainers(root, shape);
+  return shape.kind === "map" ? container : prolog;
 }
 
 /** Direct child elements of `el`, optionally filtered by name. */

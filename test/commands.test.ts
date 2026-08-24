@@ -285,7 +285,7 @@ describe("runGet", () => {
     expect(results[0]?.values["title.nope"]).toBeUndefined();
   });
 
-  it("addresses a key with a literal dot via JSON Pointer, not dot-notation", async () => {
+  it("addresses a key with a literal dot by either spelling", async () => {
     const results = await runGet({
       fields: ["/odd.key", "odd.key"],
       inputs: ["test/fixtures/nested/doc.md"],
@@ -293,8 +293,28 @@ describe("runGet", () => {
     });
     // The pointer treats `odd.key` as one segment and resolves the key.
     expect(results[0]?.values["/odd.key"]).toBe("dotted");
-    // Dot-notation splits it into `odd` -> `key`, which does not exist.
-    expect(results[0]?.values["odd.key"]).toBeUndefined();
+    // Dot-notation splits it into `odd` -> `key` first. That misses, and the
+    // literal key is then tried as a fallback.
+    //
+    // This used to assert `undefined`, on the rule that a dotted key has one
+    // unambiguous spelling. Element-derived metadata retired that rule by
+    // making dotted keys ordinary rather than odd — `article.title`,
+    // `prolog.author`, `ms.date` — at which point the old behavior meant the
+    // natural spelling returned an *empty result* rather than an error, for
+    // the majority of keys in a structured document. A silent wrong answer is
+    // worse than a second spelling.
+    expect(results[0]?.values["odd.key"]).toBe("dotted");
+  });
+
+  it("still lets descent win over the literal key where it resolves", async () => {
+    // The fallback fires only where the old behavior gave up, so a genuine
+    // nested object answers exactly as it always has.
+    const results = await runGet({
+      fields: ["author.name"],
+      inputs: ["test/fixtures/nested/doc.md"],
+      cwd: root,
+    });
+    expect(results[0]?.values["author.name"]).toBeDefined();
   });
 
   it("decodes RFC 6901 escape sequences in JSON Pointer keys", async () => {

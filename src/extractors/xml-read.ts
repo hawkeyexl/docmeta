@@ -16,12 +16,23 @@ import { DOMParser } from "@xmldom/xmldom";
 import { parse as parseYamlScalar } from "yaml";
 import { escapePointerSegment, positionForFactory } from "./pointer.js";
 import {
+  childElements,
   ditaShape,
+  liftRoot,
   metadataContainers,
   otherMetaEntries,
+  DITA_CONTENT_MODEL,
+  DITA_LIFTS,
+  type DitaLift,
   type DitaShape,
 } from "./dita.js";
-import type { ExtractedMetadata } from "../types.js";
+import {
+  liftKey,
+  pairValues,
+  parseElementPath,
+  type ElementPath,
+} from "./element-key.js";
+import type { ExtractedMetadata, ExtractOptions } from "../types.js";
 
 type XmlDocument = ReturnType<DOMParser["parseFromString"]>;
 export type XmlElement = NonNullable<XmlDocument["documentElement"]>;
@@ -29,7 +40,20 @@ export type XmlElement = NonNullable<XmlDocument["documentElement"]>;
 /** Where a key's effective value came from. */
 export type XmlSource =
   | { kind: "attr"; name: string }
-  | { kind: "othermeta"; el: XmlElement };
+  | { kind: "othermeta"; el: XmlElement }
+  /**
+   * A value read from element text. `els` carries every occurrence, in document
+   * order, because the key is a list — a write replaces the whole set, and one
+   * element out of several is not a location a write can aim at.
+   */
+  | { kind: "element-text"; els: XmlElement[] }
+  /**
+   * A value read from an element's *attribute* — `<created date=…/>`. Kept
+   * distinct from `element-text` because a writer aiming at the text of an
+   * empty element would produce `<created>2026-01-15</created>`, which is
+   * neither what the reader looks at nor valid against the DTD.
+   */
+  | { kind: "element-attr"; els: XmlElement[]; name: string };
 
 export interface XmlRead {
   data: Record<string, unknown>;
@@ -66,10 +90,160 @@ export function isMetadataAttribute(name: string): boolean {
 }
 
 /**
+ * The text an element carries, or `undefined` when it carries none worth
+ * lifting.
+ *
+ * Two exclusions, and both are the reason this returns `undefined` rather than
+ * an empty string:
+ *
+ * - **An element with element children is structure, not a value.** `<body>`
+ *   full of `<p>` is a container; lifting it would concatenate the prose of the
+ *   whole document into one key.
+ * - **Whitespace-only text is not a value either.** Indented markup puts a
+ *   newline and some spaces inside every container, so treating that as content
+ *   would lift every element in the file.
+ *
+ * Comments and processing instructions are ignored rather than disqualifying,
+ * so `<title><!-- note -->Set up</title>` is still a value.
+ *
+ * A deliberately empty element (`<title></title>`) therefore yields nothing by
+ * convention. That is right for the convention, which has to keep structural
+ * elements out of the key set without a hardcoded ignore list, and wrong for a
+ * path someone named in `elements:` config — where "present but empty" is
+ * exactly what they want checked. The config path passes `allowEmpty`.
+ */
+export function elementText(
+  el: XmlElement,
+  allowEmpty = false,
+): string | undefined {
+  let text = "";
+  for (let n = el.firstChild; n; n = n.nextSibling) {
+    if (n.nodeType === 1) return undefined;
+    if (n.nodeType === 3 || n.nodeType === 4) text += n.nodeValue ?? "";
+  }
+  if (!allowEmpty && text.trim() === "") return undefined;
+  return text.trim();
+}
+
+/**
+ * DITA's typed metadata elements, grouped by the key each contributes.
+ *
+ * Walks down from `<prolog>` or `<topicmeta>`, descending into any child the
+ * content-model table knows — which is how `<critdates>`, `<metadata>` and
+ * `<prodinfo>` are reached without either being named here. What is lifted, and
+ * whether from text or an attribute, is `DITA_LIFTS`' decision; this only
+ * traverses.
+ */
+function ditaLiftedElements(
+  container: XmlElement,
+): Map<string, { els: XmlElement[]; spec: DitaLift }> {
+  const out = new Map<string, { els: XmlElement[]; spec: DitaLift }>();
+  const add = (key: string, el: XmlElement, spec: DitaLift): void => {
+    const found = out.get(key);
+    if (found) found.els.push(el);
+    else out.set(key, { els: [el], spec });
+  };
+  const walk = (parent: XmlElement): void => {
+    const parentName = parent.nodeName.toLowerCase();
+    const lifts = own(DITA_LIFTS, parentName);
+    for (const child of childElements(parent)) {
+      const childName = child.nodeName.toLowerCase();
+      const spec = lifts ? own(lifts, childName) : undefined;
+      if (spec?.attrKeys) {
+        // One element, several values. The key is named for the *element*,
+        // because for an attribute that is the containing thing.
+        for (const attr of spec.attrKeys) {
+          add(liftKey(childName, attr), child, {
+            attr,
+            repeatable: spec.repeatable,
+          });
+        }
+      } else if (spec) {
+        add(liftKey(parentName, childName), child, spec);
+      }
+      if (own(DITA_CONTENT_MODEL, childName) !== undefined) walk(child);
+    }
+  };
+  walk(container);
+  return out;
+}
+
+/**
+ * Own-property lookup on a plain-object table.
+ *
+ * A document supplies these names, and `Object.prototype` answers to plenty of
+ * them: a `<constructor>` element would find `DITA_LIFTS.constructor` and a
+ * `<toString>` would descend into a content model that does not exist. `get.ts`
+ * already guards the same way where a *field* name indexes an object, for the
+ * same reason.
+ */
+function own<T>(table: Record<string, T>, key: string): T | undefined {
+  return Object.prototype.hasOwnProperty.call(table, key)
+    ? table[key]
+    : undefined;
+}
+
+/**
+ * The root's direct children that are values, grouped by the key they
+ * contribute, in document order.
+ *
+ * Grouped rather than emitted one at a time because repeated element names
+ * share a key, and every occurrence has to survive — dropping all but the first
+ * would discard data silently, which is the failure this whole mechanism exists
+ * to avoid.
+ */
+function liftableChildren(
+  root: XmlElement,
+): Map<string, { els: XmlElement[]; values: unknown[] }> {
+  const out = new Map<string, { els: XmlElement[]; values: unknown[] }>();
+  for (const child of childElements(root)) {
+    // Read once. Testing with `elementText` and then reading with it again
+    // walked every child element's text twice, on every file.
+    const text = elementText(child);
+    if (text === undefined) continue;
+    const key = liftKey(root.nodeName, child.nodeName);
+    const group = out.get(key);
+    if (group) {
+      group.els.push(child);
+      group.values.push(typeValue(text));
+    } else {
+      out.set(key, { els: [child], values: [typeValue(text)] });
+    }
+  }
+  return out;
+}
+
+/**
+ * Every element a config path selects, walked down the child axis from the
+ * document root.
+ *
+ * A plain descent, deliberately: no predicates, no axes, no wildcards. The
+ * syntax is documented as a subset of XPath's child axis, and matching that
+ * promise exactly is cheaper than explaining which parts of XPath work.
+ */
+function matchElementPath(
+  root: XmlElement,
+  segments: string[],
+): XmlElement[] {
+  if (root.nodeName.toLowerCase() !== segments[0]) return [];
+  let current: XmlElement[] = [root];
+  for (const segment of segments.slice(1)) {
+    const next: XmlElement[] = [];
+    for (const el of current) next.push(...childElements(el, segment));
+    current = next;
+  }
+  return current;
+}
+
+/**
  * Parse and read. Throws for malformed XML, which the command layer records as
  * a per-file failure so the rest of the run continues (mirroring frontmatter).
  */
-export function readXml(content: string, filePath?: string): XmlRead {
+export function readXml(
+  content: string,
+  filePath?: string,
+  options?: ExtractOptions,
+): XmlRead {
   // A BOM stays part of line 1; it doesn't shift line numbers.
   const body = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
 
@@ -140,12 +314,72 @@ export function readXml(content: string, filePath?: string): XmlRead {
     }
   }
 
+  // Element-derived metadata. Plain XML carries no content model, so the
+  // convention stops at the root's direct children and lifts only the ones that
+  // are values rather than structure — see `elementText`. Anything deeper needs
+  // an explicit `elements:` path, because guessing which nested element is
+  // metadata and which is prose is how a document body turns into a key per
+  // paragraph.
+  for (const [key, { els, values }] of liftableChildren(root)) {
+    // Overwrites, deliberately, and only one thing can be overwritten: a root
+    // attribute *literally named* `article.title`, since a dot is a legal XML
+    // NameChar. The element convention owns its key space — a reader looking at
+    // `<article><title>` expects that to be what `article.title` means — so the
+    // element wins. `assertNoElementCollision` in the writer is the other half:
+    // it refuses to *create* such an attribute, so docmeta never authors the
+    // collision it resolves here.
+    //
+    // Always a list. XML says nothing about cardinality, so a type that
+    // depended on how many elements this document happened to carry would be
+    // unwritable against; a schema that means "exactly one" says `maxItems: 1`.
+    data[key] = values;
+    sources.set(key, { kind: "element-text", els });
+    const first = els[0];
+    const pointer = `/${escapePointerSegment(key)}`;
+    // The caret goes on the first occurrence: it is where a reader looks, and
+    // where a write that replaces the set begins.
+    if (first?.lineNumber != null) lineMap.set(pointer, first.lineNumber);
+    if (first?.columnNumber != null) colMap.set(pointer, first.columnNumber);
+  }
+
   // DITA keeps document metadata in <prolog>/<topicmeta>, not on the root
   // element. Reading it is not optional once `fill` can write it: a value the
   // writer puts in an <othermeta> that the reader cannot see leaves the field
   // missing, so `validate` fails again and the next run rewrites it forever.
   const dita = ditaShape(body, root, filePath);
   if (dita) {
+    // The typed elements first. They are namespaced by their container, so they
+    // cannot collide with the flat `<othermeta>` names below — which is what
+    // lets a topic carry the same fact in both channels and have both checked,
+    // rather than one quietly overwriting the other.
+    const liftContainer = liftRoot(root, dita);
+    if (liftContainer) {
+      for (const [key, { els, spec }] of ditaLiftedElements(liftContainer)) {
+        // Elements and values are kept **paired**. An element that contributes
+        // nothing — a second `<vrm>` with no `@release`, a `<created>` with no
+        // `@date` — must not stay in `els`, or `els[i]` stops naming the
+        // element `values[i]` came from and a write aims at an attribute that
+        // is not there.
+        const found = pairValues(
+          els,
+          (el) => (spec.attr ? el.getAttribute(spec.attr) : elementText(el)),
+          typeValue,
+        );
+        if (found.values.length === 0) continue;
+        data[key] = spec.repeatable ? found.values : found.values[0];
+        sources.set(
+          key,
+          spec.attr
+            ? { kind: "element-attr", els: found.els, name: spec.attr }
+            : { kind: "element-text", els: found.els },
+        );
+        const first = found.els[0];
+        const pointer = `/${escapePointerSegment(key)}`;
+        if (first?.lineNumber != null) lineMap.set(pointer, first.lineNumber);
+        if (first?.columnNumber != null) colMap.set(pointer, first.columnNumber);
+      }
+    }
+
     const { container } = metadataContainers(root, dita);
     if (container) {
       for (const { key, value, el } of otherMetaEntries(container)) {
@@ -159,6 +393,32 @@ export function readXml(content: string, filePath?: string): XmlRead {
         if (el.columnNumber != null) colMap.set(pointer, el.columnNumber);
       }
     }
+  }
+
+  // Config paths last. The convention and DITA's content model both ran above,
+  // so a path naming a key they already filled is a no-op — which is what keeps
+  // adding one from retyping `prolog.source` from a scalar into a list.
+  for (const raw of options?.elements ?? []) {
+    const spec: ElementPath = parseElementPath(raw);
+    if (data[spec.key] !== undefined) continue;
+    const matched = matchElementPath(root, spec.segments);
+    const found = pairValues(
+      matched,
+      (el) => (spec.attr ? el.getAttribute(spec.attr) : elementText(el, true)),
+      typeValue,
+    );
+    if (found.values.length === 0) continue;
+    data[spec.key] = found.values;
+    sources.set(
+      spec.key,
+      spec.attr
+        ? { kind: "element-attr", els: found.els, name: spec.attr }
+        : { kind: "element-text", els: found.els },
+    );
+    const first = found.els[0];
+    const pointer = `/${escapePointerSegment(spec.key)}`;
+    if (first?.lineNumber != null) lineMap.set(pointer, first.lineNumber);
+    if (first?.columnNumber != null) colMap.set(pointer, first.columnNumber);
   }
 
   return { data, lineMap, colMap, root, body, sources, dita };

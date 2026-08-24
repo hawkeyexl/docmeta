@@ -187,6 +187,7 @@ formats](/docmeta/reference/formats/).
 | `supportedExtensions` | Every extension an implemented extractor handles — the default set for directory and glob walks. |
 | `MetadataExtractor` (type) | The extractor interface: name, extensions, and the read and write entry points. |
 | `ExtractedMetadata` (type) | The format-independent result of extraction: whether metadata was present, the parsed data, and any parse error. |
+| `ExtractOptions` (type) | Per-run inputs to extraction beyond the document itself — currently the `elements:` paths, which lift metadata held in elements rather than attributes. Pass the same value to `apply`, or a writer re-reads without them and cannot find the key it just wrote. |
 
 ### Frontmatter
 

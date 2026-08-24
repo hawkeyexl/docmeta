@@ -100,7 +100,7 @@ function buildAjv(dialect: Dialect): InstanceType<AjvCtor> {
  *   *and* under the schema's own `$id`, so the id form comes for free. Calling
  *   it a second time under the id throws "schema with key or id … already
  *   exists".
- * - **Meta-schema validation is off for these seven.** All the built-ins are
+ * - **Meta-schema validation is off for these.** All the built-ins are
  *   2020-12, and the 2019/draft-07/draft-04 instances do not carry that
  *   meta-schema — `addSchema` would throw `no schema with key or ref
  *   "https://json-schema.org/draft/2020-12/schema"` and take out every Ajv but
@@ -112,7 +112,7 @@ function buildAjv(dialect: Dialect): InstanceType<AjvCtor> {
  *   the draft-07 Ajv and needs the built-ins registered there too.
  *
  * Registration is lazy — Ajv compiles a stored schema only when something
- * references it — so this costs a map insert per built-in, not seven compiles.
+ * references it — so this costs a map insert per built-in, not fifteen compiles.
  *
  * Called from `buildAjv` rather than from `Validator`, deliberately:
  * `compileWithFormats` builds its own throwaway instance for `fill`'s proposal
@@ -216,7 +216,7 @@ export class Validator {
       // Reused only when the registration really is *this* object. Sharing on
       // the id alone was tolerable while a registration could only come from an
       // earlier compile in the same run. It stopped being tolerable when
-      // `registerBuiltins` began pre-loading all seven built-ins into every
+      // `registerBuiltins` began pre-loading every built-in into every
       // instance: an id collision is no longer a race whose outcome depends on
       // ordering, it is certain, and the built-in always wins.
       //

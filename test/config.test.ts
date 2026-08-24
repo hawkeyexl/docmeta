@@ -780,7 +780,15 @@ describe("the repository's own docmeta.config.yaml", () => {
         filePath: "docs/src/content/docs/index.mdx",
         config,
       }),
-    ).toEqual(["./docs/doc-frontmatter.schema.json"]);
+      // Two, and both are load-bearing. The local schema is the house rule
+      // (title + description, neither of which Starlight itself requires); the
+      // built-in is the platform contract the site actually runs on, which
+      // checks everything the house schema leaves unconstrained —
+      // `sidebar.order`, `template`, a `badge` object's `text`.
+    ).toEqual([
+      "./docs/doc-frontmatter.schema.json",
+      "astro:starlight:0.41",
+    ]);
     expect(
       resolveSchemaSet({ filePath: "test/fixtures/valid.md", config }),
     ).toEqual([...DEFAULT_SCHEMAS]);

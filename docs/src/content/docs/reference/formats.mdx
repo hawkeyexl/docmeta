@@ -18,8 +18,8 @@ implemented and counts toward directory and glob walks.
 | `mdx` | `.mdx` | Leading fenced frontmatter — YAML, TOML, or JSON. | Yes |
 | `asciidoc` | `.adoc`, `.asciidoc` | Fenced frontmatter, or the native header: `= Title` plus `:key: value` attributes. | Only into an existing fenced block |
 | `rst` | `.rst` | Fenced frontmatter, or the native section title plus `:key: value` docinfo fields. | Only into an existing fenced block |
-| `xml` | `.xml`, `.dita`, `.ditamap` | Attributes of the root element; for DITA, also `<othermeta>`. | Yes |
-| `html` | `.html`, `.htm` | `<title>` plus `<meta name="…" content="…">` tags. | Yes |
+| `xml` | `.xml`, `.dita`, `.ditamap` | Root-element attributes, plus [element metadata](/docmeta/reference/element-metadata/); for DITA, also `<othermeta>` and the typed `<prolog>`/`<topicmeta>` elements. | Yes |
+| `html` | `.html`, `.htm` | `<title>` plus `<meta name="…" content="…">` tags, plus [element metadata](/docmeta/reference/element-metadata/) from `<head>`. | Yes |
 
 ### Why writing is conditional
 
@@ -201,6 +201,13 @@ This yields `id`, `type`, and `xml:lang`; the `DOCTYPE` declaration is skipped.
 The DTD-declared entities common in DITA content (`&nbsp;`, `&mdash;`) do not
 fail the file — see above.
 
+Elements are read too, not just attributes. The root's direct text-bearing
+children become `<root>.<child>` keys — `<article><byline>` is `article.byline`
+— and an [`elements:` path](/docmeta/reference/element-metadata/) reaches
+deeper. HTML gains `head.title` beside the flat `title` it has always produced.
+See [Element metadata](/docmeta/reference/element-metadata/) for the naming rule
+and what a write will and will not do.
+
 DITA also carries metadata in the place the standard sets aside for it, and
 docmeta reads that too:
 
@@ -215,6 +222,12 @@ docmeta reads that too:
 A map uses `<topicmeta>` in place of `<prolog><metadata>`. Where a key appears
 both as a root attribute and as an `<othermeta>`, the `<othermeta>` wins: it is
 the explicit metadata channel, while root attributes are largely structural.
+
+docmeta also reads the *typed* prolog elements — `<author>`, `<critdates>`,
+`<audience>`, `<permissions>` — as `prolog.author`, `critdates.created` and so
+on. Those and the `<othermeta>` keys are separate keys, so a topic carrying the
+same fact in both channels has both validated. The
+[DITA schema](/docmeta/reference/dita-schema/) describes them.
 
 `fill` writes DITA into that same channel. A key already present keeps its
 place — a root attribute is corrected as a root attribute, an `<othermeta>` as

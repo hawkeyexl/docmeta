@@ -27,3 +27,10 @@ overrides:
   - files: "docs/src/content/docs/**/*.{md,mdx}"
     schemas:
       - ./docs/doc-frontmatter.schema.json
+      # The platform contract this site actually runs on. The house schema
+      # above stays because Starlight itself does not require `description` and
+      # this site does; what the built-in adds is everything the house schema
+      # left unconstrained — `sidebar.order` must be a number, `template` must
+      # be `doc` or `splash`, a `badge` object must carry `text`. Before it
+      # existed, every Starlight key on every page went unchecked.
+      - astro:starlight:0.41

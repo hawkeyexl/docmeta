@@ -41,8 +41,9 @@ changed as a result, and lists what it depends on.
 | [0015](0015-schema-trust-boundary.md) | A trust boundary for document-supplied schemas | Devin · D2 / Sara · S3 | Implemented |
 | [0016](0016-flag-ownership.md) | Which command owns a flag, and where it may be written | all (CLI surface) | Accepted |
 | [0017](0017-fill-egress-and-bounds.md) | What `fill` sends, and how to bound it | Maya · M4 / Devin · D1 | Implemented (#102) |
-| [0018](0018-write-support-shipped-for-all-three.md) | Write support shipped for HTML, XML **and** DITA | Maya · M1, M4 / Theo · T1 | Implemented (#97–#100) |
+| [0018](0018-write-support-shipped-for-all-three.md) | Write support shipped for HTML, XML **and** DITA | Maya · M1, M4 / Theo · T1 | Superseded by [0020](0020-element-metadata.md) |
 | [0019](0019-no-docmeta-init.md) | `docmeta init` is rejected, not deferred | Maya · M1 | Accepted |
+| [0020](0020-element-metadata.md) | Element metadata in XML and HTML, and the DITA schema it unblocks | Sara · S1 / Maya · M1, M4 | Implemented |
 
 0014 was not in the original review. It surfaced while stress-testing 0004 and
 is the most severe item in the set: **docmeta currently exits `0` when it

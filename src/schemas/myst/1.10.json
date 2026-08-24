@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "myst:frontmatter:1.10",
+  "title": "MyST page frontmatter v1.10",
+  "description": "The page-level MyST frontmatter fields, as of mystmd 1.10. MyST requires nothing: a page with no `title` takes one from its first heading. What this schema does carry is MyST's documented length caps — 500 characters on `title`, `subtitle`, `description` and `label`, 40 on `short_title` and `subject` — which are the constraints a long title silently violates. Project-level keys that belong in `myst.yml` (`bibliography`, `references`, `requirements`, `social`) are not described here; they are tolerated like any unknown key. Controlled vocabularies MyST defines but this schema does not reproduce — the 14 CRediT contributor roles above all — are checked for shape only, never against a transcribed list. See https://mystmd.org/guide/frontmatter",
+  "type": "object",
+  "additionalProperties": true,
+  "$defs": {
+    "person": {
+      "description": "An author, editor or reviewer: an object, or a string referencing one declared elsewhere by id.",
+      "if": { "type": "object" },
+      "then": {
+        "properties": {
+          "name": {
+            "type": ["string", "object"],
+            "description": "Full name, or a CSL-JSON object of parsed name parts."
+          },
+          "id": { "type": "string" },
+          "orcid": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "corresponding": {
+            "type": "boolean",
+            "description": "Marks the corresponding author. MyST requires an `email` alongside it."
+          },
+          "roles": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "CRediT contributor roles. Checked as strings only — the 14-term vocabulary and its aliases are not transcribed here, so a guessed enum cannot reject a valid role."
+          },
+          "affiliations": {
+            "type": ["string", "array"],
+            "items": { "type": ["string", "object"] }
+          },
+          "equal_contributor": { "type": "boolean" },
+          "deceased": { "type": "boolean" },
+          "note": { "type": "string" },
+          "url": { "type": "string" }
+        }
+      },
+      "else": { "type": "string" }
+    },
+    "people": {
+      "if": { "type": "array" },
+      "then": { "items": { "$ref": "#/$defs/person" } },
+      "else": { "$ref": "#/$defs/person" }
+    },
+    "stringList": {
+      "if": { "type": "array" },
+      "then": { "items": { "type": "string" } },
+      "else": { "type": "string" }
+    }
+  },
+  "properties": {
+    "title": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Page title. When absent, MyST lifts it from the first heading and removes that heading from the content."
+    },
+    "subtitle": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Complementary title text shown beneath the title."
+    },
+    "short_title": {
+      "type": "string",
+      "maxLength": 40,
+      "description": "Abbreviated title for running headers and navigation. Capped at 40 characters."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Summary of the page, used for previews and indexing."
+    },
+    "label": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Identifier this page can be cross-referenced by."
+    },
+    "subject": {
+      "type": "string",
+      "maxLength": 40,
+      "description": "Short subject categorization. Capped at 40 characters."
+    },
+    "date": {
+      "type": "string",
+      "description": "Publication date. MyST accepts ISO 8601 (`2026-08-23`) and RFC 2822 variants (`23 Aug 2026`), so this is not constrained to one format."
+    },
+    "keywords": {
+      "$ref": "#/$defs/stringList",
+      "description": "Key concepts described by the page."
+    },
+    "tags": {
+      "$ref": "#/$defs/stringList",
+      "description": "Categorization tags."
+    },
+    "authors": { "$ref": "#/$defs/people" },
+    "editors": { "$ref": "#/$defs/people" },
+    "reviewers": { "$ref": "#/$defs/people" },
+    "affiliations": {
+      "type": ["object", "array"],
+      "items": { "type": ["string", "object"] },
+      "description": "Institutions referenced by `authors`, declared inline or by id."
+    },
+    "license": {
+      "type": ["string", "object"],
+      "description": "An SPDX identifier such as `CC-BY-4.0`, or an object describing content and code licenses separately."
+    },
+    "copyright": { "type": "string" },
+    "open_access": { "type": "boolean" },
+    "doi": { "type": "string", "description": "A DOI, bare or as a URL." },
+    "arxiv": { "type": "string" },
+    "pmid": { "type": "integer" },
+    "pmcid": {
+      "type": "string",
+      "pattern": "^PMC[0-9]+$",
+      "description": "A PubMed Central id: the literal `PMC` followed by digits."
+    },
+    "github": {
+      "type": "string",
+      "description": "A repository URL, or `owner/name`."
+    },
+    "edit_url": { "type": "string", "format": "uri-reference" },
+    "source_url": { "type": "string", "format": "uri-reference" },
+    "binder": { "type": "string", "format": "uri-reference" },
+    "thumbnail": { "type": "string" },
+    "banner": { "type": "string" },
+    "first_page": { "type": ["string", "number"] },
+    "last_page": { "type": ["string", "number"] },
+    "venue": { "type": ["string", "object"] },
+    "volume": { "type": ["string", "number", "object"] },
+    "issue": { "type": ["string", "number", "object"] },
+    "funding": { "type": ["object", "array"] },
+    "kernelspec": {
+      "type": "object",
+      "description": "Jupyter kernel this page executes against."
+    },
+    "execute": { "type": "object" },
+    "math": {
+      "type": "object",
+      "description": "Macro dictionary applied to math on this page."
+    },
+    "abbreviations": { "type": "object" },
+    "numbering": { "type": "object" },
+    "parts": {
+      "type": "object",
+      "description": "Named parts such as `abstract` or `data_availability`."
+    },
+    "exports": { "type": ["object", "array"] },
+    "downloads": { "type": ["object", "array"] },
+    "options": { "type": "object" }
+  }
+}

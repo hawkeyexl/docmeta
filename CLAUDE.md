@@ -289,7 +289,9 @@ npm run schemas:check-published  # ...and the live URLs still serve those bytes.
 # After editing anything under docs/, run the dogfood check too. docmeta
 # validates its own docs, and the Docs deploy is gated on it. No paths and no
 # -s: both come from the repo's own docmeta.config.yaml, so this exercises
-# config discovery rather than stepping around it.
+# config discovery rather than stepping around it. The override there carries
+# two schemas — the house rule (title + description) and the Starlight contract
+# this site runs on.
 node dist/cli.js validate
 ```
 

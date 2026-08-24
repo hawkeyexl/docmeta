@@ -84,6 +84,10 @@ Home — "What do you want to do?" router + 30-second proof
 | Built-in OKF schema, explained | S1 | | `google:okf:0.1`: fields, dialect, spec link. |
 | Built-in taxonomy schemas | S1 | | `diataxis:diataxis:1.0`, `tgdp:templates:1.0`, and `passo-uno:seven-action:1.0`: vocabularies, why `type` vs `action`, which pair competes for `type`, why both `type` schemas require their key and Seven-Action does not, composing with OKF, crosswalk. |
 | Built-in Docusaurus schemas | S1, M3 | | `docusaurus:docs:3.10`, `docusaurus:blog:3.10`, `docusaurus:pages:3.10`: the three plugin front matter contracts, field by field. Platform rather than editorial — they require nothing, so they are format checks that compose with any vocabulary. Covers what they deliberately skip (cross-field TOC levels, unknown keys) and the per-directory override config a Docusaurus site needs. |
+| Built-in platform schemas | S1, M3 | | `astro:starlight:0.41`, `antora:page:3.1`, `sphinx:docinfo:9.1`, `myst:frontmatter:1.10`: the non-Docusaurus toolchain contracts. Carries the rule that a platform schema requires exactly what the generator refuses to build without — which is why Starlight and Antora demand `title` while Sphinx and MyST demand nothing. Also the AsciiDoc typing rules (attribute values are strings, bare attributes are `true`) and the pre-1.0 pin caveat for Starlight. |
+| Built-in metadata vocabularies | S1 | | `ogp:article:1.0`, `dcmi:elements:1.1`, `microsoft:learn:1.0`: how a page describes itself to something outside the docs site. Open Graph is the only built-in checking something no build tool checks. Covers the two `format` traps (`og:locale` underscores, `ms.date` is MM/DD/YYYY not ISO) and the standing rule on not enumerating a vocabulary whose published list is not authoritative. |
+| Element metadata in XML and HTML | S1, S2 | | The rule that the containing element is the namespace (`article.byline`, `prolog.author`, `head.title`), what each format lifts by convention and what it declines, the `elements:` config path syntax (slash-separated, `@attr`), and the update-vs-create write boundary. The page the rule lives on; the DITA page links to it. |
+| Built-in DITA schema | S1 | | `oasis:dita-metadata:1.3`: the ten prolog keys, why a map spells five of them `topicmeta.*`, why both metadata channels are validated, what `fill` creates, why `<vrm>` is keyed for itself, and what checks the written output. |
 
 ### Fix a failing check (Theo)
 
@@ -96,7 +100,7 @@ Home — "What do you want to do?" router + 30-second proof
 
 | Page | CUJ | ★ | Notes |
 |---|---|---|---|
-| Built-in schemas (registry) | S1, M1 | ★ | The hub for everything docmeta ships: one table of all seven ids with what each constrains, what it requires, and which two are on by default; the editorial-vs-platform distinction; the three ways to turn one on. The OKF, taxonomy, and Docusaurus pages are its detail pages. Source of truth: `src/core/schema-registry.ts`, `src/core/resolve-schema.ts`. |
+| Built-in schemas (registry) | S1, M1 | ★ | The hub for everything docmeta ships: one table of all fourteen ids with what each constrains, what it requires, and which two are on by default; the editorial-vs-platform distinction; the three ways to turn one on. The OKF, taxonomy, Docusaurus, platform, and vocabulary pages are its detail pages. Source of truth: `src/core/schema-registry.ts`, `src/core/resolve-schema.ts`. |
 | CLI reference | All | ★ | `validate`/`get`/`schemas`; every flag. Source of truth: `src/cli.ts`. |
 | Configuration reference | M1, D1 | ★ | Full `docmeta.config.yaml` keys, types, defaults, CLI-merge precedence. Source of truth: `src/core/config.ts`. |
 | Schema resolution reference | S2, D2 | ★ | Precedence chain + ref kinds + dialects. Source of truth: `resolve-schema.ts`, `schema-registry.ts`, `validator.ts`. |
@@ -130,6 +134,10 @@ Reference pages must never contradict the source code. Before writing any Refere
 | Built-in taxonomy schemas | `src/schemas/diataxis/1.0.json`, `src/schemas/tgdp/1.0.json`, `src/schemas/seven-action/1.0.json`, `src/core/resolve-schema.ts` (the default set) |
 | Built-in schemas (registry) | `src/core/schema-registry.ts` (the id list), `src/core/resolve-schema.ts` (the default set) |
 | Built-in Docusaurus schemas | `src/schemas/docusaurus-docs/3.10.json`, `src/schemas/docusaurus-blog/3.10.json`, `src/schemas/docusaurus-pages/3.10.json`; upstream: `@docusaurus/plugin-content-*` front matter reference |
+| Built-in platform schemas | `src/schemas/starlight/0.41.json`, `src/schemas/antora/3.1.json`, `src/schemas/sphinx/9.1.json`, `src/schemas/myst/1.10.json` |
+| Built-in metadata vocabularies | `src/schemas/ogp/1.0.json`, `src/schemas/dcmi/1.1.json`, `src/schemas/microsoft-learn/1.0.json` |
+| Element metadata | `src/extractors/element-key.ts`, `src/extractors/element-write.ts`, `src/extractors/xml-read.ts`, `src/extractors/html-read.ts`, `src/core/config.ts` (`elements:`) |
+| Built-in DITA schema | `src/schemas/dita/1.3.json`, `src/extractors/dita.ts` (`DITA_LIFTS`, `DITA_CONTENT_MODEL`) |
 
 ---
 

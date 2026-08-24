@@ -55,6 +55,7 @@ import {
   resolveSchemaSetWithSource,
   type ResolvedSchemaSet,
   FILE_SCHEMA_KEY,
+  resolveElements,
 } from "../core/resolve-schema.js";
 import { loadSchema, schemaLoadOptions } from "../core/schema-registry.js";
 import { Validator, compileWithFormats } from "../core/validator.js";
@@ -389,9 +390,14 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
       );
     }
 
+    // Resolved once per file. It walks every `overrides:` entry and dedupes,
+    // and the three call sites below — extract, the write pre-flight, and the
+    // write itself — all want the same answer for the same file.
+    const elements = resolveElements(label, config);
+
     let extracted;
     try {
-      extracted = extractor.extract(content, label);
+      extracted = extractor.extract(content, label, { elements });
     } catch (err) {
       return errorResult(label, extractor.name, (err as Error).message);
     }
@@ -459,7 +465,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
     // metadata syntax, and finding that out afterwards means the call is
     // billed for a file that could never have been written.
     try {
-      extractor.apply(content, {}, { filePath: label });
+      extractor.apply(content, {}, { filePath: label, elements });
     } catch (err) {
       return errorResult(label, extractor.name, (err as Error).message, schemaSet);
     }
@@ -662,6 +668,7 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
     try {
       next = extractor.apply(content, patchOf(writable), {
         filePath: label,
+        elements,
       });
     } catch (err) {
       return errorResult(

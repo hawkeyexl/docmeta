@@ -277,6 +277,26 @@ Pinning `provider` is worth doing in CI. Left on `auto`, a runner that loses its
 API key silently falls through to a local model and downloads gigabytes rather
 than failing the build.
 
+### `elements`
+
+Element paths to lift in addition to each format's convention. Slash-separated
+and absolute from the document root, optionally ending in `@attribute`:
+
+```yaml title="docmeta.config.yaml"
+elements:
+  - article/byline/author      # → byline.author
+  - html/head/link@href        # → head.link
+```
+
+The key is derived from the path's last two segments and is never spelled here.
+Paths are validated when the config loads, so a typo is an error naming the file
+rather than a check that silently never runs.
+
+Unlike `schemas:`, these **accumulate**: the top-level list and every matching
+`overrides:` entry all contribute, because element paths are extra places to
+look rather than a complete statement about how a file is judged. See [Element
+metadata](/docmeta/reference/element-metadata/).
+
 ### Overrides
 
 `overrides` is a list of mappings, each applying a schema set to files matching
