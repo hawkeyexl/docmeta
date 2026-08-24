@@ -137,23 +137,74 @@ function ditaLiftedElements(
   container: XmlElement,
 ): Map<string, { els: XmlElement[]; spec: DitaLift }> {
   const out = new Map<string, { els: XmlElement[]; spec: DitaLift }>();
+  const add = (key: string, el: XmlElement, spec: DitaLift): void => {
+    const found = out.get(key);
+    if (found) found.els.push(el);
+    else out.set(key, { els: [el], spec });
+  };
   const walk = (parent: XmlElement): void => {
     const parentName = parent.nodeName.toLowerCase();
-    const lifts = DITA_LIFTS[parentName];
+    const lifts = own(DITA_LIFTS, parentName);
     for (const child of childElements(parent)) {
       const childName = child.nodeName.toLowerCase();
-      const spec = lifts?.[childName];
-      if (spec) {
-        const key = liftKey(parentName, childName);
-        const found = out.get(key);
-        if (found) found.els.push(child);
-        else out.set(key, { els: [child], spec });
+      const spec = lifts ? own(lifts, childName) : undefined;
+      if (spec?.attrKeys) {
+        // One element, several values. The key is named for the *element*,
+        // because for an attribute that is the containing thing.
+        for (const attr of spec.attrKeys) {
+          add(liftKey(childName, attr), child, {
+            attr,
+            repeatable: spec.repeatable,
+          });
+        }
+      } else if (spec) {
+        add(liftKey(parentName, childName), child, spec);
       }
-      if (DITA_CONTENT_MODEL[childName] !== undefined) walk(child);
+      if (own(DITA_CONTENT_MODEL, childName) !== undefined) walk(child);
     }
   };
   walk(container);
   return out;
+}
+
+/**
+ * Read a value out of each element, dropping the ones that have none — and
+ * dropping the element with it.
+ *
+ * The pairing is the point. `values[i]` must have come from `els[i]`, because
+ * that is how a write knows where to put the replacement back. Filtering the
+ * values alone leaves the two lists a different length and silently
+ * misaligned, which surfaces as a write aimed at an attribute the element does
+ * not carry.
+ */
+function pairValues(
+  els: XmlElement[],
+  read: (el: XmlElement) => string | null | undefined,
+): { els: XmlElement[]; values: unknown[] } {
+  const keptEls: XmlElement[] = [];
+  const values: unknown[] = [];
+  for (const el of els) {
+    const raw = read(el);
+    if (raw == null) continue;
+    keptEls.push(el);
+    values.push(typeValue(raw));
+  }
+  return { els: keptEls, values };
+}
+
+/**
+ * Own-property lookup on a plain-object table.
+ *
+ * A document supplies these names, and `Object.prototype` answers to plenty of
+ * them: a `<constructor>` element would find `DITA_LIFTS.constructor` and a
+ * `<toString>` would descend into a content model that does not exist. `get.ts`
+ * already guards the same way where a *field* name indexes an object, for the
+ * same reason.
+ */
+function own<T>(table: Record<string, T>, key: string): T | undefined {
+  return Object.prototype.hasOwnProperty.call(table, key)
+    ? table[key]
+    : undefined;
 }
 
 /**
@@ -312,21 +363,23 @@ export function readXml(
     const liftContainer = liftRoot(root, dita);
     if (liftContainer) {
       for (const [key, { els, spec }] of ditaLiftedElements(liftContainer)) {
-        const values = els
-          .map((el) =>
-            spec.attr ? el.getAttribute(spec.attr) : elementText(el),
-          )
-          .filter((v): v is string => v != null)
-          .map(typeValue);
-        if (values.length === 0) continue;
-        data[key] = spec.repeatable ? values : values[0];
+        // Elements and values are kept **paired**. An element that contributes
+        // nothing — a second `<vrm>` with no `@release`, a `<created>` with no
+        // `@date` — must not stay in `els`, or `els[i]` stops naming the
+        // element `values[i]` came from and a write aims at an attribute that
+        // is not there.
+        const found = pairValues(els, (el) =>
+          spec.attr ? el.getAttribute(spec.attr) : elementText(el),
+        );
+        if (found.values.length === 0) continue;
+        data[key] = spec.repeatable ? found.values : found.values[0];
         sources.set(
           key,
           spec.attr
-            ? { kind: "element-attr", els, name: spec.attr }
-            : { kind: "element-text", els },
+            ? { kind: "element-attr", els: found.els, name: spec.attr }
+            : { kind: "element-text", els: found.els },
         );
-        const first = els[0];
+        const first = found.els[0];
         const pointer = `/${escapePointerSegment(key)}`;
         if (first?.lineNumber != null) lineMap.set(pointer, first.lineNumber);
         if (first?.columnNumber != null) colMap.set(pointer, first.columnNumber);
@@ -354,22 +407,19 @@ export function readXml(
   for (const raw of options?.elements ?? []) {
     const spec: ElementPath = parseElementPath(raw);
     if (data[spec.key] !== undefined) continue;
-    const els = matchElementPath(root, spec.segments);
-    const values = els
-      .map((el) =>
-        spec.attr ? el.getAttribute(spec.attr) : elementText(el, true),
-      )
-      .filter((v): v is string => v != null)
-      .map(typeValue);
-    if (values.length === 0) continue;
-    data[spec.key] = values;
+    const matched = matchElementPath(root, spec.segments);
+    const found = pairValues(matched, (el) =>
+      spec.attr ? el.getAttribute(spec.attr) : elementText(el, true),
+    );
+    if (found.values.length === 0) continue;
+    data[spec.key] = found.values;
     sources.set(
       spec.key,
       spec.attr
-        ? { kind: "element-attr", els, name: spec.attr }
-        : { kind: "element-text", els },
+        ? { kind: "element-attr", els: found.els, name: spec.attr }
+        : { kind: "element-text", els: found.els },
     );
-    const first = els[0];
+    const first = found.els[0];
     const pointer = `/${escapePointerSegment(spec.key)}`;
     if (first?.lineNumber != null) lineMap.set(pointer, first.lineNumber);
     if (first?.columnNumber != null) colMap.set(pointer, first.columnNumber);

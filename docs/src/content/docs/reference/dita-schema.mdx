@@ -29,7 +29,13 @@ Cardinality comes from the content model, not from a guess: `author*` is a list,
 | `critdates.revised` | `<critdates><revised @modified>` | list of date strings |
 | `metadata.audience` | `<metadata><audience @type>` | list |
 | `metadata.category` | `<metadata><category>` | list |
+| `copyright.copyryear` | `<copyright><copyryear @year>` | list |
+| `copyright.copyrholder` | `<copyright><copyrholder>` | string |
+| `keywords.keyword` | `<keywords><keyword>` | list |
+| `keywords.indexterm` | `<keywords><indexterm>` | list |
 | `prodinfo.prodname` | `<prodinfo><prodname>` | string |
+| `prodinfo.brand` … `.series` | `<prodinfo>`'s six-element choice group | list |
+| `vrm.version` / `.release` / `.modification` | `<vrmlist><vrm @…>` | list |
 
 In a **map** the five `prolog.*` keys are `topicmeta.*`, and `audience` and
 `category` are `topicmeta.audience` and `topicmeta.category`. `critdates.*` and
@@ -95,18 +101,42 @@ docmeta fill docs/**/*.dita -s oasis:dita-metadata:1.3
   over two `<author>` elements changes the topic's shape, which docmeta will not
   do on your behalf.
 
-<Aside type="caution" title="What this schema deliberately leaves out">
-Three parts of the prolog are not described, each for a stated reason:
+<Aside type="note" title="Why `<vrm>` is keyed for itself and not its container">
+`<vrm>` is EMPTY and carries three separate facts —
+`version="2" release="1" modification="0"`. Keying it `vrmlist.vrm` would have
+to pick one and discard two.
 
-- **`<copyright>`** nests `copyrholder` and `copyryear @year` — two levels and
-  two value shapes.
-- **`<keywords>`** contains `<indexterm>` and `<keyword>` children rather than
-  text, so it is not a value the element rule can lift.
-- **The `<prodinfo>` tail** — `vrmlist`, `brand`, `component`, `featnum`,
-  `platform`, `prognum`, `series` — is long and rarely carries document
-  metadata.
+The naming rule does not change to accommodate that; it applies one level down.
+For an *attribute* the containing thing is the element, so the keys are
+`vrm.version`, `vrm.release` and `vrm.modification`. `<created date="…"/>` stays
+`critdates.created`, because there the element means one thing and the attribute
+is merely where it lives.
 
-They are readable through an [`elements:`
-path](/docmeta/reference/element-metadata/#elements--reaching-what-the-convention-does-not)
-if your repo needs them.
+One consequence: `fill` can update a `<vrm>` attribute but will not create one,
+because creating it would mean synthesising the element and folding three
+sibling keys into it. It refuses by name and says which element to add.
 </Aside>
+
+<Aside type="note" title="Attribute values are YAML scalars here too">
+`year="2026"` arrives as the number 2026 and `version="2.1.0"` stays a string,
+because attribute values are parsed as YAML scalars in every format docmeta
+reads. The affected keys are typed string-or-number rather than the reader
+special-casing them, which would be a surprise nothing else in the tool prepares
+you for.
+</Aside>
+
+## What checks the written output
+
+Every DITA document docmeta writes is checked against the OASIS content models —
+which children a container may hold, in what order, and how many times. Those
+are the only constraints a splice-only writer can break: it never invents
+attributes and never reorders existing children.
+
+The models are transcribed by hand from the specification in the test suite and
+deliberately **not** imported from the table the writer writes from, since
+checking one against the other would prove only that it is self-consistent.
+
+It does not cover attribute value types, required attributes, entity
+resolution, or specialization `@class` ancestry. No DITA DTD validator exists in
+this toolchain, and vendoring the OASIS grammar is about a megabyte of DTD
+modules to check element order in a handful of files.

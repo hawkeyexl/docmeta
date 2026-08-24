@@ -10,6 +10,11 @@
       "type": "array",
       "items": { "type": "string" }
     },
+    "scalarList": {
+      "type": "array",
+      "items": { "type": ["string", "number"] },
+      "description": "Attribute values are parsed as YAML scalars, as they are in every format docmeta reads, so `year=\"2026\"` arrives as the number 2026 while `version=\"2.1.0\"` stays a string. Both are accepted rather than the reader special-casing these attributes, which would be a surprise nothing else in the tool prepares you for."
+    },
     "ditaDate": {
       "type": "string",
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
@@ -85,6 +90,58 @@
     "prodinfo.prodname": {
       "type": "string",
       "description": "Product name, from `<prodinfo><prodname>`. Scalar: `prodname?`."
+    },
+    "prodinfo.brand": {
+      "$ref": "#/$defs/textList",
+      "description": "Manufacturer or brand, from `<prodinfo><brand>`."
+    },
+    "prodinfo.component": {
+      "$ref": "#/$defs/textList",
+      "description": "Product component, from `<prodinfo><component>`."
+    },
+    "prodinfo.featnum": {
+      "$ref": "#/$defs/textList",
+      "description": "Feature number, from `<prodinfo><featnum>`."
+    },
+    "prodinfo.platform": {
+      "$ref": "#/$defs/textList",
+      "description": "Operating system or hardware, from `<prodinfo><platform>`."
+    },
+    "prodinfo.prognum": {
+      "$ref": "#/$defs/textList",
+      "description": "Program or order number, from `<prodinfo><prognum>`."
+    },
+    "prodinfo.series": {
+      "$ref": "#/$defs/textList",
+      "description": "Product series, from `<prodinfo><series>`. These six are a repeatable *choice* group in the content model, so they may interleave in any order."
+    },
+    "vrm.version": {
+      "$ref": "#/$defs/scalarList",
+      "description": "Product version, from `<vrmlist><vrm @version>`. Keyed for the element rather than its container because `<vrm>` is EMPTY and carries three separate facts — keying it `vrmlist.vrm` would have to pick one and discard two. For an attribute the containing thing is the element, so the naming rule applies one level down rather than changing."
+    },
+    "vrm.release": {
+      "$ref": "#/$defs/scalarList",
+      "description": "Product release, from `<vrmlist><vrm @release>`. A `<vrm>` carrying no `@release` contributes nothing here, and is dropped from the element list with it, so a write still lands on the element its value came from."
+    },
+    "vrm.modification": {
+      "$ref": "#/$defs/scalarList",
+      "description": "Modification level, from `<vrmlist><vrm @modification>`."
+    },
+    "copyright.copyryear": {
+      "$ref": "#/$defs/scalarList",
+      "description": "Copyright years, from `<copyright><copyryear @year>`. A list: the content model is `copyryear+`."
+    },
+    "copyright.copyrholder": {
+      "type": "string",
+      "description": "Copyright holder, from `<copyright><copyrholder>`."
+    },
+    "keywords.keyword": {
+      "$ref": "#/$defs/textList",
+      "description": "Search keywords, from `<keywords><keyword>`. Reached through the children rather than the container: `<keywords>` holds `(indexterm | keyword)*` and has no text of its own."
+    },
+    "keywords.indexterm": {
+      "$ref": "#/$defs/textList",
+      "description": "Index terms, from `<keywords><indexterm>`. A *nested* `<indexterm>` makes its parent a container rather than a value, so only flat terms are lifted."
     }
   }
 }

@@ -36,6 +36,7 @@ import {
   findContainer,
   liftRoot,
   metadataContainers,
+  DITA_ATTR_KEYS,
   DITA_CONTENT_MODEL,
   DITA_LIFTS,
   type DitaLift,
@@ -110,7 +111,19 @@ export function ditaEdits(
       const dot = key.indexOf(".");
       const container = dot === -1 ? "" : key.slice(0, dot);
       const element = dot === -1 ? "" : key.slice(dot + 1);
-      const spec = DITA_LIFTS[container]?.[element];
+      if (DITA_ATTR_KEYS.has(key)) {
+        // `vrm.version` and friends look exactly like a `container.element`
+        // key and are not one: the key names an *attribute*, three of which
+        // share one `<vrm>`. Creating it would mean synthesising the element
+        // and folding the sibling keys into it, which is not what the create
+        // path does — and falling through to an `<othermeta>` would put the
+        // value where the reader stops looking the moment a real `<vrm>`
+        // appears. Refusing is the only honest option until it has a writer.
+        throw new DocmetaError(
+          `docmeta fill cannot create "${key}": it names an attribute of an element the document does not have. Add the <${key.slice(0, key.indexOf("."))}> element, and docmeta will keep it up to date.`,
+        );
+      }
+      const spec = ownLift(container, element);
       if (spec) {
         freshElements.push({ key, container, element, spec, value: raw });
       } else {
@@ -138,6 +151,22 @@ export function ditaEdits(
   return edits;
 }
 
+/**
+ * Own-property lookup into the lift table.
+ *
+ * The key comes from a patch, so `constructor.name` would otherwise find
+ * `Object.prototype` and be treated as a liftable element.
+ */
+function ownLift(container: string, element: string): DitaLift | undefined {
+  if (!Object.prototype.hasOwnProperty.call(DITA_LIFTS, container)) {
+    return undefined;
+  }
+  const lifts = DITA_LIFTS[container];
+  return lifts && Object.prototype.hasOwnProperty.call(lifts, element)
+    ? lifts[element]
+    : undefined;
+}
+
 /** A typed element the document does not have yet. */
 interface FreshElement {
   key: string;
@@ -152,19 +181,24 @@ interface FreshElement {
  *
  * This is the one place in the DITA writer that adds structure rather than
  * replacing a span, so it is the one place that can produce a topic the user's
- * DTD rejects. Three things keep it honest:
+ * DTD rejects. Four things keep it honest:
  *
  * - **Position comes from the content model, not from convenience.** A DITA
  *   container is a sequence, so `<critdates>` after `<metadata>` is invalid even
- *   though both are allowed. `childAnchor` finds the first existing child that
- *   must follow the new one, and the element goes immediately before it.
- * - **Missing ancestors are created together.** Adding `critdates.created` to a
- *   topic with no `<critdates>` emits the whole nest at the position
- *   `<critdates>` itself belongs in.
+ *   though both are allowed.
  * - **Blocks are grouped by anchor, not by container.** Two containers can
  *   resolve to one insertion point, and two edits at one offset overlap —
  *   which `spliceAll` refuses, turning a legitimate multi-field `fill` into an
  *   internal error.
+ * - **Containers that do not exist yet are merged into one nest.** Every
+ *   placement is computed against the *original* document, so three keys that
+ *   each need a `<metadata>` would each create one. `metadata*` is repeatable,
+ *   so three siblings are technically valid and no content-model check catches
+ *   it — it is simply not what a person would write, and `fill` is not supposed
+ *   to be identifiable by its output.
+ * - **Tags and created containers interleave by model position.** `<source>`
+ *   has to precede a `<copyright>` created in the same edit, so ordering cannot
+ *   be "values first, then containers".
  */
 function newElementEdits(
   content: string,
@@ -179,13 +213,16 @@ function newElementEdits(
   const liftRootEl = liftRoot(root, shape);
 
   /** `<author>Ada</author>` or `<created date="…"/>`, one per value. */
-  const tagsFor = (item: FreshElement): string[] => {
+  const tagsFor = (item: FreshElement): Tag[] => {
     const values = Array.isArray(item.value) ? item.value : [item.value];
     return values.map((v) => {
       const emitted = emit(item.key, v);
-      return item.spec.attr
-        ? `<${item.element} ${item.spec.attr}="${escape(emitted, DQ)}"/>`
-        : `<${item.element}>${escapeText(emitted)}</${item.element}>`;
+      return {
+        name: item.element,
+        text: item.spec.attr
+          ? `<${item.element} ${item.spec.attr}="${escape(emitted, DQ)}"/>`
+          : `<${item.element}>${escapeText(emitted)}</${item.element}>`,
+      };
     });
   };
 
@@ -196,11 +233,6 @@ function newElementEdits(
     else byContainer.set(item.container, [item]);
   }
 
-  // One placement per container, then merged by anchor. Two containers can
-  // resolve to the *same* insertion point — adding `critdates.created` and
-  // `metadata.audience` to a topic that has neither puts both at the end of
-  // `<prolog>` — and two edits at one offset overlap, which `spliceAll`
-  // refuses outright. Grouping by container alone is not enough.
   const placements: Placement[] = [];
   for (const [containerName, group] of byContainer) {
     const missing: string[] = [];
@@ -228,18 +260,18 @@ function newElementEdits(
       placements.push({
         at,
         base: "",
+        hostName,
         missing,
         tags,
-        order: modelIndex(hostName, outermost),
         atClose: before === undefined,
       });
     } else {
       placements.push({
         at: newContainerAnchor(content, starts, root, shape),
         base: siblingIndent(content, starts, root),
+        hostName: "",
         missing,
         tags,
-        order: modelIndex("", outermost),
         atClose: false,
       });
     }
@@ -256,41 +288,98 @@ function newElementEdits(
   for (const [at, group] of byAnchor) {
     const base = group.find((p) => p.base !== "")?.base ?? "";
     const anchor = anchorBefore(content, at, base || "  ");
-    const lines: string[] = [];
-    // Content-model order among themselves, so two created siblings do not
-    // land in an order the DTD rejects.
-    for (const p of [...group].sort((a, b) => a.order - b.order)) {
-      const indent = base || anchor.indent + (p.atClose ? "  " : "");
-      if (p.missing.length === 0) {
-        for (const tag of p.tags) lines.push(indent + tag);
-        continue;
+    const atClose = group.some((p) => p.atClose);
+    const indent = base || anchor.indent + (atClose ? "  " : "");
+    const hostName = group.find((p) => p.hostName !== "")?.hostName ?? "";
+
+    // Merge every placement at this anchor into one tree, so containers that
+    // do not exist yet are created once rather than once per key.
+    const nest: Nest = { tags: [], children: new Map() };
+    for (const p of group) {
+      let node = nest;
+      for (const name of p.missing) {
+        let child = node.children.get(name);
+        if (!child) {
+          child = { tags: [], children: new Map() };
+          node.children.set(name, child);
+        }
+        node = child;
       }
-      p.missing.forEach((n, depth) => {
-        lines.push(indent + "  ".repeat(depth) + `<${n}>`);
-      });
-      for (const tag of p.tags) {
-        lines.push(indent + "  ".repeat(p.missing.length) + tag);
-      }
-      [...p.missing].reverse().forEach((n, i) => {
-        lines.push(indent + "  ".repeat(p.missing.length - 1 - i) + `</${n}>`);
-      });
+      node.tags.push(...p.tags);
     }
+
     edits.push({
       start: anchor.start,
       end: anchor.end,
-      text: (anchor.lead ? eol : "") + lines.join(eol) + eol + anchor.indent,
+      text:
+        (anchor.lead ? eol : "") +
+        renderNest(nest, hostName, indent, 0).join(eol) +
+        eol +
+        anchor.indent,
     });
   }
   return edits;
+}
+
+/** A tag to emit, with the element name its model position is looked up by. */
+interface Tag {
+  name: string;
+  text: string;
+}
+
+/** Values and sub-containers to create inside one container. */
+interface Nest {
+  tags: Tag[];
+  children: Map<string, Nest>;
+}
+
+/**
+ * Serialize a nest, interleaving values and sub-containers by model position.
+ *
+ * Sorting the two separately would put `<source>` after a `<copyright>` created
+ * beside it, which the content model forbids.
+ */
+function renderNest(
+  nest: Nest,
+  containerName: string,
+  indent: string,
+  depth: number,
+): string[] {
+  const pad = indent + "  ".repeat(depth);
+  const entries: { order: number; lines: string[] }[] = [];
+
+  for (const tag of nest.tags) {
+    entries.push({
+      order: modelIndex(containerName, tag.name),
+      lines: [pad + tag.text],
+    });
+  }
+  for (const [name, child] of nest.children) {
+    entries.push({
+      order: modelIndex(containerName, name),
+      lines: [
+        pad + `<${name}>`,
+        ...renderNest(child, name, indent, depth + 1),
+        pad + `</${name}>`,
+      ],
+    });
+  }
+
+  // A stable sort keeps repeated values (two `<author>`) in the order they were
+  // given, since they share one model position.
+  return entries
+    .sort((a, b) => a.order - b.order)
+    .flatMap((e) => e.lines);
 }
 
 /** One block of new markup, and where it goes. */
 interface Placement {
   at: number;
   base: string;
+  /** The existing container the block goes inside, or "" for the root. */
+  hostName: string;
   missing: string[];
-  tags: string[];
-  order: number;
+  tags: Tag[];
   /**
    * Whether the anchor is the container's closing tag rather than an existing
    * sibling. It changes the indent by one level: a sibling already sits where

@@ -204,3 +204,76 @@ describe("oasis:dita-metadata:1.3", () => {
     expect(getSchemasInfo().builtins.map((b) => b.id)).toContain(DITA_SCHEMA);
   });
 });
+
+describe("the parts of the prolog that were deferred", () => {
+  // Three groups the first pass left out, each for a stated reason, and each
+  // now handled by the mechanism that was said to be unable to reach it.
+  const D = () => read("deferred-prolog.dita");
+
+  it("lifts <copyright>, whose year lives in an attribute two levels down", () => {
+    // `copyryear+, copyrholder` — the year is `@year` on an EMPTY element, so
+    // the text rule alone would skip it entirely.
+    // Numbers, because `year="2025"` types as a YAML scalar like every other
+    // attribute docmeta reads. The schema types it string-or-number for the
+    // same reason it does for vrm.
+    expect(D().data["copyright.copyryear"]).toEqual([2025, 2026]);
+    expect(D().data["copyright.copyrholder"]).toBe("Example Press");
+  });
+
+  it("lifts <keywords> through its children, not its own text", () => {
+    // `(indexterm | keyword)*`. The element itself has element children, so it
+    // is a container — and the parent-is-the-namespace rule reaches the values
+    // inside it without needing a special case.
+    expect(D().data["keywords.keyword"]).toEqual(["gateway", "install"]);
+    expect(D().data["keywords.indexterm"]).toEqual(["Gateways"]);
+  });
+
+  it("lifts the whole prodinfo tail", () => {
+    const d = D().data;
+    expect(d["prodinfo.brand"]).toEqual(["Babbage"]);
+    expect(d["prodinfo.platform"]).toEqual(["Linux"]);
+    expect(d["prodinfo.series"]).toEqual(["Engines"]);
+    expect(d["prodinfo.component"]).toEqual(["Mill"]);
+    expect(d["prodinfo.featnum"]).toEqual(["AE-77"]);
+    expect(d["prodinfo.prognum"]).toEqual(["P-100"]);
+  });
+
+  it("gives each <vrm> attribute its own key, because each is a value", () => {
+    // `<vrm>` is EMPTY and carries three meaningful attributes, so keying it
+    // `vrmlist.vrm` would have to pick one and discard two. For an attribute
+    // the containing thing is the *element*, so the same rule gives
+    // `vrm.version` — and all three survive.
+    const d = D().data;
+    expect(d["vrm.version"]).toEqual([2, 3]);
+    expect(d["vrm.release"]).toEqual([1]);
+    expect(d["vrm.modification"]).toEqual([0]);
+  });
+
+  it("types vrm attributes as YAML scalars, like every other attribute", () => {
+    // `version="2"` is the number 2 and `version="2.1.0"` is the string it
+    // cannot parse as one. That is docmeta's documented behaviour for every
+    // attribute in every format, and an exception here would be a surprise
+    // nothing else in the tool prepares you for — so the schema types these
+    // keys as string-or-number rather than the reader special-casing them.
+    const mixed = xmlExtractor.extract(
+      `<map id="m"><topicmeta><prodinfo><prodname>P</prodname><vrmlist><vrm version="2.1.0"/></vrmlist></prodinfo></topicmeta></map>`,
+      "m.ditamap",
+    );
+    expect(D().data["vrm.version"]).toEqual([2, 3]);
+    expect(mixed.data["vrm.version"]).toEqual(["2.1.0"]);
+  });
+
+  it("skips a nested <indexterm>, which is a container rather than a value", () => {
+    const r = xmlExtractor.extract(
+      readFileSync(
+        join(root, "test", "fixtures", "dita", "deferred-prolog.dita"),
+        "utf8",
+      ).replace(
+        "<indexterm>Gateways</indexterm>",
+        "<indexterm>Gateways<indexterm>Nested</indexterm></indexterm>",
+      ),
+      "test/fixtures/dita/deferred-prolog.dita",
+    );
+    expect(r.data["keywords.indexterm"]).toBeUndefined();
+  });
+});

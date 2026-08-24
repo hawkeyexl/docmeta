@@ -264,3 +264,109 @@ describe("creating a DITA element that is not there yet", () => {
     expect(next).toContain('<othermeta name="audience" content="writer"/>');
   });
 });
+
+describe("creating the deferred prolog elements", () => {
+  const PROLOG_ONLY = readFileSync(
+    join(root, "test/fixtures/dita/prolog-no-metadata.dita"),
+    "utf8",
+  );
+  const P_PATH = "test/fixtures/dita/prolog-no-metadata.dita";
+
+  it("creates <copyright> with the year in its attribute", () => {
+    const next = apply(PROLOG_ONLY, { "copyright.copyryear": [2026] }, P_PATH);
+    expect(next).toContain('<copyryear year="2026"/>');
+    expect(next.indexOf("<author>")).toBeLessThan(next.indexOf("<copyright>"));
+  });
+
+  it("creates <keywords> under <metadata>, not under <prolog>", () => {
+    // The container-parent table has to know this. Under the old heuristic,
+    // <keywords> was created as a direct child of <prolog>, which the DTD
+    // rejects — the element belongs to <metadata>.
+    const next = apply(PROLOG_ONLY, { "keywords.keyword": ["gateway"] }, P_PATH);
+    expect(next).toContain("<metadata>");
+    expect(next.indexOf("<metadata>")).toBeLessThan(next.indexOf("<keywords>"));
+    expect(next.indexOf("<keywords>")).toBeLessThan(next.indexOf("</metadata>"));
+  });
+
+  it("creates the prodinfo tail inside <prodinfo> inside <metadata>", () => {
+    const next = apply(PROLOG_ONLY, { "prodinfo.brand": ["Babbage"] }, P_PATH);
+    expect(next.indexOf("<metadata>")).toBeLessThan(next.indexOf("<prodinfo>"));
+    expect(next.indexOf("<prodinfo>")).toBeLessThan(next.indexOf("<brand>"));
+  });
+
+  it("round-trips and is idempotent for each of them", () => {
+    const patch = {
+      "copyright.copyryear": [2026],
+      "keywords.keyword": ["gateway"],
+      "prodinfo.brand": ["Babbage"],
+    };
+    const once = apply(PROLOG_ONLY, patch, P_PATH);
+    expect(apply(once, patch, P_PATH)).toBe(once);
+    const r = xmlExtractor.extract(once, P_PATH);
+    for (const [key, value] of Object.entries(patch)) {
+      expect(r.data[key], key).toEqual(value);
+    }
+  });
+
+  it("creates one <metadata>, not one per key that needs it", () => {
+    // Every placement is computed against the *original* document, so three
+    // keys that each need a <metadata> each created one. `metadata*` is
+    // repeatable, so three siblings are valid DITA and no content-model check
+    // catches it — it is simply not what a person would write.
+    const next = apply(
+      PROLOG_ONLY,
+      {
+        "metadata.audience": ["writer"],
+        "keywords.keyword": ["gw"],
+        "prodinfo.brand": ["Babbage"],
+      },
+      P_PATH,
+    );
+    expect(next.match(/<metadata>/g)).toHaveLength(1);
+    expect(next).toContain(
+      [
+        "    <metadata>",
+        '      <audience type="writer"/>',
+        "      <keywords>",
+        "        <keyword>gw</keyword>",
+        "      </keywords>",
+        "      <prodinfo>",
+        "        <brand>Babbage</brand>",
+        "      </prodinfo>",
+        "    </metadata>",
+      ].join(LF),
+    );
+  });
+
+  it("interleaves created values and containers by model position", () => {
+    // <source> precedes a <copyright> created in the same edit. Sorting values
+    // and containers separately would put it after.
+    const next = apply(
+      PROLOG_ONLY,
+      { "prolog.source": "Notes", "copyright.copyryear": [2026] },
+      P_PATH,
+    );
+    expect(next.indexOf("<source>")).toBeLessThan(next.indexOf("<copyright>"));
+  });
+
+  it("refuses to create a vrm attribute key, and says what to add", () => {
+    // `vrm.version` names an attribute, not an element. Creating it would mean
+    // synthesising <vrmlist><vrm/></vrmlist> and folding three sibling keys
+    // into one element; falling through to <othermeta> would put the value
+    // where the reader stops looking as soon as a real <vrm> appears.
+    expect(() =>
+      apply(PROLOG_ONLY, { "vrm.version": [2] }, P_PATH),
+    ).toThrow(/cannot create "vrm\.version"/);
+  });
+
+  it("still updates a vrm attribute that exists", () => {
+    const deferred = readFileSync(
+      join(root, "test/fixtures/dita/deferred-prolog.dita"),
+      "utf8",
+    );
+    const path = "test/fixtures/dita/deferred-prolog.dita";
+    const next = apply(deferred, { "vrm.release": [9] }, path);
+    expect(next).toContain('<vrm version="2" release="9" modification="0"/>');
+    expect(apply(next, { "vrm.release": [9] }, path)).toBe(next);
+  });
+});

@@ -147,14 +147,68 @@ docmeta simply could not see the elements. Fixing under-reporting is not a
 contract break, and a major bump on a published package for a contrived case is
 a real cost paid for nothing.
 
-## What is deferred, and why
+## The deferrals, and what removing them found
 
-`<copyright>` nests `copyrholder`/`copyryear @year` — two levels, two shapes.
-`<keywords>` holds `<indexterm>`/`<keyword>` children rather than text, so it is
-not a value the element rule can lift at all. The `<prodinfo>` tail is long and
-rarely carries document metadata. All three are reachable through an `elements:`
-path; none is described by `oasis:dita-metadata:1.3`, and the schema says so.
+An earlier revision of this proposal deferred three parts of the prolog and
+declined to check written output against the content model. Both were reversed
+on review, and the reversal is the more interesting half — each "too awkward to
+lift" case turned out to test the rule rather than defeat it.
 
-DTD validation of written output is **not** covered in CI, because no DITA
-validator is available there. Stated here rather than implied, so nobody reads
-the idempotence and round-trip tests as proving more than they do.
+**`<copyright>`** nests `copyryear @year` and `copyrholder`. Two levels and two
+value shapes, and the existing mechanism handled both: descending into a
+container and reading an attribute were already what `<critdates>` needed.
+
+**`<keywords>`** holds `(indexterm | keyword)*` and has no text of its own, so
+it is not a value — which is precisely why the parent-is-the-namespace rule
+reaches *through* it. `keywords.keyword` needed no special case at all.
+
+**`<vrm>` is the one that genuinely stretched the rule**, and stretched it in a
+direction worth keeping. It is EMPTY and carries three separate facts, so
+keying it `vrmlist.vrm` would pick one and discard two. The answer was not a new
+rule but the same one applied a level down: for an *attribute*, the containing
+thing is the element, so the keys are `vrm.version`, `vrm.release`,
+`vrm.modification`. `<created date="…"/>` stays `critdates.created` because there
+the element means one thing and the attribute is merely where it sits — the
+distinction is whether the attributes are *values* or *storage*.
+
+`fill` refuses to create a `vrm.*` key, because creating it means synthesising
+the element and folding three sibling keys into it. It says which element to add
+rather than falling through to an `<othermeta>` the reader would stop looking at.
+
+### Two defects the reversal exposed
+
+**Elements and values were not kept paired.** A `<vrm>` with no `@release`
+stayed in the source's element list while contributing no value, so `els[i]` no
+longer named the element `values[i]` came from — and a write aimed at an
+attribute that was not there. Latent in the shipped DITA lift for any
+attribute-valued element missing its attribute; the second `<vrm>` in a fixture
+is simply the first document that had one.
+
+**Every placement was computed against the original document**, so three keys
+that each needed a `<metadata>` each created one. `metadata*` is repeatable, so
+three siblings are valid DITA and the content-model check below passes them —
+they are simply not what a person would write. Missing containers are now merged
+into one nest per anchor, and values and created containers interleave by model
+position so `<source>` still precedes a `<copyright>` created beside it.
+
+## What checks the written output
+
+Content-model conformance — which children a container may hold, in what order,
+and how many times — is checked for every DITA document the writer produces, in
+`test/dita-content-model.test.ts`.
+
+Those are the only DTD constraints a splice-only writer can break: it never
+invents attributes and never reorders existing children. The models are
+transcribed by hand from the OASIS specification and deliberately **not**
+imported from `DITA_CONTENT_MODEL`, because checking the writer against the
+table it writes from would prove only that the table is self-consistent — the
+discipline `docusaurus-schemas.test.ts` already applies to field sets. The
+checker is itself tested against deliberately broken documents, so it cannot
+pass by never failing.
+
+It does **not** cover attribute value types, required attributes, entity
+resolution, or specialization `@class` ancestry. Full DTD validation is not run:
+no DITA validator exists in this toolchain, and vendoring the OASIS grammar is
+about a megabyte of DTD modules to check element order in a handful of fixtures.
+Stated plainly so nobody reads the round-trip and idempotence tests as proving
+more than they do.

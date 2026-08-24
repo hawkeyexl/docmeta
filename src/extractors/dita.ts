@@ -11,6 +11,7 @@
  * why the metadata channel and not the root element is the place to write.
  */
 import type { XmlElement } from "./xml-read.js";
+import { liftKey } from "./element-key.js";
 
 /** Which flavour of DITA a document is, and where its metadata belongs. */
 export interface DitaShape {
@@ -164,6 +165,21 @@ function doctypeText(masked: string): string | undefined {
 export interface DitaLift {
   /** Attribute carrying the value. Absent means the element's text. */
   attr?: string;
+  /**
+   * Attributes that are each a value in their own right, rather than one
+   * attribute being where the element's single value happens to sit.
+   *
+   * `<created date="…"/>` is the first case: the element means one thing and
+   * `@date` is where it lives, so the key stays `critdates.created`. `<vrm
+   * version="2" release="1" modification="0"/>` is the second: three separate
+   * facts on one EMPTY element, and keying it `vrmlist.vrm` would have to pick
+   * one and discard two.
+   *
+   * The naming rule does not change to accommodate it — it applies one level
+   * down. For an attribute the containing thing is the *element*, so these are
+   * `vrm.version`, `vrm.release`, `vrm.modification`.
+   */
+  attrKeys?: readonly string[];
   /** Whether the content model permits more than one. */
   repeatable: boolean;
 }
@@ -217,10 +233,47 @@ export const DITA_LIFTS: Readonly<
     audience: { attr: "type", repeatable: true },
     category: { repeatable: true },
   },
+  copyright: {
+    copyryear: { attr: "year", repeatable: true },
+    copyrholder: { repeatable: false },
+  },
+  keywords: {
+    keyword: { repeatable: true },
+    indexterm: { repeatable: true },
+  },
   prodinfo: {
     prodname: { repeatable: false },
+    brand: { repeatable: true },
+    component: { repeatable: true },
+    featnum: { repeatable: true },
+    platform: { repeatable: true },
+    prognum: { repeatable: true },
+    series: { repeatable: true },
+  },
+  vrmlist: {
+    vrm: {
+      attrKeys: ["version", "release", "modification"],
+      repeatable: true,
+    },
   },
 };
+
+/**
+ * Keys produced by {@link DitaLift.attrKeys} — `vrm.version` and friends.
+ *
+ * Derived rather than written out, so the two cannot disagree. The writer needs
+ * it to tell such a key apart from an ordinary `container.element` one: they
+ * look identical, and creating `vrm.version` would mean synthesising a
+ * `<vrmlist><vrm/></vrmlist>` and folding three keys into one element, which is
+ * not what the create path does.
+ */
+export const DITA_ATTR_KEYS: ReadonlySet<string> = new Set(
+  Object.entries(DITA_LIFTS).flatMap(([, lifts]) =>
+    Object.entries(lifts).flatMap(([element, spec]) =>
+      (spec.attrKeys ?? []).map((attr) => liftKey(element, attr)),
+    ),
+  ),
+);
 
 /**
  * The ordered content models, for placing an element that does not exist yet.
@@ -278,15 +331,23 @@ export const DITA_CONTENT_MODEL: Readonly<Record<string, readonly string[]>> = {
     "othermeta",
     "data",
   ],
+  copyright: ["copyryear", "copyrholder"],
+  // `(indexterm | keyword)*` — a repeatable *choice*, so any interleaving is
+  // valid and the order here only decides where a created element lands.
+  keywords: ["indexterm", "keyword"],
+  vrmlist: ["vrm"],
+  // `prodname, vrmlist?, (brand | component | featnum | platform | prognum |
+  // series)*`. The tail is a choice group too, so its internal order is
+  // likewise a placement preference rather than a rule.
   prodinfo: [
     "prodname",
     "vrmlist",
     "brand",
-    "series",
+    "component",
+    "featnum",
     "platform",
     "prognum",
-    "featnum",
-    "component",
+    "series",
   ],
 };
 
@@ -304,8 +365,18 @@ export function ditaContainerParent(
   name: string,
 ): string | undefined {
   if (name === "prolog" || name === "topicmeta") return undefined;
-  if (shape.kind === "map") return "topicmeta";
-  return name === "prodinfo" ? "metadata" : "prolog";
+  // Two levels below the root are the same in both flavours: `<keywords>` and
+  // `<prodinfo>` hang off `<metadata>`, and `<vrmlist>` off `<prodinfo>`. Only
+  // the *top* level differs, which is what the fallthrough handles.
+  if (name === "vrmlist") return "prodinfo";
+  if (name === "keywords" || name === "prodinfo") {
+    // A map may hold these directly under `<topicmeta>` or nest them in a
+    // `<metadata>`; both are legal. Creating one goes to `<metadata>` in a
+    // topic, where it is the only option, and directly under `<topicmeta>` in
+    // a map, where it is the shorter of the two.
+    return shape.kind === "map" ? "topicmeta" : "metadata";
+  }
+  return shape.kind === "map" ? "topicmeta" : "prolog";
 }
 
 /**
