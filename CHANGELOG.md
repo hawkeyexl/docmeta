@@ -1,3 +1,23 @@
+# [4.2.0](https://github.com/hawkeyexl/docmeta/compare/v4.1.3...v4.2.0) (2026-08-24)
+
+
+### Bug Fixes
+
+* **extractors:** pair elements with values in HTML too, and share the helper ([cdfbbc8](https://github.com/hawkeyexl/docmeta/commit/cdfbbc8f56e70ff978901c73da2db2819d9c7a46))
+* **extractors:** write element keys in HTML, and re-read with the same options ([4ef47f9](https://github.com/hawkeyexl/docmeta/commit/4ef47f99651ab54654b4ab9948b8d1d6452a64e2))
+
+
+### Features
+
+* **config:** add `elements:` for element paths the convention misses ([027bed4](https://github.com/hawkeyexl/docmeta/commit/027bed46f105dc107983d541a23b9b6fd9b324e3))
+* **extractors:** create missing DITA metadata elements in content-model order ([0b72f4b](https://github.com/hawkeyexl/docmeta/commit/0b72f4b857b0ea3a0bf6ecc273523ef85ca09253))
+* **extractors:** lift the rest of the DITA prolog, and check what the writer emits ([1273119](https://github.com/hawkeyexl/docmeta/commit/1273119b15b65ba67a7eab092a321c1895f00f6d))
+* **extractors:** read DITA's typed prolog and topicmeta metadata ([997560a](https://github.com/hawkeyexl/docmeta/commit/997560a5bd495998a4c637b399a3844d2fd4ee23))
+* **extractors:** read metadata from elements in XML and HTML ([0478d91](https://github.com/hawkeyexl/docmeta/commit/0478d91637a32cd829ec57bad932f1a354988322))
+* **extractors:** write element-derived metadata back where it was read ([125524f](https://github.com/hawkeyexl/docmeta/commit/125524f7062e397ec344aab43496ae305183d67a))
+* **schemas:** add oasis:dita-metadata:1.3, and document element metadata ([41a3177](https://github.com/hawkeyexl/docmeta/commit/41a3177866580fc2b4cbb5e126ef226374730772))
+* **schemas:** add seven built-in schemas for platforms and vocabularies ([6f14fa3](https://github.com/hawkeyexl/docmeta/commit/6f14fa392c480b62566d9ce2b3840995b24683ce))
+
 ## [4.1.3](https://github.com/hawkeyexl/docmeta/compare/v4.1.2...v4.1.3) (2026-08-23)
 
 
