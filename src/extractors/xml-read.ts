@@ -18,8 +18,12 @@ import { escapePointerSegment, positionForFactory } from "./pointer.js";
 import {
   childElements,
   ditaShape,
+  liftRoot,
   metadataContainers,
   otherMetaEntries,
+  DITA_CONTENT_MODEL,
+  DITA_LIFTS,
+  type DitaLift,
   type DitaShape,
 } from "./dita.js";
 import { liftKey } from "./element-key.js";
@@ -107,6 +111,38 @@ export function elementText(
   }
   if (!allowEmpty && text.trim() === "") return undefined;
   return text.trim();
+}
+
+/**
+ * DITA's typed metadata elements, grouped by the key each contributes.
+ *
+ * Walks down from `<prolog>` or `<topicmeta>`, descending into any child the
+ * content-model table knows — which is how `<critdates>`, `<metadata>` and
+ * `<prodinfo>` are reached without either being named here. What is lifted, and
+ * whether from text or an attribute, is `DITA_LIFTS`' decision; this only
+ * traverses.
+ */
+function ditaLiftedElements(
+  container: XmlElement,
+): Map<string, { els: XmlElement[]; spec: DitaLift }> {
+  const out = new Map<string, { els: XmlElement[]; spec: DitaLift }>();
+  const walk = (parent: XmlElement): void => {
+    const parentName = parent.nodeName.toLowerCase();
+    const lifts = DITA_LIFTS[parentName];
+    for (const child of childElements(parent)) {
+      const childName = child.nodeName.toLowerCase();
+      const spec = lifts?.[childName];
+      if (spec) {
+        const key = liftKey(parentName, childName);
+        const found = out.get(key);
+        if (found) found.els.push(child);
+        else out.set(key, { els: [child], spec });
+      }
+      if (DITA_CONTENT_MODEL[childName] !== undefined) walk(child);
+    }
+  };
+  walk(container);
+  return out;
 }
 
 /**
@@ -231,6 +267,29 @@ export function readXml(content: string, filePath?: string): XmlRead {
   // missing, so `validate` fails again and the next run rewrites it forever.
   const dita = ditaShape(body, root, filePath);
   if (dita) {
+    // The typed elements first. They are namespaced by their container, so they
+    // cannot collide with the flat `<othermeta>` names below — which is what
+    // lets a topic carry the same fact in both channels and have both checked,
+    // rather than one quietly overwriting the other.
+    const liftContainer = liftRoot(root, dita);
+    if (liftContainer) {
+      for (const [key, { els, spec }] of ditaLiftedElements(liftContainer)) {
+        const values = els
+          .map((el) =>
+            spec.attr ? el.getAttribute(spec.attr) : elementText(el),
+          )
+          .filter((v): v is string => v != null)
+          .map(typeValue);
+        if (values.length === 0) continue;
+        data[key] = spec.repeatable ? values : values[0];
+        sources.set(key, { kind: "element-text", els });
+        const first = els[0];
+        const pointer = `/${escapePointerSegment(key)}`;
+        if (first?.lineNumber != null) lineMap.set(pointer, first.lineNumber);
+        if (first?.columnNumber != null) colMap.set(pointer, first.columnNumber);
+      }
+    }
+
     const { container } = metadataContainers(root, dita);
     if (container) {
       for (const { key, value, el } of otherMetaEntries(container)) {

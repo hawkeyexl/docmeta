@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<map id="meta-map">
+  <title>A map carries the same facts in topicmeta</title>
+  <topicmeta>
+    <author>Ada Lovelace</author>
+    <critdates>
+      <created date="2026-01-15"/>
+    </critdates>
+    <audience type="programmer"/>
+    <category>Reference</category>
+  </topicmeta>
+  <topicref href="topic.dita"/>
+</map>

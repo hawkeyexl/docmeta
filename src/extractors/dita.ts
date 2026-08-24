@@ -152,6 +152,159 @@ function doctypeText(masked: string): string | undefined {
   return undefined;
 }
 
+/**
+ * One element docmeta lifts out of DITA's typed metadata, and how.
+ *
+ * `repeatable` is not a guess. It is read straight off the OASIS content model:
+ * `author*` is a list, `source?` is a scalar. Generic XML defaults everything to
+ * a list because it has no such statement to consult; DITA does, so its keys are
+ * typed exactly and a schema can say `format: date` on a scalar rather than
+ * reaching through a one-item array.
+ */
+export interface DitaLift {
+  /** Attribute carrying the value. Absent means the element's text. */
+  attr?: string;
+  /** Whether the content model permits more than one. */
+  repeatable: boolean;
+}
+
+/**
+ * The typed metadata elements docmeta reads, keyed by the element that contains
+ * them — which is also the namespace their key takes.
+ *
+ * A container appearing as a key here is descended into, so `<prolog>` reaches
+ * `<critdates>`, `<metadata>` and `<prodinfo>` without any of them being named
+ * as a special case in the walker.
+ *
+ * `topicmeta` repeats most of `prolog` rather than deferring to it because the
+ * two models genuinely differ: `<topicmeta>` holds `audience`, `category`,
+ * `prodinfo`, `othermeta` and `resourceid` as **direct children**, where a topic
+ * nests them inside `<prolog><metadata>`. Verified against the OASIS
+ * content-model appendix rather than assumed — the same fact reads as
+ * `topicmeta.audience` in a map and `metadata.audience` in a topic, and both are
+ * correct, because each key names where the value actually is.
+ *
+ * Deliberately absent, each for a reason: `<copyright>` nests
+ * `copyrholder`/`copyryear @year`, two levels and two shapes; `<keywords>`
+ * contains `<indexterm>`/`<keyword>` children rather than text; and the
+ * `<prodinfo>` tail (`vrmlist`, `brand`, `component`, `featnum`, `platform`,
+ * `prognum`, `series`) is long and rarely carries document metadata.
+ */
+export const DITA_LIFTS: Readonly<
+  Record<string, Readonly<Record<string, DitaLift>>>
+> = {
+  prolog: {
+    author: { repeatable: true },
+    source: { repeatable: false },
+    publisher: { repeatable: false },
+    permissions: { attr: "entitlement", repeatable: false },
+    resourceid: { attr: "id", repeatable: true },
+  },
+  topicmeta: {
+    author: { repeatable: true },
+    source: { repeatable: false },
+    publisher: { repeatable: false },
+    permissions: { attr: "entitlement", repeatable: false },
+    resourceid: { attr: "id", repeatable: true },
+    audience: { attr: "type", repeatable: true },
+    category: { repeatable: true },
+  },
+  critdates: {
+    created: { attr: "date", repeatable: false },
+    revised: { attr: "modified", repeatable: true },
+  },
+  metadata: {
+    audience: { attr: "type", repeatable: true },
+    category: { repeatable: true },
+  },
+  prodinfo: {
+    prodname: { repeatable: false },
+  },
+};
+
+/**
+ * The ordered content models, for placing an element that does not exist yet.
+ *
+ * A DITA container is a *sequence*, not a set: `<critdates>` after `<metadata>`
+ * is invalid even though both are allowed, so a writer creating an element has
+ * to know what may precede it. `shape.preamble` answers that question for one
+ * position — where a whole new `<prolog>` goes — and this answers it for every
+ * position inside one.
+ *
+ * Names not listed for a container are unknown to docmeta and sort last, which
+ * keeps a specialization docmeta has never seen from being inserted in the
+ * middle of a model it does not understand.
+ */
+export const DITA_CONTENT_MODEL: Readonly<Record<string, readonly string[]>> = {
+  prolog: [
+    "author",
+    "source",
+    "publisher",
+    "copyright",
+    "critdates",
+    "permissions",
+    "metadata",
+    "resourceid",
+    "data",
+  ],
+  topicmeta: [
+    "navtitle",
+    "linktext",
+    "searchtitle",
+    "shortdesc",
+    "author",
+    "source",
+    "publisher",
+    "copyright",
+    "critdates",
+    "permissions",
+    "metadata",
+    "audience",
+    "category",
+    "keywords",
+    "exportanchors",
+    "prodinfo",
+    "othermeta",
+    "resourceid",
+    "ux-window",
+    "data",
+  ],
+  critdates: ["created", "revised"],
+  metadata: [
+    "audience",
+    "category",
+    "keywords",
+    "prodinfo",
+    "othermeta",
+    "data",
+  ],
+  prodinfo: [
+    "prodname",
+    "vrmlist",
+    "brand",
+    "series",
+    "platform",
+    "prognum",
+    "featnum",
+    "component",
+  ],
+};
+
+/**
+ * The element a document's typed metadata hangs off: `<prolog>` in a topic,
+ * `<topicmeta>` in a map. Undefined when the document has neither.
+ *
+ * Distinct from {@link metadataContainers}, which finds the element holding
+ * `<othermeta>` — one level deeper in a topic.
+ */
+export function liftRoot(
+  root: XmlElement,
+  shape: DitaShape,
+): XmlElement | undefined {
+  const { prolog, container } = metadataContainers(root, shape);
+  return shape.kind === "map" ? container : prolog;
+}
+
 /** Direct child elements of `el`, optionally filtered by name. */
 export function childElements(el: XmlElement, name?: string): XmlElement[] {
   const out: XmlElement[] = [];
