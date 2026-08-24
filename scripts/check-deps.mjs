@@ -196,8 +196,8 @@ of an optional package (@emnapi/core and @emnapi/runtime, reached through
 lockfile still installs here, and \`npm ci\` rejects it — so the first sign is
 every CI job failing at once with \`Missing: @emnapi/core@<ver> from lock file\`.
 
-Run \`npm install -g npm@11\`. If package-lock.json was already written by this
-npm, rewrite it afterwards with \`npm install --package-lock-only\`.`,
+Run \`npm install -g npm@latest\`. If package-lock.json was already written by
+this npm, rewrite it afterwards with \`npm install --package-lock-only\`.`,
     );
     process.exit(1);
   }
