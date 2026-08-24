@@ -321,6 +321,14 @@ export function readXml(
   // metadata and which is prose is how a document body turns into a key per
   // paragraph.
   for (const [key, { els, values }] of liftableChildren(root)) {
+    // Overwrites, deliberately, and only one thing can be overwritten: a root
+    // attribute *literally named* `article.title`, since a dot is a legal XML
+    // NameChar. The element convention owns its key space — a reader looking at
+    // `<article><title>` expects that to be what `article.title` means — so the
+    // element wins. `assertNoElementCollision` in the writer is the other half:
+    // it refuses to *create* such an attribute, so docmeta never authors the
+    // collision it resolves here.
+    //
     // Always a list. XML says nothing about cardinality, so a type that
     // depended on how many elements this document happened to carry would be
     // unwritable against; a schema that means "exactly one" says `maxItems: 1`.

@@ -410,3 +410,28 @@ describe("a config @attr path backed by several elements", () => {
     expect(htmlExtractor.apply?.(once, patch, { elements })).toBe(once);
   });
 });
+
+describe("a coincidentally-dotted root attribute", () => {
+  // A dot is a legal XML NameChar, so a document can carry a root attribute
+  // named exactly what the element convention produces. Which wins was decided
+  // but never stated or covered; the writer's `assertNoElementCollision` is the
+  // other half of the same rule.
+  const DOC = `<article article.title="from the attribute"><title>from the element</title></article>`;
+
+  it("loses to the element the convention lifts", () => {
+    const r = xmlExtractor.extract(DOC, "a.xml");
+    expect(r.data["article.title"]).toEqual(["from the element"]);
+  });
+
+  it("is still writable, because docmeta never authored the collision", () => {
+    // The writer refuses to *create* `article.title` as an attribute; a
+    // document that already has one is the author's own doing, and updating
+    // the element it lost to is what "write where you read" means here.
+    const next =
+      xmlExtractor.apply?.(DOC, { "article.title": ["rewritten"] }, {
+        filePath: "a.xml",
+      }) ?? "";
+    expect(next).toContain("<title>rewritten</title>");
+    expect(next).toContain('article.title="from the attribute"');
+  });
+});
