@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { DOC, makeTempRepo, removeTempRepo } from "./helpers/temp-repo.js";
 import { startSchemaServer } from "./helpers/schema-server.js";
+import { spawnText } from "./helpers/spawn.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
@@ -238,8 +239,11 @@ describe("docmeta CLI (built bin)", () => {
     expect(JSON.parse(r.stdout)[0].values.type).toBe("note");
   });
 
+  // `--no-config` spells out the second half of the name. `run` stands at the
+  // repo root, which carries a `docmeta.config.yaml` of its own, so without the
+  // flag this would fall back to that config's `paths:` and check the docs.
   it("exits 2 when get is given no paths and no config", () => {
-    const r = run(["get", "type"]);
+    const r = run(["get", "type", "--no-config"]);
     expect(r.status).toBe(2);
     expect(r.stderr).toContain("No files");
   });
@@ -368,7 +372,7 @@ describe("cli fill", () => {
   });
 
   it("exits 2 when given no paths and no config", () => {
-    const r = run(["fill"]);
+    const r = run(["fill", "--no-config"]);
     expect(r.status).toBe(2);
     expect(r.stderr).toContain("No files");
   });
@@ -944,7 +948,7 @@ describe("docmeta CLI: .gitignore-aware discovery", () => {
    * nothing at all.
    */
   const runIn = (args: string[], cwd: string): Run => {
-    const r = spawnSync("node", [bin, ...args], { cwd, encoding: "utf8" });
+    const r = spawnText(spawnSync("node", [bin, ...args], { cwd, encoding: "utf8" }));
     return {
       stdout: r.stdout ?? "",
       stderr: r.stderr ?? "",
@@ -1092,7 +1096,7 @@ describe("docmeta CLI: sarif and junit output (built bin)", () => {
 
   /** stderr is invisible to `run()` on a zero exit; these tests need both. */
   const runIn = (args: string[], cwd: string): Run => {
-    const r = spawnSync("node", [bin, ...args], { cwd, encoding: "utf8" });
+    const r = spawnText(spawnSync("node", [bin, ...args], { cwd, encoding: "utf8" }));
     return {
       stdout: r.stdout ?? "",
       stderr: r.stderr ?? "",
@@ -1194,7 +1198,7 @@ describe("docmeta CLI: --offline and the cross-run schema cache (built bin)", ()
   let repo: string | undefined;
 
   const runIn = (args: string[], cwd: string): Run => {
-    const r = spawnSync("node", [bin, ...args], { cwd, encoding: "utf8" });
+    const r = spawnText(spawnSync("node", [bin, ...args], { cwd, encoding: "utf8" }));
     return {
       stdout: r.stdout ?? "",
       stderr: r.stderr ?? "",
@@ -1217,8 +1221,8 @@ describe("docmeta CLI: --offline and the cross-run schema cache (built bin)", ()
         { cwd, encoding: "utf8" },
         (err, stdout, stderr) => {
           done({
-            stdout: stdout ?? "",
-            stderr: stderr ?? "",
+            stdout,
+            stderr,
             status: err ? ((err as { code?: number }).code ?? 1) : 0,
           });
         },
@@ -1418,8 +1422,8 @@ describe("docmeta CLI: schemas vendor (built bin)", () => {
         { cwd, encoding: "utf8" },
         (err, stdout, stderr) => {
           done({
-            stdout: stdout ?? "",
-            stderr: stderr ?? "",
+            stdout,
+            stderr,
             status: err ? ((err as { code?: number }).code ?? 1) : 0,
           });
         },
@@ -1524,7 +1528,9 @@ describe("docmeta CLI: schemas vendor (built bin)", () => {
  */
 describe("usage errors exit 2 (0005 §4)", () => {
   const runSync = (args: string[]): Run => {
-    const r = spawnSync("node", [bin, ...args], { cwd: root, encoding: "utf8" });
+    const r = spawnText(
+      spawnSync("node", [bin, ...args], { cwd: root, encoding: "utf8" }),
+    );
     return {
       stdout: r.stdout ?? "",
       stderr: r.stderr ?? "",
@@ -1746,10 +1752,11 @@ describe("get: --fields, positional kept as a fallback (0005 §1)", () => {
       init: false,
     });
     try {
-      const r = spawnSync(
-        "node",
-        [bin, "get", "--fields", "title", "-f", "json"],
-        { cwd: repo, encoding: "utf8" },
+      const r = spawnText(
+        spawnSync("node", [bin, "get", "--fields", "title", "-f", "json"], {
+          cwd: repo,
+          encoding: "utf8",
+        }),
       );
       expect(r.status).toBe(0);
       const parsed = JSON.parse(r.stdout ?? "") as GetJson[];
@@ -1780,7 +1787,7 @@ describe("get names the real mistake when a path lands in [fields] (0005 §2)", 
   // spawnSync, because `run()` reports stderr as "" on a passing run and two of
   // these assert on stderr while expecting exit 0.
   const runIn = (args: string[], cwd: string): Run => {
-    const r = spawnSync("node", [bin, ...args], { cwd, encoding: "utf8" });
+    const r = spawnText(spawnSync("node", [bin, ...args], { cwd, encoding: "utf8" }));
     return {
       stdout: r.stdout ?? "",
       stderr: r.stderr ?? "",
@@ -1892,12 +1899,17 @@ describe("get names the real mistake when a path lands in [fields] (0005 §2)", 
 // ---------------------------------------------------------------------------
 
 describe("get --quiet (0005 §2)", () => {
+  // `--no-config` on both runs, because the assertion is that quiet stdout is
+  // *empty*. The repo root's own config would otherwise put `Using
+  // docmeta.config.yaml (.)` there — a true statement about the run, but not a
+  // file, and it would turn this into a test about the notice.
   it("hides a file where every requested field is unset", () => {
-    const noisy = run(["get", "title", "test/fixtures/no-frontmatter.md"]);
+    const args = ["get", "title", "test/fixtures/no-frontmatter.md", "--no-config"];
+    const noisy = run(args);
     expect(noisy.status).toBe(0);
     expect(noisy.stdout).toContain("title=(unset)");
 
-    const quiet = run(["get", "title", "test/fixtures/no-frontmatter.md", "-q"]);
+    const quiet = run([...args, "-q"]);
     expect(quiet.status).toBe(0);
     expect(quiet.stdout.trim()).toBe("");
   });
@@ -1987,8 +1999,8 @@ describe("docmeta CLI: schemaTrust (built bin)", () => {
     new Promise((done) => {
       execFile("node", [bin, ...args], { cwd, encoding: "utf8" }, (err, stdout, stderr) => {
         done({
-          stdout: stdout ?? "",
-          stderr: stderr ?? "",
+          stdout,
+          stderr,
           status: err ? ((err as { code?: number }).code ?? 1) : 0,
         });
       });

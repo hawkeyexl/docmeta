@@ -59,6 +59,7 @@ import {
 } from "../core/resolve-schema.js";
 import { loadSchema, schemaLoadOptions } from "../core/schema-registry.js";
 import { Validator, compileWithFormats } from "../core/validator.js";
+import { toJsonText } from "../core/json-text.js";
 import { writeFileAtomic } from "../core/write-file.js";
 import {
   FILL_PROMPT_VERSION,
@@ -893,6 +894,18 @@ function describedBy(schema: Record<string, unknown>): string[] {
 }
 
 /**
+ * A JSON *object*, in the sense JSON Schema uses the word: `null` and arrays
+ * are `typeof "object"` too and neither is a schema.
+ *
+ * A predicate rather than the inline test plus a cast, because the cast was the
+ * only thing carrying `object` across to `Record<string, unknown>` and nothing
+ * checked that it still matched the test beside it.
+ */
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
  * The branches a subschema contributes to a merge — its own `allOf` entries if
  * it is a wrapper, otherwise itself. An author-written `{description, allOf}` is
  * unfolded on the same terms as one of ours; `describedBy` is what keeps its
@@ -908,8 +921,8 @@ function branchesOf(schema: Record<string, unknown>): Record<string, unknown>[] 
     keys.every((k) => k === "allOf" || k === "description");
   if (!isWrapper) return [schema];
   return (schema.allOf as unknown[]).flatMap((branch) => {
-    if (typeof branch === "object" && branch !== null && !Array.isArray(branch)) {
-      return [branch as Record<string, unknown>];
+    if (isJsonObject(branch)) {
+      return [branch];
     }
     // JSON Schema allows a boolean where a schema belongs. `true` constrains
     // nothing and disappears into the merge; `false` accepts nothing, and
@@ -932,7 +945,10 @@ function canonical(value: unknown): string {
   // `collectCandidates` is public API and a hand-written JS object can pass an
   // `undefined`, a function, or a symbol. Tagging by type keeps those apart from
   // each other and from `null`, which is a legitimate schema value.
-  return JSON.stringify(value) ?? `(${typeof value})`;
+  //
+  // `toJsonText`, not `JSON.stringify`, only so the declared type admits the
+  // `undefined` this fallback exists for — see there.
+  return toJsonText(value) ?? `(${typeof value})`;
 }
 
 const DEF_BLOCKS = ["$defs", "definitions"] as const;
@@ -1067,7 +1083,12 @@ function plannedFor(schemas: Record<string, unknown>[]): DefsPlan {
  */
 function withRenamedRefs<T>(node: T, renames: Map<string, string>): T {
   if (Array.isArray(node)) {
-    return node.map((item) => withRenamedRefs(item, renames)) as T;
+    // `Array.isArray` narrows a generic to `T & any[]`, so the mapped result is
+    // `any[]` and the cast below would launder it. Restate the element type as
+    // `unknown` first: the recursion accepts it, and the only assertion left is
+    // the `as T` that was always there.
+    const items: unknown[] = node;
+    return items.map((item) => withRenamedRefs(item, renames)) as T;
   }
   if (typeof node !== "object" || node === null) return node;
   const out: Record<string, unknown> = {};

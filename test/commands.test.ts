@@ -134,10 +134,13 @@ describe("runValidate", () => {
     expect(results[0]?.ok).toBe(true);
   });
 
+  // `noConfig` states the condition the test is about. It used to hold by
+  // accident, because the repo happened to carry no config; the root has one of
+  // its own now, so standing there is no longer a way to say "and no config".
   it("throws when no inputs and no config", async () => {
-    await expect(runValidate({ inputs: [], cwd: root })).rejects.toBeInstanceOf(
-      DocmetaError,
-    );
+    await expect(
+      runValidate({ inputs: [], cwd: root, noConfig: true }),
+    ).rejects.toBeInstanceOf(DocmetaError);
   });
 
   it("fetches a URL $schema from frontmatter and validates against it", async () => {
@@ -364,7 +367,7 @@ describe("runGet", () => {
 
   it("throws when no inputs and no config (parity with validate)", async () => {
     await expect(
-      runGet({ fields: ["type"], inputs: [], cwd: root }),
+      runGet({ fields: ["type"], inputs: [], cwd: root, noConfig: true }),
     ).rejects.toBeInstanceOf(DocmetaError);
   });
 
@@ -561,13 +564,25 @@ describe("config discovery and resolution base (0004)", () => {
   });
 
   it("reports nothing when no config is found", async () => {
-    const seen: unknown[] = [];
-    await runValidate({
-      inputs: ["test/fixtures/valid.md"],
-      cwd: root,
-      onConfigLoaded: (info) => seen.push(info),
-    });
-    expect(seen).toEqual([]);
+    // A temp directory rather than the repo root. The root carries a
+    // `docmeta.config.yaml` of its own now, so standing there is no longer a
+    // place where discovery comes up empty — and swapping in `noConfig: true`
+    // would test suppression instead, which is the next case down. A directory
+    // outside any repository is the real thing: with no `.git` above it,
+    // `searchPath` considers only `cwd`.
+    const bare = await mkdtemp(join(tmpdir(), "docmeta-no-config-"));
+    try {
+      await writeFile(join(bare, "page.md"), "---\ntype: note\n---\n", "utf8");
+      const seen: unknown[] = [];
+      await runValidate({
+        inputs: ["page.md"],
+        cwd: bare,
+        onConfigLoaded: (info) => seen.push(info),
+      });
+      expect(seen).toEqual([]);
+    } finally {
+      await rm(bare, { recursive: true, force: true });
+    }
   });
 
   it("reports nothing when noConfig suppresses a config that exists", async () => {
@@ -804,7 +819,7 @@ const failure = (p: Promise<unknown>): Promise<Error> =>
     () => {
       throw new Error("expected the call to fail, but it resolved");
     },
-    (e: Error) => e,
+    (e: unknown) => e as Error,
   );
 
 // 0008 — `docmeta schemas vendor`
@@ -1212,6 +1227,18 @@ describe("0015 · a document opting out of the repo's standard", () => {
   let server: SchemaServer | undefined;
   let dir: string | undefined;
 
+  /**
+   * `dir`, or a failure that names the cause.
+   *
+   * The suite clears it after every test on purpose, so it really can be
+   * `undefined` here — a bare `dir!` would turn "the repo was never built" into
+   * whatever confusing thing `runValidate` does with an empty cwd.
+   */
+  const repo = (): string => {
+    if (dir === undefined) throw new Error("the temp repo was never built");
+    return dir;
+  };
+
   afterEach(async () => {
     await server?.close();
     server = undefined;
@@ -1243,7 +1270,7 @@ describe("0015 · a document opting out of the repo's standard", () => {
 
   it("passes by default — the documented feature, and the hole", async () => {
     await buildRepo("");
-    const { results } = await runValidate({ inputs: ["*.md"], cwd: dir! });
+    const { results } = await runValidate({ inputs: ["*.md"], cwd: repo() });
     // The contributor who opted out is the one who passes; the document
     // playing by the config's rules is the one that fails.
     expect(byFile(results)).toEqual({ "contributed.md": true, "honest.md": false });
@@ -1299,7 +1326,7 @@ describe("0015 · a document opting out of the repo's standard", () => {
 
   it("flips under `schemaTrust.documentRefs: local`", async () => {
     const url = await buildRepo("schemaTrust:\n  documentRefs: local\n");
-    const { results } = await runValidate({ inputs: ["*.md"], cwd: dir! });
+    const { results } = await runValidate({ inputs: ["*.md"], cwd: repo() });
     expect(byFile(results)).toEqual({ "contributed.md": false, "honest.md": false });
 
     const refused = results.find((r) => r.file.endsWith("contributed.md"));
@@ -1321,7 +1348,7 @@ describe("0015 · a document opting out of the repo's standard", () => {
     const notices: string[] = [];
     const { results } = await runValidate({
       inputs: ["*.md"],
-      cwd: dir!,
+      cwd: repo(),
       onNotice: (m) => notices.push(m),
     });
     // Config decides for both files, so both are judged by google:okf:0.1.
@@ -1403,6 +1430,12 @@ describe("0015 · a document-supplied path reaching out of the repository", () =
   let outer: string | undefined;
   let inner: string | undefined;
 
+  /** `inner`, or a failure that names the cause. See `repo()` above. */
+  const project = (): string => {
+    if (inner === undefined) throw new Error("the project was never built");
+    return inner;
+  };
+
   /**
    * A project with a file **outside** it, and no git repository anywhere above
    * — so the boundary is the config's directory and the reach is one `../`.
@@ -1438,7 +1471,7 @@ describe("0015 · a document-supplied path reaching out of the repository", () =
 
   it("is refused, and the refusal names the boundary it applied", async () => {
     await build("");
-    const { results } = await runValidate({ inputs: ["*.md"], cwd: inner! });
+    const { results } = await runValidate({ inputs: ["*.md"], cwd: project() });
     expect(results[0]?.ok).toBe(false);
     expect(results[0]?.errors[0]?.keyword).toBe("schema");
     expect(results[0]?.errors[0]?.message).toMatch(/outside/);
@@ -1453,12 +1486,12 @@ describe("0015 · a document-supplied path reaching out of the repository", () =
     // schema kept beside the project is a real setup, not an attack.
     await build("");
     await writeFile(
-      join(inner!, "docmeta.config.yaml"),
+      join(project(), "docmeta.config.yaml"),
       "schemas:\n  - ../outside.schema.json\n",
       "utf8",
     );
-    await writeFile(join(inner!, "plain.md"), "---\ntitle: Plain\n---\n", "utf8");
-    const { results } = await runValidate({ inputs: ["plain.md"], cwd: inner! });
+    await writeFile(join(project(), "plain.md"), "---\ntitle: Plain\n---\n", "utf8");
+    const { results } = await runValidate({ inputs: ["plain.md"], cwd: project() });
     expect(results[0]?.ok).toBe(true);
     // Spelled as the config wrote it: the config sits in the run's own
     // directory, so nothing is rebased, and nothing is contained either.
@@ -1877,10 +1910,20 @@ describe("schemas infer is offline by design (0010 stress test 2)", () => {
   beforeEach(() => {
     realFetch = globalThis.fetch;
     attempted = [];
-    globalThis.fetch = ((input: Parameters<typeof fetch>[0]) => {
-      attempted.push(String(input));
+    globalThis.fetch = (input: Parameters<typeof fetch>[0]) => {
+      // Not `String(input)`. `fetch` takes a string, a `URL`, **or** a
+      // `Request`, and a `Request` has no useful `toString` — it records as
+      // "[object Request]", so the assertion below would be about a placeholder
+      // rather than about the address something tried to reach.
+      attempted.push(
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url,
+      );
       return Promise.reject(new Error("the network is not available here"));
-    }) as typeof globalThis.fetch;
+    };
   });
   afterEach(() => {
     globalThis.fetch = realFetch;

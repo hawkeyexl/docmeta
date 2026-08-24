@@ -44,21 +44,21 @@ export interface BuiltinInfo {
 
 /** Built-in schemas keyed by `vendor:name:version` id. */
 const BUILTINS = new Map<string, Record<string, unknown>>([
-  ["google:okf:0.1", okf01 as Record<string, unknown>],
-  ["diataxis:diataxis:1.0", diataxis10 as Record<string, unknown>],
-  ["passo-uno:seven-action:1.0", sevenAction10 as Record<string, unknown>],
-  ["tgdp:templates:1.0", tgdp10 as Record<string, unknown>],
-  ["docusaurus:docs:3.10", docusaurusDocs310 as Record<string, unknown>],
-  ["docusaurus:blog:3.10", docusaurusBlog310 as Record<string, unknown>],
-  ["docusaurus:pages:3.10", docusaurusPages310 as Record<string, unknown>],
-  ["astro:starlight:0.41", starlight041 as Record<string, unknown>],
-  ["antora:page:3.1", antora31 as Record<string, unknown>],
-  ["sphinx:docinfo:9.1", sphinx91 as Record<string, unknown>],
-  ["myst:frontmatter:1.10", myst110 as Record<string, unknown>],
-  ["ogp:article:1.0", ogp10 as Record<string, unknown>],
-  ["dcmi:elements:1.1", dcmi11 as Record<string, unknown>],
-  ["microsoft:learn:1.0", microsoftLearn10 as Record<string, unknown>],
-  ["oasis:dita-metadata:1.3", ditaMetadata13 as Record<string, unknown>],
+  ["google:okf:0.1", okf01],
+  ["diataxis:diataxis:1.0", diataxis10],
+  ["passo-uno:seven-action:1.0", sevenAction10],
+  ["tgdp:templates:1.0", tgdp10],
+  ["docusaurus:docs:3.10", docusaurusDocs310],
+  ["docusaurus:blog:3.10", docusaurusBlog310],
+  ["docusaurus:pages:3.10", docusaurusPages310],
+  ["astro:starlight:0.41", starlight041],
+  ["antora:page:3.1", antora31],
+  ["sphinx:docinfo:9.1", sphinx91],
+  ["myst:frontmatter:1.10", myst110],
+  ["ogp:article:1.0", ogp10],
+  ["dcmi:elements:1.1", dcmi11],
+  ["microsoft:learn:1.0", microsoftLearn10],
+  ["oasis:dita-metadata:1.3", ditaMetadata13],
 ]);
 
 export function listBuiltins(): BuiltinInfo[] {
@@ -525,12 +525,23 @@ async function readCappedBody(
 ): Promise<Buffer> {
   const body = res.body;
   if (!body) return Buffer.alloc(0);
-  const reader = body.getReader();
+  // `@types/node` types `Response.body` as `ReadableStream<any>`, so every
+  // chunk would arrive as `any` and the size accounting below would be done in
+  // `any` arithmetic — which is how a cap silently stops being a cap. Name the
+  // chunk type once, here, at the boundary where the `any` enters.
+  const reader = body.getReader() as ReadableStreamDefaultReader<Uint8Array>;
   const chunks: Uint8Array[] = [];
   let total = 0;
   try {
     for (;;) {
-      const { done, value } = await reader.read();
+      // Annotated `value?:` rather than taking `ReadableStreamReadResult`'s
+      // word for it. That type is the more precise of the two — a discriminated
+      // union promising a value whenever `done` is false — and it is deliberately
+      // not used here: the promise is the *stream implementation's* to keep, not
+      // something the reader enforces, and the guard below is only meaningful
+      // while the type admits the case it guards.
+      const { done, value }: { done: boolean; value?: Uint8Array } =
+        await reader.read();
       if (done) break;
       // `Uint8Array` is always truthy, even at length 0, so this only ever
       // means "no chunk this turn" — not "skip an empty chunk".
@@ -724,8 +735,12 @@ async function resolveRemote(
   ref: string,
   options: LoadSchemaOptions,
 ): Promise<Record<string, unknown>> {
-  const cache = options.cacheDir
-    ? new SchemaCache(options.cacheDir, options.ttlHours ?? DEFAULT_TTL_HOURS)
+  // Hoisted rather than read twice: `cache` is derived from it, so branching on
+  // `cacheDir` first is what lets the compiler see that a working cache implies
+  // a directory worth naming in the remedy below.
+  const cacheDir = options.cacheDir;
+  const cache = cacheDir
+    ? new SchemaCache(cacheDir, options.ttlHours ?? DEFAULT_TTL_HOURS)
     : null;
 
   if (cache) {
@@ -755,11 +770,14 @@ async function resolveRemote(
     // Three cases, not two, because "no cache" and "cache switched off" have
     // different remedies and naming the wrong one is what made the earlier
     // versions of this message send people in circles.
-    const remedy = cache?.enabled
-      ? `Run once without --offline to populate ${options.cacheDir}, or point the reference at a local file.`
-      : options.cacheDir !== undefined
-        ? "The schema cache is switched off (`schemaCache.ttlHours: 0`), so there is nothing for --offline to read. Set a non-zero `schemaCache.ttlHours`, or point the reference at a local file or a built-in id."
-        : "No schema cache is configured for this run, so there is nothing for --offline to read. Pass a `cacheDir`, or point the reference at a local file or a built-in id.";
+    // Same three cases, ordered so `cacheDir` is narrowed to a string by the
+    // time the first branch interpolates it.
+    const remedy =
+      cacheDir === undefined
+        ? "No schema cache is configured for this run, so there is nothing for --offline to read. Pass a `cacheDir`, or point the reference at a local file or a built-in id."
+        : cache?.enabled
+          ? `Run once without --offline to populate ${cacheDir}, or point the reference at a local file.`
+          : "The schema cache is switched off (`schemaCache.ttlHours: 0`), so there is nothing for --offline to read. Set a non-zero `schemaCache.ttlHours`, or point the reference at a local file or a built-in id.";
     throw new DocmetaError(
       `Cannot resolve schema "${ref}": --offline is set and it could not be served from cache. ${remedy}`,
     );

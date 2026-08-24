@@ -362,6 +362,6 @@ repository, which is why the pre-commit framework above is usually preferable.
 {/* test {"testId":"ci-recipes","description":"The stable contract every recipe depends on, run against the local CLI build."} */}
 {/* step {"description":"Exit 0 when all files are valid.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md","exitCodes":[0]}} */}
 {/* step {"description":"Exit 1 when one or more files fail validation.","runShell":{"command":"npx docmeta validate test/fixtures/missing-type.md","exitCodes":[1]}} */}
-{/* step {"description":"Exit 2 on an operational or usage error.","runShell":{"command":"npx docmeta validate","exitCodes":[2],"stdio":"No files to validate"}} */}
+{/* step {"description":"Exit 2 on an operational or usage error.","runShell":{"command":"npx docmeta validate --no-config","exitCodes":[2],"stdio":"No files to validate"}} */}
 {/* step {"description":"`--format json` emits a machine-readable report for capture as a CI artifact.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md --format json","exitCodes":[0],"stdio":"/\"summary\"/"}} */}
 {/* test end */}

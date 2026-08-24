@@ -65,7 +65,12 @@ function fail(err: unknown): never {
 function resolveColor(program: Command): boolean {
   // commander maps --no-color to opts.color === false.
   const noColor = program.opts().color === false;
-  return shouldColor({ noColor, isTTY: Boolean(process.stdout.isTTY) });
+  // Passed through uncoerced. `@types/node` declares `isTTY` as `boolean`, but
+  // Node leaves it **undefined** on a stream that is not a terminal — it is
+  // never `false` — and `shouldColor` already takes `isTTY?` and treats a
+  // missing one as "not a terminal". A `Boolean()` here only restated that,
+  // where the declared type says it restates nothing.
+  return shouldColor({ noColor, isTTY: process.stdout.isTTY });
 }
 
 /**
@@ -340,6 +345,105 @@ function numeric(
   }
 }
 
+/**
+ * Commander hands an `.action()` callback an untyped bag of option values, so
+ * each subcommand declares the shape it actually reads.
+ *
+ * The three-state flags are the reason this is worth writing down rather than
+ * coercing at each use site. `-c`/`--no-config`, `--baseline`/`--no-baseline`,
+ * `--no-gitignore` and `--no-cache` are only correct while *absent*, *a value*
+ * and *an explicit `false`* stay distinguishable — absence leaves config in
+ * charge, `false` overrides it. A union that names all three states is the one
+ * place a reader finds that out; `String(options.format)` never said anything.
+ */
+
+/** The flags the parity rule keeps identical across every input-taking command. */
+interface InputCliOptions {
+  /** `--ext <list>`; the command splits it. */
+  ext?: string;
+  /** `--exclude <glob>`, repeatable — commander's default value is `[]`. */
+  exclude: string[];
+  /** `--as <format>`: force an extractor. */
+  as?: string;
+  /** `-f, --format <format>`. Always a string: every declaration has a default. */
+  format: string;
+  /**
+   * `-c, --config <path>` and `--no-config` share one commander attribute:
+   * `undefined` with neither flag, the path with `-c`, `false` with
+   * `--no-config`. Split by `configOption`.
+   */
+  config?: string | boolean;
+}
+
+/** The rest of what `validate`, `get`, and `fill` share. */
+interface RunCliOptions extends InputCliOptions {
+  quiet?: boolean;
+  allowEmpty?: boolean;
+  /**
+   * `--no-gitignore`. Commander supplies `true` when the flag is absent, so
+   * this is `boolean` and never `undefined` — which is exactly why
+   * `gitignoreFlag` exists to turn that default back into "no opinion".
+   */
+  gitignore: boolean;
+  offline?: boolean;
+}
+
+interface ValidateCliOptions extends RunCliOptions {
+  /** `-s, --schema <ref>`, repeatable — commander's default value is `[]`. */
+  schema: string[];
+  /**
+   * `--baseline [path]` / `--no-baseline`, the same three-state split as
+   * `config`: absent leaves the config in charge, a string names a file, `true`
+   * is a bare `--baseline` (the default path), `false` is `--no-baseline`.
+   */
+  baseline?: string | boolean;
+  /** `--write-baseline [path]`; `true` for the bare flag. See `baseline`. */
+  writeBaseline?: string | boolean;
+}
+
+interface GetCliOptions extends RunCliOptions {
+  /** `--fields <list>`; when present, every positional is a path. */
+  fields?: string;
+}
+
+interface FillCliOptions extends RunCliOptions {
+  /** `-s, --schema <ref>`, repeatable — commander's default value is `[]`. */
+  schema: string[];
+  fields?: string;
+  /** Parsed by `parseFloat`, so possibly NaN — `numeric` is the range check. */
+  confidence?: number;
+  dryRun?: boolean;
+  provider?: string;
+  model?: string;
+  /**
+   * `--no-cache`. Commander supplies `true` when the flag is absent; unlike
+   * `gitignore` that default is passed straight through, because the core's
+   * `cache` has no config counterpart for it to override.
+   */
+  cache: boolean;
+  local?: boolean;
+  maxTurns?: number;
+  chunkChars?: number;
+  concurrency?: number;
+}
+
+interface SchemasCliOptions {
+  format: string;
+}
+
+interface InferCliOptions extends InputCliOptions {
+  out?: string;
+  /** `--min-coverage <pct>`; commander's default value is `0`. */
+  minCoverage: number;
+}
+
+interface VendorCliOptions {
+  /** `--dir <path>`; commander's default value is `DEFAULT_VENDOR_DIR`. */
+  dir: string;
+  /** `-c, --config <path>`. `vendor` declares no `--no-config`, so no `false`. */
+  config?: string;
+}
+
 export function buildProgram(): Command {
   const program = new Command();
   program
@@ -436,71 +540,73 @@ export function buildProgram(): Command {
         "  docmeta validate --baseline                  # fail only on new findings",
       ].join("\n"),
     )
-    .action(async (paths: string[], options, command: Command) => {
-      try {
-        // `validate` is the default command, so a misspelled subcommand lands
-        // here as a path. Upgrade the message before it becomes "not found".
-        suggestCommand(paths[0], process.cwd());
-        const format = String(options.format);
-        if (!isReportFormat(format)) {
-          throw new DocmetaError(
-            `Unknown --format "${format}". Use ${REPORT_FORMAT_LIST}.`,
-          );
-        }
-        const exts: string[] | undefined = options.ext
-          ? String(options.ext)
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean)
-          : undefined;
-        const stdinContent = paths.includes("-")
-          ? await readStdin()
-          : undefined;
+    .action(
+      async (paths: string[], options: ValidateCliOptions, command: Command) => {
+        try {
+          // `validate` is the default command, so a misspelled subcommand lands
+          // here as a path. Upgrade the message before it becomes "not found".
+          suggestCommand(paths[0], process.cwd());
+          const format = options.format;
+          if (!isReportFormat(format)) {
+            throw new DocmetaError(
+              `Unknown --format "${format}". Use ${REPORT_FORMAT_LIST}.`,
+            );
+          }
+          const exts: string[] | undefined = options.ext
+            ? splitList(options.ext)
+            : undefined;
+          const stdinContent = paths.includes("-")
+            ? await readStdin()
+            : undefined;
 
-        const { results, summary, frame } = await runValidate({
-          inputs: paths,
-          cliSchemas: options.schema,
-          exts,
-          exclude: options.exclude,
-          as: options.as,
-          ...configOption(options.config),
-          onConfigLoaded: reportConfig(!isMachineFormat(format), process.cwd()),
-          stdinContent,
-          // `undefined` rather than `false` when the flag is absent, so config
-          // `allowEmpty:` still wins (the cores do `opts ?? config`).
-          allowEmpty: options.allowEmpty ? true : undefined,
-          respectGitignore: gitignoreFlag(options.gitignore),
-          // `undefined` rather than `false` when absent, so config `offline:`
-          // still decides.
-          offline: options.offline ? true : undefined,
-          onNotice: notice,
-          // `--baseline` and `--no-baseline` share one commander attribute, the
-          // same three-state `undefined | string | false` split as `-c` /
-          // `--no-config`: absent leaves the config in charge, a string names a
-          // file, `false` suppresses a configured one for this run.
-          baseline: options.baseline as string | boolean | undefined,
-          writeBaseline: options.writeBaseline as string | boolean | undefined,
-        });
+          const { results, summary, frame } = await runValidate({
+            inputs: paths,
+            cliSchemas: options.schema,
+            exts,
+            exclude: options.exclude,
+            as: options.as,
+            ...configOption(options.config),
+            onConfigLoaded: reportConfig(
+              !isMachineFormat(format),
+              process.cwd(),
+            ),
+            stdinContent,
+            // `undefined` rather than `false` when the flag is absent, so config
+            // `allowEmpty:` still wins (the cores do `opts ?? config`).
+            allowEmpty: options.allowEmpty ? true : undefined,
+            respectGitignore: gitignoreFlag(options.gitignore),
+            // `undefined` rather than `false` when absent, so config `offline:`
+            // still decides.
+            offline: options.offline ? true : undefined,
+            onNotice: notice,
+            // `--baseline` and `--no-baseline` share one commander attribute, the
+            // same three-state `undefined | string | false` split as `-c` /
+            // `--no-config`: absent leaves the config in charge, a string names a
+            // file, `false` suppresses a configured one for this run.
+            baseline: options.baseline,
+            writeBaseline: options.writeBaseline,
+          });
 
-        const color = resolveColor(command.parent ?? command);
-        const text = render(format, results, summary, {
-          color,
-          quiet: Boolean(options.quiet),
-          // Non-presentational: SARIF needs to know where the run stood before
-          // it can name a file the way the repository does.
-          frame,
-          onNotice: notice,
-        });
-        // Only `github` may say nothing on a clean run. Every other format owes
-        // its envelope even when it is empty — see `OMITTED_WHEN_CLEAN`.
-        if (text.length > 0 || !OMITTED_WHEN_CLEAN.has(format)) {
-          process.stdout.write(`${text}\n`);
+          const color = resolveColor(command.parent ?? command);
+          const text = render(format, results, summary, {
+            color,
+            quiet: Boolean(options.quiet),
+            // Non-presentational: SARIF needs to know where the run stood before
+            // it can name a file the way the repository does.
+            frame,
+            onNotice: notice,
+          });
+          // Only `github` may say nothing on a clean run. Every other format owes
+          // its envelope even when it is empty — see `OMITTED_WHEN_CLEAN`.
+          if (text.length > 0 || !OMITTED_WHEN_CLEAN.has(format)) {
+            process.stdout.write(`${text}\n`);
+          }
+          process.exitCode = summary.failed > 0 ? 1 : 0;
+        } catch (err) {
+          fail(err);
         }
-        process.exitCode = summary.failed > 0 ? 1 : 0;
-      } catch (err) {
-        fail(err);
-      }
-    });
+      },
+    );
 
   program
     .command("get")
@@ -556,7 +662,7 @@ export function buildProgram(): Command {
       async (
         fieldsArg: string | undefined,
         pathsArg: string[],
-        options,
+        options: GetCliOptions,
         command: Command,
       ) => {
         try {
@@ -568,10 +674,7 @@ export function buildProgram(): Command {
             process.cwd(),
           );
           const exts: string[] | undefined = options.ext
-            ? String(options.ext)
-                .split(",")
-                .map((s) => s.trim())
-                .filter(Boolean)
+            ? splitList(options.ext)
             : undefined;
           const stdinContent = paths.includes("-")
             ? await readStdin()
@@ -690,9 +793,9 @@ export function buildProgram(): Command {
         "  cat page.md | docmeta fill - --as markdown   # filled doc to stdout",
       ].join("\n"),
     )
-    .action(async (paths: string[], options, command: Command) => {
+    .action(async (paths: string[], options: FillCliOptions, command: Command) => {
       try {
-        const format = String(options.format);
+        const format = options.format;
         if (!isFillFormat(format)) {
           throw new DocmetaError(
             `Unknown --format "${format}". Use ${FILL_FORMAT_LIST}.`,
@@ -711,7 +814,7 @@ export function buildProgram(): Command {
         numeric("--concurrency", options.concurrency, 1, 64);
 
         const exts: string[] | undefined = options.ext
-          ? splitList(String(options.ext))
+          ? splitList(options.ext)
           : undefined;
         const usingStdin = paths.includes(STDIN);
         // With `-` the filled document owns stdout and the report is a
@@ -744,9 +847,7 @@ export function buildProgram(): Command {
           respectGitignore: gitignoreFlag(options.gitignore),
           offline: options.offline ? true : undefined,
           onNotice: notice,
-          fields: options.fields
-            ? splitList(String(options.fields))
-            : undefined,
+          fields: options.fields ? splitList(options.fields) : undefined,
           confidence: options.confidence,
           dryRun: Boolean(options.dryRun),
           provider: options.provider,
@@ -793,7 +894,7 @@ export function buildProgram(): Command {
       `output: ${COMMON_FORMATS.join(" | ")}`,
       "pretty",
     )
-    .action((options, command: Command) => {
+    .action((options: SchemasCliOptions, command: Command) => {
       try {
         // A closed set, checked like every other command's --format. This used
         // to be a bare `=== "json" ? json : pretty`, so `schemas -f github`
@@ -875,12 +976,12 @@ export function buildProgram(): Command {
         "make, not the tool's.",
       ].join("\n"),
     )
-    .action(async (paths: string[], options, command: Command) => {
+    .action(async (paths: string[], options: InferCliOptions, command: Command) => {
       try {
         const format = assertCommonFormat(formatFor(command, options.format));
         numeric("--min-coverage", options.minCoverage, 0, 100);
         const exts: string[] | undefined = options.ext
-          ? splitList(String(options.ext))
+          ? splitList(options.ext)
           : undefined;
         const stdinContent = paths.includes(STDIN)
           ? await readStdin()
@@ -936,11 +1037,18 @@ export function buildProgram(): Command {
         "vendoring is that CI validates against a copy in your own history.",
       ].join("\n"),
     )
-    .action(async (url: string, options) => {
+    .action(async (url: string, options: VendorCliOptions) => {
       try {
         const result = await runVendorSchema({
           url,
-          dir: options.dir as string,
+          dir: options.dir,
+          // `typeof === "string"`, not `!== undefined`. `vendor` is the one
+          // config-taking command with no `--no-config`, and the parity rule in
+          // CLAUDE.md points straight at adding one — at which point commander
+          // starts passing `false` here. The annotation on `VendorCliOptions`
+          // says that cannot happen, so it would not be caught at the point the
+          // flag is declared; this test is what keeps a `false` out of a field
+          // that must be a path.
           ...(typeof options.config === "string"
             ? { configPath: options.config }
             : {}),

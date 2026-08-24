@@ -27,6 +27,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
+import { spawnText } from "./helpers/spawn.js";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -110,24 +111,26 @@ function runAction(env: Record<string, string>, npxExit = 0): RunResult {
   writeFileSync(join(dir, "run.sh"), actionScript(), "utf8");
   const outFile = join(dir, "out");
 
-  const res = spawnSync(
-    "bash",
-    ["--noprofile", "--norc", "-eo", "pipefail", join(dir, "run.sh")],
-    {
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        PATH: `${join(dir, "bin")}:${process.env.PATH ?? ""}`,
-        GITHUB_OUTPUT: outFile,
-        DOCMETA_PATHS: "",
-        DOCMETA_SCHEMA: "",
-        DOCMETA_CONFIG: "",
-        DOCMETA_FORMAT: "",
-        DOCMETA_VERSION: "4",
-        DOCMETA_ARGS: "",
-        ...env,
+  const res = spawnText(
+    spawnSync(
+      "bash",
+      ["--noprofile", "--norc", "-eo", "pipefail", join(dir, "run.sh")],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PATH: `${join(dir, "bin")}:${process.env.PATH ?? ""}`,
+          GITHUB_OUTPUT: outFile,
+          DOCMETA_PATHS: "",
+          DOCMETA_SCHEMA: "",
+          DOCMETA_CONFIG: "",
+          DOCMETA_FORMAT: "",
+          DOCMETA_VERSION: "4",
+          DOCMETA_ARGS: "",
+          ...env,
+        },
       },
-    },
+    ),
   );
   const args = (res.stdout ?? "")
     .split("\n")

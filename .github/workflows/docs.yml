@@ -23,17 +23,10 @@ concurrency:
 
 jobs:
   # Dogfood: build the docmeta CLI from this repo and use it to validate the
-  # frontmatter of the docs pages. -s overrides the default OKF schema (which
-  # requires `type`) with two schemas that compose:
-  #
-  #   ./docs/doc-frontmatter.schema.json  the house rule — title + description
-  #   astro:starlight:0.41                the platform contract this site runs on
-  #
-  # The house schema stays because Starlight itself does not require
-  # `description`, and this site does. What the built-in adds is everything the
-  # house schema left unconstrained: `sidebar.order` must be a number,
-  # `template` must be `doc` or `splash`, a `badge` object must carry `text`.
-  # Before it existed, every Starlight key on every page went unchecked.
+  # frontmatter of the docs pages. The targets and the schema both come from the
+  # repo's own docmeta.config.yaml, whose `overrides:` entry points the docs glob
+  # at a docs-specific schema requiring title + description — rather than the
+  # default OKF set, which requires `type` and no page carries.
   validate-docs:
     runs-on: ubuntu-latest
     steps:
@@ -46,11 +39,11 @@ jobs:
       - run: npm run build
       - name: Check CLI reference is in sync with src/cli.ts
         run: npm run docs:check-cli
+      # Bare, with no paths and no `-s`: both come from the repo's own
+      # docmeta.config.yaml, so the deploy gate exercises config discovery
+      # rather than stepping around it. Kept identical to the step in ci.yml.
       - name: Validate docs frontmatter (dogfood)
-        run: |
-          node dist/cli.js validate "docs/src/content/docs/**/*.{md,mdx}" \
-            -s ./docs/doc-frontmatter.schema.json \
-            -s astro:starlight:0.41 --format github
+        run: node dist/cli.js validate --format github
 
   # Build the Astro/Starlight static site and upload it as a Pages artifact.
   build:

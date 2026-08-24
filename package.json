@@ -1,6 +1,6 @@
 {
   "name": "docmeta",
-  "version": "4.1.2",
+  "version": "4.1.3",
   "description": "Validate the presence and format of document metadata (Markdown frontmatter and more) against JSON Schema. CI-friendly.",
   "type": "module",
   "bin": {
@@ -40,13 +40,17 @@
     "pretest": "npm run check:deps",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "pretypecheck": "npm run check:deps",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
     "check:deps": "node scripts/check-deps.mjs",
     "docs:check-cli": "node scripts/check-cli-reference.mjs",
     "docs:check-action": "node scripts/check-action-reference.mjs",
+    "docs:check-api": "node scripts/check-api-reference.mjs",
     "schemas:sync": "node scripts/sync-builtin-schemas.mjs",
     "schemas:check": "node scripts/check-builtin-schemas.mjs",
+    "schemas:check-published": "node scripts/check-published-schemas.mjs",
     "commitlint": "commitlint --edit",
     "semantic-release": "semantic-release",
     "prepare": "node scripts/prepare.mjs",
@@ -83,6 +87,7 @@
   "devDependencies": {
     "@commitlint/cli": "^21.0.2",
     "@commitlint/config-conventional": "^21.0.2",
+    "@eslint/js": "^10.0.1",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/commit-analyzer": "^13.0.1",
     "@semantic-release/git": "^10.0.1",
@@ -91,10 +96,14 @@
     "@semantic-release/release-notes-generator": "^14.1.1",
     "@types/node": "^26.0.1",
     "@types/picomatch": "^4.0.3",
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^10.9.0",
+    "globals": "^17.11.0",
     "husky": "^9.1.7",
     "semantic-release": "^25.0.3",
     "tsup": "^8.3.5",
     "typescript": "^6.0.3",
+    "typescript-eslint": "^8.67.0",
     "vitest": "^4.1.9"
   }
 }

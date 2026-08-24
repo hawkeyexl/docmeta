@@ -1,0 +1,97 @@
+name: Bug report
+description: docmeta did something other than what it says it does.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. The fastest path to a fix is a reproduction, so
+        the fields below are mostly about what you ran and what came back.
+
+        **If this is a security issue, stop here** and use
+        [private vulnerability reporting](https://github.com/hawkeyexl/docmeta/security/advisories/new)
+        instead. See [SECURITY.md](https://github.com/hawkeyexl/docmeta/blob/main/SECURITY.md).
+
+  - type: input
+    id: version
+    attributes:
+      label: docmeta version
+      description: Output of `docmeta --version`.
+      placeholder: "4.1.2"
+    validations:
+      required: true
+
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      description: Output of `node --version`. docmeta requires Node 24 or later.
+      placeholder: "v24.4.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      description: Path handling, line endings, and the schema cache directory all differ by platform, so this is load-bearing.
+      options:
+        - Linux
+        - macOS
+        - Windows
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How is docmeta installed?
+      options:
+        - npm global (npm install -g docmeta)
+        - npx docmeta
+        - GitHub Action (hawkeyexl/docmeta)
+        - pre-commit hook
+        - Other (say so below)
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: The exact command you ran
+      description: Paste it verbatim, flags and all. If it came from a workflow or `docmeta.config.yaml`, include the relevant lines.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: Including the exit code, if that is the part that is wrong.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Full output
+      description: Everything docmeta printed, stdout and stderr. Do not trim it to the part that looks relevant — the surrounding lines often name the schema or file that explains it.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: A document and schema that reproduce it
+      description: Optional, but it is usually the difference between a fix this week and a fix eventually. A minimal file is better than a real one.
+    validations:
+      required: false

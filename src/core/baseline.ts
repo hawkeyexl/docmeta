@@ -145,7 +145,7 @@ export function serializeBaseline(baseline: Baseline): string {
   // Null-prototype for the same reason `parseBaseline` uses one: a file key of
   // `__proto__` assigned into a plain object literal would set the prototype
   // and drop the entry, so a parse/serialize round-trip would lose it silently.
-  const entries: Record<string, string[]> = Object.create(null);
+  const entries = Object.create(null) as Record<string, string[]>;
   for (const file of Object.keys(baseline.entries).sort()) {
     entries[file] = [...(baseline.entries[file] ?? [])].sort();
   }
@@ -202,7 +202,7 @@ export function parseBaseline(text: string, source: string): Baseline {
   // rather than triggering the inherited setter — which would replace this
   // object's prototype and silently drop the entry. Every other malformation
   // here is rejected loudly; this one would not even be visible.
-  const entries: Record<string, string[]> = Object.create(null);
+  const entries = Object.create(null) as Record<string, string[]>;
   for (const [file, value] of Object.entries(
     rawEntries as Record<string, unknown>,
   )) {
@@ -283,7 +283,7 @@ export function buildBaseline(
   // inherited method instead of `undefined`, pass the `!known` guard because a
   // function is truthy, and then die in `new Set(known)` with "function is not
   // iterable".
-  const entries: Record<string, string[]> = Object.create(null);
+  const entries = Object.create(null) as Record<string, string[]>;
   for (const r of results) {
     if (r.errors.length === 0) continue;
     // Two identical violations in one file are one fingerprint; storing the

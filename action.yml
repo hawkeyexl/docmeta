@@ -137,9 +137,22 @@ runs:
         }
 
         argv=()
+        # `${a[@]+"${a[@]}"}`, not a bare `"${a[@]}"`, everywhere an array
+        # that may be empty is expanded below.
+        #
+        # bash 3.2 — which is what macOS ships, and therefore what `shell: bash`
+        # resolves to on a macos runner — treats expanding an *empty* array
+        # under `set -u` as an unbound variable. The script aborts before it
+        # reaches npx, so `exit-code` is never written and the action fails with
+        # no diagnostic on every run that passes no paths. bash 4.4 fixed this,
+        # which is why ubuntu and windows runners never showed it.
+        #
+        # The `+` form expands to nothing at all when the array is unset or
+        # empty, and to the properly-quoted elements otherwise, on every bash
+        # from 3.2 up.
         # Paths are positional, matching the CLI.
         split_input "$DOCMETA_PATHS" "paths"
-        argv+=("${split_out[@]}")
+        argv+=(${split_out[@]+"${split_out[@]}"})
         # One `-s` per line: a schema ref can contain spaces, so lines are the
         # only separator that cannot collide with a legitimate value.
         if [ -n "$DOCMETA_SCHEMA" ]; then
@@ -150,16 +163,16 @@ runs:
         [ -n "$DOCMETA_CONFIG" ] && argv+=(-c "$DOCMETA_CONFIG")
         [ -n "$DOCMETA_FORMAT" ] && argv+=(--format "$DOCMETA_FORMAT")
         split_input "$DOCMETA_ARGS" "args"
-        argv+=("${split_out[@]}")
+        argv+=(${split_out[@]+"${split_out[@]}"})
 
         # `%q` per element, because the point of this line is to tell a
         # consumer what actually ran. Neither `${argv[*]}` nor `${argv[@]}`
         # would: echo rejoins on single spaces either way, so a path
         # containing a space logs identically to two separate paths.
         printf 'docmeta validate'
-        [ ${#argv[@]} -gt 0 ] && printf ' %q' "${argv[@]}"
+        [ ${#argv[@]} -gt 0 ] && printf ' %q' ${argv[@]+"${argv[@]}"}
         echo
-        npx --yes "docmeta@${DOCMETA_VERSION}" validate "${argv[@]}"
+        npx --yes "docmeta@${DOCMETA_VERSION}" validate ${argv[@]+"${argv[@]}"}
         code=$?
         echo "exit-code=${code}" >> "$GITHUB_OUTPUT"
         exit "$code"

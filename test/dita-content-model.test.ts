@@ -179,7 +179,7 @@ function violations(xml: string): Violation[] {
   };
 
   const rootEl = doc.documentElement;
-  if (rootEl) walk(rootEl as unknown as XmlElement);
+  if (rootEl) walk(rootEl);
   return found;
 }
 
@@ -219,7 +219,7 @@ describe("every DITA fixture conforms", () => {
   });
 
   for (const name of fixtures) {
-    it(`${name}`, () => {
+    it(name, () => {
       const xml = readFileSync(join(DITA_DIR, name), "utf8");
       expect(violations(xml)).toEqual([]);
     });
@@ -259,7 +259,7 @@ describe("what the writer creates conforms", () => {
   ];
 
   for (const [name, doc, patch, path] of cases) {
-    it(`${name}`, () => {
+    it(name, () => {
       const next = apply(doc, patch, path);
       expect(violations(next)).toEqual([]);
     });

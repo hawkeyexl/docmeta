@@ -87,45 +87,40 @@ Before any user-facing writing or docs task, consult `docs/content-strategy/`:
    video — follows `docs/content-strategy/design.md`, which governs the docs site
    and the demo videos alike.
 
-### Changing a dependency: splice the lockfile, never regenerate it
+### Changing a dependency: keep npm at 11.6.3 or newer
 
-`npm install <dep>` **on Windows** does not just add that dep. It re-resolves
-unrelated transitive packages and drops the top-level `@emnapi/core` /
-`@emnapi/runtime` entries that satisfy `@napi-rs/wasm-runtime`, nesting copies
-under `@rolldown/binding-wasm32-wasi` instead. npm prunes entries for optional
-packages it won't install on the current platform while keeping the dependency
-edges — an incomplete graph that `npm install` tolerates and `npm ci` rejects.
-On Linux CI, every workflow starts with `npm ci`, so build-test, lint, docs and
-doc-detective all go red at once with `Missing: @emnapi/core@<ver> from lock
-file`.
+Change dependencies normally — `npm install <dep>`, commit the lockfile — as
+long as npm is at least **11.6.3**. `npm run check:deps` asserts that floor and
+auto-runs before `test`, `typecheck` and `build`, so the version cannot drift
+back down unnoticed.
 
-**Do not trust any whole-tree regeneration on Windows.** All of these produce
-broken lockfiles:
+At 11.6.2 and below, npm writes an incomplete `package-lock.json`. It drops
+the top-level entries for the peer dependencies of an optional package —
+`@emnapi/core` and `@emnapi/runtime`, reached through
+`@rolldown/binding-wasm32-wasi` (vitest → vite → rolldown) — while keeping the
+dependency edges that point at them. The result installs happily, so nothing
+looks wrong locally, and `npm ci` rejects it. Every workflow starts with
+`npm ci`, so on the next push build-test, lint, docs and doc-detective all go
+red at once with `Missing: @emnapi/core@<ver> from lock file`.
 
-- `npm install <dep>` — drops the emnapi entries
-- `rm -rf node_modules package-lock.json && npm install` — breaks differently
-- `npm install --package-lock-only` — same pruning
-- **running `npm install` twice** — converges locally and passes `npm ci` *on
-  Windows*, then still fails on Linux. A local `npm ci` pass does **not** prove CI.
-- `npm link` / `npm unlink` — same pruning, and easy to miss because you ran it to
-  test something else entirely. Running the doc-detective suite locally needs
-  `npm link`, so **check `git status` afterwards and `git checkout --
-  package-lock.json` if it was touched.**
+**This is not platform-specific**, whatever the symptom suggests. The repo
+carried a "splice the lockfile by hand, never regenerate it" rule for a while,
+on the theory that `npm install` was broken *on Windows*. It was not: npm 11.6.2
+drops those entries on Linux, macOS and Windows alike, and npm 11.6.3 keeps them
+on all three. The local npm was 11.6.1 — two patch releases below the fix — while
+CI's bundled npm was well above it, which is why only CI ever complained.
 
-The fix is to splice. Start from the committed lockfile
-(`git show origin/main:package-lock.json`), copy in **only** what the change
-genuinely introduces — the dep's own entry, `packages[""].dependencies`, and any
-`dev`/`peer` flags that legitimately flip when a package becomes reachable from a
-production dep — re-sort keys (root first, then lexicographic), and write it back.
+Regenerating the whole tree is fine again. Hand-splicing is not needed, and it
+leaves its own cruft behind — the spliced lockfile had accumulated a stale
+nested entry for `conventional-commits-parser` under `git-raw-commits` that a
+clean regeneration removes.
 
-Then diff the result against `origin/main`'s lockfile and confirm:
-
-```
-added: [...only genuinely new packages...]   removed: []   changed: [...only the above...]
-```
-
-`removed` must be empty, and every entry in `changed` must be one you can name.
-That check is the real gate.
+Still worth doing after any dependency change: **read the lockfile diff**. A
+change that adds packages you cannot name, or removes any, is worth stopping
+for. And `npm link` / `npm unlink` rewrite `package-lock.json` as a side effect
+of something you ran for another reason — running the doc-detective suite
+locally needs `npm link` — so check `git status` afterwards and
+`git checkout -- package-lock.json` if it was touched.
 
 ### Working in a worktree: run `npm ci` first
 
@@ -137,15 +132,15 @@ against another branch's dependency tree, and the type errors and test failures
 that come back read exactly like real code bugs. Diagnosing that once cost a
 detour through four "pre-existing failures" that were nothing of the kind.
 
-`npm ci` is the fix, and it is safe under the lockfile rule above: it installs
-*from* `package-lock.json` and never rewrites it. (`npm install` does rewrite
-it — see above.)
+`npm ci` is the fix. It installs *from* `package-lock.json` and never rewrites
+it, so it cannot drag an unrelated lockfile change into your branch.
 
 `npm run check:deps` asserts direct dependencies are installed in this checkout
 at the locked versions, and names the outside directory when the walk happens.
-It runs automatically before `test`, `typecheck`, and `build`, so the walk now
-announces itself instead of being diagnosed. Before believing any failure that
-smells like a dependency, check that it passes.
+It also asserts the npm floor from the section above. It runs automatically
+before `test`, `typecheck`, and `build`, so both problems now announce
+themselves instead of being diagnosed. Before believing any failure that smells
+like a dependency, check that it passes.
 
 ### Every new feature ships with a short demo video
 
@@ -258,6 +253,14 @@ not the verdict, not the reasoning, however wrong they read afterwards.
 - **Strict TypeScript.** `tsconfig` enables strict settings including
   `noUncheckedIndexedAccess`. Avoid unsound casts and non-null assertions; guard
   indexed access and regex capture groups.
+- **Type-aware lint.** `npm run lint` runs `typescript-eslint`'s
+  `strictTypeChecked` set over `src/` and `test/`. It needs type information, so
+  it is slower than a syntax linter and worth the cost: the thing it catches that
+  `tsc` does not is an *inferred* `any` crossing a boundary — a commander
+  callback parameter, a `JSON.parse`, a `ReadableStream<any>` — which never
+  appears as the word `any` in the source and so cannot be grepped for. When a
+  rule is genuinely wrong here, turn it off in `eslint.config.js` with a comment
+  saying why, rather than scattering inline disables.
 - **Conventional Commits.** Commit messages are linted by commitlint and drive
   semantic-release (`fix:` → patch, `feat:` → minor, `feat!:`/`BREAKING CHANGE`
   → major). Scope extractor work as `feat(extractors): …`.
@@ -273,15 +276,23 @@ npm run typecheck   # tsc --noEmit (strict)
 npm test            # vitest run (unit + built-bin CLI integration)
 npm run build       # tsup -> dist/ (needed before CLI integration tests)
 npm run check:deps  # deps installed here, at locked versions (auto-runs before the three above)
+npm run lint        # eslint, type-aware (strictTypeChecked) over src/ and test/
+npm run test:coverage  # vitest with v8 coverage; reported, not gated
 npm run docs:check-cli  # CLI reference must match src/cli.ts
 npm run docs:check-action  # Action reference must match action.yml
+npm run docs:check-api  # API reference must match the built dist/index.d.ts
+npm run schemas:check   # published built-in schemas immutable and in sync (local)
+npm run schemas:check-published  # ...and the live URLs still serve those bytes.
+                        # Hits the network, so it runs on a daily schedule
+                        # rather than in PR CI — see published-schemas.yml.
 
 # After editing anything under docs/, run the dogfood check too. docmeta
-# validates its own docs, and the Docs deploy is gated on it. Both schemas are
-# required: the local one is the house rule (title + description), the built-in
-# is the Starlight contract this site runs on.
-node dist/cli.js validate "docs/src/content/docs/**/*.{md,mdx}" \
-  -s ./docs/doc-frontmatter.schema.json -s astro:starlight:0.41
+# validates its own docs, and the Docs deploy is gated on it. No paths and no
+# -s: both come from the repo's own docmeta.config.yaml, so this exercises
+# config discovery rather than stepping around it. The override there carries
+# two schemas — the house rule (title + description) and the Starlight contract
+# this site runs on.
+node dist/cli.js validate
 ```
 
 Command cores are tested directly in `test/*.test.ts`; the full CLI is exercised
