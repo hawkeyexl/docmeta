@@ -51,6 +51,16 @@ export interface ApplyOptions {
    * that happens to have a `<task>` root.
    */
   filePath?: string;
+  /**
+   * The same `elements:` paths extraction was given.
+   *
+   * A writer re-reads the document to find where each key came from, and a read
+   * without these paths would not produce a config-declared key at all — so the
+   * writer would treat it as absent and create it somewhere else. That is the
+   * asymmetry proposal 0018 calls a loop, arriving through the options object
+   * rather than through the code.
+   */
+  elements?: readonly string[];
 }
 
 /** Per-run inputs to extraction, beyond the document itself. */

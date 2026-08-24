@@ -39,13 +39,13 @@ interface Edit {
 export function applyHtml(
   original: string,
   patch: MetadataPatch,
-  _options: ApplyOptions = {},
+  options: ApplyOptions = {},
 ): string {
   // `readHtml` strips a leading BOM before parsing — see there for why parse5
   // makes that necessary — so every position it reports is relative to the text
   // it hands back. Splice against that same text and restore the BOM as a
   // prefix, which leaves no offset arithmetic to get wrong.
-  const before = readHtml(original);
+  const before = readHtml(original, { elements: options.elements });
   const content = before.body;
 
   // Structural checks run before the empty-patch shortcut, so an empty patch is
@@ -81,7 +81,8 @@ export function applyHtml(
       edits.push(titleEdit(content, source.el, key, emitted));
       moved.add(source.el);
     } else {
-      // An element-derived key (`head.title`). Refusing is deliberate: the
+      // An element-derived key (`head.title`, or a config `@attr` path).
+      // Refusing is deliberate: the
       // alternative branches are `<meta>` and `<title>`, and writing there
       // would put the value somewhere the reader does not take `head.title`
       // from — which leaves the field unchanged, so `validate` fails again and
@@ -321,7 +322,10 @@ function verify(
   const expected: Record<string, unknown> = { ...before.data, ...patch };
   for (const [key, source] of before.sources) {
     if (key in patch) continue;
-    const els = source.kind === "element-text" ? source.els : [source.el];
+    const els =
+      source.kind === "element-text" || source.kind === "element-attr"
+        ? source.els
+        : [source.el];
     if (els.some((el: Element) => moved.has(el))) expected[key] = actual[key];
   }
   if (!deepEqual(actual, expected)) {

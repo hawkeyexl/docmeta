@@ -29,7 +29,9 @@ export type HtmlSource =
    * occurrence because the key may be a list — a write replaces the whole set,
    * and one element out of several is not a location a write can aim at.
    */
-  | { kind: "element-text"; els: Element[] };
+  | { kind: "element-text"; els: Element[] }
+  /** A value read from an element's attribute — `<link href=…>`. */
+  | { kind: "element-attr"; els: Element[]; name: string };
 
 export interface HtmlRead {
   data: Record<string, unknown>;
@@ -268,7 +270,12 @@ export function readHtml(
       .map(typeValue);
     if (values.length === 0) continue;
     data[spec.key] = values;
-    sources.set(spec.key, { kind: "element-text", els });
+    sources.set(
+      spec.key,
+      spec.attr
+        ? { kind: "element-attr", els, name: spec.attr }
+        : { kind: "element-text", els },
+    );
     const location = els[0]?.sourceCodeLocation;
     const pointer = `/${escapePointerSegment(spec.key)}`;
     if (location?.startLine != null) lineMap.set(pointer, location.startLine);

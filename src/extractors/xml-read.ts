@@ -45,7 +45,14 @@ export type XmlSource =
    * order, because the key is a list — a write replaces the whole set, and one
    * element out of several is not a location a write can aim at.
    */
-  | { kind: "element-text"; els: XmlElement[] };
+  | { kind: "element-text"; els: XmlElement[] }
+  /**
+   * A value read from an element's *attribute* — `<created date=…/>`. Kept
+   * distinct from `element-text` because a writer aiming at the text of an
+   * empty element would produce `<created>2026-01-15</created>`, which is
+   * neither what the reader looks at nor valid against the DTD.
+   */
+  | { kind: "element-attr"; els: XmlElement[]; name: string };
 
 export interface XmlRead {
   data: Record<string, unknown>;
@@ -313,7 +320,12 @@ export function readXml(
           .map(typeValue);
         if (values.length === 0) continue;
         data[key] = spec.repeatable ? values : values[0];
-        sources.set(key, { kind: "element-text", els });
+        sources.set(
+          key,
+          spec.attr
+            ? { kind: "element-attr", els, name: spec.attr }
+            : { kind: "element-text", els },
+        );
         const first = els[0];
         const pointer = `/${escapePointerSegment(key)}`;
         if (first?.lineNumber != null) lineMap.set(pointer, first.lineNumber);
@@ -351,7 +363,12 @@ export function readXml(
       .map(typeValue);
     if (values.length === 0) continue;
     data[spec.key] = values;
-    sources.set(spec.key, { kind: "element-text", els });
+    sources.set(
+      spec.key,
+      spec.attr
+        ? { kind: "element-attr", els, name: spec.attr }
+        : { kind: "element-text", els },
+    );
     const first = els[0];
     const pointer = `/${escapePointerSegment(spec.key)}`;
     if (first?.lineNumber != null) lineMap.set(pointer, first.lineNumber);

@@ -30,6 +30,7 @@ import {
   type MetadataPatch,
 } from "../types.js";
 import { childElements, metadataContainers, type DitaShape } from "./dita.js";
+import { elementEdits } from "./element-write.js";
 import type { XmlElement, XmlRead } from "./xml-read.js";
 import {
   lineStarts,
@@ -68,15 +69,30 @@ export function ditaEdits(
   const fresh: { key: string; value: string }[] = [];
 
   for (const [key, raw] of Object.entries(patch)) {
-    const emitted = emit(key, raw);
     const source = read.sources.get(key);
-
+    // Emitted per branch rather than up front. A list-valued key — `author*` in
+    // the content model — is emitted one item at a time by `elementEdits`;
+    // emitting the whole array here would serialize it as a YAML block, hit the
+    // "needs more than one line" guard, and refuse a write that is perfectly
+    // expressible as two `<author>` elements.
     if (source?.kind === "attr") {
-      edits.push(attributeEdit(content, starts, root, source.name, emitted, escape));
+      edits.push(
+        attributeEdit(content, starts, root, source.name, emit(key, raw), escape),
+      );
     } else if (source?.kind === "othermeta") {
-      edits.push(otherMetaEdit(content, starts, source.el, key, emitted, escape));
+      edits.push(
+        otherMetaEdit(content, starts, source.el, key, emit(key, raw), escape),
+      );
+    } else if (
+      source?.kind === "element-text" ||
+      source?.kind === "element-attr"
+    ) {
+      // A typed prolog element — <author>, <created date=…>. Written where it
+      // was read, which for DITA also means written where the DTD already
+      // allows it: the element exists, so only its value changes.
+      edits.push(...elementEdits(content, starts, source, key, raw, emit, escape));
     } else {
-      fresh.push({ key, value: emitted });
+      fresh.push({ key, value: emit(key, raw) });
     }
   }
 
