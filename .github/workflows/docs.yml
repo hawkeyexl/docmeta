@@ -17,12 +17,12 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Least privilege for the deploy: read the repo, write Pages, mint the OIDC
-# token deploy-pages needs.
+# Least privilege. `pages: write` and the OIDC token belong to the one job that
+# deploys, not to the workflow — pull requests run here now, and a token that
+# can publish Pages has no business existing in a run whose whole purpose is to
+# check that the site builds.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # Only one Pages deploy at a time; let an in-flight run finish rather than
 # cancelling it (avoids leaving Pages in a half-deployed state).
@@ -92,6 +92,11 @@ jobs:
     needs: build
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    # The only job that needs more than `contents: read`.
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
