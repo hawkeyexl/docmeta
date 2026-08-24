@@ -28,6 +28,7 @@ import {
 } from "./dita.js";
 import {
   liftKey,
+  pairValues,
   parseElementPath,
   type ElementPath,
 } from "./element-key.js";
@@ -165,31 +166,6 @@ function ditaLiftedElements(
   };
   walk(container);
   return out;
-}
-
-/**
- * Read a value out of each element, dropping the ones that have none — and
- * dropping the element with it.
- *
- * The pairing is the point. `values[i]` must have come from `els[i]`, because
- * that is how a write knows where to put the replacement back. Filtering the
- * values alone leaves the two lists a different length and silently
- * misaligned, which surfaces as a write aimed at an attribute the element does
- * not carry.
- */
-function pairValues(
-  els: XmlElement[],
-  read: (el: XmlElement) => string | null | undefined,
-): { els: XmlElement[]; values: unknown[] } {
-  const keptEls: XmlElement[] = [];
-  const values: unknown[] = [];
-  for (const el of els) {
-    const raw = read(el);
-    if (raw == null) continue;
-    keptEls.push(el);
-    values.push(typeValue(raw));
-  }
-  return { els: keptEls, values };
 }
 
 /**
@@ -377,8 +353,10 @@ export function readXml(
         // `@date` — must not stay in `els`, or `els[i]` stops naming the
         // element `values[i]` came from and a write aims at an attribute that
         // is not there.
-        const found = pairValues(els, (el) =>
-          spec.attr ? el.getAttribute(spec.attr) : elementText(el),
+        const found = pairValues(
+          els,
+          (el) => (spec.attr ? el.getAttribute(spec.attr) : elementText(el)),
+          typeValue,
         );
         if (found.values.length === 0) continue;
         data[key] = spec.repeatable ? found.values : found.values[0];
@@ -417,8 +395,10 @@ export function readXml(
     const spec: ElementPath = parseElementPath(raw);
     if (data[spec.key] !== undefined) continue;
     const matched = matchElementPath(root, spec.segments);
-    const found = pairValues(matched, (el) =>
-      spec.attr ? el.getAttribute(spec.attr) : elementText(el, true),
+    const found = pairValues(
+      matched,
+      (el) => (spec.attr ? el.getAttribute(spec.attr) : elementText(el, true)),
+      typeValue,
     );
     if (found.values.length === 0) continue;
     data[spec.key] = found.values;

@@ -13,6 +13,7 @@ import { parse as parseYamlScalar } from "yaml";
 import { escapePointerSegment } from "./pointer.js";
 import {
   liftKey,
+  pairValues,
   parseElementPath,
   type ElementPath,
 } from "./element-key.js";
@@ -241,8 +242,11 @@ export function readHtml(
   // an SVG `<title>` down in it labels a graphic rather than the page — which is
   // also why this walks `head` directly instead of reusing the visitor above.
   if (head) {
-    for (const [key, els] of liftableHeadChildren(head)) {
-      const values = els.map((el) => typeValue(headText(el) ?? ""));
+    for (const [key, group] of liftableHeadChildren(head)) {
+      // The same pairing the config path uses. `liftableHeadChildren` has
+      // already filtered these, so nothing is dropped here — using one helper
+      // for all three loops is what stops a fourth from being written by hand.
+      const { els, values } = pairValues(group, headText, typeValue);
       // HTML has a content model, so where it fixes the cardinality the key
       // follows it. `<title>` is permitted once, so it is a scalar rather than
       // a one-item list; generic XML defaults to a list precisely because it
@@ -263,20 +267,22 @@ export function readHtml(
   for (const raw of options?.elements ?? []) {
     const spec: ElementPath = parseElementPath(raw);
     if (data[spec.key] !== undefined) continue;
-    const els = matchHtmlPath(doc, spec.segments);
-    const values = els
-      .map((el) => (spec.attr ? attrValue(el, spec.attr) : headText(el, true)))
-      .filter((v): v is string => v != null)
-      .map(typeValue);
-    if (values.length === 0) continue;
-    data[spec.key] = values;
+    // Paired, so `els[i]` still names the element `values[i]` came from — a
+    // `<link>` with no `@href` must leave the element list with its value.
+    const found = pairValues(
+      matchHtmlPath(doc, spec.segments),
+      (el) => (spec.attr ? attrValue(el, spec.attr) : headText(el, true)),
+      typeValue,
+    );
+    if (found.values.length === 0) continue;
+    data[spec.key] = found.values;
     sources.set(
       spec.key,
       spec.attr
-        ? { kind: "element-attr", els, name: spec.attr }
-        : { kind: "element-text", els },
+        ? { kind: "element-attr", els: found.els, name: spec.attr }
+        : { kind: "element-text", els: found.els },
     );
-    const location = els[0]?.sourceCodeLocation;
+    const location = found.els[0]?.sourceCodeLocation;
     const pointer = `/${escapePointerSegment(spec.key)}`;
     if (location?.startLine != null) lineMap.set(pointer, location.startLine);
     if (location?.startCol != null) colMap.set(pointer, location.startCol);

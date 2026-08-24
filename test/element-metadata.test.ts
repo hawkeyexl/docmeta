@@ -330,3 +330,34 @@ describe("table lookups do not answer from the prototype chain", () => {
     expect(r.data["prolog.author"]).toBeUndefined();
   });
 });
+
+describe("elements and values stay paired in HTML too", () => {
+  // The XML reader was fixed for this and the HTML one was not, which is the
+  // shape of bug a shared helper exists to prevent. A <link> with no @href
+  // must leave the element list along with its missing value, or `els[i]` stops
+  // naming the element `values[i]` came from.
+  const PAGE = `<html><head><title>T</title>
+<link rel="stylesheet"/>
+<link rel="canonical" href="https://example.com/a"/></head><body></body></html>`;
+  const elements = ["html/head/link@href"];
+
+  it("drops the element that contributed no value", () => {
+    const r = htmlExtractor.extract(PAGE, "p.html", { elements });
+    expect(r.data["head.link"]).toEqual(["https://example.com/a"]);
+  });
+
+  it("puts the caret on the element the value came from", () => {
+    const r = htmlExtractor.extract(PAGE, "p.html", { elements });
+    // The href-bearing <link> is on line 3; the bare one on line 2.
+    expect(r.lineFor("/head.link")).toBe(3);
+  });
+
+  it("lets the value be written back, rather than tripping the count rule", () => {
+    const next =
+      htmlExtractor.apply?.(PAGE, { "head.link": ["https://example.com/b"] }, {
+        elements,
+      }) ?? "";
+    expect(next).toContain('href="https://example.com/b"');
+    expect(next).toContain('<link rel="stylesheet"/>');
+  });
+});

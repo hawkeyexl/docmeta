@@ -94,7 +94,7 @@ export function applyHtml(
         const one = emitScalar(key, values[i]);
         edits.push(
           source.kind === "element-attr"
-            ? elementAttrEdit(content, el, source.name, key, one)
+            ? headAttrEdit(content, el, source.name, key, one)
             : elementTextEdit(el, key, one),
         );
         moved.add(el);
@@ -125,11 +125,18 @@ function metaEdit(
   key: string,
   emitted: string,
 ): Edit {
-  return elementAttrEdit(content, el, "content", key, emitted);
+  return headAttrEdit(content, el, "content", key, emitted);
 }
 
-/** Replace the value span of a named attribute on any element. */
-function elementAttrEdit(
+/**
+ * Replace the value span of a named attribute on any element.
+ *
+ * Named apart from `element-write.ts`'s exported `elementAttrEdit`, which this
+ * module already imports from. The two do the same job on different trees —
+ * parse5 nodes here, xmldom nodes there — and cannot be shared, so they should
+ * at least not read as the same function.
+ */
+function headAttrEdit(
   content: string,
   el: Element,
   attrName: string,

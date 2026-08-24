@@ -34,6 +34,35 @@ export function liftKey(parentName: string, elementName: string): string {
   return `${parentName.toLowerCase()}.${elementName.toLowerCase()}`;
 }
 
+/**
+ * Read a value out of each element, dropping the ones that have none — and
+ * dropping the element with it.
+ *
+ * The pairing is the point. `values[i]` must have come from `els[i]`, because
+ * that is how a write knows where to put the replacement back. Filtering the
+ * values alone leaves the two lists a different length and silently
+ * misaligned, which surfaces later as a write aimed at an attribute the element
+ * does not carry, or a caret on an element that contributed nothing.
+ *
+ * Generic over the node type, and shared, because the XML and HTML readers each
+ * had their own copy of the loop and only one of them was fixed the first time.
+ */
+export function pairValues<E>(
+  els: readonly E[],
+  read: (el: E) => string | null | undefined,
+  type: (raw: string) => unknown,
+): { els: E[]; values: unknown[] } {
+  const keptEls: E[] = [];
+  const values: unknown[] = [];
+  for (const el of els) {
+    const raw = read(el);
+    if (raw == null) continue;
+    keptEls.push(el);
+    values.push(type(raw));
+  }
+  return { els: keptEls, values };
+}
+
 /** One `elements:` entry, parsed. */
 export interface ElementPath {
   /** Element names from the document root down, lowercased. At least two. */
@@ -49,10 +78,16 @@ export interface ElementPath {
  *
  * `elements:` paths are a handful of strings reused for every file in the run,
  * so re-splitting them per document is pure waste — a thousand files and three
- * paths is three thousand parses of the same three strings. The map is bounded
- * by the config, not by the corpus.
+ * paths is three thousand parses of the same three strings.
+ *
+ * Capped, because this module is also reachable through the exported
+ * `readXml`/`readHtml`. In the CLI the key set is the config and stays tiny; an
+ * embedding that passed a different path per request would otherwise grow a map
+ * that never evicts. Past the cap parsing simply happens again, which is the
+ * behaviour before the cache existed.
  */
 const parsed = new Map<string, ElementPath>();
+const PARSE_CACHE_MAX = 256;
 
 /**
  * Parse an `elements:` path — a slash-separated child path from the document
@@ -74,7 +109,7 @@ export function parseElementPath(path: string): ElementPath {
   const hit = parsed.get(path);
   if (hit) return hit;
   const result = parseElementPathUncached(path);
-  parsed.set(path, result);
+  if (parsed.size < PARSE_CACHE_MAX) parsed.set(path, result);
   return result;
 }
 
