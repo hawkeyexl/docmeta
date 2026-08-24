@@ -102,6 +102,36 @@ Where a content model *does* state the cardinality, the key follows it.
 [DITA's keys](/docmeta/reference/dita-schema/) are typed element by element
 because the OASIS content model says which repeat.
 
+## Key types
+
+The single thing to check before writing a schema against a lifted key: **is it
+a list or a scalar?** It depends on the format, and getting it wrong produces a
+confusing failure — the field is present and has a value, and the type is simply
+not the one you declared.
+
+| Format | Key type | Decided by |
+|---|---|---|
+| Generic XML | **always a list** | nothing — XML states no cardinality |
+| HTML | scalar for `head.title`, list otherwise | the HTML content model (one `<title>`) |
+| DITA | per key: `prolog.author` is a list, `prolog.source` is a scalar | the OASIS content model (`author*` vs `source?`) |
+| Any `elements:` config path | **always a list** | nothing — a path states no cardinality |
+
+```json
+"article.byline": { "type": "string" }                                 // always fails
+"article.byline": { "type": "array", "items": { "type": "string" } }   // right
+"article.byline": { "type": "array", "items": { "type": "string" }, "maxItems": 1 }
+```
+
+The first form fails on **every** document, including one with exactly one
+`<byline>`. Nothing warns you: it is valid JSON Schema and simply never matches.
+
+Run `docmeta get` against a real file to see the shape a key actually has before
+writing a schema for it:
+
+```bash
+docmeta get article.byline docs/api.xml -f json
+```
+
 ## `elements:` — reaching what the convention does not
 
 The convention stops short on purpose. Naming a path is how a repo says "this
@@ -127,9 +157,11 @@ name one key is the ambiguity this design removes.
 
 Four behaviours worth knowing:
 
-- **Config extends the convention.** A path producing a key the convention
-  already filled is a no-op, so naming `concept/prolog/source` cannot retype it
-  from the scalar its content model says it is.
+- **Config extends the convention.** An `elements:` path whose key the
+  convention or a content model already filled has no effect. That is what stops
+  naming `concept/prolog/source` from retyping it out of the scalar its content
+  model says it is — and it means a path cannot be used to *override* a key,
+  only to add one the convention does not reach.
 - **`elements:` accumulates where `schemas:` replaces.** A schema set is a
   complete statement about how a file is judged; element paths are a list of
   extra places to look, so the repo-wide list and *every* matching override all

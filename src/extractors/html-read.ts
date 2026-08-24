@@ -107,17 +107,26 @@ function headText(el: Element, allowEmpty = false): string | undefined {
  * stylesheets into one list and discard the `rel` that distinguished them. An
  * `elements:` path naming the attribute addresses them instead.
  */
-function liftableHeadChildren(head: Element): Map<string, Element[]> {
-  const out = new Map<string, Element[]>();
+function liftableHeadChildren(
+  head: Element,
+): Map<string, { els: Element[]; texts: string[] }> {
+  const out = new Map<string, { els: Element[]; texts: string[] }>();
   for (const node of head.childNodes) {
     if (!defaultTreeAdapter.isElementNode(node)) continue;
     const name = node.tagName.toLowerCase();
     if (HEAD_NOT_METADATA.has(name)) continue;
-    if (headText(node) === undefined) continue;
+    // Read once and carried out with the element. Testing here and reading
+    // again at the call site walked every child's text twice.
+    const text = headText(node);
+    if (text === undefined) continue;
     const key = liftKey("head", name);
     const group = out.get(key);
-    if (group) group.push(node);
-    else out.set(key, [node]);
+    if (group) {
+      group.els.push(node);
+      group.texts.push(text);
+    } else {
+      out.set(key, { els: [node], texts: [text] });
+    }
   }
   return out;
 }
@@ -242,11 +251,13 @@ export function readHtml(
   // an SVG `<title>` down in it labels a graphic rather than the page — which is
   // also why this walks `head` directly instead of reusing the visitor above.
   if (head) {
-    for (const [key, group] of liftableHeadChildren(head)) {
-      // The same pairing the config path uses. `liftableHeadChildren` has
-      // already filtered these, so nothing is dropped here — using one helper
-      // for all three loops is what stops a fourth from being written by hand.
-      const { els, values } = pairValues(group, headText, typeValue);
+    for (const [key, { els, texts }] of liftableHeadChildren(head)) {
+      // Not `pairValues` here, and still paired: `els` and `texts` are appended
+      // in the same iteration, so index i names the element value i came from
+      // by construction rather than by a helper enforcing it afterwards. That
+      // is the invariant the config paths need `pairValues` for — those match
+      // elements first and only then discover which ones carry a value.
+      const values = texts.map(typeValue);
       // HTML has a content model, so where it fixes the cardinality the key
       // follows it. `<title>` is permitted once, so it is a scalar rather than
       // a one-item list; generic XML defaults to a list precisely because it
