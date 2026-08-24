@@ -27,6 +27,13 @@ import tgdp10 from "../schemas/tgdp/1.0.json" with { type: "json" };
 import docusaurusDocs310 from "../schemas/docusaurus-docs/3.10.json" with { type: "json" };
 import docusaurusBlog310 from "../schemas/docusaurus-blog/3.10.json" with { type: "json" };
 import docusaurusPages310 from "../schemas/docusaurus-pages/3.10.json" with { type: "json" };
+import starlight041 from "../schemas/starlight/0.41.json" with { type: "json" };
+import antora31 from "../schemas/antora/3.1.json" with { type: "json" };
+import sphinx91 from "../schemas/sphinx/9.1.json" with { type: "json" };
+import myst110 from "../schemas/myst/1.10.json" with { type: "json" };
+import ogp10 from "../schemas/ogp/1.0.json" with { type: "json" };
+import dcmi11 from "../schemas/dcmi/1.1.json" with { type: "json" };
+import microsoftLearn10 from "../schemas/microsoft-learn/1.0.json" with { type: "json" };
 
 export interface BuiltinInfo {
   id: string;
@@ -43,6 +50,13 @@ const BUILTINS = new Map<string, Record<string, unknown>>([
   ["docusaurus:docs:3.10", docusaurusDocs310 as Record<string, unknown>],
   ["docusaurus:blog:3.10", docusaurusBlog310 as Record<string, unknown>],
   ["docusaurus:pages:3.10", docusaurusPages310 as Record<string, unknown>],
+  ["astro:starlight:0.41", starlight041 as Record<string, unknown>],
+  ["antora:page:3.1", antora31 as Record<string, unknown>],
+  ["sphinx:docinfo:9.1", sphinx91 as Record<string, unknown>],
+  ["myst:frontmatter:1.10", myst110 as Record<string, unknown>],
+  ["ogp:article:1.0", ogp10 as Record<string, unknown>],
+  ["dcmi:elements:1.1", dcmi11 as Record<string, unknown>],
+  ["microsoft:learn:1.0", microsoftLearn10 as Record<string, unknown>],
 ]);
 
 export function listBuiltins(): BuiltinInfo[] {
@@ -86,6 +100,13 @@ const PUBLISHED_ALIAS: ReadonlyMap<string, string> = new Map([
   [`${PUBLISHED_BASE}docusaurus-docs/3.10.json`, "docusaurus:docs:3.10"],
   [`${PUBLISHED_BASE}docusaurus-blog/3.10.json`, "docusaurus:blog:3.10"],
   [`${PUBLISHED_BASE}docusaurus-pages/3.10.json`, "docusaurus:pages:3.10"],
+  [`${PUBLISHED_BASE}starlight/0.41.json`, "astro:starlight:0.41"],
+  [`${PUBLISHED_BASE}antora/3.1.json`, "antora:page:3.1"],
+  [`${PUBLISHED_BASE}sphinx/9.1.json`, "sphinx:docinfo:9.1"],
+  [`${PUBLISHED_BASE}myst/1.10.json`, "myst:frontmatter:1.10"],
+  [`${PUBLISHED_BASE}ogp/1.0.json`, "ogp:article:1.0"],
+  [`${PUBLISHED_BASE}dcmi/1.1.json`, "dcmi:elements:1.1"],
+  [`${PUBLISHED_BASE}microsoft-learn/1.0.json`, "microsoft:learn:1.0"],
 ]);
 
 /**

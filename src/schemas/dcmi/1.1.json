@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "dcmi:elements:1.1",
+  "title": "Dublin Core Metadata Element Set v1.1",
+  "description": "The fifteen elements of the Dublin Core Metadata Element Set, as published in the DCMI Recommendation of 2020-01-20. DCMI marks no element mandatory, so this requires nothing and checks shape only. Every element is repeatable in Dublin Core, so each accepts a single value or a list of them. `type` is deliberately *not* enumerated: DCMI recommends a controlled vocabulary such as the DCMI Type Vocabulary rather than mandating one, and enumerating it here would reject conforming documents that use a different vocabulary. Element names are the unprefixed terms the Recommendation defines; documents using the DCMI-HTML `DC.title` spelling in `<meta name>` need a schema of their own. See https://www.dublincore.org/specifications/dublin-core/dcmi-terms/",
+  "type": "object",
+  "additionalProperties": true,
+  "$defs": {
+    "text": {
+      "if": { "type": "array" },
+      "then": { "items": { "type": "string" } },
+      "else": { "type": "string" }
+    },
+    "w3cdtf": {
+      "type": "string",
+      "pattern": "^[0-9]{4}(-[0-9]{2}(-[0-9]{2}(T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\\.[0-9]+)?)?(Z|[+-][0-9]{2}:[0-9]{2}))?)?)?$"
+    }
+  },
+  "properties": {
+    "title": {
+      "$ref": "#/$defs/text",
+      "description": "A name given to the resource."
+    },
+    "creator": {
+      "$ref": "#/$defs/text",
+      "description": "An entity primarily responsible for making the resource."
+    },
+    "contributor": {
+      "$ref": "#/$defs/text",
+      "description": "An entity responsible for making contributions to the resource."
+    },
+    "publisher": {
+      "$ref": "#/$defs/text",
+      "description": "An entity responsible for making the resource available."
+    },
+    "subject": {
+      "$ref": "#/$defs/text",
+      "description": "The topic of the resource."
+    },
+    "description": {
+      "$ref": "#/$defs/text",
+      "description": "An account of the resource."
+    },
+    "date": {
+      "if": { "type": "array" },
+      "then": { "items": { "$ref": "#/$defs/w3cdtf" } },
+      "else": { "$ref": "#/$defs/w3cdtf" },
+      "description": "A point or period of time associated with an event in the lifecycle of the resource. Encoded as W3CDTF, which permits reduced precision — `2026`, `2026-08` and `2026-08-23` are all legal, and a full datetime carries a timezone."
+    },
+    "type": {
+      "$ref": "#/$defs/text",
+      "description": "The nature or genre of the resource. Recommended best practice is a controlled vocabulary such as the DCMI Type Vocabulary (Collection, Dataset, Event, Image, InteractiveResource, MovingImage, PhysicalObject, Service, Software, Sound, StillImage, Text), but DCMI does not require one, so no enum is imposed."
+    },
+    "format": {
+      "$ref": "#/$defs/text",
+      "description": "The file format, physical medium, or dimensions of the resource. Recommended best practice is a MIME type."
+    },
+    "identifier": {
+      "$ref": "#/$defs/text",
+      "description": "An unambiguous reference to the resource within a given context."
+    },
+    "source": {
+      "$ref": "#/$defs/text",
+      "description": "A related resource from which the described resource is derived."
+    },
+    "language": {
+      "$ref": "#/$defs/text",
+      "description": "A language of the resource. Recommended best practice is an IETF BCP 47 tag."
+    },
+    "relation": {
+      "$ref": "#/$defs/text",
+      "description": "A related resource."
+    },
+    "coverage": {
+      "$ref": "#/$defs/text",
+      "description": "The spatial or temporal topic of the resource, its spatial applicability, or the jurisdiction under which it is relevant."
+    },
+    "rights": {
+      "$ref": "#/$defs/text",
+      "description": "Information about rights held in and over the resource."
+    }
+  }
+}

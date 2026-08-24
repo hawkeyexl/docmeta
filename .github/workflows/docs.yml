@@ -24,8 +24,16 @@ concurrency:
 jobs:
   # Dogfood: build the docmeta CLI from this repo and use it to validate the
   # frontmatter of the docs pages. -s overrides the default OKF schema (which
-  # requires `type`) with a docs-specific schema that requires title +
-  # description.
+  # requires `type`) with two schemas that compose:
+  #
+  #   ./docs/doc-frontmatter.schema.json  the house rule — title + description
+  #   astro:starlight:0.41                the platform contract this site runs on
+  #
+  # The house schema stays because Starlight itself does not require
+  # `description`, and this site does. What the built-in adds is everything the
+  # house schema left unconstrained: `sidebar.order` must be a number,
+  # `template` must be `doc` or `splash`, a `badge` object must carry `text`.
+  # Before it existed, every Starlight key on every page went unchecked.
   validate-docs:
     runs-on: ubuntu-latest
     steps:
@@ -41,7 +49,8 @@ jobs:
       - name: Validate docs frontmatter (dogfood)
         run: |
           node dist/cli.js validate "docs/src/content/docs/**/*.{md,mdx}" \
-            -s ./docs/doc-frontmatter.schema.json --format github
+            -s ./docs/doc-frontmatter.schema.json \
+            -s astro:starlight:0.41 --format github
 
   # Build the Astro/Starlight static site and upload it as a Pages artifact.
   build:

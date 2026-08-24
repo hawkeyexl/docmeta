@@ -277,9 +277,11 @@ npm run docs:check-cli  # CLI reference must match src/cli.ts
 npm run docs:check-action  # Action reference must match action.yml
 
 # After editing anything under docs/, run the dogfood check too. docmeta
-# validates its own docs, and the Docs deploy is gated on it.
+# validates its own docs, and the Docs deploy is gated on it. Both schemas are
+# required: the local one is the house rule (title + description), the built-in
+# is the Starlight contract this site runs on.
 node dist/cli.js validate "docs/src/content/docs/**/*.{md,mdx}" \
-  -s ./docs/doc-frontmatter.schema.json
+  -s ./docs/doc-frontmatter.schema.json -s astro:starlight:0.41
 ```
 
 Command cores are tested directly in `test/*.test.ts`; the full CLI is exercised

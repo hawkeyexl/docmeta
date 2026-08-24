@@ -1,0 +1,164 @@
+---
+title: Built-in metadata vocabularies
+description: The Open Graph, Dublin Core, and Microsoft Learn schemas shipped with docmeta, covering the fields each requires, the formats they enforce, and the vocabularies they deliberately leave unenumerated.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Three built-ins describe a document to something *outside* your docs site. A
+[platform schema](/docmeta/reference/platform-schemas/) says what your generator
+will parse; a [taxonomy schema](/docmeta/reference/taxonomy-schemas/) says what
+kind of page this is; these say how the page presents itself to a social card
+renderer, a catalogue, or another publisher's build.
+
+| Id | Speaks to | Requires |
+|---|---|---|
+| `ogp:article:1.0` | Social and link-preview renderers | `og:title`, `og:type`, `og:url`, `og:image` |
+| `dcmi:elements:1.1` | Catalogues, repositories, library systems | nothing |
+| `microsoft:learn:1.0` | The Microsoft Learn publishing build | `title`, `description`, `author`, `ms.author`, `ms.date` |
+
+## `ogp:article:1.0`
+
+The [Open Graph protocol](https://ogp.me/) basic properties plus the `article`
+object type. This is the built-in that checks something **no build tool
+checks**: nothing fails when `og:image` is missing, the page builds and deploys
+perfectly, and then renders as a grey box everywhere it is shared.
+
+In HTML these live on `<meta property="…">`. docmeta reads `property` alongside
+`name`, so an ordinary HTML page needs no special handling:
+
+```html
+<meta property="og:title" content="Validate document metadata in CI" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://example.com/docs/ci" />
+<meta property="og:image" content="https://example.com/img/card.png" />
+```
+
+In front matter they are ordinary keys, quoted because they contain a colon:
+
+```markdown
+---
+"og:title": Validate document metadata in CI
+"og:type": article
+---
+```
+
+### Fields
+
+| Property | Type | Notes |
+|---|---|---|
+| `og:title` | string | **Required.** Non-empty. |
+| `og:type` | string | **Required.** Not enumerated — the protocol allows namespaced and vendor types. |
+| `og:url` | URI | **Required.** Absolute. A site-root path is not a canonical URL. |
+| `og:image` | URI \| array | **Required.** |
+| `og:description` | string | One or two sentences. |
+| `og:site_name` | string | |
+| `og:determiner` | enum | `a`, `an`, `the`, `""`, `auto`. |
+| `og:locale` | string | `language_TERRITORY`, such as `en_US`. |
+| `og:locale:alternate` | string \| array | Same form. |
+| `og:audio`, `og:video` | URI \| array | |
+| `article:published_time` | date-time | ISO 8601. |
+| `article:modified_time` | date-time | ISO 8601. |
+| `article:expiration_time` | date-time | ISO 8601. |
+| `article:author` | string \| array | |
+| `article:section` | string | |
+| `article:tag` | string \| array | |
+
+<Aside type="caution" title="`en-US` is rejected, and that is the point">
+`og:locale` takes `language_TERRITORY` with an underscore. The hyphenated BCP 47
+spelling `en-US` is correct almost everywhere else in web metadata and is wrong
+here, which is exactly the class of mistake that survives review. The pattern
+accepts `en` and `en_US` and rejects `en-US`.
+</Aside>
+
+<Aside type="note" title="Repeated `<meta>` tags collapse">
+Open Graph allows a property to repeat — several `article:tag` tags, several
+`og:image` tags. docmeta's HTML reader keeps the last occurrence of a key, so a
+repeated property arrives as a single string. The array forms in the table are
+there for front matter, where a real list is possible.
+</Aside>
+
+## `dcmi:elements:1.1`
+
+The fifteen elements of the Dublin Core Metadata Element Set, as published in
+the DCMI Recommendation of 2020-01-20. That date is worth noticing: this is a
+frozen specification, so unlike the toolchain pins, `1.1` will stay accurate
+indefinitely.
+
+`contributor`, `coverage`, `creator`, `date`, `description`, `format`,
+`identifier`, `language`, `publisher`, `relation`, `rights`, `source`,
+`subject`, `title`, `type`.
+
+DCMI marks **no element mandatory**, so the schema requires nothing. Every
+element is repeatable in Dublin Core, so each accepts a single value or a list:
+
+```markdown
+---
+creator:
+  - Ada Lovelace
+  - Charles Babbage
+date: 2026-08
+---
+```
+
+`date` is the one element with a format. It is encoded as W3CDTF, which permits
+reduced precision — `2026`, `2026-08`, and `2026-08-23` are all valid, and a
+full datetime carries a timezone. `June 5th` is not.
+
+<Aside type="note" title="`type` is not enumerated, on purpose">
+DCMI publishes a Type Vocabulary — Collection, Dataset, Event, Image,
+InteractiveResource, MovingImage, PhysicalObject, Service, Software, Sound,
+StillImage, Text — but describes using it as *recommended best practice* rather
+than requiring it. Enumerating it here would reject conforming documents that
+use a different controlled vocabulary. If your repo has standardised on the DCMI
+Type Vocabulary, that is a one-property schema of your own worth writing, `$ref`-ing
+this built-in and narrowing `type`.
+</Aside>
+
+<Aside type="caution" title="Element names are unprefixed">
+This schema uses the bare term names the Recommendation defines — `title`,
+`creator`, `date`. Documents that use the DCMI-HTML profile spelling in
+`<meta name="DC.title">` carry a different set of keys and are not covered by
+this built-in.
+</Aside>
+
+## `microsoft:learn:1.0`
+
+The front matter Microsoft Learn requires and recommends on a documentation
+article. Of every built-in, this is the closest analogue to what docmeta itself
+does: five attributes whose absence fails a real publishing build.
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `title` | string | **Required.** |
+| `description` | string | **Required.** 75–300 characters. |
+| `author` | string | **Required.** The author's GitHub account ID, not a display name. |
+| `ms.author` | string | **Required.** Microsoft alias, without `@microsoft.com`. |
+| `ms.date` | string | **Required.** `MM/DD/YYYY`. |
+| `ms.topic` | string | The kind of article. Not enumerated. |
+| `ms.service`, `ms.subservice` | string | |
+| `ms.custom`, `ms.collection`, `ms.devlang`, `keywords` | string \| array | |
+| `ms.reviewer` | string | |
+| `ms.prod`, `ms.technology` | string | For repos that use `ms.prod` instead of `ms.service`. |
+| `zone_pivot_groups` | string | |
+
+Three of these encode a rule that a generic check would miss:
+
+- **`ms.date` is `MM/DD/YYYY`, not ISO 8601.** `2026-08-23` is the correct
+  spelling nearly everywhere else and is wrong here; `08/23/2026` is right. A
+  `format: date` check would have passed the wrong one.
+- **`description` has a floor, not just a ceiling.** Microsoft documents the
+  hard range as 75–300 characters and recommends 115–145. Only the hard range is
+  enforced, because the recommendation is guidance and the range is the build
+  rule.
+- **`ms.author` rejects an email address.** The alias goes in bare, and writing
+  the full address is the common error.
+
+<Aside type="note" title="`ms.topic` is a string, because the real list is not public">
+The published docfx-era set (`article`, `get-started-article`, `hero-article`,
+`hub-page`, `landing-page`, `non-content`, `reference`, `search`) and the values
+Microsoft's own repositories use (`conceptual`, `quickstart`, `tutorial`,
+`how-to`, `overview`, `include`) do not agree, and the authoritative taxonomy is
+internal to Microsoft. An enum assembled from those examples would fail correct
+articles, so `ms.topic` is checked for presence and shape only.
+</Aside>

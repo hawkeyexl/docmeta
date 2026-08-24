@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "astro:starlight:0.41",
+  "title": "Astro Starlight front matter v0.41",
+  "description": "Front matter accepted by Astro Starlight as of 0.41. Unlike the Docusaurus built-ins, this one requires `title`: Starlight refuses to build a page without it, so its absence is an error rather than a default. Every other field is optional and checked only when present. Unknown keys are tolerated, matching Starlight's own schema extension mechanism. See https://starlight.astro.build/reference/frontmatter/",
+  "type": "object",
+  "required": ["title"],
+  "additionalProperties": true,
+  "$defs": {
+    "linkRef": {
+      "description": "A pagination link: `false` to hide it, `true` for the default, a string to relabel it, or an object to set both target and text. Branched with `if`/`then` rather than `anyOf` so a fault inside the object form is reported once, against the key that is wrong.",
+      "if": { "type": "object" },
+      "then": {
+        "additionalProperties": false,
+        "properties": {
+          "link": { "type": "string" },
+          "label": { "type": "string" }
+        }
+      },
+      "else": { "type": ["boolean", "string"] }
+    },
+    "headingLevel": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 6
+    }
+  },
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Shown at the top of the page, in the browser tab, and in page metadata. The only field Starlight requires."
+    },
+    "description": {
+      "type": "string",
+      "description": "Used for page metadata and search engine optimization."
+    },
+    "slug": {
+      "type": "string",
+      "description": "Overrides the URL slug derived from the file path."
+    },
+    "editUrl": {
+      "type": ["string", "boolean"],
+      "format": "uri-reference",
+      "description": "Customizes the edit-page link, or disables it with `false`. The format constrains the string branch only."
+    },
+    "head": {
+      "type": "array",
+      "description": "Additional tags injected into this page's `<head>`.",
+      "items": {
+        "type": "object",
+        "required": ["tag"],
+        "properties": {
+          "tag": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The tag name, such as `meta` or `script`."
+          },
+          "attrs": {
+            "type": "object",
+            "description": "Attributes set on the tag."
+          },
+          "content": {
+            "type": "string",
+            "description": "Text content placed inside the tag."
+          }
+        }
+      }
+    },
+    "tableOfContents": {
+      "description": "Controls which headings the on-page table of contents lists, or `false` to hide it entirely. Written as `if`/`then` rather than `anyOf` so that a bad heading level is reported against `/tableOfContents/maxHeadingLevel` — an `anyOf` collapses every branch failure onto the parent, which is the wrong caret.",
+      "if": { "type": "object" },
+      "then": {
+        "additionalProperties": false,
+        "properties": {
+          "minHeadingLevel": { "$ref": "#/$defs/headingLevel" },
+          "maxHeadingLevel": { "$ref": "#/$defs/headingLevel" }
+        }
+      },
+      "else": { "type": "boolean", "const": false }
+    },
+    "template": {
+      "type": "string",
+      "enum": ["doc", "splash"],
+      "description": "Layout template. `doc` is the default; `splash` is the wider landing-page layout that pairs with `hero`."
+    },
+    "hero": {
+      "type": "object",
+      "description": "Hero block shown at the top of the page, normally with `template: splash`.",
+      "properties": {
+        "title": { "type": "string" },
+        "tagline": { "type": "string" },
+        "image": {
+          "type": "object",
+          "description": "One image, a light/dark pair, or raw HTML."
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["text", "link"],
+            "properties": {
+              "text": { "type": "string" },
+              "link": { "type": "string" },
+              "variant": {
+                "type": "string",
+                "enum": ["primary", "secondary", "minimal"]
+              },
+              "icon": { "type": "string" },
+              "attrs": { "type": "object" }
+            }
+          }
+        }
+      }
+    },
+    "banner": {
+      "type": "object",
+      "required": ["content"],
+      "description": "Announcement banner shown at the top of the page.",
+      "properties": {
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Banner text. Inline HTML is allowed."
+        }
+      }
+    },
+    "lastUpdated": {
+      "type": ["string", "boolean"],
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}",
+      "description": "A YAML date overriding the git-derived last-updated stamp, or a boolean turning the stamp on or off for this page. The pattern constrains the string branch only, and accepts a plain date or a full timestamp."
+    },
+    "prev": { "$ref": "#/$defs/linkRef" },
+    "next": { "$ref": "#/$defs/linkRef" },
+    "pagefind": {
+      "type": "boolean",
+      "description": "Whether this page is included in the site search index. Defaults to true."
+    },
+    "draft": {
+      "type": "boolean",
+      "description": "A draft page is excluded from production builds. Defaults to false."
+    },
+    "sidebar": {
+      "type": "object",
+      "description": "How this page appears in an autogenerated sidebar group.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Sidebar link text. Defaults to the page title."
+        },
+        "order": {
+          "type": "number",
+          "description": "Sort weight within the group; lower sorts higher."
+        },
+        "hidden": {
+          "type": "boolean",
+          "description": "Omit this page from the autogenerated group. Defaults to false."
+        },
+        "badge": {
+          "description": "A badge beside the sidebar link: a string, or an object naming its variant.",
+          "if": { "type": "object" },
+          "then": {
+            "required": ["text"],
+            "properties": {
+              "text": { "type": "string" },
+              "variant": {
+                "type": "string",
+                "enum": ["note", "tip", "caution", "danger", "success", "default"]
+              }
+            }
+          },
+          "else": { "type": "string" }
+        },
+        "attrs": {
+          "type": "object",
+          "description": "HTML attributes set on the sidebar link."
+        }
+      }
+    }
+  }
+}
