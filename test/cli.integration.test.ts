@@ -299,13 +299,17 @@ describe("cli empty and unmatched inputs", () => {
     expect(r.stderr).toContain("No files matched");
   });
 
-  // `fill` pulls in the inference package, so even a fast-failing run costs
-  // seconds of module loading. Matches the 60s the other fill cases use.
+  // No extended timeout: this exits on the empty input set, and costs what the
+  // `get` case above costs. `--provider mock` is belt and braces — targets do
+  // resolve before identity today, but fill.ts calls that an optimization
+  // rather than a contract, and an `allowEmpty: true` in the repo-root config
+  // (which every run beneath it discovers) would be enough to push this into
+  // full `auto` detection with no headroom left to absorb it.
   it("exits 2 when fill matches no files", () => {
-    const r = run(["fill", "test/fixtures/*.nomatch"]);
+    const r = run(["fill", "test/fixtures/*.nomatch", "--provider", "mock"]);
     expect(r.status).toBe(2);
     expect(r.stderr).toContain("No files matched");
-  }, 60000);
+  });
 
   it("keeps stdin working: one input, zero files, still a verdict", () => {
     const r = run(["validate", "-", "--as", "markdown"], "---\ntype: note\n---\n");
@@ -1031,12 +1035,30 @@ describe("docmeta CLI: .gitignore-aware discovery", () => {
 
   it("fill honors .gitignore too", () => {
     // The third command sharing the input model, so the three cannot drift.
-    // `--dry-run` keeps this away from any provider: filtering happens during
-    // target resolution, long before a proposal would be requested, so the file
-    // list is observable without inference running.
+    //
+    // `--provider mock` is what keeps this away from a provider. (Not every
+    // `fill` case in this file pins one — the three that assert on
+    // `report.provider` run under `auto` precisely because detection is what
+    // they test. This one only needs the file list.) `--dry-run` is a
+    // write-suppressor, not an inference-suppressor: it reports proposals
+    // instead of writing them, so on its own it still resolves an identity.
+    // Under `auto` that means probing the environment, the Claude CLI and the
+    // local runtime, and the last probe is slow exactly where no credential is
+    // present — which is every CI runner. Pinning the provider skips detection
+    // outright; filtering still happens during target resolution, so the file
+    // list is observable either way.
     repo = makeTempRepo({ files: tree() });
     const r = runIn(
-      withSchema("fill", "**/*.md", "--dry-run", "--no-cache", "-f", "json"),
+      withSchema(
+        "fill",
+        "**/*.md",
+        "--provider",
+        "mock",
+        "--dry-run",
+        "--no-cache",
+        "-f",
+        "json",
+      ),
       repo,
     );
     const parsed = JSON.parse(r.stdout) as {
@@ -1045,11 +1067,12 @@ describe("docmeta CLI: .gitignore-aware discovery", () => {
     const seen = parsed.results.map((x) => x.file);
     expect(seen).toContain("docs/real.md");
     expect(seen).not.toContain("build/generated.md");
-    // 60s like the other `fill` cases: it pulls in the inference package and
-    // resolves a provider identity, which costs seconds on a cold run even
-    // though `--dry-run` means no proposal is ever requested. A warm run
-    // finishes well inside the 5s default, so the shortfall only shows on CI.
-  }, 60000);
+    // Asserted like the sibling cases, and for a reason the JSON cannot cover:
+    // `fill` exits 1 on `requiredSkipped` or `errors` while still writing a
+    // complete report, and an errored file keeps its `file` key — so the two
+    // assertions above stay green straight through an exit-1 regression.
+    expect(r.status).toBe(0);
+  });
 
   it("names .gitignore when it is why nothing matched", () => {
     repo = makeTempRepo({
