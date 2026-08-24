@@ -27,7 +27,7 @@ import {
   type MetadataPatch,
 } from "../types.js";
 import { dropUndefined, deepEqual } from "./patch-util.js";
-import { readHtml, type Element } from "./html-read.js";
+import { readHtml, type Element, type HtmlRead } from "./html-read.js";
 
 /** One character-range replacement in the source. */
 interface Edit {
@@ -63,6 +63,8 @@ export function applyHtml(
 
   const edits: Edit[] = [];
   const inserts: string[] = [];
+  /** Elements this write touches, so `verify` knows which keys move with them. */
+  const moved = new Set<Element>();
   for (const [key, value] of Object.entries(clean)) {
     const emitted = emitScalar(key, value);
     const source = before.sources.get(key);
@@ -74,8 +76,22 @@ export function applyHtml(
       );
     } else if (source.kind === "meta") {
       edits.push(metaEdit(content, source.el, key, emitted));
-    } else {
+      moved.add(source.el);
+    } else if (source.kind === "title") {
       edits.push(titleEdit(content, source.el, key, emitted));
+      moved.add(source.el);
+    } else {
+      // An element-derived key (`head.title`). Refusing is deliberate: the
+      // alternative branches are `<meta>` and `<title>`, and writing there
+      // would put the value somewhere the reader does not take `head.title`
+      // from — which leaves the field unchanged, so `validate` fails again and
+      // the next `fill` proposes it again. Proposal 0018 calls that a loop, and
+      // a loud refusal is the only safe placeholder for a writer that does not
+      // exist yet.
+      throw new DocmetaError(
+        `docmeta fill cannot yet write "${key}", which is read from element text. ` +
+          "Set it in the document, or use the flat key for the same value.",
+      );
     }
   }
 
@@ -84,7 +100,7 @@ export function applyHtml(
   }
 
   const next = spliceAll(content, edits);
-  verify(next, before.data, clean);
+  verify(next, before, clean, moved);
   // `content === original` is the BOM test: `readHtml` returns `body` with any
   // leading BOM removed, so the two are the same value exactly when there was
   // none to remove. When there was, it is the single character at `original[0]`,
@@ -282,14 +298,32 @@ function spliceAll(content: string, edits: Edit[]): string {
  * Re-read the written document and confirm it says exactly what it should. This
  * is the difference between a bug here being a refusal and a bug here being a
  * corrupted page.
+ *
+ * `moved` names the elements this write edited. Since element-derived metadata
+ * arrived, one element can back **two** keys — `<title>` is read as both the
+ * flat `title` and as `head.title` — so writing one of them necessarily moves
+ * the other. Holding the co-derived key to its *old* value would fail every
+ * `<title>` write, which is exactly what it did before this argument existed.
+ *
+ * The invariant is not weakened by exempting them. A co-derived key reads from
+ * the same text as the key that was written, and that key is still checked
+ * strictly: if the element had not been updated, the written key would mismatch
+ * and this would still throw. Everything sourced from an element the write did
+ * not touch is still held to its old value exactly.
  */
 function verify(
   next: string,
-  before: Record<string, unknown>,
+  before: HtmlRead,
   patch: MetadataPatch,
+  moved: Set<Element>,
 ): void {
-  const expected = { ...before, ...patch };
   const actual = readHtml(next).data;
+  const expected: Record<string, unknown> = { ...before.data, ...patch };
+  for (const [key, source] of before.sources) {
+    if (key in patch) continue;
+    const els = source.kind === "element-text" ? source.els : [source.el];
+    if (els.some((el: Element) => moved.has(el))) expected[key] = actual[key];
+  }
   if (!deepEqual(actual, expected)) {
     throw new DocmetaError(
       "Refusing to write HTML metadata: the rewritten document did not read back as expected.",

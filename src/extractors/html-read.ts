@@ -11,13 +11,20 @@
 import { parse, defaultTreeAdapter, type DefaultTreeAdapterMap } from "parse5";
 import { parse as parseYamlScalar } from "yaml";
 import { escapePointerSegment } from "./pointer.js";
+import { liftKey } from "./element-key.js";
 
 export type Element = DefaultTreeAdapterMap["element"];
 
 /** Where a key's winning value came from. */
 export type HtmlSource =
   | { kind: "meta"; el: Element }
-  | { kind: "title"; el: Element };
+  | { kind: "title"; el: Element }
+  /**
+   * A value read from the text of a `<head>` child. `els` carries every
+   * occurrence because the key may be a list — a write replaces the whole set,
+   * and one element out of several is not a location a write can aim at.
+   */
+  | { kind: "element-text"; els: Element[] };
 
 export interface HtmlRead {
   data: Record<string, unknown>;
@@ -45,6 +52,65 @@ export function typeValue(raw: string): unknown {
 
 export function attrValue(el: Element, name: string): string | undefined {
   return el.attrs.find((a) => a.name === name)?.value;
+}
+
+/**
+ * `<head>` children that carry text but are not metadata.
+ *
+ * Both are text-bearing, so the generic rule would lift them, and neither says
+ * anything about the document: lifting them would put a stylesheet and a line
+ * of JavaScript into the key set of every page docmeta reads.
+ */
+const HEAD_NOT_METADATA = new Set(["script", "style"]);
+
+/**
+ * `<head>` children the HTML content model permits at most once, which are
+ * therefore scalars rather than one-item lists.
+ *
+ * `<base>` is here for completeness; being void it carries no text and so never
+ * reaches the convention at all. `<meta>`, `<link>` and the rest may repeat.
+ */
+const HEAD_SINGLETONS = new Set(["title", "base"]);
+
+const elementName = (el: Element | undefined): string =>
+  el ? el.tagName.toLowerCase() : "";
+
+/**
+ * The text a `<head>` child carries, or `undefined` when it carries none worth
+ * lifting — an element child makes it a container, and whitespace-only text is
+ * indentation rather than content.
+ */
+function headText(el: Element): string | undefined {
+  let text = "";
+  for (const node of el.childNodes) {
+    if (defaultTreeAdapter.isElementNode(node)) return undefined;
+    if (defaultTreeAdapter.isTextNode(node)) text += node.value;
+  }
+  return text.trim() === "" ? undefined : text.trim();
+}
+
+/**
+ * The `<head>` children that are values, grouped by the key they contribute.
+ *
+ * Void elements — `<meta>`, `<link>`, `<base>` — hold their value in an
+ * attribute and so produce nothing here. That is deliberate rather than an
+ * omission: lifting `<link>` by `href` would collapse a canonical URL and three
+ * stylesheets into one list and discard the `rel` that distinguished them. An
+ * `elements:` path naming the attribute addresses them instead.
+ */
+function liftableHeadChildren(head: Element): Map<string, Element[]> {
+  const out = new Map<string, Element[]>();
+  for (const node of head.childNodes) {
+    if (!defaultTreeAdapter.isElementNode(node)) continue;
+    const name = node.tagName.toLowerCase();
+    if (HEAD_NOT_METADATA.has(name)) continue;
+    if (headText(node) === undefined) continue;
+    const key = liftKey("head", name);
+    const group = out.get(key);
+    if (group) group.push(node);
+    else out.set(key, [node]);
+  }
+  return out;
 }
 
 /** Read metadata, positions, and per-key provenance from HTML source. */
@@ -131,6 +197,27 @@ export function readHtml(source: string): HtmlRead {
   };
 
   for (const child of doc.childNodes) visit(child);
+
+  // Element-derived metadata, lifted from `<head>` only. The body is prose, and
+  // an SVG `<title>` down in it labels a graphic rather than the page — which is
+  // also why this walks `head` directly instead of reusing the visitor above.
+  if (head) {
+    for (const [key, els] of liftableHeadChildren(head)) {
+      const values = els.map((el) => typeValue(headText(el) ?? ""));
+      // HTML has a content model, so where it fixes the cardinality the key
+      // follows it. `<title>` is permitted once, so it is a scalar rather than
+      // a one-item list; generic XML defaults to a list precisely because it
+      // has no such statement to follow.
+      const singleton = HEAD_SINGLETONS.has(elementName(els[0]));
+      data[key] = singleton ? values[0] : values;
+      sources.set(key, { kind: "element-text", els });
+      const first = els[0];
+      const location = first?.sourceCodeLocation;
+      const pointer = `/${escapePointerSegment(key)}`;
+      if (location?.startLine != null) lineMap.set(pointer, location.startLine);
+      if (location?.startCol != null) colMap.set(pointer, location.startCol);
+    }
+  }
 
   return { data, body, lineMap, colMap, sources, head };
 }

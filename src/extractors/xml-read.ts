@@ -16,11 +16,13 @@ import { DOMParser } from "@xmldom/xmldom";
 import { parse as parseYamlScalar } from "yaml";
 import { escapePointerSegment, positionForFactory } from "./pointer.js";
 import {
+  childElements,
   ditaShape,
   metadataContainers,
   otherMetaEntries,
   type DitaShape,
 } from "./dita.js";
+import { liftKey } from "./element-key.js";
 import type { ExtractedMetadata } from "../types.js";
 
 type XmlDocument = ReturnType<DOMParser["parseFromString"]>;
@@ -29,7 +31,13 @@ export type XmlElement = NonNullable<XmlDocument["documentElement"]>;
 /** Where a key's effective value came from. */
 export type XmlSource =
   | { kind: "attr"; name: string }
-  | { kind: "othermeta"; el: XmlElement };
+  | { kind: "othermeta"; el: XmlElement }
+  /**
+   * A value read from element text. `els` carries every occurrence, in document
+   * order, because the key is a list — a write replaces the whole set, and one
+   * element out of several is not a location a write can aim at.
+   */
+  | { kind: "element-text"; els: XmlElement[] };
 
 export interface XmlRead {
   data: Record<string, unknown>;
@@ -63,6 +71,63 @@ export function typeValue(raw: string): unknown {
 /** Whether an attribute carries metadata, as opposed to describing the document. */
 export function isMetadataAttribute(name: string): boolean {
   return name !== "xmlns" && !name.startsWith("xmlns:");
+}
+
+/**
+ * The text an element carries, or `undefined` when it carries none worth
+ * lifting.
+ *
+ * Two exclusions, and both are the reason this returns `undefined` rather than
+ * an empty string:
+ *
+ * - **An element with element children is structure, not a value.** `<body>`
+ *   full of `<p>` is a container; lifting it would concatenate the prose of the
+ *   whole document into one key.
+ * - **Whitespace-only text is not a value either.** Indented markup puts a
+ *   newline and some spaces inside every container, so treating that as content
+ *   would lift every element in the file.
+ *
+ * Comments and processing instructions are ignored rather than disqualifying,
+ * so `<title><!-- note -->Set up</title>` is still a value.
+ *
+ * A deliberately empty element (`<title></title>`) therefore yields nothing by
+ * convention. That is right for the convention, which has to keep structural
+ * elements out of the key set without a hardcoded ignore list, and wrong for a
+ * path someone named in `elements:` config — where "present but empty" is
+ * exactly what they want checked. The config path passes `allowEmpty`.
+ */
+export function elementText(
+  el: XmlElement,
+  allowEmpty = false,
+): string | undefined {
+  let text = "";
+  for (let n = el.firstChild; n; n = n.nextSibling) {
+    if (n.nodeType === 1) return undefined;
+    if (n.nodeType === 3 || n.nodeType === 4) text += n.nodeValue ?? "";
+  }
+  if (!allowEmpty && text.trim() === "") return undefined;
+  return text.trim();
+}
+
+/**
+ * The root's direct children that are values, grouped by the key they
+ * contribute, in document order.
+ *
+ * Grouped rather than emitted one at a time because repeated element names
+ * share a key, and every occurrence has to survive — dropping all but the first
+ * would discard data silently, which is the failure this whole mechanism exists
+ * to avoid.
+ */
+function liftableChildren(root: XmlElement): Map<string, XmlElement[]> {
+  const out = new Map<string, XmlElement[]>();
+  for (const child of childElements(root)) {
+    if (elementText(child) === undefined) continue;
+    const key = liftKey(root.nodeName, child.nodeName);
+    const group = out.get(key);
+    if (group) group.push(child);
+    else out.set(key, [child]);
+  }
+  return out;
 }
 
 /**
@@ -138,6 +203,26 @@ export function readXml(content: string, filePath?: string): XmlRead {
     if (attr.lineNumber != null && attr.columnNumber != null) {
       colMap.set(pointer, attr.columnNumber);
     }
+  }
+
+  // Element-derived metadata. Plain XML carries no content model, so the
+  // convention stops at the root's direct children and lifts only the ones that
+  // are values rather than structure — see `elementText`. Anything deeper needs
+  // an explicit `elements:` path, because guessing which nested element is
+  // metadata and which is prose is how a document body turns into a key per
+  // paragraph.
+  for (const [key, els] of liftableChildren(root)) {
+    // Always a list. XML says nothing about cardinality, so a type that
+    // depended on how many elements this document happened to carry would be
+    // unwritable against; a schema that means "exactly one" says `maxItems: 1`.
+    data[key] = els.map((el) => typeValue(elementText(el) ?? ""));
+    sources.set(key, { kind: "element-text", els });
+    const first = els[0];
+    const pointer = `/${escapePointerSegment(key)}`;
+    // The caret goes on the first occurrence: it is where a reader looks, and
+    // where a write that replaces the set begins.
+    if (first?.lineNumber != null) lineMap.set(pointer, first.lineNumber);
+    if (first?.columnNumber != null) colMap.set(pointer, first.columnNumber);
   }
 
   // DITA keeps document metadata in <prolog>/<topicmeta>, not on the root

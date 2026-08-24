@@ -162,11 +162,33 @@ export async function runGet(opts: GetOptions): Promise<GetFileResult[]> {
  * Returns `undefined` when any segment is missing or descends into a scalar.
  * A bare top-level key (no `/`, no `.`) resolves to a single segment, so the
  * historical `get title` behavior is unchanged.
+ *
+ * **A key that literally contains a dot is tried as a fallback**, after descent
+ * fails. Element-derived metadata makes those ordinary — `article.title`,
+ * `prolog.author`, `ms.date` — and without this, `get article.title` returned
+ * an *empty* result rather than an error, which is a silent wrong answer.
+ * Descent still wins wherever it resolves, so a document with a genuine
+ * `author: { name: … }` object answers `author.name` exactly as it always has;
+ * the fallback only fires where the old behavior was to give up.
  */
 function resolveField(data: Record<string, unknown>, field: string): unknown {
   const segments = field.startsWith("/")
     ? parseJsonPointer(field)
     : field.split(".");
+  const descended = descend(data, segments);
+  if (descended !== undefined) return descended;
+  if (
+    !field.startsWith("/") &&
+    field.includes(".") &&
+    Object.prototype.hasOwnProperty.call(data, field)
+  ) {
+    return data[field];
+  }
+  return undefined;
+}
+
+/** Walk `segments` into `data`, or `undefined` at the first miss. */
+function descend(data: Record<string, unknown>, segments: string[]): unknown {
   let current: unknown = data;
   for (const segment of segments) {
     if (Array.isArray(current)) {
