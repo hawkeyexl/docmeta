@@ -213,7 +213,6 @@ function liftableChildren(
   return out;
 }
 
-
 /**
  * Every element a config path selects, walked down the child axis from the
  * document root.

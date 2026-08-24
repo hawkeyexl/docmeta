@@ -104,6 +104,13 @@ export function ditaShape(
  * not declare, which is the one outcome this whole module exists to avoid.
  */
 function hasDitaDoctype(content: string): boolean {
+  // Cheap exit before the expensive one. Masking allocates a same-length string
+  // per comment match, and this runs once per file — including on DITA-OT
+  // output, which is already identified by `@class` and rarely carries a
+  // DOCTYPE at all. Sound in one direction only, which is the direction needed:
+  // masking replaces text with spaces and never introduces any, so a document
+  // whose raw bytes hold no `<!DOCTYPE` cannot have one after masking either.
+  if (!content.includes("<!DOCTYPE")) return false;
   const masked = content.replace(/<!--[\s\S]*?-->/g, (m) => " ".repeat(m.length));
   const doctype = doctypeText(masked);
   if (doctype === undefined) return false;

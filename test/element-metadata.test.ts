@@ -361,3 +361,52 @@ describe("elements and values stay paired in HTML too", () => {
     expect(next).toContain('<link rel="stylesheet"/>');
   });
 });
+
+describe("a config @attr path backed by several elements", () => {
+  // The review asked for this: `verify` exempts a co-derived key if *any* of
+  // its elements moved, which is the right call but would hide a partial write
+  // if nothing exercised multi-element `@attr` paths. The count rule makes a
+  // partial write unreachable — M must equal N — and these pin both halves.
+  const PAGE = `<html><head><title>T</title>
+<link rel="alternate" href="https://example.com/a"/>
+<link rel="canonical" href="https://example.com/b"/></head><body></body></html>`;
+  const elements = ["html/head/link@href"];
+
+  it("reads every element into the key, in document order", () => {
+    const r = htmlExtractor.extract(PAGE, "p.html", { elements });
+    expect(r.data["head.link"]).toEqual([
+      "https://example.com/a",
+      "https://example.com/b",
+    ]);
+  });
+
+  it("writes every element, not just the first", () => {
+    const next =
+      htmlExtractor.apply?.(
+        PAGE,
+        { "head.link": ["https://example.com/x", "https://example.com/y"] },
+        { elements },
+      ) ?? "";
+    expect(next).toContain('rel="alternate" href="https://example.com/x"');
+    expect(next).toContain('rel="canonical" href="https://example.com/y"');
+    const r = htmlExtractor.extract(next, "p.html", { elements });
+    expect(r.data["head.link"]).toEqual([
+      "https://example.com/x",
+      "https://example.com/y",
+    ]);
+  });
+
+  it("refuses a partial write rather than moving only one element", () => {
+    expect(() =>
+      htmlExtractor.apply?.(PAGE, { "head.link": ["only-one"] }, { elements }),
+    ).toThrow(/2 elements .* 1 value/);
+  });
+
+  it("is idempotent across both elements", () => {
+    const patch = {
+      "head.link": ["https://example.com/x", "https://example.com/y"],
+    };
+    const once = htmlExtractor.apply?.(PAGE, patch, { elements }) ?? "";
+    expect(htmlExtractor.apply?.(once, patch, { elements })).toBe(once);
+  });
+});

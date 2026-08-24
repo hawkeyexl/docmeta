@@ -77,6 +77,26 @@ against, so the convention commits to a list:
 `maxItems: 1` is how a schema says "there should be exactly one", which is a
 check that was not expressible before.
 
+<Aside type="caution" title="A plain-XML lifted key is never a string">
+This is the sharpest edge in the whole mechanism, so it is worth stating as a
+failure rather than as a rule.
+
+```json
+"article.byline": { "type": "string" }        // always fails
+"article.byline": { "type": "array", "items": { "type": "string" } }   // right
+```
+
+The first form fails on **every** document, including one with exactly one
+`<byline>`, because generic XML has no content model to say a second one is not
+coming. Nothing warns you: the schema is valid JSON Schema and simply never
+matches.
+
+DITA keys escape this through the cardinality in their content model, and
+`head.title` escapes it because HTML permits one `<title>`. Neither mechanism
+exists for plain XML, which is why the list is the honest default — and why a
+schema written against it has to say so.
+</Aside>
+
 Where a content model *does* state the cardinality, the key follows it.
 `head.title` is a scalar because HTML permits one `<title>`;
 [DITA's keys](/docmeta/reference/dita-schema/) are typed element by element

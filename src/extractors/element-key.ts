@@ -135,6 +135,10 @@ function parseElementPathUncached(path: string): ElementPath {
     );
   }
 
+  // Both indices are in bounds — the length check above guarantees it. The
+  // fallbacks are how `noUncheckedIndexedAccess` is satisfied, not a defence
+  // against a case that can happen: it widens `string[][n]` to
+  // `string | undefined` regardless of any guard the compiler cannot follow.
   const parent = segments[segments.length - 2] ?? "";
   const name = segments[segments.length - 1] ?? "";
   return { segments, ...(attr ? { attr } : {}), key: liftKey(parent, name) };
