@@ -260,3 +260,73 @@ describe("`get` can address a lifted key", () => {
     expect(results[0]?.values["author.name"]).toBe("Ada");
   });
 });
+
+describe("writing an element-derived key in HTML", () => {
+  // The reference page promises that *updating* an element works "in any
+  // dialect", because replacing a span changes content and not shape. HTML was
+  // refusing every element-derived key, which made that claim false.
+  const page = `<html><head><title>Old</title>
+<link rel="canonical" href="https://example.com/a"/></head><body></body></html>`;
+  const write = (patch: Record<string, unknown>, elements?: string[]) =>
+    htmlExtractor.apply?.(page, patch, elements ? { elements } : {}) ?? "";
+
+  it("updates head.title, the key the convention lifts", () => {
+    const next = write({ "head.title": "New" });
+    expect(next).toContain("<title>New</title>");
+    expect(htmlExtractor.extract(next, "p.html").data["head.title"]).toBe("New");
+  });
+
+  it("updates an attribute a config path reached", () => {
+    const elements = ["html/head/link@href"];
+    const next = write({ "head.link": ["https://example.com/b"] }, elements);
+    expect(next).toContain('href="https://example.com/b"');
+    const r = htmlExtractor.extract(next, "p.html", { elements });
+    expect(r.data["head.link"]).toEqual(["https://example.com/b"]);
+  });
+
+  it("escapes markup, sharing one rule with the XML side", () => {
+    expect(write({ "head.title": "a < b & c" })).toContain(
+      "<title>a &lt; b &amp; c</title>",
+    );
+  });
+
+  it("holds to the same count rule as XML", () => {
+    const elements = ["html/head/link@href"];
+    expect(() => write({ "head.link": ["a", "b"] }, elements)).toThrow(
+      /1 element .* 2 values/,
+    );
+  });
+
+  it("is idempotent, so fill cannot loop on it", () => {
+    const once = write({ "head.title": "New" });
+    const twice = htmlExtractor.apply?.(once, { "head.title": "New" }, {}) ?? "";
+    expect(twice).toBe(once);
+  });
+});
+
+describe("table lookups do not answer from the prototype chain", () => {
+  // A document supplies these names, and `Object.prototype` answers to plenty
+  // of them. `get.ts` already guards the same way where a *field* name indexes
+  // an object; the element tables index by element name, which is worse — the
+  // document controls it directly.
+  it("does not treat a <constructor> element as a known DITA container", () => {
+    const topic = `<?xml version="1.0"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="p"><title>T</title><prolog><constructor><name>x</name></constructor></prolog></concept>`;
+    const r = xmlExtractor.extract(topic, "p.dita");
+    // `DITA_LIFTS.constructor` is Object's constructor and `.name` is "Object";
+    // an unguarded lookup finds both and lifts a key that does not exist.
+    expect(r.data["constructor.name"]).toBeUndefined();
+  });
+
+  it("does not descend into a <toString> element", () => {
+    const topic = `<?xml version="1.0"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="p"><title>T</title><prolog><toString><author>Ada</author></toString></prolog></concept>`;
+    const r = xmlExtractor.extract(topic, "p.dita");
+    // `DITA_CONTENT_MODEL.toString` is a function, so an unguarded `!== undefined`
+    // makes it a container and lifts the <author> inside as `tostring.author`.
+    expect(r.data["tostring.author"]).toBeUndefined();
+    expect(r.data["prolog.author"]).toBeUndefined();
+  });
+});

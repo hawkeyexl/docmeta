@@ -216,14 +216,23 @@ function own<T>(table: Record<string, T>, key: string): T | undefined {
  * would discard data silently, which is the failure this whole mechanism exists
  * to avoid.
  */
-function liftableChildren(root: XmlElement): Map<string, XmlElement[]> {
-  const out = new Map<string, XmlElement[]>();
+function liftableChildren(
+  root: XmlElement,
+): Map<string, { els: XmlElement[]; values: unknown[] }> {
+  const out = new Map<string, { els: XmlElement[]; values: unknown[] }>();
   for (const child of childElements(root)) {
-    if (elementText(child) === undefined) continue;
+    // Read once. Testing with `elementText` and then reading with it again
+    // walked every child element's text twice, on every file.
+    const text = elementText(child);
+    if (text === undefined) continue;
     const key = liftKey(root.nodeName, child.nodeName);
     const group = out.get(key);
-    if (group) group.push(child);
-    else out.set(key, [child]);
+    if (group) {
+      group.els.push(child);
+      group.values.push(typeValue(text));
+    } else {
+      out.set(key, { els: [child], values: [typeValue(text)] });
+    }
   }
   return out;
 }
@@ -336,11 +345,11 @@ export function readXml(
   // an explicit `elements:` path, because guessing which nested element is
   // metadata and which is prose is how a document body turns into a key per
   // paragraph.
-  for (const [key, els] of liftableChildren(root)) {
+  for (const [key, { els, values }] of liftableChildren(root)) {
     // Always a list. XML says nothing about cardinality, so a type that
     // depended on how many elements this document happened to carry would be
     // unwritable against; a schema that means "exactly one" says `maxItems: 1`.
-    data[key] = els.map((el) => typeValue(elementText(el) ?? ""));
+    data[key] = values;
     sources.set(key, { kind: "element-text", els });
     const first = els[0];
     const pointer = `/${escapePointerSegment(key)}`;

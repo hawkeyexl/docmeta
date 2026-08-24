@@ -142,6 +142,10 @@ docmeta does that only for [DITA](/docmeta/reference/dita-schema/), whose
 content model can answer, placing the new element — and any containers it needs
 — at the position the model requires.
 
+Updating works for XML, DITA and HTML alike. Creating is DITA-only: elsewhere a
+key with no element to update falls back to the format's own channel — a root
+attribute in XML, a `meta` tag in HTML.
+
 </TabItem>
 <TabItem label="Refusing">
 

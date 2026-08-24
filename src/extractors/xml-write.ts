@@ -88,7 +88,7 @@ export function applyXml(
       content,
       ditaEdits(content, before, before.dita, clean, emitScalar, escapeAttr),
     );
-    verify(next, before.data, clean, options.filePath);
+    verify(next, before.data, clean, options);
     return bom ? original.slice(0, 1) + next : next;
   }
 
@@ -153,7 +153,7 @@ export function applyXml(
   }
 
   const next = spliceAll(content, edits);
-  verify(next, before.data, clean, options.filePath);
+  verify(next, before.data, clean, options);
   return bom ? original.slice(0, 1) + next : next;
 }
 
@@ -270,7 +270,7 @@ function verify(
   next: string,
   before: Record<string, unknown>,
   patch: MetadataPatch,
-  filePath: string | undefined,
+  options: ApplyOptions,
 ): void {
   const expected = { ...before, ...patch };
   // Same path as the original read: a `.dita` file re-read as plain XML would
@@ -283,7 +283,12 @@ function verify(
   // the parser happened to throw.
   let actual;
   try {
-    actual = readXml(next, filePath).data;
+    // Re-read with the *same* options the write used. Without the config
+    // element paths this cannot see a key an `elements:` path produced, so it
+    // would find the key missing and refuse every write to one.
+    actual = readXml(next, options.filePath, {
+      elements: options.elements,
+    }).data;
   } catch (err) {
     throw new DocmetaError(
       `Refusing to write XML metadata: the rewritten document did not parse (${(err as Error).message}).`,

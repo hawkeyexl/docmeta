@@ -45,6 +45,16 @@ export interface ElementPath {
 }
 
 /**
+ * Parsed paths, keyed by their source string.
+ *
+ * `elements:` paths are a handful of strings reused for every file in the run,
+ * so re-splitting them per document is pure waste — a thousand files and three
+ * paths is three thousand parses of the same three strings. The map is bounded
+ * by the config, not by the corpus.
+ */
+const parsed = new Map<string, ElementPath>();
+
+/**
  * Parse an `elements:` path — a slash-separated child path from the document
  * root, optionally ending in `@attribute`.
  *
@@ -61,6 +71,14 @@ export interface ElementPath {
  * ignoring it would leave someone waiting for a check that never runs.
  */
 export function parseElementPath(path: string): ElementPath {
+  const hit = parsed.get(path);
+  if (hit) return hit;
+  const result = parseElementPathUncached(path);
+  parsed.set(path, result);
+  return result;
+}
+
+function parseElementPathUncached(path: string): ElementPath {
   const at = path.indexOf("@");
   const attr = at === -1 ? undefined : path.slice(at + 1).trim();
   const body = at === -1 ? path : path.slice(0, at);
