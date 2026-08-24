@@ -55,6 +55,7 @@ import {
   resolveSchemaSetWithSource,
   type ResolvedSchemaSet,
   FILE_SCHEMA_KEY,
+  resolveElements,
 } from "../core/resolve-schema.js";
 import { loadSchema, schemaLoadOptions } from "../core/schema-registry.js";
 import { Validator, compileWithFormats } from "../core/validator.js";
@@ -390,7 +391,9 @@ export async function runFill(opts: FillOptions): Promise<FillRun> {
 
     let extracted;
     try {
-      extracted = extractor.extract(content, label);
+      extracted = extractor.extract(content, label, {
+        elements: resolveElements(label, config),
+      });
     } catch (err) {
       return errorResult(label, extractor.name, (err as Error).message);
     }

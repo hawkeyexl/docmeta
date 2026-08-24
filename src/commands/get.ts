@@ -6,6 +6,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { resolve, extname } from "node:path";
+import { resolveElements } from "../core/resolve-schema.js";
 import { DocmetaError } from "../types.js";
 import {
   extractorByName,
@@ -127,7 +128,9 @@ export async function runGet(opts: GetOptions): Promise<GetFileResult[]> {
         `Unsupported file type "${extension}" for "${label}". Supported: ${supportedExtensions().join(", ")}. Use --as to override.`,
       );
     }
-    const extracted = extractor.extract(content, label);
+    const extracted = extractor.extract(content, label, {
+      elements: resolveElements(label, config),
+    });
     const values: Record<string, unknown> = {};
     for (const f of opts.fields) values[f] = resolveField(extracted.data, f);
     out.push({ file: label, present: extracted.present, values });

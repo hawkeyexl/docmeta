@@ -27,8 +27,8 @@ export const htmlExtractor: MetadataExtractor = {
   name: "html",
   extensions: [".html", ".htm"],
   implemented: true,
-  extract(content): ExtractedMetadata {
-    const { data, lineMap, colMap } = readHtml(content);
+  extract(content, _filePath, options): ExtractedMetadata {
+    const { data, lineMap, colMap } = readHtml(content, options);
     return {
       data,
       present: Object.keys(data).length > 0,

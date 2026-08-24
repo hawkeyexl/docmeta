@@ -11,7 +11,12 @@
 import { parse, defaultTreeAdapter, type DefaultTreeAdapterMap } from "parse5";
 import { parse as parseYamlScalar } from "yaml";
 import { escapePointerSegment } from "./pointer.js";
-import { liftKey } from "./element-key.js";
+import {
+  liftKey,
+  parseElementPath,
+  type ElementPath,
+} from "./element-key.js";
+import type { ExtractOptions } from "../types.js";
 
 export type Element = DefaultTreeAdapterMap["element"];
 
@@ -80,13 +85,14 @@ const elementName = (el: Element | undefined): string =>
  * lifting — an element child makes it a container, and whitespace-only text is
  * indentation rather than content.
  */
-function headText(el: Element): string | undefined {
+function headText(el: Element, allowEmpty = false): string | undefined {
   let text = "";
   for (const node of el.childNodes) {
     if (defaultTreeAdapter.isElementNode(node)) return undefined;
     if (defaultTreeAdapter.isTextNode(node)) text += node.value;
   }
-  return text.trim() === "" ? undefined : text.trim();
+  if (!allowEmpty && text.trim() === "") return undefined;
+  return text.trim();
 }
 
 /**
@@ -113,8 +119,39 @@ function liftableHeadChildren(head: Element): Map<string, Element[]> {
   return out;
 }
 
+
+/** Every element a config path selects, walked down the child axis. */
+function matchHtmlPath(
+  doc: DefaultTreeAdapterMap["document"],
+  segments: string[],
+): Element[] {
+  const childrenNamed = (
+    nodes: readonly DefaultTreeAdapterMap["childNode"][],
+    name: string,
+  ): Element[] => {
+    const out: Element[] = [];
+    for (const n of nodes) {
+      if (defaultTreeAdapter.isElementNode(n) && n.tagName.toLowerCase() === name) {
+        out.push(n);
+      }
+    }
+    return out;
+  };
+
+  let current = childrenNamed(doc.childNodes, segments[0] ?? "");
+  for (const segment of segments.slice(1)) {
+    const next: Element[] = [];
+    for (const el of current) next.push(...childrenNamed(el.childNodes, segment));
+    current = next;
+  }
+  return current;
+}
+
 /** Read metadata, positions, and per-key provenance from HTML source. */
-export function readHtml(source: string): HtmlRead {
+export function readHtml(
+  source: string,
+  options?: ExtractOptions,
+): HtmlRead {
   // A BOM is invisible in an editor, so letting the parser count it as a
   // character puts every caret on line 1 one column to the right of what the
   // reader sees. `xml-read.ts` has always stripped it for that reason.
@@ -217,6 +254,25 @@ export function readHtml(source: string): HtmlRead {
       if (location?.startLine != null) lineMap.set(pointer, location.startLine);
       if (location?.startCol != null) colMap.set(pointer, location.startCol);
     }
+  }
+
+  // Config paths last, so a path naming a key the convention already filled is
+  // a no-op rather than a silent retype.
+  for (const raw of options?.elements ?? []) {
+    const spec: ElementPath = parseElementPath(raw);
+    if (data[spec.key] !== undefined) continue;
+    const els = matchHtmlPath(doc, spec.segments);
+    const values = els
+      .map((el) => (spec.attr ? attrValue(el, spec.attr) : headText(el, true)))
+      .filter((v): v is string => v != null)
+      .map(typeValue);
+    if (values.length === 0) continue;
+    data[spec.key] = values;
+    sources.set(spec.key, { kind: "element-text", els });
+    const location = els[0]?.sourceCodeLocation;
+    const pointer = `/${escapePointerSegment(spec.key)}`;
+    if (location?.startLine != null) lineMap.set(pointer, location.startLine);
+    if (location?.startCol != null) colMap.set(pointer, location.startCol);
   }
 
   return { data, body, lineMap, colMap, sources, head };

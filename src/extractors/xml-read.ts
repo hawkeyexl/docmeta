@@ -26,8 +26,12 @@ import {
   type DitaLift,
   type DitaShape,
 } from "./dita.js";
-import { liftKey } from "./element-key.js";
-import type { ExtractedMetadata } from "../types.js";
+import {
+  liftKey,
+  parseElementPath,
+  type ElementPath,
+} from "./element-key.js";
+import type { ExtractedMetadata, ExtractOptions } from "../types.js";
 
 type XmlDocument = ReturnType<DOMParser["parseFromString"]>;
 export type XmlElement = NonNullable<XmlDocument["documentElement"]>;
@@ -166,11 +170,38 @@ function liftableChildren(root: XmlElement): Map<string, XmlElement[]> {
   return out;
 }
 
+
+/**
+ * Every element a config path selects, walked down the child axis from the
+ * document root.
+ *
+ * A plain descent, deliberately: no predicates, no axes, no wildcards. The
+ * syntax is documented as a subset of XPath's child axis, and matching that
+ * promise exactly is cheaper than explaining which parts of XPath work.
+ */
+function matchElementPath(
+  root: XmlElement,
+  segments: string[],
+): XmlElement[] {
+  if (root.nodeName.toLowerCase() !== segments[0]) return [];
+  let current: XmlElement[] = [root];
+  for (const segment of segments.slice(1)) {
+    const next: XmlElement[] = [];
+    for (const el of current) next.push(...childElements(el, segment));
+    current = next;
+  }
+  return current;
+}
+
 /**
  * Parse and read. Throws for malformed XML, which the command layer records as
  * a per-file failure so the rest of the run continues (mirroring frontmatter).
  */
-export function readXml(content: string, filePath?: string): XmlRead {
+export function readXml(
+  content: string,
+  filePath?: string,
+  options?: ExtractOptions,
+): XmlRead {
   // A BOM stays part of line 1; it doesn't shift line numbers.
   const body = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
 
@@ -303,6 +334,28 @@ export function readXml(content: string, filePath?: string): XmlRead {
         if (el.columnNumber != null) colMap.set(pointer, el.columnNumber);
       }
     }
+  }
+
+  // Config paths last. The convention and DITA's content model both ran above,
+  // so a path naming a key they already filled is a no-op — which is what keeps
+  // adding one from retyping `prolog.source` from a scalar into a list.
+  for (const raw of options?.elements ?? []) {
+    const spec: ElementPath = parseElementPath(raw);
+    if (data[spec.key] !== undefined) continue;
+    const els = matchElementPath(root, spec.segments);
+    const values = els
+      .map((el) =>
+        spec.attr ? el.getAttribute(spec.attr) : elementText(el, true),
+      )
+      .filter((v): v is string => v != null)
+      .map(typeValue);
+    if (values.length === 0) continue;
+    data[spec.key] = values;
+    sources.set(spec.key, { kind: "element-text", els });
+    const first = els[0];
+    const pointer = `/${escapePointerSegment(spec.key)}`;
+    if (first?.lineNumber != null) lineMap.set(pointer, first.lineNumber);
+    if (first?.columnNumber != null) colMap.set(pointer, first.columnNumber);
   }
 
   return { data, lineMap, colMap, root, body, sources, dita };

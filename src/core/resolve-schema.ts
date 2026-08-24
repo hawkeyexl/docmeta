@@ -392,3 +392,24 @@ export function resolveSchemaSetWithSource(
 export function resolveSchemaSet(params: ResolveParams): string[] {
   return resolveSchemaSetWithSource(params).schemas;
 }
+
+/**
+ * The `elements:` paths that apply to one file.
+ *
+ * Accumulating, not first-match-wins. `schemas:` replaces because a schema set
+ * is a complete statement about how a file is judged; `elements:` is a list of
+ * extra places to look, so the repo-wide list and every matching override all
+ * contribute. An override that silently dropped the repo-wide paths would turn
+ * adding a directory rule into losing checks elsewhere.
+ */
+export function resolveElements(
+  filePath: string,
+  config: DocmetaConfig | null | undefined,
+): string[] {
+  const out: string[] = [];
+  if (config?.elements) out.push(...config.elements);
+  for (const ov of config?.overrides ?? []) {
+    if (ov.elements && matches(ov.files, filePath)) out.push(...ov.elements);
+  }
+  return dedupe(out);
+}

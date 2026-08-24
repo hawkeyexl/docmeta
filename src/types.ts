@@ -53,6 +53,17 @@ export interface ApplyOptions {
   filePath?: string;
 }
 
+/** Per-run inputs to extraction, beyond the document itself. */
+export interface ExtractOptions {
+  /**
+   * Extra element paths to lift, from `elements:` config. Slash-separated from
+   * the document root, optionally ending in `@attribute`. These *extend* the
+   * per-format convention: a path producing a key the convention already filled
+   * is a no-op, so naming one cannot retype a key a content model typed exactly.
+   */
+  elements?: readonly string[];
+}
+
 /** A pluggable metadata extractor for one document format. */
 export interface MetadataExtractor {
   /** Stable name, also used as `ExtractedMetadata.format`. */
@@ -68,7 +79,11 @@ export interface MetadataExtractor {
    */
   implemented: boolean;
   /** Extract metadata from raw file content. */
-  extract(content: string, filePath: string): ExtractedMetadata;
+  extract(
+    content: string,
+    filePath: string,
+    options?: ExtractOptions,
+  ): ExtractedMetadata;
   /**
    * Return new content with every key in `patch` set at the top level. Pure:
    * no IO, no mutation, deterministic; returns `content` itself for a no-op.
