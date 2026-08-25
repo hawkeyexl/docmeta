@@ -101,7 +101,7 @@ Home — "What do you want to do?" router + 30-second proof
 
 | Page | CUJ | ★ | Notes |
 |---|---|---|---|
-| Built-in schemas (registry) | S1, M1 | ★ | The hub for everything docmeta ships: one table of all seventeen ids with what each constrains, what it requires, and which two are on by default; the editorial-vs-platform distinction; the three ways to turn one on. The OKF, taxonomy, Docusaurus, platform, vocabulary, DITA, and Agent Skills pages are its detail pages. Source of truth: `src/core/schema-registry.ts`, `src/core/resolve-schema.ts`. |
+| Built-in schemas (registry) | S1, M1 | ★ | The hub for everything docmeta ships: one table of all twenty-one ids with what each constrains, what it requires, and which two are on by default; the editorial-vs-platform distinction; the three ways to turn one on. The OKF, taxonomy, Docusaurus, platform, vocabulary, DITA, and Agent Skills pages are its detail pages. Source of truth: `src/core/schema-registry.ts`, `src/core/resolve-schema.ts`. |
 | CLI reference | All | ★ | `validate`/`get`/`schemas`; every flag. Source of truth: `src/cli.ts`. |
 | Configuration reference | M1, D1 | ★ | Full `docmeta.config.yaml` keys, types, defaults, CLI-merge precedence. Source of truth: `src/core/config.ts`. |
 | Schema resolution reference | S2, D2 | ★ | Precedence chain + ref kinds + dialects. Source of truth: `resolve-schema.ts`, `schema-registry.ts`, `validator.ts`. |

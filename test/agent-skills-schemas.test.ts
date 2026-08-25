@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { runValidate } from "../src/commands/validate.js";
 import { DEFAULT_SCHEMAS } from "../src/core/resolve-schema.js";
-import { loadSchema } from "../src/core/schema-registry.js";
+import { listBuiltins, loadSchema } from "../src/core/schema-registry.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
@@ -136,8 +136,21 @@ describe("agentskills:skill:1.0", () => {
   });
 
   it("is the one built-in that closes additionalProperties", async () => {
-    const schema = await loadSchema(SPEC);
-    expect(schema.additionalProperties).toBe(false);
+    // Swept over the whole registry rather than asserted on SPEC alone,
+    // because the claim the reference page makes is about the *set*: "sixteen
+    // of them allow additional properties, and this is the one exception". A
+    // check that only looked at SPEC would stay green while a later built-in
+    // shipped closed and quietly made that sentence wrong.
+    const closed: string[] = [];
+    const open: string[] = [];
+    for (const { id } of listBuiltins()) {
+      const schema = await loadSchema(id);
+      (schema.additionalProperties === false ? closed : open).push(id);
+      expect(schema.additionalProperties, id).not.toBeUndefined();
+    }
+    expect(closed).toEqual([SPEC]);
+    expect(open).not.toContain(SPEC);
+    expect(open.length).toBe(listBuiltins().length - 1);
   });
 });
 
