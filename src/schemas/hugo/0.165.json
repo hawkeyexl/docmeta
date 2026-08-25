@@ -15,10 +15,16 @@
       "type": "array",
       "items": { "type": "string" }
     },
-    "buildFlag": {
-      "description": "A boolean, or one of Hugo's named build behaviours.",
+    "listFlag": {
+      "description": "How the page is listed: a boolean, or one of the three names `build.list` accepts. Kept separate from `renderFlag` because the two options do not share a vocabulary — `local` is meaningful only here, and merging the sets would accept `link` on the wrong one.",
       "if": { "type": "string" },
-      "then": { "enum": ["always", "never", "link", "local"] },
+      "then": { "enum": ["always", "never", "local"] },
+      "else": { "type": "boolean" }
+    },
+    "renderFlag": {
+      "description": "How the page is rendered: a boolean, or one of the three names `build.render` accepts. `link` is meaningful only here — see `listFlag`.",
+      "if": { "type": "string" },
+      "then": { "enum": ["always", "never", "link"] },
       "else": { "type": "boolean" }
     }
   },
@@ -32,8 +38,8 @@
       "additionalProperties": true,
       "description": "Per-page build options.",
       "properties": {
-        "list": { "$ref": "#/$defs/buildFlag" },
-        "render": { "$ref": "#/$defs/buildFlag" },
+        "list": { "$ref": "#/$defs/listFlag" },
+        "render": { "$ref": "#/$defs/renderFlag" },
         "publishResources": { "type": "boolean" }
       }
     },

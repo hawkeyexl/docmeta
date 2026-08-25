@@ -279,6 +279,33 @@ describe("x:cards:1.0", () => {
     expect(r.ok).toBe(true);
   });
 
+  it("rejects a zero dimension in both channels, not just one", async () => {
+    // `twitter:player:width` is typed string|integer to serve HTML (where every
+    // attribute is a string) and front matter (where it can be a number). A
+    // `minimum` is ignored on a string and a `pattern` on a number, so each
+    // branch needs its own spelling of the floor — otherwise "0" sails through
+    // the channel that carries almost all real traffic.
+    const { results } = await runValidate({
+      inputs: ["-"],
+      as: "html",
+      stdinContent: [
+        "<!doctype html><html><head><title>T</title>",
+        '<meta name="twitter:card" content="player" />',
+        '<meta name="twitter:title" content="T" />',
+        '<meta name="twitter:image" content="https://example.com/p.png" />',
+        '<meta name="twitter:player" content="https://example.com/embed" />',
+        '<meta name="twitter:player:width" content="0" />',
+        '<meta name="twitter:player:height" content="360" />',
+        "</head><body></body></html>",
+        "",
+      ].join("\n"),
+      cliSchemas: [XCARDS],
+      cwd: root,
+    });
+    expect(results[0]?.ok).toBe(false);
+    expect(results[0]?.errors[0]?.instancePath).toBe("/twitter:player:width");
+  });
+
   it("requires only twitter:card, because the rest fall back to og:", async () => {
     const schema = (await loadSchema(XCARDS)) as { required?: string[] };
     expect(schema.required).toEqual(["twitter:card"]);

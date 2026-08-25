@@ -378,7 +378,18 @@ function parseJsonBlockText(text: string): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
-/** Read a block back with its own flavor's parser, for the verification pass. */
+/**
+ * Read a block back with its own flavor's parser, for the verification pass.
+ *
+ * **TOML dates stay native here, unlike on the read path.** `extractFrontmatter`
+ * normalizes a `TomlDate` to the string it was authored as, because a schema
+ * typed `"string"` must accept the unquoted spelling. Verification must not:
+ * `emitTomlLine` accepts a `Date` and `stringifyToml` needs one to emit an
+ * unquoted date, so a patch value arrives here as a `Date` and the re-read has
+ * to produce a `Date` for `deepEqual` to match. Normalizing this call for
+ * consistency would make every `Date` write fail its own verify step and be
+ * refused. `test/frontmatter-write.test.ts` pins both halves.
+ */
 function parseBlock(
   flavor: FrontmatterFlavor,
   text: string,

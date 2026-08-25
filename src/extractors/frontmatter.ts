@@ -17,6 +17,7 @@
  */
 import { parseDocument, LineCounter, isMap, isSeq, isScalar } from "yaml";
 import { parse as parseToml } from "smol-toml";
+import { isoDateValue } from "./date-value.js";
 import type { ExtractedMetadata, FrontmatterFlavor } from "../types.js";
 
 type Flavor = FrontmatterFlavor;
@@ -294,21 +295,13 @@ function parseJsonBlock(
  * OKF's `timestamp`, Hugo's `date` and `lastmod` — rejects the *unquoted*
  * spelling, which is the idiomatic one, and accepts only the quoted one.
  *
- * `smol-toml` returns a `TomlDate`, whose `toISOString` round-trips the
- * authored form rather than widening it: a local date stays `YYYY-MM-DD`
- * instead of becoming a datetime, and an offset is restored rather than
- * normalized to `Z`. So `format: "date"` still matches a date and
- * `format: "date-time"` still matches a datetime.
+ * The per-value spelling is `isoDateValue`, shared with `schemas infer` so the
+ * two cannot disagree about what a `Date` looks like as JSON.
  *
  * Recursive, because a date can sit inside a `[table]` or an array.
  */
 function withoutNativeDates(value: unknown): unknown {
-  if (value instanceof Date) {
-    // An unparseable date cannot reach here — `parseToml` throws first — but a
-    // NaN date would stringify as "Invalid Date" via `toISOString` throwing,
-    // so fall back to the same `String()` shape `schemas infer` uses.
-    return Number.isNaN(value.getTime()) ? String(value) : value.toISOString();
-  }
+  if (value instanceof Date) return isoDateValue(value);
   if (Array.isArray(value)) return value.map(withoutNativeDates);
   if (value !== null && typeof value === "object") {
     return Object.fromEntries(

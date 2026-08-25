@@ -137,6 +137,23 @@ describe("hugo:page:0.165", () => {
     expect(r.errors[0]?.instancePath).toBe("/sitemap/changefreq");
   });
 
+  it("keeps build.list and build.render on their own vocabularies", async () => {
+    // Hugo gives the two options different name sets: `list` takes
+    // always/never/local and `render` takes always/never/link. One shared
+    // enum of the union would accept each other's odd one out, so the schema
+    // carries two $defs rather than one.
+    const bad = await check("hugo-bad-render.md", [HUGO]);
+    expect(bad.ok).toBe(false);
+    expect(bad.errors[0]?.instancePath).toBe("/build/render");
+
+    const alsoBad = await check("hugo-bad-list.md", [HUGO]);
+    expect(alsoBad.ok).toBe(false);
+    expect(alsoBad.errors[0]?.instancePath).toBe("/build/list");
+
+    // and the valid fixture still uses `list: always` + `render: true`
+    expect((await check("hugo-valid.md", [HUGO])).ok).toBe(true);
+  });
+
   it("requires nothing — Hugo builds a page with no front matter", async () => {
     const { results } = await runValidate({
       inputs: ["-"],

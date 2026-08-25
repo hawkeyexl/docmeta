@@ -25,9 +25,9 @@
     },
     "pixels": {
       "type": ["string", "integer"],
-      "pattern": "^[0-9]+$",
+      "pattern": "^(?!0+$)[0-9]+$",
       "minimum": 1,
-      "description": "A pixel count. Typed for both channels: the pattern constrains the HTML string form, the minimum the front matter number form."
+      "description": "A pixel count, at least 1. Typed for both channels: an HTML `content=` attribute is always a string, while front matter can carry a real number. Both branches enforce the same floor — `pattern` is ignored on a number and `minimum` on a string, so each needs its own spelling of \"not zero\", or the string form silently accepts a `0` the number form rejects."
     }
   },
   "properties": {
