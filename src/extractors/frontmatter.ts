@@ -285,6 +285,39 @@ function parseJsonBlock(
   return { data, present: true, format, lineFor: positionForFactory(map) };
 }
 
+/**
+ * Replace TOML's native dates with the strings they were authored as.
+ *
+ * TOML is the only flavor with a real date type: `date = 2026-06-25` parses to
+ * a `Date`, where the same line under a YAML or JSON fence yields a string. A
+ * schema sees the parsed value, so without this a field typed `"string"` —
+ * OKF's `timestamp`, Hugo's `date` and `lastmod` — rejects the *unquoted*
+ * spelling, which is the idiomatic one, and accepts only the quoted one.
+ *
+ * `smol-toml` returns a `TomlDate`, whose `toISOString` round-trips the
+ * authored form rather than widening it: a local date stays `YYYY-MM-DD`
+ * instead of becoming a datetime, and an offset is restored rather than
+ * normalized to `Z`. So `format: "date"` still matches a date and
+ * `format: "date-time"` still matches a datetime.
+ *
+ * Recursive, because a date can sit inside a `[table]` or an array.
+ */
+function withoutNativeDates(value: unknown): unknown {
+  if (value instanceof Date) {
+    // An unparseable date cannot reach here — `parseToml` throws first — but a
+    // NaN date would stringify as "Invalid Date" via `toISOString` throwing,
+    // so fall back to the same `String()` shape `schemas infer` uses.
+    return Number.isNaN(value.getTime()) ? String(value) : value.toISOString();
+  }
+  if (Array.isArray(value)) return value.map(withoutNativeDates);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, withoutNativeDates(v)]),
+    );
+  }
+  return value;
+}
+
 function parseTomlBlock(
   raw: string,
   prefixLines: number,
@@ -300,7 +333,7 @@ function parseTomlBlock(
     );
   }
   // A valid TOML document is always a table, but stay uniform with the others.
-  const data = rootObject(parsed, "TOML");
+  const data = rootObject(withoutNativeDates(parsed), "TOML");
   const map = buildTomlLineMap(raw, prefixLines);
   return { data, present: true, format, lineFor: positionForFactory(map) };
 }
