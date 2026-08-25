@@ -138,10 +138,18 @@ describe("docmeta CLI (built bin)", () => {
     const r = run(["schemas", "-f", "json"]);
     expect(r.status).toBe(0);
     const ids = JSON.parse(r.stdout).builtins.map((b: { id: string }) => b.id);
-    // Registration order, which is also the order `docmeta schemas` prints:
-    // the two editorial vocabularies that make up the default set first, then
-    // the taxonomies, then the platform contracts, then the vocabularies that
-    // describe a document to something outside the docs site.
+    // Registration order, which is also the order `docmeta schemas` prints.
+    // The first fifteen were grouped by kind — the default set, then the
+    // taxonomies, then the platform contracts, then the vocabularies that
+    // describe a document to something outside the docs site. From
+    // `oasis:dita-metadata:1.3` onward the list is simply chronological:
+    // a new built-in is **appended**, never inserted into its group.
+    //
+    // That is deliberate, and this test is what holds it. Inserting would
+    // reorder `docmeta schemas` output for everyone on a version bump, and
+    // anything reading that list positionally would silently start reporting a
+    // different schema. Appending keeps the printed list stable and lets it
+    // read as a history of what shipped when.
     expect(ids).toEqual([
       "google:okf:0.1",
       "diataxis:diataxis:1.0",
@@ -158,6 +166,10 @@ describe("docmeta CLI (built bin)", () => {
       "dcmi:elements:1.1",
       "microsoft:learn:1.0",
       "oasis:dita-metadata:1.3",
+      "hugo:page:0.165",
+      "jekyll:page:4.4",
+      "vitepress:page:1.6",
+      "x:cards:1.0",
     ]);
   });
 
