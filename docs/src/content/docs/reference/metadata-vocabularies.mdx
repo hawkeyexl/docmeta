@@ -1,11 +1,11 @@
 ---
 title: Built-in metadata vocabularies
-description: The Open Graph, Dublin Core, and Microsoft Learn schemas shipped with docmeta, covering the fields each requires, the formats they enforce, and the vocabularies they deliberately leave unenumerated.
+description: The Open Graph, Dublin Core, Microsoft Learn, and X Cards schemas shipped with docmeta, covering the fields each requires, the formats they enforce, and the vocabularies they deliberately leave unenumerated.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-Three built-ins describe a document to something *outside* your docs site. A
+Four built-ins describe a document to something *outside* your docs site. A
 [platform schema](/docmeta/reference/platform-schemas/) says what your generator
 will parse; a [taxonomy schema](/docmeta/reference/taxonomy-schemas/) says what
 kind of page this is; these say how the page presents itself to a social card
@@ -16,6 +16,7 @@ renderer, a catalogue, or another publisher's build.
 | `ogp:article:1.0` | Social and link-preview renderers | `og:title`, `og:type`, `og:url`, `og:image` |
 | `dcmi:elements:1.1` | Catalogues, repositories, library systems | nothing |
 | `microsoft:learn:1.0` | The Microsoft Learn publishing build | `title`, `description`, `author`, `ms.author`, `ms.date` |
+| `x:cards:1.0` | X, when someone shares the link | `twitter:card` |
 
 ## `ogp:article:1.0`
 
@@ -161,4 +162,62 @@ Microsoft's own repositories use (`conceptual`, `quickstart`, `tutorial`,
 `how-to`, `overview`, `include`) do not agree, and the authoritative taxonomy is
 internal to Microsoft. An enum assembled from those examples would fail correct
 articles, so `ms.topic` is checked for presence and shape only.
+</Aside>
+
+## `x:cards:1.0`
+
+The `twitter:*` meta tags that decide how a link renders when someone shares it
+on X. The companion to `ogp:article:1.0`: same `<meta>` channel, same extractor,
+and normally shipped together — which is why a site with Open Graph tags and no
+card tags is the usual half-finished state.
+
+```html
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:site" content="@exampledocs" />
+<meta name="twitter:title" content="Validate document metadata in CI" />
+<meta name="twitter:description" content="Fail the build when frontmatter is missing." />
+<meta name="twitter:image" content="https://example.com/img/card.png" />
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `twitter:card` | `summary` \| `summary_large_image` \| `app` \| `player` | **Required.** |
+| `twitter:site`, `twitter:creator` | string | A handle, with or without the `@`. |
+| `twitter:site:id`, `twitter:creator:id` | string \| integer | Numeric account ids. |
+| `twitter:title` | string | 70 characters. |
+| `twitter:description` | string | 200 characters. |
+| `twitter:image` | string | An **HTTPS** URL. |
+| `twitter:image:alt` | string | 420 characters. |
+| `twitter:player`, `twitter:player:stream` | string | HTTPS URLs. Player cards. |
+| `twitter:player:width`, `twitter:player:height` | string \| integer | Pixels. |
+| `twitter:app:*` | string | Name, id, and URL per platform, plus `twitter:app:country`. |
+
+### Why only `twitter:card` is required
+
+Every other tag on the card has an Open Graph fallback: X reads `og:title`,
+`og:description` and `og:image` when the `twitter:` equivalents are absent. A
+page carrying good Open Graph tags and no `twitter:title` is *correct*, so
+requiring one here would fail it.
+
+`twitter:card` is the exception. It has no fallback, and X will not infer a card
+type from Open Graph alone — without it no card renders at all, however complete
+the rest of the markup is. That is the whole of what this schema insists on.
+
+The length caps are real limits rather than style advice: X truncates past them.
+And `twitter:image` must be HTTPS, because an image served over plain HTTP is
+dropped and the card renders without it.
+
+<Aside type="note" title="A player card carries its own required set">
+Set `twitter:card` to `player` and the schema also demands `twitter:title`,
+`twitter:image`, `twitter:player` and the player's width and height. Without the
+player URL and its dimensions there is nothing to embed, and X falls back to no
+card rather than to a summary. No other card type triggers that rule.
+</Aside>
+
+<Aside type="note" title="Numbers arrive as strings from HTML, and as numbers from front matter">
+`twitter:player:width` and the account ids are typed `string | integer`. An HTML
+`content=` attribute is always a string, so typing them as integers alone would
+fail every real HTML page; front matter can carry a genuine number. Both
+spellings are constrained — the string form by a digits pattern, the number form
+by a minimum — so neither channel goes unchecked.
 </Aside>
