@@ -274,7 +274,11 @@ collide with and nobody can type, which keeps deletion conditional
 (`WHERE`, `CASE`) — and `ALTER TABLE docs DROP COLUMN` falls out of the
 effect gate as corpus-wide removal for free, since a vanished column reads
 as every file losing the key. `SET key = NULL` still writes an explicit
-null; the two spellings now mean the two different things.
+null; the two spellings now mean the two different things. *(Revised once
+more by [0024](0024-standard-sql-vocabulary.md) before release: the NULL
+assignment became the removal spelling, `explicit_null()` took the literal,
+and `drop_key()` was removed — the standard-vocabulary push moved the
+decision. The reasoning above stays as written.)*
 
 ## Not breaking
 
