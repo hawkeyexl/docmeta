@@ -45,6 +45,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "check:deps": "node scripts/check-deps.mjs",
+    "query:ui": "npm run build && node dist/cli.js query --db .docmeta/query.db && node scripts/query-ui.mjs .docmeta/query.db",
     "docs:check-cli": "node scripts/check-cli-reference.mjs",
     "docs:check-action": "node scripts/check-action-reference.mjs",
     "docs:check-api": "node scripts/check-api-reference.mjs",
