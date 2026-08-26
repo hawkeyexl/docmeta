@@ -94,7 +94,7 @@ function renderChanges(
   return lines.join("\n");
 }
 
-/** A preview's `from` for a key the file never had. */
+/** A preview's `from`: `(unset)` only for a key the file never had. */
 function cellFrom(value: unknown): string {
-  return value === null ? "(unset)" : cell(value);
+  return value === undefined ? "(unset)" : cell(value);
 }

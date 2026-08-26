@@ -361,10 +361,13 @@ async function runSql(
     }
 
     // ATTACH and VACUUM INTO write files of their own, outside the table the
-    // effect gate below watches — the only statements refused by name.
-    if (/^(attach|vacuum)\b/i.test(sql)) {
+    // effect gate below watches — the only statements refused by name. The
+    // check runs on the first real token: `/* c */ ATTACH …` must not slip
+    // past a first-character regex on the strength of a comment.
+    const head = stripLeadingTrivia(sql);
+    if (/^(attach|vacuum)\b/i.test(head)) {
       throw new DocmetaError(
-        `${sql.split(/\s/, 1)[0]?.toUpperCase() ?? "That statement"} is refused: it can write outside the docs table.`,
+        `${head.split(/\s/, 1)[0]?.toUpperCase() ?? "That statement"} is refused: it can write outside the docs table.`,
       );
     }
 
@@ -394,8 +397,11 @@ async function runSql(
       throw new DocmetaError(ROW_SET_MESSAGE);
     }
     const effects = diffSnapshots(before, after);
-    const mutatingIntent =
-      /^(update|insert|delete|replace|drop|alter|create)\b/i.test(sql);
+    // Structural, not textual: a read always yields result columns, DML and
+    // DDL (without RETURNING) never do — so `WITH … UPDATE …` classifies
+    // correctly even when it matches zero rows. The residual: RETURNING DML
+    // that matches nothing reads as an empty result, which is what it shows.
+    const mutatingIntent = columns.length === 0;
     if (effects.length === 0 && !mutatingIntent) {
       return { columns, rows, ...(dbInfo ? { db: dbInfo } : {}) };
     }
@@ -449,7 +455,10 @@ function diffSnapshots(
         `The statement changed system column "_path" for "${path}"; system columns are read-only.`,
       );
     }
-    for (const key of Object.keys(was)) {
+    // The union of both sides: a column ALTER ADD introduced exists only in
+    // `now`, and with a DEFAULT it backfills every row — a real change a
+    // before-keys-only scan would silently miss.
+    for (const key of new Set([...Object.keys(was), ...Object.keys(now)])) {
       if (Object.is(was[key], now[key])) continue;
       if (RESERVED.has(key)) {
         throw new DocmetaError(
@@ -568,15 +577,30 @@ function restoreChanges(
           break;
       }
     }
-    changes.push({
-      file,
-      key,
-      from: original === undefined ? null : original,
-      to: restored,
-      written: false,
-    });
+    // `from` stays `undefined` for a key the file never had — JSON output
+    // omits it — which keeps "absent" distinguishable from an explicit null.
+    changes.push({ file, key, from: original, to: restored, written: false });
   }
   return changes;
+}
+
+/** The statement with leading whitespace and comments removed. */
+function stripLeadingTrivia(sql: string): string {
+  let i = 0;
+  for (;;) {
+    while (i < sql.length && /\s/.test(sql[i] ?? "")) i++;
+    if (sql.startsWith("--", i)) {
+      while (i < sql.length && sql[i] !== "\n") i++;
+      continue;
+    }
+    if (sql.startsWith("/*", i)) {
+      const end = sql.indexOf("*/", i + 2);
+      if (end === -1) return "";
+      i = end + 2;
+      continue;
+    }
+    return sql.slice(i);
+  }
 }
 
 /**

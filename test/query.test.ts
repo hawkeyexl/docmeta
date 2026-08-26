@@ -251,12 +251,38 @@ describe("runQuery write-back (0022)", () => {
     ).rejects.toThrow(/system column/i);
   });
 
-  it("refuses ATTACH and VACUUM outright", async () => {
+  it("refuses ATTACH and VACUUM outright, comments included", async () => {
     const d = copy();
     await expect(w("ATTACH DATABASE 'x.db' AS x", d)).rejects.toThrow(
       /ATTACH|refused/,
     );
     await expect(w("VACUUM", d)).rejects.toThrow(/VACUUM|refused/);
+    // A leading comment must not smuggle the statement past the name check.
+    await expect(
+      w("/* bypass */ ATTACH DATABASE 'x.db' AS x", d),
+    ).rejects.toThrow(/ATTACH/);
+    await expect(w("-- c\nVACUUM", d)).rejects.toThrow(/VACUUM/);
+  });
+
+  it("classifies CTE-prefixed DML as an edit even at zero rows", async () => {
+    const d = copy();
+    const run = await w(
+      "WITH t AS (SELECT 1) UPDATE docs SET draft = 0 WHERE 1 = 0",
+      d,
+    );
+    expect(run.changes).toEqual([]);
+  });
+
+  it("sees an ALTER ADD COLUMN DEFAULT backfill as the change it is", async () => {
+    const d = copy();
+    const run = await w(
+      "ALTER TABLE docs ADD COLUMN stale INTEGER DEFAULT 7",
+      d,
+    );
+    expect(run.changes?.length).toBe(6);
+    expect(
+      run.changes?.every((c) => c.to === 7 && c.from === undefined && !c.written),
+    ).toBe(true);
   });
 
   it("is all-or-nothing: one refusal writes no file at all", async () => {
@@ -280,11 +306,13 @@ describe("runQuery write-back (0022)", () => {
       d,
       true,
     );
+    // `from` is absent for a key the file never had — distinct from an
+    // explicit null, which would carry `from: null`.
     expect(run.changes).toEqual([
       {
         file: "docs/alpha.md",
         key: "reviewed_by",
-        from: null,
+        from: undefined,
         to: "maya",
         written: true,
       },
@@ -483,7 +511,7 @@ describe("renderQuery", () => {
   it("renders changes as a diff with the mode's verdict line", () => {
     const changes = [
       { file: "docs/beta.md", key: "draft", from: true, to: false, written: false },
-      { file: "docs/gamma.md", key: "draft", from: null, to: false, written: false },
+      { file: "docs/gamma.md", key: "draft", from: undefined, to: false, written: false },
     ];
     const preview = renderQuery({ columns: [], rows: [], changes });
     expect(preview).toContain("docs/beta.md: draft: true -> false");
