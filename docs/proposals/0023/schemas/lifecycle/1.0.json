@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docmeta:lifecycle:1.0",
+  "title": "docmeta lifecycle vocabulary (1.0)",
+  "description": "Where the page is in its life, and what a deprecation owes its readers: a successor, a removal date, or both. The `lifecycle` ladder is a closed enum, chosen deliberately over an open string — it catches `depreciated`-style typos and makes the deprecation rule airtight, at the cost that an org-specific ladder must override the key.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "lifecycle": {
+      "enum": ["draft", "published", "deprecated", "archived"],
+      "description": "Where the page is in its life. A closed ladder: it catches typos and makes the deprecation rule below airtight, at the cost that an org-specific ladder (`experimental`, `retired`…) must override this key. The editorial axis — who may see the page is `visibility` (docmeta:audience:1.0)."
+    },
+    "replaced-by": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The page, id, or URL that supersedes this one. Required once `lifecycle: deprecated` unless `remove-by` says the page ends without a successor."
+    },
+    "supersedes": {
+      "$ref": "#/$defs/stringList",
+      "description": "Pages, ids, or URLs this page replaces — the other direction of `replaced-by`, and the record that survives once the old page is deleted. A record with a stated limit: JSON Schema validates one file at a time, so the pair of edges is not cross-checked here; a knowledge graph (dockg's `prov:wasRevisionOf`) is where the two are reconciled."
+    },
+    "remove-by": {
+      "$ref": "#/$defs/w3cdtf",
+      "description": "When the page should be removed, as a W3CDTF date. A date rather than a flag, following Ansible's deprecation practice: 'deprecated' without a horizon is a permanent state."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "lifecycle": { "const": "deprecated" } },
+        "required": ["lifecycle"]
+      },
+      "then": {
+        "anyOf": [{ "required": ["replaced-by"] }, { "required": ["remove-by"] }],
+        "description": "A deprecated page must say what comes next: the replacement, or the removal date, or both."
+      }
+    }
+  ],
+  "$defs": {
+    "stringList": {
+      "if": { "type": "array" },
+      "then": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": { "type": "string", "minLength": 1 }
+      },
+      "else": { "type": "string", "minLength": 1 },
+      "description": "One non-empty string, or a non-empty list of unique ones — the same shape as kg's labelList."
+    },
+    "w3cdtf": {
+      "type": "string",
+      "pattern": "^[0-9]{4}(-(0[1-9]|1[0-2])(-(0[1-9]|[12][0-9]|3[01])(T([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9](\\.[0-9]+)?)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9]))?)?)?$",
+      "description": "A W3CDTF date, permitting reduced precision. Field-ranged so an impossible date fails here rather than becoming Invalid Date downstream; not calendar-exact."
+    }
+  }
+}

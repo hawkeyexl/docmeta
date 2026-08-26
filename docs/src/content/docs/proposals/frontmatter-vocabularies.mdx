@@ -1,0 +1,207 @@
+---
+title: "Proposal: the metadata vocabularies"
+description: Nine proposed frontmatter vocabularies for maintained, machine-consumable docs — open for community review before anything ships.
+---
+
+:::caution[This is a proposal, not a shipped feature]
+Nothing on this page is registered, published, or enforced yet. It is a
+design put in front of the documentation community for review — the
+decisions below are real, and they are still reversible. The full record
+lives in the repo as
+[proposal 0023](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023-metadata-vocabularies.md),
+with the draft schemas under `src/schemas/`.
+:::
+
+docmeta is a CLI that validates the presence and format of document
+metadata — frontmatter — against JSON Schema, in CI. Its built-in schemas
+have always transcribed contracts other people published: Hugo's front
+matter, DITA's prolog, Open Graph. This proposal adds the first
+vocabularies docmeta would publish itself: the facts a docs set needs in
+order to be **maintained** and **machine-consumable**, which no site
+generator defines and no standard owns.
+
+## The nine vocabularies
+
+Six page-level vocabularies, split by intent so each is one adoption
+decision:
+
+| Id | The question it answers | Fields |
+|---|---|---|
+| `docmeta:core:1.0` | What is this page? | `title`* · `description`* · `id` · `type` · `keywords` · `authors` · `language` |
+| `docmeta:stewardship:1.0` | Is it cared for? | `owner` · `stakeholders` · `reviewed-by` · `last-reviewed` · `review-interval` · `verified-against` · `source-of-truth` |
+| `docmeta:audience:1.0` | Who does it serve, and who may see it? | `audiences` · `personas` · `journeys` · `intent` · `visibility` |
+| `docmeta:lifecycle:1.0` | Where is it in its life? | `lifecycle` · `replaced-by` · `supersedes` · `remove-by` |
+| `docmeta:structure:1.0` | What does it connect to? | `applies-to` · `concepts` · `prerequisites` · `next-steps` · `related-pages` |
+| `docmeta:ai-context:1.0` | How did machines make it — and how may they use it? | `generated-by` · `provenance` · `risks` · `sample-questions` |
+
+And three revisions of sibling tools' in-progress contracts, redesigned to
+the same conventions with no capability lost:
+
+| Id | Derived from | Declares |
+|---|---|---|
+| `docmeta:evals:1.0` | docevals `frontmatter-0.1` | Per-page quality assertions under `evals`, graded by AI, command, human, or tool |
+| `docmeta:kg:1.0` | dockg `frontmatter-0.8` | The knowledge-graph block under `kg` — SKOS concepts, iiRDS typing, PROV provenance |
+| `docmeta:artifact-evals:1.0` | moose-tracevals `artifact-evals-0.2` | Session assertions for skills and agent definitions, under `metadata.evals` |
+
+Only `docmeta:core:1.0` is intended for docmeta's default set — a bare run
+would then require every page to carry a non-empty `title` and
+`description`. The other eight are the recommended stack, adopted
+deliberately.
+
+## What a fully-annotated page looks like
+
+```yaml
+---
+title: Install the operator on Kubernetes
+description: Deploy the operator with Helm and verify the rollout.
+type: how-to
+owner: platform-docs
+stakeholders: [jane.doe, pm-alex]
+reviewed-by: [sam.reviewer]
+last-reviewed: 2026-08-20
+review-interval: P90D
+verified-against: operator 1.4.2
+source-of-truth: https://github.com/example/operator/tree/main/helm
+audiences: [administrators]
+personas: [persona-platform-admin]
+intent: Deploy the operator on a running cluster
+visibility: public
+lifecycle: published
+applies-to: [operator-1.4, kubernetes]
+concepts: [Operator, Helm chart]
+prerequisites: [create-api-token]
+related-pages: [operator-architecture]
+generated-by: claude-fable-5
+provenance:
+  - generated-by: claude-fable-5
+    fields: [intent, sample-questions]
+    confidence: { intent: 0.9, sample-questions: 0.84 }
+risks: [privileged, cost-incurring]
+sample-questions:
+  - How do I install the operator on EKS?
+evals:
+  - id: install-verified
+    assertion: The Helm install steps produce a Ready operator pod.
+    grader: human
+    severity: warning
+kg:
+  label: Operator installation
+  broader: [Operator]
+  type: task
+---
+```
+
+Every key above is optional except `title` and `description`. A page
+carrying only those two is a valid page; everything else is a rung on a
+ladder you climb deliberately.
+
+## The principles behind every field
+
+1. **Weak floors teach bad habits.** Every string the core vocabulary
+   claims is non-empty, `title` and `description` are required, and `type`
+   and `language` are single values — deliberately stricter than the
+   loosest schemas sharing those keys (Docusaurus permits empty titles;
+   Dublin Core repeats its elements), because a default whose floor accepts
+   an empty title teaches the habit it exists to prevent. Those are the
+   only exceptions to the compatibility rule below, and each is pinned by
+   an automated check.
+2. **One value is a string; many values are a list.** Everywhere, with no
+   per-field trivia.
+3. **Claim content, never rendering.** There is no `slug`, `layout`,
+   `image`, `tags`, ordering, or navigation here — the generator owns how a
+   page is dressed and where it sits. These vocabularies only describe what
+   a page *is*.
+4. **Derivable facts lie.** No `updated`, no creation `date`, no stored
+   review deadline: git knows when files change, and
+   `last-reviewed` + `review-interval` derive the due date. The dates that
+   remain are the ones only a human can assert.
+5. **Facts live at their altitude.** Reader expertise belongs to your
+   persona definitions, not to every page; style guides belong in config;
+   `stakeholders` stays because the right people genuinely differ page by
+   page.
+6. **Enumerate only what is switched on and bounded.** `visibility` and
+   `lifecycle` are the only invented enums — something downstream switches
+   on each. Recommendable-but-open vocabularies (`risks`, the artifact
+   grader family) use an open enum: recommended values feed editors and
+   tooling, any string stays legal, and consumers treat unknown values as
+   caution rather than absence.
+7. **Compose, don't duplicate.** Content classification is three layers —
+   `type` (what the page is), Seven-Action's `action` (what the reader is
+   doing), `intent` (the specific job) — each owned by the schema that
+   published it.
+8. **Deeper wins.** Where the `kg` block and a page field describe the same
+   fact (`type`, `concepts`, `applies-to`), the more deliberate, deeper
+   declaration wins and the page-level field is the fallback.
+9. **Machines propose; humans retire the provenance.** The `provenance`
+   pattern — per-model entries naming proposed fields and confidence,
+   deleted as humans review — appears at page level, in the graph block,
+   and in both eval vocabularies. A surviving entry means unreviewed
+   machine metadata.
+
+## Quality contracts, on pages and on agent artifacts
+
+The same eval vocabulary covers documentation pages and the instruction
+artifacts (skills, agent definitions) that agents run with:
+
+```yaml
+# a docs page
+eval-suite: how-to
+evals:
+  - id: install-command-current
+    assertion: The documented install command matches the current package name.
+  - id: links-resolve
+    grader: command
+    command: ["npx", "linkinator", "{file}"]
+```
+
+```yaml
+# a SKILL.md — the host tool owns the top level, so evals nest under metadata
+metadata:
+  evals:
+    - id: used-read
+      assertion: The session read at least one source file before editing.
+      grader: tool-usage
+      options: { tool: Read, expect: used }
+    - Reproduce the bug with a failing test before applying the fix.
+```
+
+Entries share one shape — `id`, `assertion`, `type`, `severity`,
+`evidence`, `examples`, per-entry `skip` — and differ only in grader
+families: pages are graded by `ai`, `command`, `human`, or `tool:*`
+integrations; sessions by `ai`, `human`, `command` over the trace, or
+deterministic session graders like `tool-usage` and `cost` — and the
+`tool:*` spelling is accepted on both sides, so one grader name ports
+across page and artifact evals.
+
+## What we most want your opinion on
+
+These are the calls we consider genuinely contestable, in the order we
+expect debate:
+
+1. **Applicability is flat.** `applies-to: [operator-1.4, kubernetes]` —
+   named dimensions (product vs deployment vs generation) were designed and
+   then simplified away, with prefix labels (`deploy:kubernetes`) as the
+   escape hatch. Too flat?
+2. **`lifecycle` is a closed enum** (`draft · published · deprecated ·
+   archived`). It catches typos and makes "deprecated pages must name a
+   successor or a removal date" airtight — and it rejects your
+   `experimental`/`retired` ladder unless you override the key.
+3. **`risks` holds assurances too.** `read-only` and `idempotent` sit in a
+   field called risks, on the theory that an unannotated page is
+   *unassessed*, not safe. Does the name survive?
+4. **Requiring `title` + `description` by default.** The one breaking
+   nudge: a bare `docmeta validate` would fail pages that cannot say what
+   they are called or what they are for.
+5. **`stakeholders` at page level** — the people to consult about *this*
+   page, deliberately distinct from project-level stakeholder lists, which
+   stay in project docs.
+
+## How to review
+
+Open an issue on
+[hawkeyexl/docmeta](https://github.com/hawkeyexl/docmeta/issues) —
+field-level nitpicks are as welcome as structural objections. The complete
+design record (every cut, every rename, every verification ladder) is in
+[proposal 0023](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023-metadata-vocabularies.md)
+and the design notes beside it. Nothing registers until this review
+concludes.

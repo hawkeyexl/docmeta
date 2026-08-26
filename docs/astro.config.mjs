@@ -32,6 +32,14 @@ export default defineConfig({
           label: "Reference",
           items: [{ autogenerate: { directory: "reference" } }],
         },
+        // Published proposals under community review. Distinct from
+        // docs/proposals/ (the internal, unpublished ADR log): a page appears
+        // here only while it is actively soliciting outside feedback, and
+        // links back to the full internal record.
+        {
+          label: "Proposals",
+          items: [{ autogenerate: { directory: "proposals" } }],
+        },
       ],
     }),
   ],

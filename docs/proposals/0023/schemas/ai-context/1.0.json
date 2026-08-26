@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docmeta:ai-context:1.0",
+  "title": "docmeta AI-context vocabulary (1.0)",
+  "description": "How machines made and may use this page: production provenance (`generated-by`, `provenance`) and consumption guidance (`risks`, `sample-questions`). The provenance pattern is the family's human-review loop — machines propose, entries retire as humans review — and `risks` uses the open-enum idiom: recommended flags anchored in published prior art, any string legal, unknown values read as caution rather than absence.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "generated-by": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The model, agent, or tool that generated this page's content, if any. Kebab-case here; dockg and docevals spell their nested equivalents `generatedBy`. Consumers use it for self-preference-bias checks: a judge should know when it is grading its own author."
+    },
+    "provenance": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/provenanceEntry"
+      },
+      "description": "Attribution for machine-proposed frontmatter, one entry per model (consumers merge by generated-by; the schema dedupes identical entries): which fields it proposed, at what confidence. The human-review trail for enrichment — a human deletes an entry once its fields are reviewed, so a surviving entry means unreviewed machine metadata. Generalized from dockg's kg.provenance. Complementary to `generated-by`, which attributes the page's content rather than its metadata.",
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "risks": {
+      "if": {
+        "type": "array"
+      },
+      "then": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {
+          "$ref": "#/$defs/riskFlag"
+        }
+      },
+      "else": {
+        "$ref": "#/$defs/riskFlag"
+      },
+      "description": "Flags for what following this page does, each a pre-flight question for an agent or reviewer. Cautions: `cost-incurring` (spends money), `destructive` (changes or deletes existing state), `irreversible` (cannot be undone), `privileged` (needs elevated permissions), `open-world` (reaches external systems beyond your control). Assurances: `read-only` (changes nothing) and `idempotent` (safe to repeat) — worth stating explicitly, because an unannotated page is unassessed, not safe. The last three mirror MCP's tool annotations (readOnlyHint, destructiveHint, idempotentHint, openWorldHint), the published prior art for agent-facing hints. All seven are recommendations, not a closed list: any non-empty string is legal, and a consumer switching on a flag should treat an unknown value as caution rather than absence."
+    },
+    "sample-questions": {
+      "if": {
+        "type": "array"
+      },
+      "then": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "else": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "One question, or a list of them, that a reader would ask that this page should answer — `How do I install the operator on EKS?`. The retrieval-eval hook: ask them against the corpus and measure whether this page carries the answer. Assertion-style per-page evals belong to docmeta:evals:1.0, not here."
+    }
+  },
+  "$defs": {
+    "provenanceEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generated-by"
+      ],
+      "properties": {
+        "generated-by": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Model or agent that proposed the fields."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "description": "Which frontmatter keys it proposed. Unenumerated, unlike kg's self-referential list — the fillable surface here extends across every schema stacked on the page."
+        },
+        "confidence": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "description": "Per-field model confidence, 0..1."
+        }
+      }
+    },
+    "riskFlag": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "enum": [
+            "cost-incurring",
+            "destructive",
+            "irreversible",
+            "privileged",
+            "open-world",
+            "read-only",
+            "idempotent"
+          ]
+        }
+      ],
+      "description": "One risk flag: a recommended value, or any non-empty string. The enum branch is advisory — it feeds editor completion, docs, and fill proposals; the open string branch keeps an org-specific flag a correct document rather than a violation."
+    }
+  }
+}

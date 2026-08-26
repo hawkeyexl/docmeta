@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docmeta:stewardship:1.0",
+  "title": "docmeta stewardship vocabulary (1.0)",
+  "description": "Is this page cared for: ownership, review, and the anchors that make drift detectable. Every field is a fact only a human can assert — dates the repo can derive (creation, last change) are deliberately absent, because git owns them and hand-typed copies go stale. The review dates are records, not freshness gates: JSON Schema cannot compare a date to today, and deriving the due date from `last-reviewed` + `review-interval` belongs to tooling that can read a clock (docevals' freshness grader reads `last-reviewed`).",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "owner": {
+      "$ref": "#/$defs/stringList",
+      "description": "The person or team answerable for this page — the one required field of every docs-ownership system from Backstage to GitLab. A name, a handle, a chat channel, a team slug, or a list of them; write the spelling people can actually reach."
+    },
+    "stakeholders": {
+      "$ref": "#/$defs/stringList",
+      "description": "Who has a stake in this page being right: the feature's engineer, the product owner, the support lead who fields its tickets. The standing parties to consult before changing the page — where `reviewed-by` records who actually did the last pass. Page-level on purpose: the right stakeholders differ page by page, and project-wide ones belong in your project docs, not in every file's frontmatter."
+    },
+    "reviewed-by": {
+      "$ref": "#/$defs/stringList",
+      "description": "Who last reviewed the page. Named `reviewed-by` rather than `reviewers` because MyST already defines `reviewers` as scholarly person objects."
+    },
+    "last-reviewed": {
+      "$ref": "#/$defs/w3cdtf",
+      "description": "When the page was last reviewed, as a W3CDTF date. The same field docevals' freshness grader reads. A record, not a freshness gate — JSON Schema cannot compare a date to today."
+    },
+    "review-interval": {
+      "type": "string",
+      "pattern": "^P(?:\\d+W|(?=\\d|T\\d)(?:\\d+Y)?(?:\\d+M)?(?:\\d+D)?(?:T(?=\\d)(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?)$",
+      "description": "How often the page should be reviewed, as an ISO 8601 duration: `P90D`, `P1Y`. ISO rather than `90d` so the value is machine-comparable. With `last-reviewed`, this is everything review tooling needs to derive the due date — a stored due date would only ever agree with them or lie."
+    },
+    "verified-against": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The product version, API revision, or spec the content was last verified against — `operator 1.4.2`. What turns 'reviewed' into 'reviewed against something'."
+    },
+    "source-of-truth": {
+      "$ref": "#/$defs/stringList",
+      "description": "Where reality lives for this page: a repo path, an API spec, a schema file. The anchor a drift check compares the page against; a page without one cannot be drift-monitored."
+    }
+  },
+  "$defs": {
+    "stringList": {
+      "if": { "type": "array" },
+      "then": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": { "type": "string", "minLength": 1 }
+      },
+      "else": { "type": "string", "minLength": 1 },
+      "description": "One non-empty string, or a non-empty list of unique ones — the same shape as kg's labelList."
+    },
+    "w3cdtf": {
+      "type": "string",
+      "pattern": "^[0-9]{4}(-(0[1-9]|1[0-2])(-(0[1-9]|[12][0-9]|3[01])(T([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9](\\.[0-9]+)?)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9]))?)?)?$",
+      "description": "A W3CDTF date, permitting reduced precision: `2026`, `2026-08`, `2026-08-23`, or a full timestamp with timezone. Field-ranged (month 01-12, day 01-31, hour 00-23) so an impossible date fails here rather than becoming Invalid Date in the tooling that derives review deadlines; not calendar-exact — February 31 is a reviewer's catch."
+    }
+  }
+}

@@ -61,6 +61,7 @@ jobs:
         run: |
           node dist/cli.js validate "test/fixtures/**/*.md" \
             --exclude "test/fixtures/infer/**" \
+            --exclude "test/fixtures/default-schema/**" \
             --allow-empty -f sarif > docmeta.sarif
           echo "results=$(jq '.runs[0].results | length' docmeta.sarif)" >> "$GITHUB_OUTPUT"
 

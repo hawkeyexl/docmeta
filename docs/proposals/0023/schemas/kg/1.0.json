@@ -1,0 +1,282 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docmeta:kg:1.0",
+  "title": "docmeta knowledge-graph frontmatter (1.0)",
+  "description": "SKOS concept fields, PROV-O provenance, and iiRDS Core/Software typing under the top-level `kg` key — a docmeta-published revision of dockg's frontmatter-0.8 keeping every capability while adopting the house conventions: kebab-case keys, plain-language names, and single-value-or-list forgiveness on label fields. The `kg` envelope survives the house flattening rule deliberately: it is what lets a closed, typo-catching block coexist with an open page. Where the block and a page-level field speak to the same fact (`type`, `concepts`, `applies-to`, `revision-of`/`supersedes`, legacy `generatedBy`), the deeper declaration wins and the page-level field is the harvest fallback. The RDF term each field becomes is named in its description — which is where that mapping always lived, since half of 0.8's camelCase never mirrored upstream anyway (iiRDS spells its properties kebab: has-topic-type, relates-to-product-variant). Files without a `kg` key pass. AI provenance for the page itself lives at the top-level `generated-by` (docmeta:ai-context:1.0), not in this block.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "kg": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The one canonical name of the concept this document is primarily about (skos:prefLabel). Renamed from 0.8's `prefLabel`; `alt-labels` carry every other name the concept goes by."
+        },
+        "alt-labels": {
+          "$ref": "#/$defs/labelList",
+          "description": "Alternative names — synonyms, abbreviations, spelling variants — for the primary concept (skos:altLabel). What search and retrieval match; `label` is what the graph displays."
+        },
+        "broader": {
+          "$ref": "#/$defs/labelList",
+          "description": "Labels of broader (parent) concepts (skos:broader)."
+        },
+        "narrower": {
+          "$ref": "#/$defs/labelList",
+          "description": "Labels of narrower (child) concepts (skos:narrower)."
+        },
+        "related-concepts": {
+          "$ref": "#/$defs/labelList",
+          "description": "Labels of associatively related concepts (skos:related) — a claim about the concept graph, independent of what this page covers. Named in step with the page-level `related-pages`: each says what it points at."
+        },
+        "concepts": {
+          "$ref": "#/$defs/labelList",
+          "description": "Concept labels this document is about (dcterms:subject, minting a skos:Concept per value). The deeper twin of the page-level `concepts`, same shape; when both are present this one wins. Renamed from 0.8's `subjects` — concepts are what these are."
+        },
+        "type": {
+          "$ref": "#/$defs/topicType",
+          "description": "iiRDS Core topic type (iirds:has-topic-type). The deeper twin of the page-level `type`: same name, and this closed iiRDS enum wins when present — the authority the no-invented-enums rule asks for. When absent, the deriver may default it from the page's type (how-to → task, tutorial → learning, explanation → concept)."
+        },
+        "applies-to": {
+          "$ref": "#/$defs/labelList",
+          "description": "Product/variant labels this document applies to (iirds:relates-to-product-variant, minting iirds:ProductVariant nodes). The deeper twin of the page-level `applies-to`, same flat shape; when both are present, this one wins and the page-level field is the harvest fallback."
+        },
+        "about-product-lifecycle": {
+          "$ref": "#/$defs/lifecyclePhaseList",
+          "description": "Which phases of the PRODUCT's lifecycle the content covers (iirds:relates-to-product-lifecycle-phase): a page about deploying or uninstalling the product. Renamed from 0.8's `softwareLifecyclePhase` so the about-ness is structural — this says what the page is about, never anything about the page's own `lifecycle`."
+        },
+        "about-product-aspect": {
+          "$ref": "#/$defs/productAspectList",
+          "description": "Which aspects of the product the content is about (iirds:has-subject, Software domain): its architecture, its interfaces, or its system requirements. Renamed from 0.8's `softwareSubject`, pairing with `about-product-lifecycle`."
+        },
+        "not-applicable-to": {
+          "$ref": "#/$defs/labelList",
+          "description": "Product/variant labels this document explicitly does NOT apply to (dockg:notApplicableToVariant). Disjointness from `applies-to` is checked at the graph layer (SHACL), not here."
+        },
+        "not-about-product-aspect": {
+          "$ref": "#/$defs/productAspectList",
+          "description": "Product aspects this document is explicitly NOT about (dockg:notSoftwareSubject). Disjoint from `about-product-aspect`, checked at the graph layer."
+        },
+        "sections": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/sectionMetadata"
+          },
+          "description": "Per-section iiRDS typing, keyed by GitHub-style heading slug. Keys are deliberately unconstrained here: a key matching no heading derives dockg:brokenSectionRef at build time, which is the right layer for that check."
+        },
+        "revision-of": {
+          "$ref": "#/$defs/labelList",
+          "description": "Repo-relative paths or URLs of earlier documents this one revises (prov:wasRevisionOf). The deeper counterpart of the page-level `supersedes`, which emits the same predicate as the harvest fallback."
+        },
+        "derived-from": {
+          "$ref": "#/$defs/labelList",
+          "description": "Repo-relative paths or URLs this document was derived from (prov:wasDerivedFrom). Lineage between documents — distinct from the page-level `source-of-truth`, which anchors the page to external reality."
+        },
+        "provenance": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/provenanceEntry"
+          },
+          "description": "Attribution for machine-proposed kg fields, one entry per model (consumers merge by generated-by; the schema dedupes identical entries); humans delete entries they have reviewed. Array only — 0.8's deprecated single-object form (the 0.2/0.3 shape) is dropped in this revision, which has no legacy documents to carry.",
+          "uniqueItems": true
+        }
+      },
+      "dependentRequired": {
+        "alt-labels": [
+          "label"
+        ],
+        "broader": [
+          "label"
+        ],
+        "narrower": [
+          "label"
+        ],
+        "related-concepts": [
+          "label"
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "labelList": {
+      "if": {
+        "type": "array"
+      },
+      "then": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uniqueItems": true
+      },
+      "else": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "One non-empty label, or a non-empty unique list of them. The single-string shorthand is a widening over 0.8, which required arrays."
+    },
+    "topicType": {
+      "enum": [
+        "task",
+        "concept",
+        "reference",
+        "learning",
+        "troubleshooting",
+        "form"
+      ]
+    },
+    "lifecyclePhaseList": {
+      "if": {
+        "type": "array"
+      },
+      "then": {
+        "type": "array",
+        "items": {
+          "enum": [
+            "administration",
+            "customization",
+            "update",
+            "deployment",
+            "integration",
+            "deinstallation"
+          ]
+        },
+        "uniqueItems": true
+      },
+      "else": {
+        "enum": [
+          "administration",
+          "customization",
+          "update",
+          "deployment",
+          "integration",
+          "deinstallation"
+        ]
+      },
+      "description": "One iiRDS Software-domain product lifecycle phase, or a unique list of them."
+    },
+    "productAspectList": {
+      "if": {
+        "type": "array"
+      },
+      "then": {
+        "type": "array",
+        "items": {
+          "enum": [
+            "architecture",
+            "interface",
+            "system-requirement"
+          ]
+        },
+        "uniqueItems": true
+      },
+      "else": {
+        "enum": [
+          "architecture",
+          "interface",
+          "system-requirement"
+        ]
+      },
+      "description": "One iiRDS Software-domain aspect, or a unique list of them."
+    },
+    "sectionMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "iiRDS typing for one heading section. Fields mirror the document-level kg fields; nothing is inherited from the document, and the SKOS hierarchy fields are deliberately not available per section.",
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/topicType",
+          "description": "iiRDS Core topic type for this section (iirds:has-topic-type)."
+        },
+        "applies-to": {
+          "$ref": "#/$defs/labelList",
+          "description": "Product/variant labels this section applies to (iirds:relates-to-product-variant)."
+        },
+        "about-product-lifecycle": {
+          "$ref": "#/$defs/lifecyclePhaseList",
+          "description": "Product lifecycle phases this section covers."
+        },
+        "about-product-aspect": {
+          "$ref": "#/$defs/productAspectList",
+          "description": "Product aspects this section is about."
+        },
+        "not-applicable-to": {
+          "$ref": "#/$defs/labelList",
+          "description": "Product/variant labels this section explicitly does NOT apply to (dockg:notApplicableToVariant)."
+        },
+        "not-about-product-aspect": {
+          "$ref": "#/$defs/productAspectList",
+          "description": "Product aspects this section is explicitly NOT about (dockg:notSoftwareSubject)."
+        },
+        "concepts": {
+          "$ref": "#/$defs/labelList",
+          "description": "Concept labels for this section (dcterms:subject)."
+        }
+      }
+    },
+    "provenanceEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generated-by"
+      ],
+      "properties": {
+        "generated-by": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Model that proposed the machine-filled kg fields. Kebab-cased from 0.8's `generatedBy`. This is fill's attribution trail for the block — the page's own AI provenance is the top-level `generated-by`."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "label",
+              "alt-labels",
+              "broader",
+              "narrower",
+              "related-concepts",
+              "concepts",
+              "type",
+              "applies-to",
+              "about-product-lifecycle",
+              "about-product-aspect",
+              "not-applicable-to",
+              "not-about-product-aspect"
+            ]
+          },
+          "uniqueItems": true,
+          "description": "Which kg fields this model proposed. Self-referential and bounded — the twelve fillable fields, renamed with the schema. `sections`, `revision-of` and `derived-from` are deliberately absent, matching dockg's doc-level fill scope (section-level fill is deferred there, and lineage is not machine-proposed)."
+        },
+        "confidence": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "label",
+              "alt-labels",
+              "broader",
+              "narrower",
+              "related-concepts",
+              "concepts",
+              "type",
+              "applies-to",
+              "about-product-lifecycle",
+              "about-product-aspect",
+              "not-applicable-to",
+              "not-about-product-aspect"
+            ]
+          },
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "description": "Per-field model confidence 0..1, keyed by the same fillable-field names as `fields` — a confidence attached to a typo'd or unknown field name fails here instead of dangling."
+        }
+      }
+    }
+  }
+}
