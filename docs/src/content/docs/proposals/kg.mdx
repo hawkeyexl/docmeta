@@ -14,9 +14,8 @@ open for community review. Draft schema:
 
 **The question it answers: what does the knowledge graph know about this
 page?** A common vocabulary any graph builder or retrieval tool can
-implement. Its design descends from dockg's frontmatter contract — dockg
-is its expected first implementer, not its owner. Files without a `kg` key
-pass; the block itself is closed, so a typo'd field fails loudly.
+implement. Files without a `kg` key pass; the block itself is closed, so a
+typo'd field fails loudly.
 
 ## The block
 
@@ -70,9 +69,9 @@ kg:
   (`how-to` → `task`, `tutorial` → `learning`, `explanation` →
   `concept`); an explicit block always wins.
 - **Plain-language kebab names; the RDF mapping lives in descriptions.**
-  Half of the lineage contract's camelCase never mirrored upstream anyway
-  — iiRDS spells its properties kebab (`has-topic-type`). `label` is
-  `skos:prefLabel`; the field descriptions carry every mapping.
+  iiRDS itself spells its properties kebab (`has-topic-type`), so mirroring
+  a vocabulary's internal spellings in the key names buys nothing. `label`
+  is `skos:prefLabel`; the field descriptions carry every mapping.
 - **The about- prefix makes about-ness structural.**
   `about-product-lifecycle: [deinstallation]` describes what the content
   covers; a page about uninstalling is not a deprecated page. The page's

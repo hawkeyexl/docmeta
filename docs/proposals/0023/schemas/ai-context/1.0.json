@@ -9,14 +9,14 @@
     "generated-by": {
       "type": "string",
       "minLength": 1,
-      "description": "The model, agent, or tool that generated this page's content, if any. Kebab-case here; dockg and docevals spell their nested equivalents `generatedBy`. Consumers use it for self-preference-bias checks: a judge should know when it is grading its own author."
+      "description": "The model, agent, or tool that generated this page's content, if any. Consumers use it for self-preference-bias checks: a judge should know when it is grading its own author."
     },
     "provenance": {
       "type": "array",
       "items": {
         "$ref": "#/$defs/provenanceEntry"
       },
-      "description": "Attribution for machine-proposed frontmatter, one entry per model (consumers merge by generated-by; the schema dedupes identical entries): which fields it proposed, at what confidence. The human-review trail for enrichment — a human deletes an entry once its fields are reviewed, so a surviving entry means unreviewed machine metadata. Generalized from dockg's kg.provenance. Complementary to `generated-by`, which attributes the page's content rather than its metadata.",
+      "description": "Attribution for machine-proposed frontmatter, one entry per model (consumers merge by generated-by; the schema dedupes identical entries): which fields it proposed, at what confidence. The human-review trail for enrichment — a human deletes an entry once its fields are reviewed, so a surviving entry means unreviewed machine metadata. Complementary to `generated-by`, which attributes the page's content rather than its metadata.",
       "minItems": 1,
       "uniqueItems": true
     },

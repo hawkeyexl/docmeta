@@ -22,7 +22,7 @@
     },
     "supersedes": {
       "$ref": "#/$defs/stringList",
-      "description": "Pages, ids, or URLs this page replaces — the other direction of `replaced-by`, and the record that survives once the old page is deleted. A record with a stated limit: JSON Schema validates one file at a time, so the pair of edges is not cross-checked here; a knowledge graph (dockg's `prov:wasRevisionOf`) is where the two are reconciled."
+      "description": "Pages, ids, or URLs this page replaces — the other direction of `replaced-by`, and the record that survives once the old page is deleted. A record with a stated limit: JSON Schema validates one file at a time, so the pair of edges is not cross-checked here; a knowledge graph (`prov:wasRevisionOf`) is where the two are reconciled."
     },
     "remove-by": {
       "$ref": "#/$defs/w3cdtf",

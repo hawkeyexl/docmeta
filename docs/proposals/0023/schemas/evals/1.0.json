@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "docmeta:evals:1.0",
   "title": "docmeta eval declarations (1.0)",
-  "description": "Page-level eval declarations: named, testable assertions about a page, each graded by code, an AI judge (a model or an agent), or a human. A docmeta common vocabulary: any grader, judge, or CI tool can implement it, and other schemas may compose on top of it. Its design descends from docevals' draft contract (frontmatter-0.1), keeping those grading semantics while adopting the house conventions — kebab-case keys, flat page-level facts — and docevals is its expected first implementer, not its owner. It claims four keys: `evals` (one assertion or the list), `eval-suite`, `eval-skip`, and `eval-provenance`. The 0.1 object form is gone — its settings were page-level facts and now live at page level, and its `generatedBy` is superseded by the page's top-level `generated-by` (docmeta:ai-context:1.0). Because the page root is open where the 0.1 block was closed, consumers should reserve the `eval-` prefix and reject unrecognized `eval-*` keys, restoring the loud-typo property the closed block used to provide.",
+  "description": "Page-level eval declarations: named, testable assertions about a page, each graded by code, an AI judge (a model or an agent), or a human. A docmeta common vocabulary: any grader, judge, or CI tool can implement it, and other schemas may compose on top of it. It adopts the house conventions — kebab-case keys, flat page-level facts — and claims four keys: `evals` (one assertion or the list), `eval-suite`, `eval-skip`, and `eval-provenance`. There is no settings container: settings are page-level facts, and generation attribution lives at the page's top-level `generated-by` (docmeta:ai-context:1.0). Because the page root is open, consumers should reserve the `eval-` prefix and reject unrecognized `eval-*` keys, giving the root the loud-typo property a closed container would have.",
   "type": "object",
   "additionalProperties": true,
   "properties": {
@@ -21,12 +21,12 @@
     "eval-suite": {
       "type": "string",
       "minLength": 1,
-      "description": "Named suite from the config whose evals apply to this page, alongside anything in `evals`. Page entries win on id collision. Hoisted from 0.1's `evals.suite`: a suite assignment is a page-level fact."
+      "description": "Named suite from the config whose evals apply to this page, alongside anything in `evals`. Page entries win on id collision. A suite assignment is a page-level fact."
     },
     "eval-skip": {
       "type": "boolean",
       "default": false,
-      "description": "Skip this page's evals entirely — reported as skipped, never silently ignored. Hoisted from 0.1's `evals.skip`, default false as there."
+      "description": "Skip this page's evals entirely — reported as skipped, never silently ignored. Default false."
     },
     "eval-provenance": {
       "type": "array",
@@ -135,7 +135,7 @@
         "id": {
           "type": "string",
           "pattern": "^[a-z0-9][a-z0-9-]*$",
-          "description": "Unique (per page) kebab-case identifier for this eval. `id` rather than 0.1's `name`, matching the page-level `id` convention — in this family, `name` means a display name."
+          "description": "Unique (per page) kebab-case identifier for this eval. `id` matches the page-level `id` convention — in this family, `name` would mean a display name."
         },
         "assertion": {
           "type": "string",
@@ -189,16 +189,16 @@
           "default": [
             0
           ],
-          "description": "Exit codes that count as a pass. Kebab-cased from 0.1's `successExitCodes`."
+          "description": "Exit codes that count as a pass."
         },
         "timeout-ms": {
           "type": "integer",
           "minimum": 1,
-          "description": "Kebab-cased from 0.1's `timeoutMs`."
+          "description": "Wall-clock budget for the command, in milliseconds."
         },
         "generated-assertion-hash": {
           "type": "string",
-          "description": "sha256 of the assertion when the check script was generated — written back alongside `command`, and never legal without it: a hash with no command is a half write-back, and a command with a differing hash triggers regeneration. Flattened from 0.1's `generated.assertionHash` wrapper."
+          "description": "sha256 of the assertion when the check script was generated — written back alongside `command`, and never legal without it: a hash with no command is a half write-back, and a command with a differing hash triggers regeneration."
         },
         "options": {
           "type": "object",
@@ -212,7 +212,7 @@
           "additionalProperties": {
             "$ref": "#/$defs/severity"
           },
-          "description": "Maps a tool grader's own severities onto eval severities. Documented for 0.1 but rejected by its schema; legal here, closing that contradiction. Meaningful only on `tool:*` evals."
+          "description": "Maps a tool grader's own severities onto eval severities. Meaningful only on `tool:*` evals."
         },
         "skip": {
           "type": "boolean"
@@ -334,13 +334,13 @@
         "info"
       ],
       "default": "error",
-      "description": "Only error-severity failures fail the run; warning and info report but pass. Default error, as in 0.1 — the string shorthand implies it."
+      "description": "Only error-severity failures fail the run; warning and info report but pass. Default error — the string shorthand implies it."
     },
     "grader": {
       "type": "string",
       "pattern": "^(ai|command|human|tool:[a-z0-9][a-z0-9-]*)$",
       "default": "ai",
-      "description": "How the assertion is checked: an AI judge (`ai`) — a direct inference provider or an agent, selected per-eval with `provider`; an executable check (`command`), generated from the assertion when no `command` is given; a human review queue (`human`); or a named tool integration (`tool:<kebab>`) — an open family, extensible without touching this schema. `ai` replaces 0.1's `llm`, since the judge may be an agent rather than a bare model. The structural kinds stay closed because the conditionals above switch on them."
+      "description": "How the assertion is checked: an AI judge (`ai`) — a direct inference provider or an agent, selected per-eval with `provider`; an executable check (`command`), generated from the assertion when no `command` is given; a human review queue (`human`); or a named tool integration (`tool:<kebab>`) — an open family, extensible without touching this schema. The judge may be an agent rather than a bare model — hence `ai`, not `llm`. The structural kinds stay closed because the conditionals above switch on them."
     },
     "anchorList": {
       "if": {

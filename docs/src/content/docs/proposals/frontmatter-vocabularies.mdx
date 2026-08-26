@@ -28,9 +28,11 @@ generator defines and no standard owns.
 
 ## The nine vocabularies
 
-Six page-level vocabularies, split by intent so each is one adoption
-decision — **each has a dedicated page** (the sidebar lists all nine) with
-its fields, examples, design rationale, and its own review asks:
+Nine vocabularies, split by intent so each is one adoption decision — six
+page-level, plus three for quality and knowledge-graph metadata that any
+grader, graph builder, or CI tool can implement and compose on top of.
+**Each has a dedicated page** (the sidebar lists all nine) with its
+fields, examples, design rationale, and its own review asks:
 
 | Id | The question it answers | Fields |
 |---|---|---|
@@ -40,23 +42,16 @@ its fields, examples, design rationale, and its own review asks:
 | [`docmeta:lifecycle:1.0`](/docmeta/proposals/lifecycle/) | Where is it in its life? | `lifecycle` · `replaced-by` · `supersedes` · `remove-by` |
 | [`docmeta:structure:1.0`](/docmeta/proposals/structure/) | What does it connect to? | `applies-to` · `concepts` · `prerequisites` · `next-steps` · `related-pages` |
 | [`docmeta:ai-context:1.0`](/docmeta/proposals/ai-context/) | How did machines make it — and how may they use it? | `generated-by` · `provenance` · `risks` · `sample-questions` |
+| [`docmeta:evals:1.0`](/docmeta/proposals/evals/) | What must be true of this page? | `evals` · `eval-suite` · `eval-skip` · `eval-provenance` |
+| [`docmeta:kg:1.0`](/docmeta/proposals/kg/) | What does the knowledge graph know about it? | `kg` — one closed block: SKOS concepts, iiRDS typing, PROV provenance |
+| [`docmeta:artifact-evals:1.0`](/docmeta/proposals/artifact-evals/) | What must a session using this artifact have done? | `metadata.evals` · `metadata.eval-skip` · `metadata.eval-provenance` |
 
-And three more common vocabularies for quality and knowledge-graph
-metadata — schemas any tool can implement and compose on top of, whose
-designs descend from three tools' in-progress drafts (those tools are the
-expected first implementers, not the owners), redesigned to the same
-conventions with no capability lost:
-
-| Id | Design lineage | Declares |
-|---|---|---|
-| [`docmeta:evals:1.0`](/docmeta/proposals/evals/) | docevals `frontmatter-0.1` | Per-page quality assertions under `evals`, graded by AI, command, human, or tool |
-| [`docmeta:kg:1.0`](/docmeta/proposals/kg/) | dockg `frontmatter-0.8` | The knowledge-graph block under `kg` — SKOS concepts, iiRDS typing, PROV provenance |
-| [`docmeta:artifact-evals:1.0`](/docmeta/proposals/artifact-evals/) | moose-tracevals `artifact-evals-0.2` | Session assertions for skills and agent definitions, under `metadata.evals` |
-
-Only `docmeta:core:1.0` is intended for docmeta's default set — a bare run
-would then require every page to carry a non-empty `title` and
-`description`. The other eight are the recommended stack, adopted
-deliberately.
+All nine are intended for docmeta's **default set**. A bare run would then
+require every page to carry a non-empty `title` and `description` — the
+only two required fields in the family — and would validate every other
+family key a page chooses to carry. A page with just the required pair
+stays valid: the other eight vocabularies require nothing until you use
+their keys.
 
 ## What a fully-annotated page looks like
 
@@ -199,9 +194,11 @@ expect debate:
 3. **`risks` holds assurances too.** `read-only` and `idempotent` sit in a
    field called risks, on the theory that an unannotated page is
    *unassessed*, not safe. Does the name survive?
-4. **Requiring `title` + `description` by default.** The one breaking
-   nudge: a bare `docmeta validate` would fail pages that cannot say what
-   they are called or what they are for.
+4. **The whole family ships in the default set.** A bare `docmeta
+   validate` would fail pages that cannot say what they are called or what
+   they are for — the one hard nudge — and would validate any other family
+   key a page already carries; a bare `docmeta fill` proposes the full
+   menu. Is family-wide default the right aggressiveness?
 5. **`stakeholders` at page level** — the people to consult about *this*
    page, deliberately distinct from project-level stakeholder lists, which
    stay in project docs.

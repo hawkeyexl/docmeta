@@ -14,9 +14,7 @@ open for community review. Draft schema:
 
 **The question it answers: what must be true of this page?** A common
 vocabulary for per-page quality assertions that any grader, judge, or CI
-tool can implement, and that other schemas can compose on top of. Its
-design descends from docevals' draft contract, and docevals is its
-expected first implementer — not its owner.
+tool can implement, and that other schemas can compose on top of.
 
 ## Keys
 
@@ -73,12 +71,11 @@ evals:
 
 ## Design decisions
 
-- **Flat, like the rest of the family.** The lineage contract nested
-  settings inside an object; here the list is the value and the settings
-  are page-level `eval-*` keys. The page root is open where the old block
-  was closed, so implementers should **reserve the `eval-` prefix** and
-  reject unrecognized `eval-*` keys — restoring the loud-typo property at
-  the root.
+- **Flat, like the rest of the family.** There is no settings object: the
+  list is the value, and the settings are page-level `eval-*` keys. Because
+  the page root is open, implementers should **reserve the `eval-` prefix**
+  and reject unrecognized `eval-*` keys — giving the root the loud-typo
+  property a closed container would have.
 - **Ids are required on object entries** (the string shorthand is the
   legitimately id-less form): position-derived names orphan cached
   verdicts whenever entries move.

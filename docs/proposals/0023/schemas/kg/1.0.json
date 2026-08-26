@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "docmeta:kg:1.0",
   "title": "docmeta knowledge-graph frontmatter (1.0)",
-  "description": "SKOS concept fields, PROV-O provenance, and iiRDS Core/Software typing under the top-level `kg` key — a docmeta common vocabulary for knowledge-graph frontmatter that any graph builder or retrieval tool can implement and compose on. Its design descends from dockg's frontmatter-0.8 — dockg is its expected first implementer, not its owner — keeping every capability while adopting the house conventions: kebab-case keys, plain-language names, and single-value-or-list forgiveness on label fields. The `kg` envelope survives the house flattening rule deliberately: it is what lets a closed, typo-catching block coexist with an open page. Where the block and a page-level field speak to the same fact (`type`, `concepts`, `applies-to`, `revision-of`/`supersedes`, legacy `generatedBy`), the deeper declaration wins and the page-level field is the harvest fallback. The RDF term each field becomes is named in its description — which is where that mapping always lived, since half of 0.8's camelCase never mirrored upstream anyway (iiRDS spells its properties kebab: has-topic-type, relates-to-product-variant). Files without a `kg` key pass. AI provenance for the page itself lives at the top-level `generated-by` (docmeta:ai-context:1.0), not in this block.",
+  "description": "SKOS concept fields, PROV-O provenance, and iiRDS Core/Software typing under the top-level `kg` key — a docmeta common vocabulary for knowledge-graph frontmatter that any graph builder or retrieval tool can implement and compose on. It adopts the house conventions: kebab-case keys, plain-language names, and single-value-or-list forgiveness on label fields. The `kg` envelope survives the house flattening rule deliberately: it is what lets a closed, typo-catching block coexist with an open page. Where the block and a page-level field speak to the same fact (`type`, `concepts`, `applies-to`, `revision-of`/`supersedes`), the deeper declaration wins and the page-level field is the harvest fallback. The RDF term each field becomes is named in its description — iiRDS itself spells its properties kebab (has-topic-type, relates-to-product-variant), so the mapping is stated, not mirrored in key names. Files without a `kg` key pass. AI provenance for the page itself lives at the top-level `generated-by` (docmeta:ai-context:1.0), not in this block.",
   "type": "object",
   "additionalProperties": true,
   "properties": {
@@ -13,7 +13,7 @@
         "label": {
           "type": "string",
           "minLength": 1,
-          "description": "The one canonical name of the concept this document is primarily about (skos:prefLabel). Renamed from 0.8's `prefLabel`; `alt-labels` carry every other name the concept goes by."
+          "description": "The one canonical name of the concept this document is primarily about (skos:prefLabel). `alt-labels` carry every other name the concept goes by."
         },
         "alt-labels": {
           "$ref": "#/$defs/labelList",
@@ -33,7 +33,7 @@
         },
         "concepts": {
           "$ref": "#/$defs/labelList",
-          "description": "Concept labels this document is about (dcterms:subject, minting a skos:Concept per value). The deeper twin of the page-level `concepts`, same shape; when both are present this one wins. Renamed from 0.8's `subjects` — concepts are what these are."
+          "description": "Concept labels this document is about (dcterms:subject, minting a skos:Concept per value). The deeper twin of the page-level `concepts`, same shape; when both are present this one wins."
         },
         "type": {
           "$ref": "#/$defs/topicType",
@@ -45,26 +45,26 @@
         },
         "about-product-lifecycle": {
           "$ref": "#/$defs/lifecyclePhaseList",
-          "description": "Which phases of the PRODUCT's lifecycle the content covers (iirds:relates-to-product-lifecycle-phase): a page about deploying or uninstalling the product. Renamed from 0.8's `softwareLifecyclePhase` so the about-ness is structural — this says what the page is about, never anything about the page's own `lifecycle`."
+          "description": "Which phases of the PRODUCT's lifecycle the content covers (iirds:relates-to-product-lifecycle-phase): a page about deploying or uninstalling the product. The `about-` prefix makes the about-ness structural — this says what the page is about, never anything about the page's own `lifecycle`."
         },
         "about-product-aspect": {
           "$ref": "#/$defs/productAspectList",
-          "description": "Which aspects of the product the content is about (iirds:has-subject, Software domain): its architecture, its interfaces, or its system requirements. Renamed from 0.8's `softwareSubject`, pairing with `about-product-lifecycle`."
+          "description": "Which aspects of the product the content is about (iirds:has-subject, Software domain): its architecture, its interfaces, or its system requirements. Pairs with `about-product-lifecycle`."
         },
         "not-applicable-to": {
           "$ref": "#/$defs/labelList",
-          "description": "Product/variant labels this document explicitly does NOT apply to (dockg:notApplicableToVariant). Disjointness from `applies-to` is checked at the graph layer (SHACL), not here."
+          "description": "Product/variant labels this document explicitly does NOT apply to. Disjointness from `applies-to` is checked at the graph layer (SHACL), not here."
         },
         "not-about-product-aspect": {
           "$ref": "#/$defs/productAspectList",
-          "description": "Product aspects this document is explicitly NOT about (dockg:notSoftwareSubject). Disjoint from `about-product-aspect`, checked at the graph layer."
+          "description": "Product aspects this document is explicitly NOT about. Disjoint from `about-product-aspect`, checked at the graph layer."
         },
         "sections": {
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/sectionMetadata"
           },
-          "description": "Per-section iiRDS typing, keyed by GitHub-style heading slug. Keys are deliberately unconstrained here: a key matching no heading derives dockg:brokenSectionRef at build time, which is the right layer for that check."
+          "description": "Per-section iiRDS typing, keyed by GitHub-style heading slug. Keys are deliberately unconstrained here: a key matching no heading is flagged at graph build time, which is the right layer for that check."
         },
         "revision-of": {
           "$ref": "#/$defs/labelList",
@@ -80,7 +80,7 @@
           "items": {
             "$ref": "#/$defs/provenanceEntry"
           },
-          "description": "Attribution for machine-proposed kg fields, one entry per model (consumers merge by generated-by; the schema dedupes identical entries); humans delete entries they have reviewed. Array only — 0.8's deprecated single-object form (the 0.2/0.3 shape) is dropped in this revision, which has no legacy documents to carry.",
+          "description": "Attribution for machine-proposed kg fields, one entry per model (consumers merge by generated-by; the schema dedupes identical entries); humans delete entries they have reviewed. Array only.",
           "uniqueItems": true
         }
       },
@@ -118,7 +118,7 @@
         "type": "string",
         "minLength": 1
       },
-      "description": "One non-empty label, or a non-empty unique list of them. The single-string shorthand is a widening over 0.8, which required arrays."
+      "description": "One non-empty label, or a non-empty unique list of them."
     },
     "topicType": {
       "enum": [
@@ -207,11 +207,11 @@
         },
         "not-applicable-to": {
           "$ref": "#/$defs/labelList",
-          "description": "Product/variant labels this section explicitly does NOT apply to (dockg:notApplicableToVariant)."
+          "description": "Product/variant labels this section explicitly does NOT apply to."
         },
         "not-about-product-aspect": {
           "$ref": "#/$defs/productAspectList",
-          "description": "Product aspects this section is explicitly NOT about (dockg:notSoftwareSubject)."
+          "description": "Product aspects this section is explicitly NOT about."
         },
         "concepts": {
           "$ref": "#/$defs/labelList",
@@ -229,7 +229,7 @@
         "generated-by": {
           "type": "string",
           "minLength": 1,
-          "description": "Model that proposed the machine-filled kg fields. Kebab-cased from 0.8's `generatedBy`. This is fill's attribution trail for the block — the page's own AI provenance is the top-level `generated-by`."
+          "description": "Model that proposed the machine-filled kg fields. This is fill's attribution trail for the block — the page's own AI provenance is the top-level `generated-by`."
         },
         "fields": {
           "type": "array",
@@ -250,7 +250,7 @@
             ]
           },
           "uniqueItems": true,
-          "description": "Which kg fields this model proposed. Self-referential and bounded — the twelve fillable fields, renamed with the schema. `sections`, `revision-of` and `derived-from` are deliberately absent, matching dockg's doc-level fill scope (section-level fill is deferred there, and lineage is not machine-proposed).",
+          "description": "Which kg fields this model proposed. Self-referential and bounded — the twelve fillable fields. `sections`, `revision-of` and `derived-from` are deliberately absent: section typing and document lineage are curated by hand, not machine-proposed.",
           "minItems": 1
         },
         "confidence": {

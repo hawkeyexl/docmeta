@@ -10,6 +10,16 @@ gate and the docs build). Nine draft schemas live unregistered under
 and artifact-evals. Spec-by-example: `test/default-schema.test.ts` (red until
 registration, by design) and the runnable ladders `docs/proposals/0023/ladders/*.cjs` (plus `compat-check.cjs`, the composability cross-check) — and `test/default-schema.test.ts` runs green via file refs, with only default-set membership skipped until registration.
 
+**2026-08-26 ruling: no design-lineage presentation.** The schemas and the
+docs pages name no tools and no draft-contract versions — the vocabularies
+stand on their own claims. The walk's history lives only here and in
+proposal 0023's design ledgers, framed as record, not identity.
+
+**2026-08-26 correction: the whole family is default.** All nine append to
+`DEFAULT_SCHEMAS`, superseding the core-only intent below wherever it
+appears. Bare runs require the pair, validate every family key present,
+and put the full menu on bare `fill` — accepted as the teaching surface.
+
 ## The principles (settled through the field walk)
 
 1. **Weak floors teach bad habits.** `title` + `description` required as
@@ -40,8 +50,8 @@ registration, by design) and the runnable ladders `docs/proposals/0023/ladders/*
 
 Designed as one large schema, then split by owner directive into six
 intent-scoped ids (superseding the earlier `docmeta:frontmatter:1.0` id
-ruling — the split is why): `docmeta:core:1.0` (required pair; the only
-default-set candidate), `docmeta:stewardship:1.0`, `docmeta:audience:1.0`,
+ruling — the split is why): `docmeta:core:1.0` (required pair),
+`docmeta:stewardship:1.0`, `docmeta:audience:1.0`,
 `docmeta:lifecycle:1.0`, `docmeta:structure:1.0` (honoring the recorded
 naming decision recorded in the exploration brief for the relational schema), `docmeta:ai-context:1.0`.
 Disjoint by construction (0 collisions, pinned) — stacking all six behaves
@@ -73,9 +83,10 @@ Field homes:
   context-engineering deck, last three mirroring MCP tool annotations),
   sample-questions (one question or a list, like every list field)
 
-**Recorded intent for post-review (not applied):** append to
-`DEFAULT_SCHEMAS`; requiring title+description on bare runs is a deliberate
-`feat!:`; demo video per house rule.
+**Recorded intent for post-review (not applied):** append all nine to
+`DEFAULT_SCHEMAS` (corrected 2026-08-26 from core-only); requiring
+title+description on bare runs is a deliberate `feat!:`; demo video per
+house rule.
 
 **Open questions for the community draft:** the flattening of `applies-to`
 to labels — the deck modeled named dimensions (product/deployment/
@@ -117,10 +128,9 @@ translates a tool's per-finding severities (meaningful on `tool:*` only).
 - Unchanged: entry forms, grading semantics, `capability|regression`,
   `error|warning|info`, the `tool:*` open family, kebab id pattern
 
-**Placement intent:** opt-in built-in, NOT the default set — a schema
-claiming `evals` puts the block on `docmeta fill`'s menu, and docevals'
-own fill is the intended proposer. Stack the six house ids with
-`docmeta:evals:1.0` deliberately.
+**Placement intent (corrected 2026-08-26):** default set, with the whole
+family. The original opt-in call feared the bare `fill` menu; the
+correction accepts it as the teaching surface.
 
 **docevals-side ledger (their repo, post-review):** a superseding ADR over
 01000 ("schemas are published by the tool that owns them" → the new line:

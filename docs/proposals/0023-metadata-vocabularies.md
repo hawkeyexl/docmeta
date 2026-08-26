@@ -27,9 +27,9 @@ Nine metadata vocabularies, published by docmeta, designed as one family:
 | `docmeta:lifecycle:1.0` | Where is it in its life? | 4 (+ the deprecation rule) |
 | `docmeta:structure:1.0` | What does it connect to? | 5 |
 | `docmeta:ai-context:1.0` | How did machines make it; how may they use it? | 4 |
-| `docmeta:evals:1.0` | What must be true of this page? | revision of docevals `frontmatter-0.1` |
-| `docmeta:kg:1.0` | What does the knowledge graph know about it? | revision of dockg `frontmatter-0.8` |
-| `docmeta:artifact-evals:1.0` | What must a session using this artifact have done? | revision of moose-tracevals `artifact-evals-0.2` |
+| `docmeta:evals:1.0` | What must be true of this page? | 4 keys |
+| `docmeta:kg:1.0` | What does the knowledge graph know about it? | the `kg` envelope |
+| `docmeta:artifact-evals:1.0` | What must a session using this artifact have done? | 3 keys under `metadata` |
 
 **Nothing in this proposal is registered.** The drafts live at
 `docs/proposals/0023/schemas/` — deliberately *outside* `src/schemas/`, which
@@ -60,10 +60,10 @@ The evidence base: a context-engineering model for AI-ready documentation
 eval-instrumented → drift-monitored, with `intent`, `source-of-truth`,
 `risks`, and per-page sample questions); a survey of 225 writing skills' entry
 criteria as a metadata demand signal; the registry's own key space (19
-built-ins, 220 distinct keys once the in-flight platform schemas land); and
-the in-progress metadata contracts of three tools in the same family —
-docevals, dockg, and moose-tracevals — whose drafts this proposal promotes
-into common vocabularies rather than working around them.
+built-ins, 220 distinct keys once the in-flight platform schemas land); and a
+design walk through the in-progress metadata contracts of three tools in
+the same family (docevals, dockg, moose-tracevals), which the common
+vocabularies below replace.
 
 ## The principles
 
@@ -101,9 +101,9 @@ cutting, and each names what it cut.
    `passo-uno:seven-action:1.0` in the default set; the classification story
    is three layers — `type` (what the page is), `action` (what the reader is
    doing), `intent` (the specific job). The `evals`, `kg` and `metadata`
-   namespaces are never claimed by the house ids: a claimed key lands on
-   `docmeta fill`'s menu, and each of those vocabularies has its own fill
-   loop in the tools that implement it.
+   namespaces are never claimed by the house ids: each belongs to its own
+   vocabulary in the set, so a fault in an eval entry or a `kg` field is
+   attributed to that vocabulary, never to a house id.
 8. **Deeper wins; the top level is the harvest fallback.** Where a `kg` block
    field and a page-level field speak to the same fact — `type`, `concepts`,
    `applies-to`, `supersedes`/`revision-of` — the deeper declaration wins,
@@ -137,8 +137,8 @@ test), so stacking all six behaves exactly like the monolith did.
 `*` = required. All ids are `additionalProperties: true`.
 
 **docmeta:core:1.0** — `title`\*, `description`\*, `id`, `type`, `keywords`,
-`authors`, `language`. The descriptive floor and the only id intended for the
-default set. The shared keys are claimed at the loosest lawful definition
+`authors`, `language`. The descriptive floor, and the only id in the default
+set that requires anything. The shared keys are claimed at the loosest lawful definition
 (`authors` up to MyST/Docusaurus person objects and nothing looser — list
 members are strings or objects, never bare numbers; `keywords` down to
 Antora's comma-string) **except where looseness would teach a bad habit**,
@@ -155,7 +155,7 @@ expected-reject, so an exception this list does not name fails the check.
 `last-reviewed`, `review-interval` (ISO 8601 duration), `verified-against`,
 `source-of-truth`. The review dates are records, not freshness gates — JSON
 Schema cannot compare a date to today, and the overdue-review case is pinned
-as *passing*; docevals' freshness grader reads the same `last-reviewed` field
+as *passing*; a freshness grader reads the same `last-reviewed` field
 and is the thing that owns the clock.
 
 **docmeta:audience:1.0** — `audiences`, `personas`, `journeys`, `intent`,
@@ -166,8 +166,8 @@ folding the generator draft flag and the access axis into one switch).
 `draft | published | deprecated | archived`), `replaced-by`, `supersedes`,
 `remove-by`; `deprecated` ⇒ `replaced-by` or `remove-by` required. The
 inverse edges (`replaced-by`/`supersedes`) live on two files and are not
-cross-checked here — dockg's graph (`prov:wasRevisionOf`) is where the pair
-reconciles.
+cross-checked here — the knowledge graph (`prov:wasRevisionOf`) is where
+the pair reconciles.
 
 **docmeta:structure:1.0** — `applies-to` (flat labels, the harvest fallback of
 `kg.applies-to`), `concepts` (glossary terms, fallback of `kg.concepts`),
@@ -184,22 +184,25 @@ context-engineering model, the last three mirroring MCP's tool annotations),
 
 `docmeta:evals`, `docmeta:kg`, and `docmeta:artifact-evals` are **common
 vocabularies**, exactly like the six house ids: any tool can implement them,
-and other schemas can compose on top of them. They are not sibling-owned
-contracts that docmeta happens to host. Their designs descend from three
-tools' in-progress drafts — docevals, dockg, and moose-tracevals — and those
-tools are the expected first implementers, which is why each gets a fidelity
-ledger below: the ledger records design lineage, not ownership.
+and other schemas can compose on top of them. Nothing about them is
+tool-owned, and no schema or docs page presents them through another tool's
+contract — the vocabularies stand on their own claims.
 
-All three source tools had recorded "schemas are published by the tool that
-owns them" with *don't re-propose a docmeta built-in* rules. This proposal
+The design work that produced them walked the in-progress draft contracts
+of three tools in this family — docevals, dockg, and moose-tracevals — and
+reworked those drafts into the common shape. The ledgers below are the
+record of that walk: what each draft capability became, and what each
+tool's superseding ADR must cover when it adopts the common vocabulary.
+All three tools had recorded "schemas are published by the tool that owns
+them" with *don't re-propose a docmeta built-in* rules. This proposal
 reverses that deliberately, with a new dividing line: **docmeta publishes
 common metadata vocabularies; tools implement behavior — graders, graphs,
-runtimes — against them.** Each source repo owes a superseding ADR
-(supersede, never amend). The reversal is cheap now and only now: docevals
-and moose-tracevals have never shipped, so every break below is loud and
-free.
+runtimes — against them.** Each repo owes a superseding ADR (supersede,
+never amend). The reversal is cheap now and only now: docevals and
+moose-tracevals have never shipped, so every break below is loud and free.
 
-**docmeta:evals:1.0** (from docevals `frontmatter-0.1`) — claims `evals` (one
+**docmeta:evals:1.0** — ledger vs docevals' draft `frontmatter-0.1`.
+Claims `evals` (one
 assertion string or a list of entries: string shorthand, `use:` config
 reference, or inline definition), `eval-suite`, `eval-skip`,
 `eval-provenance`. Renames: `name`→`id`, `llm`→`ai`, camelCase→kebab
@@ -218,7 +221,8 @@ spellings and the top-level provenance; **reserve the `eval-` prefix** and
 reject unrecognized `eval-*` keys, restoring the closed block's loud-typo
 property at the open page root.
 
-**docmeta:kg:1.0** (from dockg `frontmatter-0.8`) — the closed `kg` envelope
+**docmeta:kg:1.0** — ledger vs dockg's draft `frontmatter-0.8`. The
+closed `kg` envelope
 survives (it is what lets a typo-catching block coexist with an open page):
 `label` (was `prefLabel`), `alt-labels`, `broader`, `narrower`,
 `related-concepts` (was `related`), `concepts` (was `subjects`), `type` (was
@@ -234,8 +238,8 @@ translation). dockg-side ledger: superseding ADR; deriver reads kebab keys,
 applies the deeper-wins fallback, derives `type`, and normalizes the
 shorthand.
 
-**docmeta:artifact-evals:1.0** (from moose-tracevals `artifact-evals-0.2`) —
-the page-side trio one level down, because an artifact's top level is the
+**docmeta:artifact-evals:1.0** — ledger vs moose-tracevals' draft
+`artifact-evals-0.2`. The page-side trio one level down, because an artifact's top level is the
 host tool's contract and `metadata` is its sanctioned extension bag:
 `metadata.evals` (one assertion or the list; 0.2's `criteria` container
 dissolved), `metadata.eval-skip`, `metadata.eval-provenance`. Entries share
@@ -262,17 +266,24 @@ delegation to docmeta. Housekeeping found in passing is recorded in
 
 ## Placement intent (decided in design, applied only after review)
 
-- `docmeta:core:1.0` **appends to `DEFAULT_SCHEMAS`.** A bare run then
-  requires `title` and `description` — a deliberate breaking change
-  (`feat!:`), enforcing the floor every docs gate in this family already
-  enforces. Ships with the demo video the house rules require of a feature.
-  Full disclosure of the bare-run breaking surface: beyond the required
-  pair, a bare run newly rejects empty strings on core's keys and the DCMI
-  array form of `language` (array `type` already fails bare runs today,
-  since okf types it string).
-- The other eight are **opt-in built-ins**: the recommended stack, adopted
-  deliberately. Defaulting them would put their entire field menu on every
-  bare `docmeta fill` run.
+- **All nine append to `DEFAULT_SCHEMAS`** (corrected 2026-08-26 from
+  core-only: the family is the default, not a recommended add-on). A bare
+  run then requires `title` and `description` — a deliberate breaking
+  change (`feat!:`), enforcing the floor every docs gate in this family
+  already enforces — and validates every other family key a page carries:
+  the invented enums, the deprecation rule, the `kg` block's closure, the
+  eval entry shapes. Ships with the demo video the house rules require of
+  a feature. Full disclosure of the bare-run breaking surface: beyond the
+  required pair, a bare run newly rejects empty strings on core's keys,
+  the DCMI array form of `language` (array `type` already fails bare runs
+  today, since okf types it string), and malformed values under any key
+  the other eight claim — `lifecycle: experimental`, a typo'd `kg` field,
+  or a malformed eval entry fails bare where it silently passed before.
+  The eight require nothing, so a page valid on the required pair alone
+  stays valid.
+- The whole family therefore lands on a bare `docmeta fill` menu. Accepted
+  deliberately: the default set is the teaching surface for what
+  frontmatter should contain.
 - Registration mechanics (imports, `BUILTINS`, `PUBLISHED_ALIAS`,
   `schemas:sync`, docs counts, reference pages) are the follow-up PR's work,
   after this review round.
@@ -293,8 +304,9 @@ The spec suite validates through the shipped `runValidate` path (file refs
 into the drafts) and pins disjointness, attribution, the enums, the
 conditionals, and the freshness limitation; only default-set membership is
 skipped until registration. Each ladder includes the migration negatives —
-old spellings and shapes failing loudly — and each lineage-bearing vocabulary includes
-a translated capability-fidelity case proving no capability was lost. The
+old spellings and shapes failing loudly — and the three reworked
+vocabularies each include a translated capability-fidelity case proving no
+capability was lost. The
 compat-check probes every shared key with the other claimants' most extreme
 legal values, expects exactly the recorded exceptions, and exits non-zero on
 anything else — it is the reproducible evidence behind principles 1 and 7.
@@ -316,8 +328,11 @@ anything else — it is the reproducible evidence behind principles 1 and 7.
    page-scoped (who to consult about *this* page) and inherits the SME
    evidence; the earlier exploration cut a project-level field of the same
    name. The distinction must hold up.
-5. **Default-on placement of `docmeta:core:1.0`**, and whether requiring the
-   pair on bare runs is the right nudge.
+5. **Default-on placement of the whole family.** All nine ship in the
+   default set: requiring the pair is the one hard nudge, every other
+   family key a page carries gets validated on bare runs, and the full
+   menu appears on a bare `fill`. Is family-wide default the right
+   aggressiveness?
 6. **Runtime vocabularies.** Grader `options` names (`maxUsd`, `maxAgeDays`)
    remain camelCase — whether kebab-case reaches into runtime contracts is
    each tool's call.
@@ -325,9 +340,8 @@ anything else — it is the reproducible evidence behind principles 1 and 7.
    sit in `docmeta:ai-context:1.0`, yet the evals self-preference-bias check
    and the kg harvest both read `generated-by`, and the provenance trail
    describes fills across every stacked schema — an argument they belong in
-   core (always present) instead. Relatedly, adopting the recommended stack
-   means six refs in every config; whether a bundle id is worth its own
-   immutable surface is open.
+   core instead; with the whole family default-on the practical difference
+   shrinks to override cases, but the attribution question stands.
 8. **TOML frontmatter and the date fields.** `smol-toml` yields native date
    objects, so the W3CDTF string fields validate only for YAML/JSON
    frontmatter until the TOML date normalization in the in-flight platform

@@ -15,8 +15,7 @@ open for community review. Draft schema:
 **The question it answers: what must a session that used this artifact
 have done?** Instruction artifacts — skills, agent definitions,
 project-rules files — carry evals about the *sessions* that run with them.
-A common vocabulary any session-grading tool can implement; its design
-descends from moose-tracevals' draft, its expected first implementer.
+A common vocabulary any session-grading tool can implement.
 
 ## Keys
 
@@ -84,9 +83,9 @@ metadata:
   untouched — while entry objects are closed; implementers reserve the
   `eval` prefix *inside* `metadata` for the same loud-typo guard the page
   side applies at its root.
-- **Ids are required on object entries.** The lineage contract's
-  optional, position-derived names orphaned cached verdicts whenever
-  entries moved; if an eval is worth an object, it is worth a stable name.
+- **Ids are required on object entries.** Position-derived names orphan
+  cached verdicts whenever entries move; if an eval is worth an object, it
+  is worth a stable name.
 - **The grader enum is fully open** because — unlike the page side — no
   schema conditional switches on it: every object entry requires an
   assertion regardless. The one cost, stated in the schema: a stale

@@ -1,6 +1,6 @@
 ---
 title: A page carrying every companion vocabulary's namespace
-description: The evals, kg, and metadata blocks belong to companion vocabularies and pass untouched.
+description: The evals, kg, and metadata blocks belong to companion vocabularies — the house ids never claim them.
 type: how-to
 eval-suite: docs-page
 evals:

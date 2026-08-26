@@ -54,8 +54,7 @@ source-of-truth: https://github.com/example/operator/tree/main/helm
   `last-reviewed` from 1998 validates — deliberately, and pinned by a test.
   Deriving the due date (`last-reviewed` + `review-interval`) and judging it
   belongs to tooling that can read a clock; any freshness grader can
-  consume these fields, and docevals ships one that reads `last-reviewed`
-  by default.
+  consume these fields.
 - **There is no stored due-date field.** It would be derivable from the
   two fields that exist, and derivable fields lie — the same rule that
   keeps `updated` out of core.

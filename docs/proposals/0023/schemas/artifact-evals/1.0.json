@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "docmeta:artifact-evals:1.0",
   "title": "docmeta artifact eval declarations (1.0)",
-  "description": "Eval declarations for instruction artifacts — skills, agent definitions, and project-rules files: assertions about what must have held in an agent session that used the artifact. A docmeta common vocabulary sharing the entry shape of docmeta:evals:1.0: any session-grading tool can implement it, and its design descends from moose-tracevals' artifact-evals-0.2 — that tool is its expected first implementer, not its owner. The page-side trio appears here one level down — `metadata.evals` (one assertion or the list), `metadata.eval-skip`, `metadata.eval-provenance` — because an artifact's top-level frontmatter is the host tool's contract and `metadata` is its sanctioned extension bag; 0.2's `criteria` container is dissolved the same way the page side's object form was, so the list is the value and the word criteria leaves the vocabulary. `metadata` stays open (other tools' members pass untouched) and entry objects are closed; consumers should reserve the `eval` prefix inside `metadata` and reject unrecognized `eval-*` members, the same loud-typo guard as the page side.",
+  "description": "Eval declarations for instruction artifacts — skills, agent definitions, and project-rules files: assertions about what must have held in an agent session that used the artifact. A docmeta common vocabulary sharing the entry shape of docmeta:evals:1.0: any session-grading tool can implement it. The page-side trio appears here one level down — `metadata.evals` (one assertion or the list), `metadata.eval-skip`, `metadata.eval-provenance` — because an artifact's top-level frontmatter is the host tool's contract and `metadata` is its sanctioned extension bag; there is no container object inside it — the list is the value. `metadata` stays open (other tools' members pass untouched) and entry objects are closed; consumers should reserve the `eval` prefix inside `metadata` and reject unrecognized `eval-*` members, the same loud-typo guard as the page side.",
   "type": "object",
   "additionalProperties": true,
   "properties": {
@@ -25,7 +25,7 @@
         "eval-skip": {
           "type": "boolean",
           "default": false,
-          "description": "Skip this artifact's evals entirely — reported as skipped, never silently ignored. The page-side key, one level down; default false, as 0.2's skip was."
+          "description": "Skip this artifact's evals entirely — reported as skipped, never silently ignored. The page-side key, one level down; default false."
         },
         "eval-provenance": {
           "type": "array",
@@ -99,7 +99,7 @@
         "id": {
           "type": "string",
           "pattern": "^[a-z0-9][a-z0-9-]*$",
-          "description": "Unique (per artifact) kebab-case identifier. Required on the object form — 0.2's optional, position-derived `name` orphaned cached verdicts whenever entries moved; if an eval is worth an object, it is worth a stable name."
+          "description": "Unique (per artifact) kebab-case identifier. Required on the object form — position-derived names orphan cached verdicts whenever entries move; if an eval is worth an object, it is worth a stable name."
         },
         "assertion": {
           "type": "string",
@@ -224,7 +224,7 @@
         "info"
       ],
       "default": "error",
-      "description": "Only error-severity failures fail the eval; warning and info report but pass. Default error, as in 0.2 — the string shorthand implies it."
+      "description": "Only error-severity failures fail the eval; warning and info report but pass. Default error — the string shorthand implies it."
     },
     "grader": {
       "anyOf": [
@@ -248,7 +248,7 @@
         }
       ],
       "default": "ai",
-      "description": "How the assertion is checked: the AI judge (`ai`, replacing 0.2's `llm`); a human review queue (`human` — judged per session, since every trace is new, unlike the page side where a verdict persists until the page changes); an executable check over the trace (`command`); a deterministic session grader — `tool-usage`, `skill-invoked`, `file-access`, `turn-count`, `cost`, `regex`, `json-output`; or a `tool:<kebab>` integration, the page side's namespace, accepted here so one grader spelling ports across both eval vocabularies. Recommended values, not a closed list: any kebab name is legal and validated against the grader registry at run time, so a new grader never needs a schema version — the one cost is that a stale `llm` passes this schema and is rejected by the registry instead."
+      "description": "How the assertion is checked: the AI judge (`ai`); a human review queue (`human` — judged per session, since every trace is new, unlike the page side where a verdict persists until the page changes); an executable check over the trace (`command`); a deterministic session grader — `tool-usage`, `skill-invoked`, `file-access`, `turn-count`, `cost`, `regex`, `json-output`; or a `tool:<kebab>` integration, the page side's namespace, accepted here so one grader spelling ports across both eval vocabularies. Recommended values, not a closed list: any kebab name is legal and validated against the grader registry at run time, so a new grader never needs a schema version — the one cost is that a stale or misspelled grader name passes this schema and is rejected by the registry instead."
     },
     "anchorList": {
       "if": {

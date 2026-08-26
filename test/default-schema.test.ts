@@ -1,7 +1,7 @@
 /**
  * Behavior of the six house vocabularies — the intent-scoped split of the
  * docmeta frontmatter vocabulary proposed in docs/proposals/0023 — plus the
- * default-set behavior docmeta:core:1.0 is intended to join.
+ * default-set behavior the nine family ids are intended to join.
  *
  * The drafts are deliberately unregistered while proposal 0023 is under
  * community review, so every case here validates through **file refs** into
@@ -244,8 +244,8 @@ describe("the six house vocabularies", () => {
   it("passes a review that is decades overdue, because a schema cannot read a clock", async () => {
     // Pinned as intended behavior: `last-reviewed` + `review-interval` are
     // records, not a freshness gate. Deriving the due date and judging it
-    // belongs to tooling that can read a clock — docevals' freshness grader
-    // reads this same `last-reviewed` field. There is deliberately no stored
+    // belongs to tooling that can read a clock — a freshness grader reads
+    // this same `last-reviewed` field. There is deliberately no stored
     // due-date field: it would be derivable, and derivable fields lie.
     const r = await check("overdue-review.md");
     expect(r.errors).toEqual([]);
@@ -464,20 +464,31 @@ describe("the composability law on claimed keys", () => {
 
 /**
  * Default-set membership is the one thing file refs cannot test: it needs
- * `docmeta:core:1.0` registered and appended to `DEFAULT_SCHEMAS`. Skipped
+ * the nine family ids registered and appended to `DEFAULT_SCHEMAS`. Skipped
  * until the registration PR that follows the 0023 review; that PR flips this
  * to `describe` and replaces the draft paths above with built-in ids. The
  * expectations inside are written against that future state on purpose.
  */
 describe.skip("the default set (flips on registration)", () => {
   const CORE_ID = "docmeta:core:1.0";
+  const FAMILY_IDS = [
+    CORE_ID,
+    "docmeta:stewardship:1.0",
+    "docmeta:audience:1.0",
+    "docmeta:lifecycle:1.0",
+    "docmeta:structure:1.0",
+    "docmeta:ai-context:1.0",
+    "docmeta:evals:1.0",
+    "docmeta:kg:1.0",
+    "docmeta:artifact-evals:1.0",
+  ];
 
-  it("appends only core after the two existing members", async () => {
+  it("appends the whole family after the two existing members", async () => {
     const { DEFAULT_SCHEMAS } = await import("../src/core/resolve-schema.js");
     expect(DEFAULT_SCHEMAS).toEqual([
       "google:okf:0.1",
       "passo-uno:seven-action:1.0",
-      CORE_ID,
+      ...FAMILY_IDS,
     ]);
   });
 
@@ -491,10 +502,17 @@ describe.skip("the default set (flips on registration)", () => {
     const r = await check("missing-description.md", []);
     expect(r.ok).toBe(false);
     const fromCore = r.errors.filter((e) => e.schema === CORE_ID);
-    expect(fromCore.some((e) => e.message.includes("description"))).toBe(true);
+    expect(
+      fromCore.some(
+        (e) => e.keyword === "required" && e.subject === "description",
+      ),
+    ).toBe(true);
   });
 
-  it("leaves the companion namespaces alone on a bare run", async () => {
+  it("validates the companion namespaces on a bare run", async () => {
+    // With evals, kg, and artifact-evals in the default set, a bare run
+    // validates these namespaces rather than passing them through; this
+    // fixture carries valid shapes and must stay green.
     const r = await check("companion-namespaces.md", []);
     expect(r.errors).toEqual([]);
     expect(r.ok).toBe(true);
