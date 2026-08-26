@@ -2097,7 +2097,15 @@ function assertSingleStatement(sql: string): void {
   }
 }
 
-/** Index of the first `;` outside literals, identifiers, and comments. */
+/**
+ * Index of the first `;` outside literals, identifiers, and comments.
+ *
+ * Parenthesis depth is deliberately not tracked: in valid SQLite, the only
+ * semicolons outside strings are statement terminators — the grammar has no
+ * parenthesized position where one may appear — so depth would be state with
+ * nothing to distinguish. (Trigger bodies, the one construct with interior
+ * semicolons, never reach here: the docs projection has no triggers.)
+ */
 function topLevelSemicolon(sql: string): number {
   for (let i = 0; i < sql.length; i++) {
     const ch = sql[i];
