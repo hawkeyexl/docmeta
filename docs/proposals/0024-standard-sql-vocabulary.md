@@ -1,6 +1,6 @@
 # 0024 — standard SQL vocabulary: DML edits the files, DDL edits the schema
 
-- **Status:** Proposed
+- **Status:** Implemented (#125, #126)
 - **Serves:** Maya · M2, M3 · Sara · S1, S3 · Devin · D3
 - **Depends on:** [0021](0021-frontmatter-as-a-database.md), [0022](0022-sql-write-back.md) — stacked on their PRs; nothing here has released.
 - **Relates to:** [0023](0023-metadata-vocabularies.md) (in design on its own branch — "vocabulary" there means the house schema families; the DDL below is how a corpus would one day *evolve* such a schema), [0010](0010-init-and-schema-inference.md) (`schemas infer` births a schema; this proposal grows one)
