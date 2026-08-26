@@ -43,9 +43,14 @@ an UPDATE is refused. This proposal makes it mean something instead:
   and the report is the per-file, per-key diff it *would* make —
   `docs/a.md: last_reviewed: 2026-03-01 -> 2026-08-26` — plus a closing
   `dry run; pass --write to apply`. No file is touched. Exit 0.
-- **With `--write`**: the same diff, applied through `apply()` and
-  `writeFileAtomic`, one file at a time, with the writer's own re-parse
-  verification standing between the patch and the disk.
+- **With `--write`**: the same diff, applied in two phases — every file's new
+  content is computed and verified in memory first, then flushed with
+  `writeFileAtomic` — with the writer's own re-parse verification standing
+  between the patch and the disk. In `--format json`, a preview or an applied
+  edit is the bare array of change objects
+  (`{ file, key, from?, to | deleted, written }`), mirroring a SELECT's bare
+  row array; `from` is omitted for a key the file never had, which keeps
+  "absent" distinguishable from an explicit null.
 - **`--check` composes**: in preview, any pending change is a finding —
   exit 1. That turns a normalization statement into a drift gate: CI fails
   while any file does not match the rule, and `--write` is the remedy the
@@ -92,7 +97,9 @@ per file and key, with a stated precedence:
 2. **The column's dominant type across the corpus**, when the file had no
    value for the key (the `SET draft = 0 WHERE draft IS NULL` case): if
    `draft` is boolean in the files that have it, the new value is written as
-   a boolean.
+   a boolean. Dominant is mechanical: the strict plurality by count of files
+   carrying the key; a tie yields *no* dominant type, and precedence falls
+   through to storage — a heterogeneous column never guesses.
 3. **The SQL storage type as-is**, when neither exists.
 
 Failures refuse rather than guess, naming the file and key: new JSON text
@@ -128,11 +135,23 @@ docmeta query --write "UPDATE docs SET tags = (
 INSERTed or DELETEd rows; any system-column change; a type that cannot be
 restored under the precedence above; JSON that does not parse back to the
 key's shape; any merge the writer's own re-parse verification rejects; a
-write that would touch `<stdin>` (there is no file behind it); and — 0020's
-boundary, inherited — element-backed keys whose write support is read-only in
-that format. Each refusal names the file and key, and a refusal anywhere
-aborts the run before any file is written: a bulk edit that half-applied is
-worse than one that declined.
+write that would touch `<stdin>` (there is no file behind it — and this
+refusal deliberately aborts the **whole run**, path-backed rows included:
+stdin in a write's input set means the corpus is mixed with something
+unwritable, and silently skipping it would be a scope reduction nobody asked
+for; the preview shows the stdin row, so the refusal is predictable); and —
+0020's boundary, inherited — element-backed keys whose write support is
+read-only in that format. Each refusal names the file and key, and a refusal
+anywhere aborts the run before any file is written: a bulk edit that
+half-applied is worse than one that declined.
+
+One honest boundary on "all-or-nothing": it is a property of the *refusal
+and verification* path, made real by the two-phase apply — every file's new
+content exists in memory before the first byte lands. What remains is the
+flush loop itself: `writeFileAtomic` is atomic per file, not across files,
+so an OS-level kill mid-flush can leave a partial corpus. The remedy is
+convergence, not a rollback machine: re-running the same statement in
+preview shows exactly the remainder.
 
 ## The `fill` boundary
 
