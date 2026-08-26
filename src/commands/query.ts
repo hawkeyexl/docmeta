@@ -790,7 +790,7 @@ function constrains(member: SetMember, key: string): boolean {
   const props = propsOf(member.schema);
   if (props && key in props) return true;
   const required = member.schema.required;
-  return Array.isArray(required) && required.includes(key);
+  return Array.isArray(required) && required.some((r) => r === key);
 }
 
 const FORK_IGNORE_TEXT: IgnoreGuardText = {
@@ -1108,7 +1108,9 @@ async function planSchemaMutation(
     }
   }
 
-  const indent = detectJsonIndent(styleReference);
+  // BOM-strip before sniffing: the regex anchors at the string head, and a
+  // BOM'd file would silently fall back to two-space and be reformatted.
+  const indent = detectJsonIndent(stripBom(styleReference));
   const mutated = mutateSchemaObject(baseObject, op);
   const content = matchEol(
     styleReference,
