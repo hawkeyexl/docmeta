@@ -249,7 +249,8 @@
             ]
           },
           "uniqueItems": true,
-          "description": "Which kg fields this model proposed. Self-referential and bounded — the twelve fillable fields, renamed with the schema. `sections`, `revision-of` and `derived-from` are deliberately absent, matching dockg's doc-level fill scope (section-level fill is deferred there, and lineage is not machine-proposed)."
+          "description": "Which kg fields this model proposed. Self-referential and bounded — the twelve fillable fields, renamed with the schema. `sections`, `revision-of` and `derived-from` are deliberately absent, matching dockg's doc-level fill scope (section-level fill is deferred there, and lineage is not machine-proposed).",
+          "minItems": 1
         },
         "confidence": {
           "type": "object",

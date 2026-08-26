@@ -77,7 +77,8 @@
             "minLength": 1
           },
           "uniqueItems": true,
-          "description": "Which frontmatter keys it proposed. Unenumerated, unlike kg's self-referential list — the fillable surface here extends across every schema stacked on the page."
+          "description": "Which frontmatter keys it proposed. Unenumerated, unlike kg's self-referential list — the fillable surface here extends across every schema stacked on the page.",
+          "minItems": 1
         },
         "confidence": {
           "type": "object",

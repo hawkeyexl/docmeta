@@ -291,9 +291,10 @@ describe("the six house vocabularies", () => {
     expect(orgSpecific.ok).toBe(true);
     const notAString = await checkStdin("title: T\ndescription: D\nrisks: [true]");
     expect(notAString.ok).toBe(false);
-    // The open-enum branches are ordered string-first, so the error names the
-    // truthful constraint rather than a vocabulary the field left open.
-    expect(notAString.errors[0]?.message).not.toContain("allowed values");
+    // Assert the error lands on the offending item, not which anyOf branch's
+    // message Ajv happened to surface — branch selection on total failure is
+    // implementation-defined and survives Ajv upgrades; the path does not.
+    expect(notAString.errors[0]?.instancePath).toBe("/risks/0");
   });
 
   it("records machine-proposed metadata in provenance entries", async () => {
@@ -336,7 +337,10 @@ describe("the six house vocabularies", () => {
     for (const yaml of [
       'title: T\ndescription: D\ntype: ""',
       'title: T\ndescription: D\nid: ""',
+      'title: T\ndescription: D\nkeywords: ""',
       'title: T\ndescription: D\nkeywords: ["", "beta"]',
+      'title: T\ndescription: D\nauthors: ""',
+      "title: T\ndescription: D\nauthors: []",
     ]) {
       const r = await checkStdin(yaml, [CORE]);
       expect(r.ok, yaml).toBe(false);

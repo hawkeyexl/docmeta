@@ -39,7 +39,8 @@
         "type": "string",
         "minLength": 1
       },
-      "description": "Search keywords. A list of strings, or a single comma-separated string — the AsciiDoc form Antora reads. Deliberately distinct from two neighbors: `tags` (the browsable site taxonomy) is left entirely to your generator's schema, and `concepts` (docmeta:structure:1.0) holds controlled glossary terms rather than free words."
+      "description": "Search keywords. A list of strings, or a single comma-separated string — the AsciiDoc form Antora reads. Deliberately distinct from two neighbors: `tags` (the browsable site taxonomy) is left entirely to your generator's schema, and `concepts` (docmeta:structure:1.0) holds controlled glossary terms rather than free words.",
+      "minLength": 1
     },
     "authors": {
       "type": [
@@ -47,13 +48,16 @@
         "object",
         "array"
       ],
-      "description": "Who wrote the page: a name, a list of names, or the structured person objects MyST and Docusaurus define. Attribution, not stewardship — the party answerable for the page is `owner` (docmeta:stewardship:1.0). List members are names or person objects — every documented MyST and Docusaurus form — never bare numbers or nulls.",
+      "description": "Who wrote the page: a name, a list of names, or the structured person objects MyST and Docusaurus define. Attribution, not stewardship — the party answerable for the page is `owner` (docmeta:stewardship:1.0). List members are names or person objects — every documented MyST and Docusaurus form — never bare numbers or nulls. Never empty in any form: minLength, minItems and minProperties each bind to their own type and are ignored for the others.",
       "items": {
         "type": [
           "string",
           "object"
         ]
-      }
+      },
+      "minLength": 1,
+      "minItems": 1,
+      "minProperties": 1
     },
     "language": {
       "type": "string",
