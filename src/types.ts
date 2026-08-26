@@ -97,6 +97,15 @@ export interface MetadataExtractor {
    */
   implemented: boolean;
   /**
+   * Whether this format's metadata lives in a removable front matter block —
+   * the fence family (markdown, MDX, AsciiDoc, reStructuredText). Absent
+   * means element-backed or native-header metadata, which `DELETE FROM docs`
+   * refuses to strip: there is no block whose removal leaves the document
+   * whole. A third capability axis beside `implemented` (read) and the
+   * presence of `apply` (write).
+   */
+  fenced?: boolean;
+  /**
    * Extract metadata from raw file content.
    *
    * `this: void` — as on `apply` below, and on `ExtractedMetadata`'s

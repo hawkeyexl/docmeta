@@ -668,11 +668,16 @@ function columnDiffOps(
   const removed = [...before.keys()].filter((c) => !after.has(c));
   const added = [...after.keys()].filter((c) => !before.has(c));
   const ops: SchemaOp[] = [];
-  for (const from of [...removed]) {
+  // Same set-tracked pairing as diffProjection's file renames — one idiom for
+  // both rename detectors, though DDL grammar bounds these arrays at one.
+  const pairedFrom = new Set<string>();
+  const pairedTo = new Set<string>();
+  for (const from of removed) {
     // The size guard keeps an empty corpus from vacuously pairing every drop
     // with every add — unreachable through one ALTER today, stated anyway.
     const to = added.find(
       (a) =>
+        !pairedTo.has(a) &&
         rowsBefore.size > 0 &&
         [...rowsBefore.keys()].every((path) =>
           Object.is(rowsBefore.get(path)?.[from], rowsAfter.get(path)?.[a]),
@@ -680,11 +685,13 @@ function columnDiffOps(
     );
     if (!to) continue;
     ops.push({ op: "rename", key: from, renamedTo: to });
-    removed.splice(removed.indexOf(from), 1);
-    added.splice(added.indexOf(to), 1);
+    pairedFrom.add(from);
+    pairedTo.add(to);
   }
-  for (const key of removed) ops.push({ op: "drop", key });
-  for (const key of added) {
+  for (const key of removed.filter((k) => !pairedFrom.has(k))) {
+    ops.push({ op: "drop", key });
+  }
+  for (const key of added.filter((k) => !pairedTo.has(k))) {
     const decl = after.get(key);
     ops.push({
       op: "add",
@@ -1549,9 +1556,19 @@ function buildChanges(
   }
 
   // DELETE: a removed row strips the block. A file that had none is a no-op.
+  const extractorOf = new Map(entries.map((e) => [e.label, e.extractor]));
   for (const file of diff.clearedRows) {
     const extracted = meta.get(file);
     if (!extracted?.present) continue;
+    // Refused at plan time, not discovered at apply: element-backed and
+    // native-header formats have no block whose removal leaves the document
+    // whole, and the preview must never promise a strip the writer refuses.
+    const extractor = extractorOf.get(file);
+    if (extractor && extractor.fenced !== true) {
+      throw new DocmetaError(
+        `"${file}": the ${extractor.name} format has no front matter block to strip.`,
+      );
+    }
     changes.push({ file, cleared: true, from: extracted.data, written: false });
   }
 

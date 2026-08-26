@@ -416,6 +416,20 @@ describe("runQuery write-back (0022)", () => {
     );
   });
 
+  it("DELETE refuses an element-backed format at preview time", async () => {
+    const d = copy();
+    writeFileSync(
+      join(d, "docs", "page.html"),
+      "<html><head><title>Page</title></head><body>x</body></html>\n",
+    );
+    // A preview, not a write: the plan itself must refuse — the element
+    // formats have no block to strip, and promising one would be a lie
+    // --write discovers later.
+    await expect(
+      w("DELETE FROM docs WHERE _path = 'docs/page.html'", d),
+    ).rejects.toThrow(/no front matter block to strip/);
+  });
+
   it("DELETE strips the block, keeps the body, and converges", async () => {
     const d = copy();
     const run = await w("DELETE FROM docs WHERE _path = 'docs/beta.md'", d, true);

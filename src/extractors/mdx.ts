@@ -11,6 +11,7 @@ export const mdxExtractor: MetadataExtractor = {
   name: "mdx",
   extensions: [".mdx"],
   implemented: true,
+  fenced: true,
   extract: (content) => extractFrontmatter(content, "mdx"),
   apply: (content, patch, options) =>
     applyFrontmatter(content, patch, options),
