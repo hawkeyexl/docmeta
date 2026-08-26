@@ -22,7 +22,7 @@ consumption fields (`risks`, `sample-questions`).
 |---|---|---|
 | `generated-by` | string, non-empty | The model, agent, or tool that generated the page's content |
 | `provenance` | list of entries | Per-model attribution of machine-proposed *metadata*: which fields, at what confidence |
-| `risks` | string or list | Pre-flight flags for agents and reviewers — open enum, seven recommended values |
+| `risks` | string or list — open enum | Pre-flight flags for agents and reviewers. Recommended: `cost-incurring` · `destructive` · `irreversible` · `privileged` · `open-world` · `read-only` · `idempotent`; any non-empty string stays legal |
 | `sample-questions` | string or list | Questions this page should answer — the retrieval-eval hook |
 
 A provenance entry: `generated-by` (required), `fields` (which frontmatter
