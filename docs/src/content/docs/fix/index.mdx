@@ -323,7 +323,7 @@ understand which schema applied to your file and why, see
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
     against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
-    (see .github/workflows/doc-detective.yml), over committed fixtures.
+    (see .github/workflows/docs-as-tests.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"fix-a-failing-check","description":"The common-failures catalog and the reproduce-locally loop, mapped to fixtures."} */}
 {/* step {"description":"Missing a required field: (root) ... must have required property, tagged with the schema.","runShell":{"command":"npx docmeta validate test/fixtures/missing-type.md","exitCodes":[1],"stdio":"must have required property 'type'"}} */}

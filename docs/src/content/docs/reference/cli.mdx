@@ -939,7 +939,7 @@ with `No files matched` (exit 2) rather than reporting a green zero.
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
     against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
-    (see .github/workflows/doc-detective.yml), over committed fixtures.
+    (see .github/workflows/docs-as-tests.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"cli-reference","description":"The documented command and flag surface, exercised against the local build."} */}
 {/* step {"description":"validate accepts multiple --schema refs (a set) and a passing file exits 0.","runShell":{"command":"docmeta validate test/fixtures/valid.md -s google:okf:0.1 -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
@@ -968,7 +968,7 @@ with `No files matched` (exit 2) rather than reporting a green zero.
 {/* Everything above stops before inference. The three below actually run it, using
      the local model — the only provider that needs no credential, and so the only
      one testable in CI at all. They are also the only steps here that need the
-     weights; see the cache in .github/workflows/doc-detective.yml.
+     weights; see the cache in .github/workflows/docs-as-tests.yml.
 
      No step clears ANTHROPIC_API_KEY/OPENAI_API_KEY to force the keyless path:
      `VAR= cmd` is bash-only and fails on Windows, where these tests also run. The

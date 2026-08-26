@@ -317,7 +317,7 @@ and editing it is usually faster than starting from nothing.
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
     against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
-    (see .github/workflows/doc-detective.yml), over committed fixtures.
+    (see .github/workflows/docs-as-tests.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"built-in-schemas","description":"Every id in the registry table resolves, and the default set is the two this page names."} */}
 {/* step {"description":"The registry lists google:okf:0.1.","runShell":{"command":"npx docmeta schemas","exitCodes":[0],"stdio":"google:okf:0.1"}} */}
