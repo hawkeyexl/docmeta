@@ -467,6 +467,11 @@ describe("runQuery write-back (0022)", () => {
     await expect(
       w("INSERT INTO docs (title) VALUES ('X')", d, true),
     ).rejects.toThrow(/_path/);
+    // An unwritable extension refuses at *preview* time — the plan must never
+    // promise a file only --write can discover it cannot build.
+    await expect(
+      w("INSERT INTO docs (_path, title) VALUES ('docs/new.xyz', 'X')", d),
+    ).rejects.toThrow(/no writable format/);
   });
 
   it("SET _path renames the file, body byte-preserved", async () => {

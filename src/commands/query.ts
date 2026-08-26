@@ -664,10 +664,14 @@ function columnDiffOps(
   const added = [...after.keys()].filter((c) => !before.has(c));
   const ops: SchemaOp[] = [];
   for (const from of [...removed]) {
-    const to = added.find((a) =>
-      [...rowsBefore.keys()].every((path) =>
-        Object.is(rowsBefore.get(path)?.[from], rowsAfter.get(path)?.[a]),
-      ),
+    // The size guard keeps an empty corpus from vacuously pairing every drop
+    // with every add — unreachable through one ALTER today, stated anyway.
+    const to = added.find(
+      (a) =>
+        rowsBefore.size > 0 &&
+        [...rowsBefore.keys()].every((path) =>
+          Object.is(rowsBefore.get(path)?.[from], rowsAfter.get(path)?.[a]),
+        ),
     );
     if (!to) continue;
     ops.push({ op: "rename", key: from, renamedTo: to });
@@ -1262,7 +1266,7 @@ async function planConfigEdit(
       .map(rawRefOf)
       .flatMap((r) => (r === undefined ? [] : [rebaseRaw(r)]));
     return refs.length === node.items.length &&
-      refs.sort().join("\n") === wantSet;
+      [...refs].sort().join("\n") === wantSet;
   };
 
   const repoint = (node: unknown): number => {
@@ -1559,6 +1563,13 @@ function buildChanges(
       }
     }
     validateNewPath(file, ctx.base);
+    // Refused at plan time so the preview never promises a file the writer
+    // cannot build — the same courtesy every other refusal here extends.
+    if (!extractorForExtension(extname(file))?.apply) {
+      throw new DocmetaError(
+        `"${file}": no writable format for that extension.`,
+      );
+    }
     if (existsSync(resolve(ctx.base, file))) {
       throw new DocmetaError(
         `"${file}" already exists; INSERT creates new files only.`,
@@ -1690,6 +1701,13 @@ async function applyChanges(
       if (!extractor?.apply) {
         throw new DocmetaError(
           `"${label}": no writable format for that extension.`,
+        );
+      }
+      // Same moved-underneath contract the schema writes get: a file that
+      // materialized here since the plan is somebody's data, not a target.
+      if (existsSync(path)) {
+        throw new DocmetaError(
+          `"${label}" appeared on disk since the plan; re-run the query.`,
         );
       }
       pendingWrites.push({
