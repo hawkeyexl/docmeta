@@ -9,7 +9,19 @@ import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { dirname, isAbsolute, resolve, extname, sep } from "node:path";
-import { resolveElements } from "../core/resolve-schema.js";
+import {
+  FILE_SCHEMA_KEY,
+  collectSchemaPins,
+  resolveElements,
+  resolveSchemaSetWithSource,
+} from "../core/resolve-schema.js";
+import { detectJsonIndent, stripBom } from "../core/json-text.js";
+import { integrityOf } from "../core/integrity.js";
+import {
+  assertNotIgnored,
+  posixRelative,
+  type IgnoreGuardText,
+} from "./schemas.js";
 import { writeFileAtomic } from "../core/write-file.js";
 import { stripFrontmatter } from "../extractors/frontmatter-write.js";
 import { deepEqual } from "../extractors/patch-util.js";
@@ -33,9 +45,18 @@ import {
 } from "../core/load-files.js";
 import {
   resolveRunConfig,
+  schemaTrustRoot,
   type ConfigNotice,
   type DocmetaConfig,
+  type SchemaTrustRoot,
 } from "../core/config.js";
+import {
+  classifyRef,
+  isPublishedBuiltinUrl,
+  loadSchema,
+  publishedBuiltins,
+} from "../core/schema-registry.js";
+import { parseDocument, isMap, isSeq, isScalar } from "yaml";
 
 export interface QueryOptions {
   /**
@@ -72,9 +93,11 @@ export interface QueryOptions {
   /** Called once when a config governs the run, so the CLI can report it. */
   onConfigLoaded?: (info: ConfigNotice) => void;
   /**
-   * `--offline`, accepted for surface parity with the other commands. It has
-   * no effect here for the same reason as on `get`: nothing ever resolves or
-   * loads a schema, so there is no network dependency to suppress.
+   * `--offline`, accepted for surface parity with the other commands. DDL
+   * statements do resolve the corpus's schema set (0024), but only from disk
+   * and the bundled built-ins — a URL ref refuses with "vendor it first"
+   * before anything could fetch — so there is still no network dependency to
+   * suppress.
    */
   offline?: boolean;
   /**
@@ -99,6 +122,27 @@ export type QueryChange = { file: string; written: boolean } & (
   | { cleared: true; from: Record<string, unknown> }
   | { created: true; to: Record<string, unknown> }
   | { renamed: string }
+  | {
+      /** A DDL statement edited the schema itself (0024): `file` is the
+       * schema written — an in-place edit, or the fork of a builtin. */
+      schema: true;
+      op: "add" | "drop" | "rename";
+      key: string;
+      renamedTo?: string;
+      type?: string;
+      required?: boolean;
+      forkedFrom?: string;
+    }
+  | {
+      /** A DDL side effect on the governing config file: a fork repoints the
+       * `schemas:` entry (`key: "schemas"`), an in-place edit of a pinned
+       * schema refreshes its pin (`key: "integrity"`). Disclosed as a change
+       * because the preview must name every file `--write` will touch. */
+      config: true;
+      key: string;
+      from: unknown;
+      to: unknown;
+    }
 );
 
 export interface QueryRun {
@@ -137,13 +181,15 @@ export async function runQuery(opts: QueryOptions): Promise<QueryRun> {
 
   // Explicit CLI inputs win, else config `paths:`; `base` is whichever of the
   // two directories those inputs were written relative to.
-  const { config, inputs, base } = await resolveRunConfig({
-    cwd,
-    configPath: opts.configPath,
-    noConfig: opts.noConfig,
-    inputs: opts.inputs,
-    onConfigLoaded: opts.onConfigLoaded,
-  });
+  const { config, inputs, base, configDir, configPath } = await resolveRunConfig(
+    {
+      cwd,
+      configPath: opts.configPath,
+      noConfig: opts.noConfig,
+      inputs: opts.inputs,
+      onConfigLoaded: opts.onConfigLoaded,
+    },
+  );
   const usingStdin = inputs.includes(STDIN_TOKEN);
 
   if (inputs.length === 0) {
@@ -235,6 +281,11 @@ export async function runQuery(opts: QueryOptions): Promise<QueryRun> {
     write: Boolean(opts.write),
     base,
     config,
+    cwd,
+    configDir,
+    configPath,
+    trustRoot: schemaTrustRoot(cwd, configDir),
+    onNotice: opts.onNotice,
   });
 }
 
@@ -251,6 +302,16 @@ interface RunContext {
   /** Directory file labels resolve against (see `resolveRunConfig`). */
   base: string;
   config: DocmetaConfig | null;
+  /** The run's working directory — schema refs resolve from here. */
+  cwd: string;
+  /** Directory holding the governing config file, when one exists. */
+  configDir?: string;
+  /** Absolute path of the governing config file, when one exists. */
+  configPath?: string;
+  /** The boundary a schema read or write may not escape (proposal 0015). */
+  trustRoot: SchemaTrustRoot;
+  /** Diagnostics for the user; the CLI writes these to stderr. */
+  onNotice?: (message: string) => void;
 }
 
 /**
@@ -385,8 +446,10 @@ async function runSql(
     db.function("explicit_null", () => sentinel);
 
     // 0022: the statement runs freely against this disposable projection and
-    // is judged by its effects, not its syntax. A read leaves no diff.
+    // is judged by its effects, not its syntax. A read leaves no diff. The
+    // column snapshot (0024) is what makes DDL an effect too.
     const before = snapshotRows(db);
+    const colBefore = snapshotColumns(db);
     let columns: string[];
     let rows: Record<string, unknown>[];
     try {
@@ -412,10 +475,11 @@ async function runSql(
       // The table itself is gone. "Delete the table definition" is the
       // accident-shaped spelling of two real statements; name them both.
       throw new DocmetaError(
-        "DROP TABLE is refused. DELETE FROM docs WHERE … strips metadata from files; ALTER TABLE docs DROP COLUMN removes one key.",
+        "DROP TABLE is refused. DELETE FROM docs WHERE … strips metadata from files; ALTER TABLE docs DROP COLUMN retires one key from the schema and every file.",
       );
     }
     const diff = diffProjection(before, after);
+    const schemaOps = columnDiffOps(colBefore, snapshotColumns(db), before, after);
     // Structural, not textual: a read always yields result columns, DML and
     // DDL (without RETURNING) never do — so `WITH … UPDATE …` classifies
     // correctly even when it matches zero rows. The residual: RETURNING DML
@@ -425,23 +489,42 @@ async function runSql(
       diff.cells.length > 0 ||
       diff.clearedRows.length > 0 ||
       diff.createdRows.size > 0 ||
-      diff.renamedFiles.length > 0;
+      diff.renamedFiles.length > 0 ||
+      schemaOps.length > 0;
     if (!hasEffects && !mutatingIntent) {
       return { columns, rows, ...(dbInfo ? { db: dbInfo } : {}) };
     }
 
-    const changes = buildChanges(diff, entries, sentinel, ctx);
-    if (ctx.write) await applyChanges(changes, entries, ctx);
+    // DDL edits the schema itself (0024); its plan carries both the schema
+    // change records and — for a builtin fork — the reference repoints.
+    assertDefaultsMatchDeclaredTypes(schemaOps, diff.cells);
+    const schemaPlan =
+      schemaOps.length > 0
+        ? await planSchemaMutation(schemaOps, entries, ctx)
+        : undefined;
+    const renameHints = schemaOps.flatMap((op) =>
+      op.op === "rename" && op.renamedTo !== undefined
+        ? [{ from: op.key, to: op.renamedTo }]
+        : [],
+    );
+    const changes = [
+      ...(schemaPlan?.changes ?? []),
+      ...buildChanges(diff, entries, sentinel, ctx, renameHints),
+    ];
+    if (ctx.write) await applyChanges(changes, entries, ctx, schemaPlan);
     return { columns, rows, changes, ...(dbInfo ? { db: dbInfo } : {}) };
   } finally {
     db.close();
   }
 }
 
+/** The one sliver of the `node:sqlite` surface the snapshots need. */
+interface Queryable {
+  prepare(sql: string): { all(): unknown[] };
+}
+
 /** Every row of the projection, keyed by `_path`. */
-function snapshotRows(
-  db: { prepare(sql: string): { all(): unknown[] } },
-): Map<string, Record<string, unknown>> {
+function snapshotRows(db: Queryable): Map<string, Record<string, unknown>> {
   const rows = db.prepare("SELECT * FROM docs").all() as Record<
     string,
     unknown
@@ -546,6 +629,715 @@ function rowsEqualExceptPath(
   return true;
 }
 
+/** Declared shape of one projection column, from `PRAGMA table_info`. */
+function snapshotColumns(
+  db: Queryable,
+): Map<string, { type: string; notnull: number }> {
+  const rows = db.prepare("PRAGMA table_info(docs)").all() as {
+    name: string;
+    type: string;
+    notnull: number;
+  }[];
+  return new Map(rows.map((r) => [r.name, { type: r.type, notnull: r.notnull }]));
+}
+
+interface SchemaOp {
+  op: "add" | "drop" | "rename";
+  key: string;
+  renamedTo?: string;
+  type?: string;
+  required?: boolean;
+}
+
+/**
+ * DDL, read as an effect: the column set changed. A removed/added pair whose
+ * per-row values are identical is a column rename; the rest are drops and
+ * adds, an add carrying its declared type and NOT NULL as schema intent.
+ */
+function columnDiffOps(
+  before: Map<string, { type: string; notnull: number }>,
+  after: Map<string, { type: string; notnull: number }>,
+  rowsBefore: Map<string, Record<string, unknown>>,
+  rowsAfter: Map<string, Record<string, unknown>>,
+): SchemaOp[] {
+  const removed = [...before.keys()].filter((c) => !after.has(c));
+  const added = [...after.keys()].filter((c) => !before.has(c));
+  const ops: SchemaOp[] = [];
+  for (const from of [...removed]) {
+    const to = added.find((a) =>
+      [...rowsBefore.keys()].every((path) =>
+        Object.is(rowsBefore.get(path)?.[from], rowsAfter.get(path)?.[a]),
+      ),
+    );
+    if (!to) continue;
+    ops.push({ op: "rename", key: from, renamedTo: to });
+    removed.splice(removed.indexOf(from), 1);
+    added.splice(added.indexOf(to), 1);
+  }
+  for (const key of removed) ops.push({ op: "drop", key });
+  for (const key of added) {
+    const decl = after.get(key);
+    ops.push({
+      op: "add",
+      key,
+      type: mapDeclaredType(decl?.type ?? ""),
+      required: decl?.notnull === 1,
+    });
+  }
+  return ops;
+}
+
+/** SQLite declared type → JSON Schema type, by SQLite's own affinity rules. */
+function mapDeclaredType(declared: string): string | undefined {
+  if (/INT/i.test(declared)) return "integer";
+  if (/CHAR|CLOB|TEXT/i.test(declared)) return "string";
+  if (/REAL|FLOA|DOUB|NUMERIC|DEC/i.test(declared)) return "number";
+  return undefined;
+}
+
+/**
+ * The declared type and the DEFAULT are two halves of one statement, and
+ * SQLite will happily store a default its own declaration cannot hold
+ * (`INTEGER … DEFAULT 'high'` stores TEXT). Left unchecked, that writes a
+ * schema requiring a type every backfilled file immediately violates — the
+ * exact inverse of the ratchet staying green. Refused before any plan exists.
+ */
+function assertDefaultsMatchDeclaredTypes(
+  ops: SchemaOp[],
+  cells: CellEffect[],
+): void {
+  for (const op of ops) {
+    if (op.op !== "add" || op.type === undefined) continue;
+    for (const cell of cells) {
+      if (cell.key !== op.key || cell.to === null || cell.to === undefined) {
+        continue;
+      }
+      const to = cell.to;
+      const ok =
+        op.type === "integer"
+          ? typeof to === "bigint" ||
+            (typeof to === "number" && Number.isInteger(to))
+          : op.type === "number"
+            ? typeof to === "number" || typeof to === "bigint"
+            : op.type === "string"
+              ? typeof to === "string"
+              : true;
+      if (!ok) {
+        throw new DocmetaError(
+          `ALTER declares "${op.key}" as ${op.type}, but the DEFAULT backfills ${JSON.stringify(to)} — the corpus would fail the schema it just gained. Match the DEFAULT to the declared type.`,
+        );
+      }
+    }
+  }
+}
+
+interface SchemaWrite {
+  path: string;
+  content: string;
+  /**
+   * Bytes the plan read from this path; apply refuses if they moved since —
+   * the same contract corpus files get. Absent means the plan requires the
+   * path to not exist (a fork target).
+   */
+  expected?: string;
+}
+
+interface SchemaPlan {
+  changes: QueryChange[];
+  writes: SchemaWrite[];
+  /**
+   * ADD writes the schema after the corpus, so a mid-apply failure leaves
+   * extra keys under an unchanged schema (still green) instead of a new
+   * requirement without its backfill (red). DROP/RENAME write schema-first
+   * for the mirror-image reason: files keep a key the schema merely no longer
+   * declares.
+   */
+  schemaLast: boolean;
+}
+
+/** One schema of the resolved set, loaded exactly once. */
+type SetMember =
+  | {
+      /** The ref exactly as the set spells it — what repoints must match. */
+      ref: string;
+      kind: "file";
+      /** Resolved from the run's cwd, the same base `loadSchema` uses. */
+      abs: string;
+      /** The exact text read, for indent/EOL fidelity and pin hashing. */
+      text: string;
+      schema: Record<string, unknown>;
+    }
+  | {
+      ref: string;
+      kind: "builtin";
+      /** The bundled id — the ref itself, or a published URL's alias. */
+      builtinId: string;
+      schema: Record<string, unknown>;
+    };
+
+/** `properties`, when it is the object the mutation machinery can touch. */
+function propsOf(
+  schema: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  const p = schema.properties;
+  return p !== null && typeof p === "object" && !Array.isArray(p)
+    ? (p as Record<string, unknown>)
+    : undefined;
+}
+
+/** Does this schema constrain `key` — by declaring it, or by requiring it? */
+function constrains(member: SetMember, key: string): boolean {
+  const props = propsOf(member.schema);
+  if (props && key in props) return true;
+  const required = member.schema.required;
+  return Array.isArray(required) && required.some((r) => r === key);
+}
+
+const FORK_IGNORE_TEXT: IgnoreGuardText = {
+  refusal: (target) =>
+    `Refusing to fork into "${target}": git reports it as ignored. The forked schema must be committed — an ignored copy validates on this machine and is simply missing in CI, where the failure reads as a schema nobody changed. Drop the .gitignore rule covering this path, or evolve a tracked local schema instead.`,
+  unchecked: (where) =>
+    `could not check .gitignore for "${where}" (no repository here, or no git on PATH). The forked schema must be committed — make sure this path is tracked.`,
+};
+
+/** Preserve the reference text's line endings in a freshly serialized body. */
+function matchEol(reference: string, text: string): string {
+  return reference.includes("\r\n") ? text.replace(/\n/g, "\r\n") : text;
+}
+
+/** A path the way reports spell it: relative to the run's base, posix. */
+function displayPath(ctx: RunContext, abs: string): string {
+  const rel = posixRelative(ctx.base, abs);
+  return rel === "" || rel.startsWith("..") ? abs : rel;
+}
+
+/** Refuse a schema write outside the boundary every schema *read* honors. */
+function assertSchemaWriteWithin(ctx: RunContext, abs: string): void {
+  const within = posixRelative(ctx.trustRoot.dir, abs);
+  if (within !== "" && !within.startsWith("..") && !isAbsolute(within)) return;
+  throw new DocmetaError(
+    `The resolved schema "${abs}" lives outside ${ctx.trustRoot.dir}; DDL edits schemas inside the repository. Evolve it where it lives, or vendor a copy in.`,
+  );
+}
+
+/**
+ * Load every schema in the set, through the same conventions the rest of the
+ * pipeline reads them with: refs resolve from the run's cwd (the
+ * `LoadSchemaOptions.fileBase` contract), text is BOM-stripped before parsing
+ * only, integrity pins are verified against the exact bytes, and a published
+ * built-in URL is the built-in it aliases. Any plain URL refuses: DDL cannot
+ * inspect (let alone edit) a schema a server owns, and sibling-conflict
+ * checks below need to see the whole set.
+ */
+async function loadSetMembers(
+  refs: readonly string[],
+  ctx: RunContext,
+): Promise<SetMember[]> {
+  const pins = collectSchemaPins(ctx.config);
+  const members: SetMember[] = [];
+  for (const ref of refs) {
+    const { kind } = classifyRef(ref);
+    if (kind === "url" && !isPublishedBuiltinUrl(ref)) {
+      throw new DocmetaError(
+        `"${ref}" in the resolved schema set is a URL — DDL edits local schemas only. Vendor it first (docmeta schemas vendor), then evolve the local copy.`,
+      );
+    }
+    if (kind === "builtin" || kind === "url") {
+      const builtinId =
+        kind === "url"
+          ? (publishedBuiltins().find((b) => b.url === ref)?.id ?? ref)
+          : ref;
+      members.push({
+        ref,
+        kind: "builtin",
+        builtinId,
+        schema: await loadSchema(builtinId),
+      });
+      continue;
+    }
+    const abs = resolve(ctx.cwd, ref);
+    let text: string;
+    try {
+      text = await readFile(abs, "utf8");
+    } catch {
+      throw new DocmetaError(
+        `Schema file not found: "${ref}" (looked at ${abs}).`,
+      );
+    }
+    const pin = pins.get(ref);
+    if (pin?.integrity !== undefined) {
+      if (integrityOf(Buffer.from(text, "utf8")) !== pin.integrity) {
+        throw new DocmetaError(
+          `Schema "${ref}" does not match its recorded integrity; its contents have moved since it was vendored. Re-vendor it before evolving it.`,
+        );
+      }
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(stripBom(text));
+    } catch {
+      throw new DocmetaError(
+        `Schema "${ref}" is not valid JSON, so DDL cannot read it. Fix the file first.`,
+      );
+    }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new DocmetaError(
+        `Schema "${ref}" is not an object schema; DDL edits \`properties\` and \`required\`, which only an object schema carries.`,
+      );
+    }
+    members.push({
+      ref,
+      kind: "file",
+      abs,
+      text,
+      schema: parsed as Record<string, unknown>,
+    });
+  }
+  return members;
+}
+
+/**
+ * 0024's DDL pipeline: resolve the run's single schema set, pick the target,
+ * and plan the mutation — an in-place edit for a hand-maintained local file,
+ * a fork (plus reference repoints) for an immutable builtin. Every refusal
+ * here costs nothing: no file has been touched.
+ */
+async function planSchemaMutation(
+  ops: SchemaOp[],
+  entries: QueryEntry[],
+  ctx: RunContext,
+): Promise<SchemaPlan> {
+  // One action per statement is SQLite's own ALTER grammar; a second op here
+  // would mean the effect diff misread the projection.
+  const [op, ...extraOps] = ops;
+  if (!op) return { changes: [], writes: [], schemaLast: false };
+  if (extraOps.length > 0) {
+    throw new DocmetaError(
+      "One DDL action per statement; this statement produced several column effects, which DDL cannot attribute to one schema edit.",
+    );
+  }
+  if (entries.length === 0) {
+    throw new DocmetaError(
+      "DDL needs at least one loaded file: the schema it edits is the one the corpus resolves, and this run matched no files.",
+    );
+  }
+
+  // One schema set for the whole run, or nothing mutates. Resolution runs
+  // with the same trust boundary as validate — a document may not name a
+  // schema outside the repository, least of all as a write target.
+  let refs: string[] | undefined;
+  const sources = new Set<string>();
+  for (const e of entries) {
+    let resolved;
+    try {
+      resolved = resolveSchemaSetWithSource({
+        filePath: e.label,
+        fileSchema: e.extracted.data[FILE_SCHEMA_KEY],
+        config: ctx.config,
+        fileBase: ctx.cwd,
+        trustRoot: ctx.trustRoot,
+        onNotice: ctx.onNotice,
+      });
+    } catch (err) {
+      // `coerceFileSchema` throws a plain Error; either way the file that
+      // carried the bad `$schema` is the one fact the user needs.
+      throw new DocmetaError(`"${e.label}": ${(err as Error).message}`);
+    }
+    sources.add(resolved.source);
+    if (refs === undefined) {
+      refs = resolved.schemas;
+    } else if (JSON.stringify(refs) !== JSON.stringify(resolved.schemas)) {
+      throw new DocmetaError(
+        `DDL needs the corpus to resolve to one schema set, and this run's is split ("${e.label}" resolves differently). Scope the run to one override group.`,
+      );
+    }
+  }
+  if (!refs || sources.has("default")) {
+    throw new DocmetaError(
+      "DDL edits the resolved schema, and this corpus runs on the built-in default set. Name a schema to evolve — in the config's `schemas:`, an override group, or the files' own `$schema`. For data-only edits the UPDATE spellings cover every case: `SET k = v` (backfill via `WHERE k IS NULL`), `SET k = NULL` to remove a key, and paired SETs to rename one.",
+    );
+  }
+
+  const members = await loadSetMembers(refs, ctx);
+  const fileMembers = members.flatMap((m) => (m.kind === "file" ? [m] : []));
+  const builtinMembers = members.flatMap((m) =>
+    m.kind === "builtin" ? [m] : [],
+  );
+
+  // The target: for ADD the single local file (else the builtin, forked); for
+  // DROP/RENAME the one schema that constrains the key. "One" is load-bearing
+  // both ways — a second declarer, or a sibling that still requires a dropped
+  // key, would leave the corpus failing a schema this statement never named.
+  let target: SetMember;
+  if (op.op === "add") {
+    if (fileMembers.length > 1) {
+      throw new DocmetaError(
+        `The resolved set names ${String(fileMembers.length)} local schema files (${fileMembers.map((m) => m.ref).join(", ")}) — DDL cannot tell which one to evolve. Scope the run to an override group that names one, or set the files' \`$schema\` to the schema to evolve.`,
+      );
+    }
+    const chosen = fileMembers[0] ?? builtinMembers[0];
+    if (!chosen) {
+      throw new DocmetaError(
+        `No local schema or built-in in the resolved set takes this DDL.`,
+      );
+    }
+    target = chosen;
+    const targetProps = propsOf(target.schema);
+    if (target.schema.properties !== undefined && targetProps === undefined) {
+      throw new DocmetaError(
+        `Schema "${target.ref}": its "properties" is not an object, so DDL cannot edit it.`,
+      );
+    }
+    if (targetProps && op.key in targetProps) {
+      throw new DocmetaError(
+        `"${op.key}" is already declared in ${target.ref}; ALTER ADD would overwrite its subschema, constraints included. Edit the schema file directly to change an existing property.`,
+      );
+    }
+    for (const m of members) {
+      if (m !== target && constrains(m, op.key)) {
+        throw new DocmetaError(
+          `"${op.key}" is already declared by ${m.ref} in the same schema set; adding it to ${target.ref} would put two contracts on one key. Evolve ${m.ref} instead, or scope the run to a set with one owner of the key.`,
+        );
+      }
+    }
+  } else {
+    const declarers = members.filter((m) => constrains(m, op.key));
+    if (declarers.length === 0) {
+      throw new DocmetaError(
+        `No schema in the resolved set declares "${op.key}".`,
+      );
+    }
+    if (declarers.length > 1) {
+      throw new DocmetaError(
+        `"${op.key}" is constrained by ${String(declarers.length)} schemas in the set (${declarers.map((m) => m.ref).join(", ")}); a DDL statement edits one schema. Evolve them separately.`,
+      );
+    }
+    const sole = declarers[0];
+    if (!sole) {
+      throw new DocmetaError(`No schema in the resolved set declares "${op.key}".`);
+    }
+    target = sole;
+    if (op.op === "rename") {
+      const to = op.renamedTo ?? op.key;
+      for (const m of members) {
+        if (constrains(m, to)) {
+          throw new DocmetaError(
+            `"${to}" is already declared${m === target ? "" : ` by ${m.ref}`} in the schema set; renaming "${op.key}" onto it would overwrite that declaration. Pick another name, or evolve that schema first.`,
+          );
+        }
+      }
+    }
+  }
+
+  const writes: SchemaWrite[] = [];
+  const changes: QueryChange[] = [];
+  const configEdit: ConfigEditRequest = {};
+
+  let baseObject: Record<string, unknown>;
+  let schemaAbs: string;
+  /** Indent and EOL come from the file being edited; a fork starts fresh. */
+  let styleReference: string;
+  let schemaExpected: string | undefined;
+  let forkedFrom: string | undefined;
+  if (target.kind === "file") {
+    schemaAbs = target.abs;
+    baseObject = target.schema;
+    styleReference = target.text;
+    schemaExpected = target.text;
+    assertSchemaWriteWithin(ctx, schemaAbs);
+  } else {
+    // A builtin is immutable by invariant — fork it beside the config and
+    // repoint every reference: the config entry, and any in-file `$schema`.
+    forkedFrom = target.builtinId;
+    const [, name, ver] = target.builtinId.split(":");
+    const forkName = `${name ?? "schema"}-${ver ?? "0"}.local.json`;
+    schemaAbs = resolve(ctx.configDir ?? ctx.cwd, "schemas", forkName);
+    assertSchemaWriteWithin(ctx, schemaAbs);
+    if (existsSync(schemaAbs)) {
+      throw new DocmetaError(
+        `"${displayPath(ctx, schemaAbs)}" already exists; refusing to overwrite it with a fork of ${target.builtinId}.`,
+      );
+    }
+    await assertNotIgnored(
+      schemaAbs,
+      dirname(schemaAbs),
+      ctx.cwd,
+      ctx.onNotice,
+      FORK_IGNORE_TEXT,
+    );
+    baseObject = { ...target.schema, $id: `${target.builtinId}+local` };
+    styleReference = "\n";
+    if (ctx.configPath !== undefined && ctx.configDir !== undefined) {
+      const rel = posixRelative(ctx.configDir, schemaAbs);
+      configEdit.repoint = {
+        oldRef: target.ref,
+        newRef: rel.startsWith(".") ? rel : `./${rel}`,
+      };
+    }
+    const docRel = posixRelative(ctx.cwd, schemaAbs);
+    const newRefForDocs = docRel.startsWith(".") ? docRel : `./${docRel}`;
+    for (const e of entries) {
+      const fileSchema = e.extracted.data[FILE_SCHEMA_KEY];
+      if (fileSchema === target.ref) {
+        changes.push({
+          file: e.label,
+          key: FILE_SCHEMA_KEY,
+          from: fileSchema,
+          to: newRefForDocs,
+          written: false,
+        });
+      } else if (Array.isArray(fileSchema)) {
+        // The documented list spelling repoints element-wise; the rest of
+        // the list is not this statement's business.
+        const list = fileSchema.filter(
+          (r): r is string => typeof r === "string",
+        );
+        if (
+          list.length === fileSchema.length &&
+          list.includes(target.ref)
+        ) {
+          changes.push({
+            file: e.label,
+            key: FILE_SCHEMA_KEY,
+            from: fileSchema,
+            to: list.map((r) => (r === target.ref ? newRefForDocs : r)),
+            written: false,
+          });
+        }
+      }
+    }
+  }
+
+  // BOM-strip before sniffing: the regex anchors at the string head, and a
+  // BOM'd file would silently fall back to two-space and be reformatted.
+  const indent = detectJsonIndent(stripBom(styleReference));
+  const mutated = mutateSchemaObject(baseObject, op);
+  const content = matchEol(
+    styleReference,
+    `${JSON.stringify(mutated, null, indent)}\n`,
+  );
+  changes.unshift({
+    file: displayPath(ctx, schemaAbs),
+    schema: true,
+    op: op.op,
+    key: op.key,
+    ...(op.renamedTo !== undefined ? { renamedTo: op.renamedTo } : {}),
+    ...(op.type !== undefined ? { type: op.type } : {}),
+    ...(op.required ? { required: true } : {}),
+    ...(forkedFrom !== undefined ? { forkedFrom } : {}),
+    written: false,
+  });
+  writes.push({
+    path: schemaAbs,
+    content,
+    ...(schemaExpected !== undefined ? { expected: schemaExpected } : {}),
+  });
+
+  // An in-place edit of a pinned schema carries its pin along: the pin is a
+  // promise about the bytes, and the bytes just changed on purpose.
+  if (target.kind === "file") {
+    const pin = collectSchemaPins(ctx.config).get(target.ref);
+    if (pin?.integrity !== undefined) {
+      configEdit.integrity = {
+        ref: target.ref,
+        value: integrityOf(Buffer.from(content, "utf8")),
+      };
+    }
+  }
+
+  if (configEdit.repoint || configEdit.integrity) {
+    const edited = await planConfigEdit(ctx, configEdit, refs);
+    changes.push(...edited.changes);
+    if (edited.write) writes.push(edited.write);
+    if (
+      configEdit.repoint &&
+      !edited.repointed &&
+      (sources.has("config") || sources.has("override"))
+    ) {
+      throw new DocmetaError(
+        `The run resolved ${configEdit.repoint.oldRef} through the config, but no \`schemas:\` entry in it matches — refusing to fork with a reference that cannot be repointed.`,
+      );
+    }
+  }
+
+  return { changes, writes, schemaLast: op.op === "add" };
+}
+
+/** Apply one DDL op to a schema object, touching properties/required only. */
+function mutateSchemaObject(
+  schema: Record<string, unknown>,
+  op: SchemaOp,
+): Record<string, unknown> {
+  const without = (
+    obj: Record<string, unknown>,
+    key: string,
+  ): Record<string, unknown> =>
+    Object.fromEntries(Object.entries(obj).filter(([k]) => k !== key));
+  let props = { ...(propsOf(schema) ?? {}) };
+  // Spec-invalid non-string entries are dropped rather than carried: every
+  // comparison below is against a string key, so they could only persist as
+  // junk this rewrite pretended not to see.
+  let required = Array.isArray(schema.required)
+    ? (schema.required as unknown[]).filter(
+        (r): r is string => typeof r === "string",
+      )
+    : [];
+  switch (op.op) {
+    case "add":
+      props[op.key] = op.type !== undefined ? { type: op.type } : {};
+      if (op.required && !required.includes(op.key)) required.push(op.key);
+      break;
+    case "drop":
+      props = without(props, op.key);
+      required = required.filter((r) => r !== op.key);
+      break;
+    case "rename": {
+      const to = op.renamedTo ?? op.key;
+      const moved = props[op.key];
+      props = without(props, op.key);
+      if (moved !== undefined) props[to] = moved;
+      required = required.map((r) => (r === op.key ? to : r));
+      break;
+    }
+  }
+  // Set-or-remove explicitly: a spread of the original schema would carry the
+  // old `required` back in whenever the new list is empty.
+  const out: Record<string, unknown> = { ...schema, properties: props };
+  if (required.length > 0) out.required = required;
+  else delete out.required;
+  return out;
+}
+
+interface ConfigEditRequest {
+  /** A builtin fork: point the entry that named the builtin at the fork. */
+  repoint?: { oldRef: string; newRef: string };
+  /** An in-place edit of a pinned schema: the pin over the new bytes. */
+  integrity?: { ref: string; value: string };
+}
+
+/**
+ * Plan an edit to the governing config — the file discovery actually loaded,
+ * at `ctx.configPath` — through the YAML Document API, so every comment and
+ * untouched line survives. Both spellings of a `schemas:` entry are handled:
+ * the bare string, and the `{ref, source, integrity}` mapping.
+ *
+ * A repoint touches only the sequences that resolve to the run's schema set.
+ * An override group with a different set is somebody else's contract; the
+ * single-set guard proved it governs none of this run's files, and rewriting
+ * it would change validation for files this statement never loaded.
+ */
+async function planConfigEdit(
+  ctx: RunContext,
+  edit: ConfigEditRequest,
+  runRefs: readonly string[],
+): Promise<{ write?: SchemaWrite; changes: QueryChange[]; repointed: boolean }> {
+  const { configPath, configDir } = ctx;
+  if (configPath === undefined || configDir === undefined) {
+    return { changes: [], repointed: false };
+  }
+  const text = await readFile(configPath, "utf8");
+  const doc = parseDocument(text);
+  const display = displayPath(ctx, configPath);
+
+  const rawRefOf = (item: unknown): string | undefined => {
+    if (isScalar(item) && typeof item.value === "string") return item.value;
+    if (isMap(item)) {
+      const ref = item.get("ref");
+      if (typeof ref === "string") return ref;
+    }
+    return undefined;
+  };
+  // The YAML holds refs as written; the run's set holds them rebased. Spell
+  // the raw ones the same way before comparing.
+  const rebaseRaw = (raw: string): string =>
+    classifyRef(raw).kind === "file" && !isAbsolute(raw)
+      ? resolve(configDir, raw)
+      : raw;
+  // Both sides through the same rebase: `runRefs` is raw whenever the config
+  // sat in the working directory (rebasing was the identity there).
+  const wantSet = runRefs.map(rebaseRaw).sort().join("\n");
+  const seqResolvesToRunSet = (node: unknown): boolean => {
+    if (!isSeq(node)) return false;
+    const refs = node.items
+      .map(rawRefOf)
+      .flatMap((r) => (r === undefined ? [] : [rebaseRaw(r)]));
+    return refs.length === node.items.length &&
+      refs.sort().join("\n") === wantSet;
+  };
+
+  const repoint = (node: unknown): number => {
+    if (!edit.repoint || !isSeq(node) || !seqResolvesToRunSet(node)) return 0;
+    let n = 0;
+    for (const item of node.items) {
+      if (isScalar(item) && item.value === edit.repoint.oldRef) {
+        item.value = edit.repoint.newRef;
+        n += 1;
+      } else if (isMap(item) && item.get("ref") === edit.repoint.oldRef) {
+        item.set("ref", edit.repoint.newRef);
+        n += 1;
+      }
+    }
+    return n;
+  };
+  const topSeq = doc.get("schemas", true);
+  let repointCount = repoint(topSeq);
+  const overrides = doc.get("overrides", true);
+  if (isSeq(overrides)) {
+    for (const entry of overrides.items) {
+      if (isMap(entry)) repointCount += repoint(entry.get("schemas", true));
+    }
+  }
+  const repointed = repointCount > 0;
+
+  let pinFrom: unknown;
+  let pinned = false;
+  if (edit.integrity && isSeq(topSeq)) {
+    // Pins live on top-level mapping entries only — that is where
+    // `collectSchemaPins` reads them from. Both spellings rebased, as above.
+    const wantRef = rebaseRaw(edit.integrity.ref);
+    for (const item of topSeq.items) {
+      if (!isMap(item)) continue;
+      const raw = rawRefOf(item);
+      if (raw === undefined || rebaseRaw(raw) !== wantRef) continue;
+      pinFrom = item.get("integrity");
+      item.set("integrity", edit.integrity.value);
+      pinned = true;
+    }
+  }
+
+  const changes: QueryChange[] = [];
+  if (repointed && edit.repoint) {
+    changes.push({
+      file: display,
+      config: true,
+      key: "schemas",
+      from: edit.repoint.oldRef,
+      to: edit.repoint.newRef,
+      written: false,
+    });
+  }
+  if (pinned && edit.integrity) {
+    changes.push({
+      file: display,
+      config: true,
+      key: "integrity",
+      from: pinFrom,
+      to: edit.integrity.value,
+      written: false,
+    });
+  }
+  if (!repointed && !pinned) return { changes: [], repointed };
+  return {
+    write: {
+      path: configPath,
+      content: matchEol(text, doc.toString({ lineWidth: 0 })),
+      expected: text,
+    },
+    changes,
+    repointed,
+  };
+}
+
 type FileType = "boolean" | "number" | "bigint" | "string" | "array" | "object";
 
 function fileTypeOf(value: unknown): FileType | undefined {
@@ -569,6 +1361,7 @@ function buildChanges(
   entries: QueryEntry[],
   sentinel: string,
   ctx: RunContext,
+  renameHints: readonly { from: string; to: string }[] = [],
 ): QueryChange[] {
   const effects = diff.cells;
   const originals = new Map(entries.map((e) => [e.label, e.extracted.data]));
@@ -659,11 +1452,38 @@ function buildChanges(
     list.push(e);
     byFile.set(e.file, list);
   }
+  // A DDL column rename is authoritative before any value matching: the pair
+  // comes from the column diff, so it carries an explicit-null value the
+  // generic pass below cannot see (a NULL cell is a deletion, not an add).
+  for (const hint of renameHints) {
+    for (const [file, list] of byFile) {
+      const data = originals.get(file) ?? {};
+      if (data[hint.from] === undefined) continue;
+      const del = list.find(
+        (e) =>
+          e.key === hint.from &&
+          (e.to === null || e.to === undefined) &&
+          !consumedDeletes.has(e),
+      );
+      const add = list.find(
+        (e) => e.key === hint.to && !pairForCreate.has(e),
+      );
+      if (!del || !add) continue;
+      consumedDeletes.add(del);
+      pairForCreate.set(add, {
+        key: hint.to,
+        renamedFrom: hint.from,
+        to: data[hint.from],
+      });
+    }
+  }
   for (const [file, list] of byFile) {
     const data = originals.get(file) ?? {};
     const dels = list.filter(
       (e) =>
-        (e.to === null || e.to === undefined) && data[e.key] !== undefined,
+        (e.to === null || e.to === undefined) &&
+        data[e.key] !== undefined &&
+        !consumedDeletes.has(e),
     );
     const adds = list.filter(
       (e) => data[e.key] === undefined && e.to != null && e.to !== sentinel,
@@ -817,8 +1637,10 @@ async function applyChanges(
   changes: QueryChange[],
   entries: QueryEntry[],
   ctx: RunContext,
+  schemaPlan?: SchemaPlan,
 ): Promise<void> {
-  if (changes.length === 0) return;
+  const schemaWrites = schemaPlan?.writes ?? [];
+  if (changes.length === 0 && schemaWrites.length === 0) return;
   const byLabel = new Map(entries.map((e) => [e.label, e]));
   interface FileOps {
     patch: MetadataPatch;
@@ -834,6 +1656,7 @@ async function applyChanges(
         "A write cannot touch <stdin>: there is no file behind it.",
       );
     }
+    if ("schema" in c || "config" in c) continue; // satisfied by schemaWrites
     const group = grouped.get(c.file) ?? { patch: {}, deletions: [] };
     if ("cleared" in c) group.cleared = true;
     else if ("created" in c) group.created = c.to;
@@ -846,7 +1669,8 @@ async function applyChanges(
     grouped.set(c.file, group);
   }
 
-  const pendingWrites: { path: string; content: string }[] = [];
+  const pendingWrites: { path: string; content: string; ensureDir?: boolean }[] =
+    [];
   const pendingRenames: { from: string; to: string }[] = [];
   for (const [label, ops] of grouped) {
     const path = resolve(ctx.base, label);
@@ -874,6 +1698,7 @@ async function applyChanges(
           filePath: label,
           elements: resolveElements(label, ctx.config),
         }),
+        ensureDir: true,
       });
       continue;
     }
@@ -938,8 +1763,53 @@ async function applyChanges(
     }
     pendingWrites.push({ path, content: applied });
   }
+  // Phase two opens by re-checking the plan-time schema/config reads — the
+  // same moved-underneath refusal corpus files got in phase one. Nothing has
+  // landed yet, so a refusal here still leaves every file untouched.
+  for (const w of schemaWrites) {
+    const display = displayPath(ctx, w.path);
+    if (w.expected === undefined) {
+      if (existsSync(w.path)) {
+        throw new DocmetaError(
+          `"${display}" appeared on disk since the plan; re-run the query.`,
+        );
+      }
+      continue;
+    }
+    let now: string | undefined;
+    try {
+      now = await readFile(w.path, "utf8");
+    } catch {
+      now = undefined;
+    }
+    if (now !== w.expected) {
+      throw new DocmetaError(
+        `"${display}" changed on disk since it was read; re-run the query.`,
+      );
+    }
+  }
+  // Parent directories once each, and only where one can be missing: a
+  // fork's schemas/ dir, an INSERT into a new subtree, a rename into one.
+  // Files that were read from disk this run prove their directories exist.
+  const dirs = new Set<string>();
+  for (const w of schemaWrites) dirs.add(dirname(w.path));
+  for (const r of pendingRenames) dirs.add(dirname(r.to));
+  for (const p of pendingWrites) {
+    if (p.ensureDir) dirs.add(dirname(p.path));
+  }
+  for (const d of dirs) await mkdir(d, { recursive: true });
+
+  // ADD writes the schema after the corpus so a mid-apply failure leaves
+  // extra keys under an unchanged schema (green); DROP/RENAME write it first
+  // so files at worst keep a key the schema no longer declares.
+  const writeSchema = async (): Promise<void> => {
+    for (const w of schemaWrites) await writeFileAtomic(w.path, w.content);
+  };
+  const schemaLast = schemaPlan?.schemaLast ?? false;
+  if (!schemaLast) await writeSchema();
   for (const r of pendingRenames) await rename(r.from, r.to);
   for (const p of pendingWrites) await writeFileAtomic(p.path, p.content);
+  if (schemaLast) await writeSchema();
   for (const c of changes) c.written = true;
 }
 

@@ -1,6 +1,6 @@
 # 0024 — standard SQL vocabulary: DML edits the files, DDL edits the schema
 
-- **Status:** Proposed
+- **Status:** Implemented (#125, #126)
 - **Serves:** Maya · M2, M3 · Sara · S1, S3 · Devin · D3
 - **Depends on:** [0021](0021-frontmatter-as-a-database.md), [0022](0022-sql-write-back.md) — stacked on their PRs; nothing here has released.
 - **Relates to:** [0023](0023-metadata-vocabularies.md) (in design on its own branch — "vocabulary" there means the house schema families; the DDL below is how a corpus would one day *evolve* such a schema), [0010](0010-init-and-schema-inference.md) (`schemas infer` births a schema; this proposal grows one)
@@ -194,6 +194,47 @@ already touches every file, as does `ALTER DROP COLUMN`. The gate is the preview
 blocks; AsciiDoc and RST refuse because a bare `---` is a transition or an open-block there
 (the writer's existing refusal, surfaced); element formats have no block to create. The
 refusal names the format and the reason.
+
+**11. The schema spread resurrected `required` — found by the DROP test.**
+Building the mutated schema as `{ ...schema, properties, ...(required.length
+? { required } : {}) }` quietly carried the *original* `required` back in
+whenever the new list was empty, and masked removals otherwise. The mutation
+now sets or removes the member explicitly. Recorded because it is the exact
+shape of bug a spread-with-conditional idiom invites.
+
+**12. ALTER on a schemaless corpus refuses — the semantic consequence stated.**
+Once DDL means "edit the schema," a corpus on the built-in default set has
+nothing DDL may touch, so `ALTER` there refuses and the message names the
+`UPDATE` spellings that cover every data-only case (`SET k = NULL` with no
+WHERE, backfill via `WHERE k IS NULL`, cross-column rename pairing). This
+retires the file-only ALTER behavior 0022 shipped un-released; the tests and
+the demo footage that showed it were updated rather than grandfathered.
+
+**13. A schema write is a schema read with higher stakes — found in review.**
+The first implementation resolved the set without the trust boundary
+`validate` passes, so a document's `$schema: ../outside.json` could direct
+DDL to *rewrite a file outside the repository* — a ref every read path
+refuses. Same lesson in miniature three more times: the config edit
+re-derived the config's path instead of using the one discovery loaded
+(wrong or missing file under `-c`, `.yml`, or an ancestor config), the
+repoint matched only the string spelling of a `schemas:` entry and of
+`$schema`, and an in-place edit left a vendored file's `integrity:` pin
+stale, bricking every later run. The rule that fixes all four: DDL goes
+through the same machinery as reading — `trustRoot`, the discovered
+`configPath`, both entry spellings, the pin map — never a parallel
+reimplementation of it.
+
+**14. The set is the contract, not the target schema — found in review.**
+DROP/RENAME edited the first schema that declared the key; a sibling in the
+same set that also declared or *required* it kept failing the corpus after a
+"successful" write (this repo's own docs override pairs a house schema with
+`astro:starlight:0.41`, which requires `title`). DDL now loads every member
+of the set and refuses when ownership is shared — same for `ADD` onto a
+property any member already declares, where the silent path would have
+clobbered its constraints. And because SQLite accepts `INTEGER … DEFAULT
+'high'`, the declared type and the backfill value are reconciled before
+anything is written: one statement must not produce a corpus that fails the
+schema it just gained.
 
 ## Not breaking
 

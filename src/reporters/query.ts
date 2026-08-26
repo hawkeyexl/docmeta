@@ -70,6 +70,22 @@ function renderChanges(
   opts: QueryReportOptions,
 ): string {
   const lines = changes.map((ch) => {
+    if ("config" in ch) {
+      return `${c.dim(`config ${ch.file}:`)} ${ch.key}: ${cellFrom(ch.from)} -> ${cell(ch.to)}`;
+    }
+    if ("schema" in ch) {
+      const fork = ch.forkedFrom ? ` ${c.dim(`(forked from ${ch.forkedFrom})`)}` : "";
+      if (ch.op === "rename") {
+        return `${c.dim(`schema ${ch.file}:`)} ${ch.key} -> ${ch.renamedTo ?? ch.key}${fork}`;
+      }
+      if (ch.op === "drop") {
+        return `${c.dim(`schema ${ch.file}:`)} - ${ch.key}${fork}`;
+      }
+      const detail = [ch.type, ch.required ? "required" : undefined]
+        .filter(Boolean)
+        .join(", ");
+      return `${c.dim(`schema ${ch.file}:`)} + ${ch.key}${detail ? ` (${detail})` : ""}${fork}`;
+    }
     if ("cleared" in ch) {
       return `${c.dim(`${ch.file}:`)} (frontmatter removed: ${Object.keys(ch.from).join(", ")})`;
     }

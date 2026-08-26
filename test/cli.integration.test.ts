@@ -394,8 +394,10 @@ describe("cli query (built bin)", () => {
       expect(moved.stdout).toContain("(moved)");
       expect(existsSync(join(dir, "docs", "new.md"))).toBe(false);
 
+      // Schemaless corpora rename keys with the UPDATE spelling — ALTER is
+      // schema DDL (0024) and refuses without an editable schema.
       const renamedKey = run(
-        ["query", "--write", "ALTER TABLE docs RENAME COLUMN tags TO topics", ...paths],
+        ["query", "--write", "UPDATE docs SET topics = tags, tags = NULL WHERE tags IS NOT NULL", ...paths],
         undefined, undefined, dir,
       );
       expect(renamedKey.status).toBe(0);
@@ -415,6 +417,50 @@ describe("cli query (built bin)", () => {
       );
       expect(gate.status).toBe(0);
       expect(gate.stdout).toContain("✓ 0 changes");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("runs the DDL ratchet end to end, and refuses it schemaless (0024)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-ddl-"));
+    try {
+      cpSync(resolve(root, "test", "fixtures", "query-ddl"), dir, {
+        recursive: true,
+      });
+      const ratchet =
+        "ALTER TABLE docs ADD COLUMN reviewed TEXT NOT NULL DEFAULT 'pending'";
+
+      const preview = run(["query", ratchet, "docs"], undefined, undefined, dir);
+      expect(preview.status).toBe(0);
+      expect(preview.stdout).toContain("schema schemas/house.json:");
+      expect(preview.stdout).toContain("+ reviewed (string, required)");
+
+      const applied = run(
+        ["query", "--write", ratchet, "docs"],
+        undefined, undefined, dir,
+      );
+      expect(applied.status).toBe(0);
+      expect(applied.stdout).toContain("— written");
+      expect(
+        readFileSync(join(dir, "schemas", "house.json"), "utf8"),
+      ).toContain('"reviewed"');
+
+      const validated = run(["validate", "docs"], undefined, undefined, dir);
+      expect(validated.status).toBe(0);
+
+      const refused = run(
+        [
+          "query",
+          "--no-config",
+          "--write",
+          "ALTER TABLE docs ADD COLUMN audited TEXT",
+          "docs",
+        ],
+        undefined, undefined, dir,
+      );
+      expect(refused.status).toBe(2);
+      expect(refused.stderr).toContain("UPDATE spellings");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
