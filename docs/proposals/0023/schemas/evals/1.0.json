@@ -316,6 +316,33 @@
             ],
             "description": "An entry carrying an executable command must say grader: command — an execution payload on an ai or human eval is either dead weight or a surprise, depending on which field the runner keys on."
           }
+        },
+        {
+          "if": {
+            "anyOf": [
+              {
+                "required": [
+                  "success-exit-codes"
+                ]
+              },
+              {
+                "required": [
+                  "timeout-ms"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "properties": {
+              "grader": {
+                "const": "command"
+              }
+            },
+            "required": [
+              "grader"
+            ],
+            "description": "success-exit-codes and timeout-ms configure command execution, so they are legal only alongside grader: command — with or without the command itself, since the generation contract writes the command later. On an ai or human eval they are dead weight the runner never reads."
+          }
         }
       ]
     },

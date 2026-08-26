@@ -262,6 +262,11 @@ describe("the six house vocabularies", () => {
     const bad = await checkStdin(`title: T\ndescription: D\nreview-interval: 90d`);
     expect(bad.ok).toBe(false);
     expect(bad.errors[0]?.instancePath).toBe("/review-interval");
+    // A bare `P` (empty duration body) is rejected too: the pattern's inner
+    // `?` marks the T-block optional, not the whole body.
+    const bareP = await checkStdin("title: T\ndescription: D\nreview-interval: P");
+    expect(bareP.ok).toBe(false);
+    expect(bareP.errors[0]?.instancePath).toBe("/review-interval");
   });
 
   it("enums visibility, and rejects a value outside its ladder", async () => {
@@ -312,6 +317,9 @@ describe("the six house vocabularies", () => {
     const scalar = await checkStdin("title: T\ndescription: D\nrisks: true");
     expect(scalar.ok).toBe(false);
     expect(scalar.errors[0]?.instancePath).toBe("/risks");
+    const emptyList = await checkStdin("title: T\ndescription: D\nrisks: []");
+    expect(emptyList.ok).toBe(false);
+    expect(emptyList.errors[0]?.instancePath).toBe("/risks");
   });
 
   it("records machine-proposed metadata in provenance entries", async () => {

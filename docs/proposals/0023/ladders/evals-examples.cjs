@@ -173,11 +173,11 @@ evals:
   ["N6 eval-skip must be a boolean, not a string", false,
 `eval-skip: "true"`],
 
-  ["N8 an eval-provenance entry without generated-by", false,
+  ["N7 an eval-provenance entry without generated-by", false,
 `eval-provenance:
   - evals: [something]`],
 
-  ["N7 the 0.1 generated wrapper now fails (flattened to generated-assertion-hash)", false,
+  ["N8 the old generated wrapper now fails (flattened to generated-assertion-hash)", false,
 `evals:
   - id: has-examples-heading
     assertion: The page includes an Examples heading.
@@ -185,6 +185,20 @@ evals:
     command: ["node", "docevals/x.mjs", "{file}"]
     generated:
       assertion-hash: 07d185732a48ace07056e847b0fadd72fa35f830f7b793f2790db1a59182fd7a`],
+
+  ["N9 exit codes on an ai grader (command-family fields need grader: command)", false,
+`evals:
+  - id: wrong-family
+    assertion: Something.
+    grader: ai
+    success-exit-codes: [0]`],
+
+  ["N10 a hash without its command (half write-back)", false,
+`evals:
+  - id: orphan-hash
+    assertion: Something.
+    grader: command
+    generated-assertion-hash: 07d185732a48ace07056e847b0fadd72fa35f830f7b793f2790db1a59182fd7a`],
 ];
 
 let bad = 0;

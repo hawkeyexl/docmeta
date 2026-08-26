@@ -1,5 +1,6 @@
 // Validate the docmeta:artifact-evals:1.0 example ladder against the draft
-// schema. Run from the repo root: node design/artifact-evals-examples.cjs
+// schema. Run from the repo root:
+//   node docs/proposals/0023/ladders/artifact-evals-examples.cjs
 const fs = require("fs");
 const { createRequire } = require("module");
 const req = createRequire(process.cwd() + "/");
@@ -120,7 +121,7 @@ metadata:
         expect: not-used
     - Reproduce the bug with a failing test before applying the fix.`],
 
-  ["12 human grader — a review-queue entry per session", true,
+  ["11 human grader — a review-queue entry per session", true,
 `metadata:
   evals:
     - id: refactor-preserved-intent
@@ -129,7 +130,7 @@ metadata:
       evidence: The diff of src/core/ across the session
       severity: warning`],
 
-  ["13 command grader, authored and post-generation", true,
+  ["12 command grader, authored and post-generation", true,
 `metadata:
   evals:
     - id: no-force-push
@@ -143,7 +144,7 @@ metadata:
       timeout-ms: 15000
       generated-assertion-hash: 07d185732a48ace07056e847b0fadd72fa35f830f7b793f2790db1a59182fd7a`],
 
-  ["11 a future grader nobody has written yet (open enum)", true,
+  ["13 a future grader nobody has written yet (open enum)", true,
 `metadata:
   evals:
     - id: frontier
@@ -190,6 +191,22 @@ metadata:
       assertion: Something.
       examples:
         pass: 5`],
+
+  ["N8 exit codes on an ai grader (command-family fields need grader: command)", false,
+`metadata:
+  evals:
+    - id: wrong-family
+      assertion: Something.
+      grader: ai
+      timeout-ms: 5000`],
+
+  ["N9 a hash without its command (half write-back)", false,
+`metadata:
+  evals:
+    - id: orphan-hash
+      assertion: Something.
+      grader: command
+      generated-assertion-hash: 07d185732a48ace07056e847b0fadd72fa35f830f7b793f2790db1a59182fd7a`],
 ];
 
 let bad = 0;

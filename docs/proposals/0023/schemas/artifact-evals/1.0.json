@@ -206,6 +206,33 @@
             ],
             "description": "An entry carrying an executable command must say grader: command."
           }
+        },
+        {
+          "if": {
+            "anyOf": [
+              {
+                "required": [
+                  "success-exit-codes"
+                ]
+              },
+              {
+                "required": [
+                  "timeout-ms"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "properties": {
+              "grader": {
+                "const": "command"
+              }
+            },
+            "required": [
+              "grader"
+            ],
+            "description": "success-exit-codes and timeout-ms configure command execution, so they are legal only alongside grader: command — present, or generated later under the generation contract."
+          }
         }
       ]
     },

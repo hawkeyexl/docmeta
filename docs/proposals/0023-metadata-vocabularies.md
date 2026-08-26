@@ -246,7 +246,9 @@ dissolved), `metadata.eval-skip`, `metadata.eval-provenance`. Entries share
 the evals vocabulary (`id`\* — was optional position-derived `name`, which
 orphaned cached verdicts — `assertion`\*, `type`, `severity`, `evidence`,
 `examples` with string-or-list anchors, `options`, `provider`, `skip` and
-`severity-map` — so one entry vocabulary genuinely ports — and the
+`severity-map` — so one entry vocabulary genuinely ports, with one
+asymmetry: `assertion` is unconditional here where the page side lets a
+tool grader be its own check — and the
 `command` family with `{trace}` substitution and the same guard rails as the
 page side). The grader is a full open enum — recommended `ai · human ·
 command · tool-usage · skill-invoked · file-access · turn-count · cost ·

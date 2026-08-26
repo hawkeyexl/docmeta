@@ -1,5 +1,6 @@
 // Validate the docmeta:kg:1.0 example ladder against the draft schema,
-// without registering anything. Run from the repo root: node design/kg-examples.cjs
+// without registering anything. Run from the repo root:
+//   node docs/proposals/0023/ladders/kg-examples.cjs
 const fs = require("fs");
 const { createRequire } = require("module");
 const req = createRequire(process.cwd() + "/");
@@ -132,6 +133,22 @@ kg:
 `kg:
   label: API keys
   provenance: []`],
+
+  ["N10 empty about-product-lifecycle list", false,
+`kg:
+  label: API keys
+  about-product-lifecycle: []`],
+
+  ["N11 empty about-product-aspect list", false,
+`kg:
+  label: API keys
+  about-product-aspect: []`],
+
+  ["N12 an empty section entry is not a declaration", false,
+`kg:
+  label: API keys
+  sections:
+    install: {}`],
 ];
 
 let bad = 0;

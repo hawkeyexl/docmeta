@@ -171,8 +171,9 @@ metadata:
 ```
 
 Entries share one shape — `id`, `assertion`, `type`, `severity`,
-`evidence`, `examples`, per-entry `skip` — and differ only in grader
-families: pages are graded by `ai`, `command`, `human`, or `tool:*`
+`evidence`, `examples`, per-entry `skip` — and differ in grader families
+(and in one rule: artifact entries always require `assertion`, while a
+page-side tool grader is its own check): pages are graded by `ai`, `command`, `human`, or `tool:*`
 integrations; sessions by `ai`, `human`, `command` over the trace, or
 deterministic session graders like `tool-usage` and `cost` — and the
 `tool:*` spelling is accepted on both sides, so one grader name ports

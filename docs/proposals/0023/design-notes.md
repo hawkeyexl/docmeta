@@ -237,12 +237,16 @@ loud-typo guard is the same `eval` prefix reservation, applied inside
   (every trace is new; no verdict caching, unlike pages), `command` runs
   an executable over `{trace}` with the same generation contract
   (command + generated-assertion-hash written back), making the two eval
-  schemas' entry vocabularies fully congruent.
+  schemas' entry vocabularies structurally aligned — with one deliberate
+  asymmetry: `assertion` is unconditionally required here, where every
+  eval must be self-describing, versus conditionally on the page side,
+  where a tool grader is its own check.
 - Unchanged: the `metadata` envelope (host contract), type/severity
   verbatim, evidence/options, string shorthand entries, every
   session-grader kind.
-- With id + assertion always required, 0.2's conditional machinery is
-  unnecessary — the entry has no allOf at all.
+- With id + assertion always required, most of the earlier conditional
+  machinery is unnecessary — the entry keeps only the command-family
+  guards (command and its settings ⇒ `grader: command`; hash ⇒ command).
 - tracevals-side ledger: superseding ADR over "never a docmeta built-in";
   extract/write/fill read `id` and the new spellings; grader registry
   rejects unknown kinds (including `llm`).
