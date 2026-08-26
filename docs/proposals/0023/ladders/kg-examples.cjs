@@ -127,6 +127,11 @@ kg:
   label: Configuration
   subjects: [reference]
   softwareSubject: [interface]`],
+
+  ["N9 empty provenance array", false,
+`kg:
+  label: API keys
+  provenance: []`],
 ];
 
 let bad = 0;

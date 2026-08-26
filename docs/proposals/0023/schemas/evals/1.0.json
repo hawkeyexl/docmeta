@@ -155,6 +155,7 @@
         },
         "evidence": {
           "type": "string",
+          "minLength": 1,
           "description": "Hint scoping where the judge should look for evidence."
         },
         "examples": {

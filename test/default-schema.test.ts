@@ -181,7 +181,8 @@ describe("the six house vocabularies", () => {
     const r = await check("missing-description.md");
     expect(r.ok).toBe(false);
     for (const e of r.errors) expect(e.schema).toBe(CORE);
-    expect(r.errors[0]?.message).toContain("description");
+    expect(r.errors[0]?.keyword).toBe("required");
+    expect(r.errors[0]?.subject).toBe("description");
   });
 
   it("rejects a lifecycle outside the four-stage ladder, attributed to lifecycle", async () => {
@@ -194,8 +195,16 @@ describe("the six house vocabularies", () => {
   it("requires a replacement or a removal date once deprecated", async () => {
     const r = await check("deprecated-without-replacement.md");
     expect(r.ok).toBe(false);
-    const messages = r.errors.map((e) => e.message).join(" ");
-    expect(messages).toContain("replaced-by");
+    // keyword/subject are the machine-stable half of an error's identity
+    // (types.ts); which anyOf branch's prose Ajv surfaces is not — either
+    // missing property satisfies the contract.
+    expect(
+      r.errors.some(
+        (e) =>
+          e.keyword === "required" &&
+          (e.subject === "replaced-by" || e.subject === "remove-by"),
+      ),
+    ).toBe(true);
   });
 
   it("accepts a deprecation that names only a removal date", async () => {
@@ -290,12 +299,19 @@ describe("the six house vocabularies", () => {
       "title: T\ndescription: D\nrisks: [grail-costs]",
     );
     expect(orgSpecific.ok).toBe(true);
+    const singleFlag = await checkStdin(
+      "title: T\ndescription: D\nrisks: destructive",
+    );
+    expect(singleFlag.ok).toBe(true);
     const notAString = await checkStdin("title: T\ndescription: D\nrisks: [true]");
     expect(notAString.ok).toBe(false);
     // Assert the error lands on the offending item, not which anyOf branch's
     // message Ajv happened to surface — branch selection on total failure is
     // implementation-defined and survives Ajv upgrades; the path does not.
     expect(notAString.errors[0]?.instancePath).toBe("/risks/0");
+    const scalar = await checkStdin("title: T\ndescription: D\nrisks: true");
+    expect(scalar.ok).toBe(false);
+    expect(scalar.errors[0]?.instancePath).toBe("/risks");
   });
 
   it("records machine-proposed metadata in provenance entries", async () => {

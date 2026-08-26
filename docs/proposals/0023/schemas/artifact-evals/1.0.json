@@ -165,6 +165,7 @@
         },
         "evidence": {
           "type": "string",
+          "minLength": 1,
           "description": "Hint telling the judge where in the session to look."
         },
         "examples": {
