@@ -13,6 +13,7 @@ import pkg from "../package.json" with { type: "json" };
 import { DocmetaError } from "./types.js";
 import { runValidate } from "./commands/validate.js";
 import { runGet } from "./commands/get.js";
+import { runQuery } from "./commands/query.js";
 import {
   DEFAULT_VENDOR_DIR,
   getSchemasInfo,
@@ -40,6 +41,7 @@ import {
   renderFill,
 } from "./reporters/fill.js";
 import { renderGet } from "./reporters/get.js";
+import { renderQuery } from "./reporters/query.js";
 import { renderInfer } from "./reporters/infer.js";
 import { shouldColor, palette } from "./reporters/color.js";
 
@@ -217,7 +219,64 @@ export function resolveGetInputs(
   return { fields, paths };
 }
 
-const COMMAND_NAMES = ["validate", "get", "fill", "schemas"];
+/**
+ * `query`'s input rule is `get`'s with SQL in the fields slot: **if `--query`
+ * is present, every positional is a path**; otherwise the first positional is
+ * the SQL. The same three guards apply and for the same reasons — a token
+ * shaped like a path in the SQL slot is a forgotten statement, `-` is stdin
+ * and never SQL, and an absent statement is an error rather than a
+ * plausible-looking run. Real SQL never trips `looksLikePath`: a statement
+ * with a column list contains a comma, and anything else with a space cannot
+ * name a file that exists.
+ *
+ * `--db` relaxes exactly one of those guards: exporting needs no SQL, so with
+ * `sqlOptional` a path-shaped first positional is a path and an absent
+ * statement means "just write the database".
+ */
+export function resolveQueryInputs(
+  sqlArg: string | undefined,
+  pathsArg: string[],
+  queryOption: unknown,
+  cwd: string,
+  sqlOptional = false,
+): { sql: string; paths: string[] } {
+  const flag = typeof queryOption === "string" ? queryOption : undefined;
+
+  if (
+    flag === undefined &&
+    sqlArg !== undefined &&
+    // A token with whitespace is never a path: every real statement has
+    // spaces, and without this test `SELECT count(*) FROM docs` reads as a
+    // *glob* — picomatch parses `(*)` as an extglob — the one SQL shape the
+    // comma test inside looksLikePath does not catch.
+    !/\s/.test(sqlArg) &&
+    // With SQL optional there is no "forgot the statement" reading to
+    // protect, so a shapeless token that really exists on disk is a path
+    // even when other paths follow — hence `alone` is forced on.
+    looksLikePath(sqlArg, cwd, sqlOptional || pathsArg.length === 0)
+  ) {
+    if (sqlOptional) return { sql: "", paths: [sqlArg, ...pathsArg] };
+    throw new DocmetaError(
+      `"${sqlArg}" looks like a path, not SQL. Pass the SQL first (docmeta query "SELECT _path FROM docs" ${sqlArg}) or use --query.`,
+    );
+  }
+
+  const source = flag ?? (sqlArg === STDIN ? undefined : sqlArg);
+  const sql = source?.trim() ?? "";
+  if (sql === "" && !sqlOptional) {
+    throw new DocmetaError(
+      'Specify SQL to run. Pass it first (docmeta query "SELECT _path FROM docs" docs/) or use --query.',
+    );
+  }
+
+  const paths =
+    sqlArg !== undefined && (flag !== undefined || sqlArg === STDIN)
+      ? [sqlArg, ...pathsArg]
+      : pathsArg;
+  return { sql, paths };
+}
+
+const COMMAND_NAMES = ["validate", "get", "query", "fill", "schemas"];
 
 /** Levenshtein distance. Only used to offer a "did you mean" hint. */
 function editDistance(a: string, b: string): number {
@@ -404,6 +463,26 @@ interface ValidateCliOptions extends RunCliOptions {
 interface GetCliOptions extends RunCliOptions {
   /** `--fields <list>`; when present, every positional is a path. */
   fields?: string;
+}
+
+/**
+ * Not `RunCliOptions`: `query` declares no `-q/--quiet`. `get` uses it to hide
+ * files and `validate` to hide passes; a query result has no analogous noise,
+ * and a flag that means nothing is what 0016 says not to declare.
+ */
+interface QueryCliOptions extends InputCliOptions {
+  /** `--query <sql>`; when present, every positional is a path. */
+  query?: string;
+  /** `--check`: any row returned is a finding, so exit 1. */
+  check?: boolean;
+  /** `--db <path>`: also write the built database; SQL becomes optional. */
+  db?: string;
+  /** `--write`: apply a mutating statement's changes; default is preview. */
+  write?: boolean;
+  allowEmpty?: boolean;
+  /** `--no-gitignore`; commander's `true` default, see `gitignoreFlag`. */
+  gitignore: boolean;
+  offline?: boolean;
 }
 
 interface FillCliOptions extends RunCliOptions {
@@ -715,6 +794,154 @@ export function buildProgram(): Command {
               );
             }
           }
+        } catch (err) {
+          fail(err);
+        }
+      },
+    );
+
+  program
+    .command("query")
+    .description("Run SQL over the metadata of the given files/dirs/globs")
+    // Optional for the same reason `get`'s `[fields]` is: a required
+    // positional would eat the user's *path* when the SQL was forgotten.
+    .argument("[sql]", "SQL to run against the `docs` table, unless --query is given")
+    .argument(
+      "[paths...]",
+      "files, directories, or globs to load (use - for stdin)",
+    )
+    .option(
+      "--query <sql>",
+      "SQL to run against the `docs` table; every positional is then a path",
+    )
+    .option(
+      "--check",
+      "treat returned rows as findings: exit 1 if the query returns any",
+    )
+    .option(
+      "--db <path>",
+      "also write the built database to this file; SQL is then optional",
+    )
+    .option(
+      "--write",
+      "apply a mutating statement's changes to the files (without it, preview the diff)",
+    )
+    .option("--ext <list>", "comma-separated extensions for directory walks")
+    .option("--exclude <glob>", "glob to exclude; repeatable", collect, [])
+    .option("--as <format>", "force an input format (e.g. markdown, mdx)")
+    .option(
+      "-f, --format <format>",
+      `output: ${COMMON_FORMATS.join(" | ")}`,
+      "pretty",
+    )
+    .option("-c, --config <path>", "path to a docmeta config file")
+    .option("--no-config", "ignore any discovered config file")
+    .option("--allow-empty", "treat zero matched files as success")
+    .option("--no-gitignore", "load files .gitignore covers")
+    .option(
+      "--offline",
+      "never fetch a remote schema; resolve URL refs from the schema cache",
+    )
+    .addHelpText(
+      "after",
+      [
+        "",
+        "One row per file in a table named `docs`: your top-level metadata keys",
+        "as columns, plus _path, _format, _present, and _data (all metadata as",
+        "JSON, for json_each/->> reach into nested values).",
+        "",
+        "Examples:",
+        '  docmeta query "SELECT _path, title FROM docs WHERE draft = 1" docs/',
+        '  docmeta query "SELECT t.value tag, count(*) n FROM docs, json_each(docs.tags) t GROUP BY tag" docs/',
+        '  docmeta query --check "SELECT slug, count(*) n FROM docs GROUP BY slug HAVING n > 1" docs/',
+        '  cat page.md | docmeta query "SELECT title FROM docs" - --as markdown',
+        "  docmeta query --db docs.db docs/       # export only; open with any SQLite UI",
+      ].join("\n"),
+    )
+    .action(
+      async (
+        sqlArg: string | undefined,
+        pathsArg: string[],
+        options: QueryCliOptions,
+        command: Command,
+      ) => {
+        try {
+          const format = assertCommonFormat(options.format);
+          const { sql, paths } = resolveQueryInputs(
+            sqlArg,
+            pathsArg,
+            options.query,
+            process.cwd(),
+            typeof options.db === "string",
+          );
+          const exts: string[] | undefined = options.ext
+            ? splitList(options.ext)
+            : undefined;
+          const stdinContent = paths.includes(STDIN)
+            ? await readStdin()
+            : undefined;
+
+          const run = await runQuery({
+            sql,
+            db: options.db,
+            write: Boolean(options.write),
+            inputs: paths,
+            as: options.as,
+            exclude: options.exclude,
+            exts,
+            ...configOption(options.config),
+            onConfigLoaded: reportConfig(format === "pretty", process.cwd()),
+            stdinContent,
+            allowEmpty: options.allowEmpty ? true : undefined,
+            respectGitignore: gitignoreFlag(options.gitignore),
+            offline: options.offline ? true : undefined,
+            onNotice: notice,
+          });
+          // With SQL, the rows own stdout and the export is a diagnostic;
+          // export-only, the export summary IS the report.
+          if (run.db && sql === "") {
+            process.stdout.write(
+              format === "json"
+                ? `${JSON.stringify(run.db, null, 2)}\n`
+                : `Wrote ${run.db.path} (${run.db.files} files, ${run.db.columns} columns)\n`,
+            );
+            process.exitCode = 0;
+            return;
+          }
+          if (run.db) {
+            notice(`wrote ${run.db.path} (${run.db.files} files)`);
+          }
+          switch (format) {
+            case "json":
+              // The bare array, mirroring `get`'s bare result array: changes
+              // for a metadata edit, rows for a read. The `--check` verdict
+              // travels in the exit code, not the envelope.
+              process.stdout.write(
+                `${JSON.stringify(run.changes ?? run.rows, null, 2)}\n`,
+              );
+              break;
+            case "pretty": {
+              const text = renderQuery(run, {
+                color: resolveColor(command.parent ?? command),
+                check: Boolean(options.check),
+                write: Boolean(options.write),
+              });
+              if (text.length > 0) process.stdout.write(`${text}\n`);
+              break;
+            }
+            default: {
+              const unreachable: never = format;
+              throw new DocmetaError(
+                `Unknown --format ${JSON.stringify(unreachable)}. Use ${COMMON_FORMAT_LIST}.`,
+              );
+            }
+          }
+          // Rows from a `--check` run are findings, and so are a preview's
+          // pending changes — the drift gate. Applied changes are the work
+          // done, so `--write` always succeeds or fails outright.
+          const findings = run.changes ? run.changes.length : run.rows.length;
+          process.exitCode =
+            options.check && !options.write && findings > 0 ? 1 : 0;
         } catch (err) {
           fail(err);
         }

@@ -810,6 +810,14 @@ export interface RunConfig {
    * ancestor config in the first place.
    */
   configDir?: string;
+  /**
+   * Absolute path of the config file itself, when one governs the run. The
+   * one honest way to edit the governing config: discovery accepts both
+   * `docmeta.config.yaml` and `.yml`, `-c` accepts any name, and the file may
+   * live in an ancestor — so re-deriving the path from a directory plus an
+   * assumed filename names the wrong file in every one of those setups.
+   */
+  configPath?: string;
 }
 
 /**
@@ -835,5 +843,10 @@ export async function resolveRunConfig(
   const inputs = fromConfig ? (config?.paths ?? []) : opts.inputs;
   const base = fromConfig && inputs.length > 0 && loaded ? loaded.dir : cwd;
 
-  return { config, inputs, base, ...(loaded ? { configDir: loaded.dir } : {}) };
+  return {
+    config,
+    inputs,
+    base,
+    ...(loaded ? { configDir: loaded.dir, configPath: loaded.path } : {}),
+  };
 }

@@ -13,6 +13,15 @@ export interface ExtractedMetadata {
   data: Record<string, unknown>;
   /** Whether a metadata block was found at all. */
   present: boolean;
+  /**
+   * Whether the metadata came from a removable fenced front matter block.
+   * A per-extraction fact, deliberately not an extractor capability: RST and
+   * AsciiDoc read a fenced block when one exists and fall back to native
+   * docinfo/attribute parsing when not, so the same extractor yields both
+   * answers. Absent (element-backed, native-header) means `DELETE FROM docs`
+   * has no block whose removal would leave the document whole, and refuses.
+   */
+  fenced?: boolean;
   /** Name of the extractor/format that produced this (e.g. "markdown"). */
   format: string;
   /**
@@ -44,6 +53,14 @@ export type MetadataPatch = Record<string, unknown>;
 export interface ApplyOptions {
   /** Flavor to use when creating a block from scratch. Default "yaml". */
   newBlockFlavor?: FrontmatterFlavor;
+  /**
+   * Top-level keys to remove entirely — deletion, where `patch` can only set
+   * (`undefined` values there are ignored by contract). Removing a key that
+   * is already absent is a no-op. Writers that cannot remove a key ignore
+   * this option, so a caller that needs certainty must re-extract and check —
+   * `runQuery --write` does exactly that and refuses the run on a survivor.
+   */
+  deletions?: readonly string[];
   /**
    * The document's path, when the caller knows it. `extract` receives one and
    * `apply` did not, which left a writer unable to use the extension as a

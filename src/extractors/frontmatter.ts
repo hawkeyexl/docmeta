@@ -317,12 +317,16 @@ export function extractFrontmatter(
 
   const raw = frontmatterInnerText(content, loc);
   const prefixLines = loc.firstContentLine - 1;
+  // `fenced` is stamped here, the one place that just located a complete
+  // block — a per-extraction fact, not an extractor capability: RST and
+  // AsciiDoc reach their native-header fallbacks through their own extract()
+  // and never pass this point for those files.
   switch (loc.flavor) {
     case "yaml":
-      return parseYamlBlock(raw, prefixLines, format);
+      return { ...parseYamlBlock(raw, prefixLines, format), fenced: true };
     case "json":
-      return parseJsonBlock(raw, prefixLines, format);
+      return { ...parseJsonBlock(raw, prefixLines, format), fenced: true };
     case "toml":
-      return parseTomlBlock(raw, prefixLines, format);
+      return { ...parseTomlBlock(raw, prefixLines, format), fenced: true };
   }
 }

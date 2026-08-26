@@ -114,7 +114,7 @@ through your first passing and failing result in under a minute.
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
     against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
-    (see .github/workflows/doc-detective.yml), over committed fixtures.
+    (see .github/workflows/docs-as-tests.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"landing-proof","description":"The hero proof, run against the local CLI build and committed fixtures."} */}
 {/* step {"description":"A file with complete, well-formed metadata passes with a green summary.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 file checked, 1 passed, 0 failed, 0 errors"}} */}

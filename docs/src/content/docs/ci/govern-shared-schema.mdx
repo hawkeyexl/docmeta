@@ -379,7 +379,7 @@ nothing in the run touches it) and confirm the gate still passes.
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
     against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
-    (see .github/workflows/doc-detective.yml), over committed fixtures.
+    (see .github/workflows/docs-as-tests.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"govern-shared-schema","description":"URL-reference classification, the fetch-failure contract, and what `schemas vendor` refuses, exercised against the local build."} */}
 {/* step {"description":"A reference starting with https:// is treated as a URL and fetched; an unreachable host fails the run as an operational error (exit 2), distinct from a validation failure. Uses a closed loopback port so the failure is instant and needs no external network.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md -s https://127.0.0.1:1/article/1.json","exitCodes":[2],"stdio":"Failed to fetch schema"}} */}
