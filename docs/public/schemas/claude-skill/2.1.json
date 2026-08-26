@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "anthropic:claude-skill:2.1",
+  "title": "Claude Code SKILL.md frontmatter v2.1",
+  "description": "Frontmatter accepted by Claude Code 2.1 in a `SKILL.md` file: the six fields of the Agent Skills standard plus the fourteen Claude Code adds for invocation control, subagent execution, tool grants and activation scope. It requires nothing, because Claude Code marks every field optional — a skill with no front matter at all loads, taking its description from the first paragraph of the body. Unknown keys are tolerated for the same reason: Claude Code ignores a field it does not recognise. That tolerance is exactly what makes this schema the wrong one to check a skill you intend to publish. The distribution path — claude.ai uploads, the Skills API, `package_skill.py` — accepts only the standard's six fields and hard-errors on the rest, so validate against `agentskills:skill:1.0` as well when the skill has to travel. Boolean fields take `yes`, `no`, `on`, `off`, `1` and `0` in any letter case as well as `true` and `false`; a YAML 1.2 parser hands most of those through as a string or an integer, so the schema accepts all three types rather than `boolean` alone. See https://code.claude.com/docs/en/skills",
+  "type": "object",
+  "additionalProperties": true,
+  "$defs": {
+    "flag": {
+      "description": "A Claude Code boolean. `true`/`false` reach the validator as booleans, `1`/`0` as integers, and `yes`/`no`/`on`/`off` — plus any mixed-case spelling such as `TrUe` — as strings, because YAML 1.2 resolves only the core spellings. Written as three type-scoped keywords rather than a branch: `pattern` constrains only the string form and `minimum`/`maximum` only the integer one, so a wrong value is reported once, against the key, instead of once per failed branch plus a summary.",
+      "type": ["boolean", "string", "integer"],
+      "pattern": "^(?:[Tt][Rr][Uu][Ee]|[Ff][Aa][Ll][Ss][Ee]|[Yy][Ee][Ss]|[Nn][Oo]|[Oo][Nn]|[Oo][Ff][Ff]|[01])$",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "wordsOrList": {
+      "description": "A field Claude Code accepts either as one delimited string or as a YAML list of entries. `items` applies only to the array form, so no branch is needed and a bad entry is reported once, against the item that is wrong.",
+      "type": ["string", "array"],
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Display name shown in skill listings, defaulting to the directory name. Deliberately unconstrained here: in a personal or project skill this is only a label, and Claude Code accepts spaces and capitals that the Agent Skills `name` rules forbid. Validate against `agentskills:skill:1.0` to hold it to the portable form. In a plugin skill it also sets the last segment of the command."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What the skill does and when to use it, which is how Claude decides whether to load it. Falls back to the first paragraph of the body when absent. The listing truncates `description` and `when_to_use` together at 1,536 characters, so the key use case goes first; that cap is a truncation rather than an error, and is not enforced here."
+    },
+    "when_to_use": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Extra triggering context — phrases or example requests — appended to `description` in the skill listing, and counted against the same 1,536-character cap. Claude Code only; not part of the Agent Skills standard."
+    },
+    "argument-hint": {
+      "type": "string",
+      "description": "Autocomplete hint for the arguments the skill expects, such as `[issue-number]` or `[filename] [format]`."
+    },
+    "arguments": {
+      "$ref": "#/$defs/wordsOrList",
+      "description": "Named positional arguments for `$name` substitution in the body, as a space-separated string or a YAML list. Names map to argument positions in order."
+    },
+    "disable-model-invocation": {
+      "$ref": "#/$defs/flag",
+      "description": "`true` keeps Claude from loading the skill on its own, leaving `/name` as the only way in. For workflows whose timing you want to own — commit, deploy, send. Also keeps the skill out of subagent preloads and scheduled-task prompts. Default: `false`."
+    },
+    "user-invocable": {
+      "$ref": "#/$defs/flag",
+      "description": "`false` hides the skill from the `/` menu so only Claude can invoke it, for background knowledge nobody should trigger by hand. Default: `true`."
+    },
+    "allowed-tools": {
+      "$ref": "#/$defs/wordsOrList",
+      "description": "Tools pre-approved for the turn that invokes this skill, as a space- or comma-separated string or a YAML list. The grant clears with your next message and does not restrict anything: tools left off the list stay callable under your normal permission settings. A project skill's grant applies even in an untrusted folder, which is why one checked into a repository is worth reading before you run it."
+    },
+    "disallowed-tools": {
+      "$ref": "#/$defs/wordsOrList",
+      "description": "Tools removed from Claude's pool while the skill is active — an autonomous loop dropping `AskUserQuestion`, say. Clears with your next message. Cannot remove `EndConversation` while any other tool remains. Claude Code only."
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Model to use while the skill is active, taking the same values as `/model` plus `inherit`. Deliberately not enumerated: the accepted set moves with the product and with an organisation's `availableModels` allowlist, so a list assembled here would reject working skills. With `context: fork` it sets the forked subagent's model instead."
+    },
+    "effort": {
+      "enum": ["low", "medium", "high", "xhigh", "max"],
+      "description": "Reasoning effort while the skill is active, overriding the session level. Which levels are actually available depends on the model. Claude Code only."
+    },
+    "context": {
+      "const": "fork",
+      "description": "`fork` runs the skill in its own subagent context, with the rendered body as the prompt and no access to the conversation history. The only value Claude Code defines."
+    },
+    "agent": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Which subagent type runs the skill. Applies only with `context: fork`. Not enumerated, because the set includes whatever agents the project, its plugins and the user define."
+    },
+    "background": {
+      "$ref": "#/$defs/flag",
+      "description": "Applies only with `context: fork`. `false` waits for the forked subagent's result inside the invoking turn instead of letting it run in the background. Default: `true`; needs Claude Code 2.1.218 or later."
+    },
+    "hooks": {
+      "type": "object",
+      "description": "Hooks registered when the skill is invoked, which then run for the rest of the session. Keyed by hook event, in the same shape as the hooks configuration, including the `once` option. The inner shape is left unconstrained here: it is the hooks contract rather than the skill contract, and it is versioned separately."
+    },
+    "paths": {
+      "$ref": "#/$defs/wordsOrList",
+      "description": "Glob patterns that scope automatic activation, as a comma-separated string or a YAML list. With these set, Claude loads the skill on its own only while working on matching files. Same format as path-specific memory rules. Ignored in a `.claude/commands/` file."
+    },
+    "shell": {
+      "enum": ["bash", "powershell"],
+      "description": "Which shell runs the skill's inline `` !`command` `` injections. Defaults to `bash`, which fails the invocation outright on Windows without Git Bash; `powershell` routes them through the PowerShell tool instead."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Free-form map for your own tooling — entitlement or catalogue fields Claude Code reads but never acts on, dropping a value that is not a map. Looser than the standard's `metadata`, which takes string values only, so a nested or numeric entry here will not survive packaging for distribution. Do not reuse front matter field names such as `paths` as keys."
+    },
+    "license": {
+      "type": "string",
+      "minLength": 1,
+      "description": "License covering the skill, from the Agent Skills standard. Claude Code accepts the field and does not act on it."
+    },
+    "compatibility": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "description": "Environment requirements, from the Agent Skills standard, in at most 500 characters. Claude Code accepts the field and does not act on it."
+    }
+  }
+}

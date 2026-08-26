@@ -171,6 +171,8 @@ describe("docmeta CLI (built bin)", () => {
       "jekyll:page:4.4",
       "vitepress:page:1.6",
       "x:cards:1.0",
+      "agentskills:skill:1.0",
+      "anthropic:claude-skill:2.1",
     ]);
   });
 

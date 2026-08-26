@@ -5,7 +5,7 @@ description: Every schema shipped with docmeta in one table, showing what each c
 
 import { Aside, Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-docmeta bundles nineteen schemas. You reference any of them by id, with no file
+docmeta bundles twenty-one schemas. You reference any of them by id, with no file
 to write, no URL to host, and no network call at validation time. This page is
 the registry: what each one constrains, whether it requires anything, and which
 are applied when you pass no flags at all.
@@ -36,11 +36,20 @@ installed.
 | `jekyll:page:4.4` | 7 Jekyll front matter variables | nothing | No | [`jekyll/4.4.json`](/docmeta/schemas/jekyll/4.4.json) | [Platform schemas](/docmeta/reference/platform-schemas/) |
 | `vitepress:page:1.6` | 16 VitePress front matter options | nothing | No | [`vitepress/1.6.json`](/docmeta/schemas/vitepress/1.6.json) | [Platform schemas](/docmeta/reference/platform-schemas/) |
 | `x:cards:1.0` | 23 `twitter:*` card tags | `twitter:card` | No | [`x-cards/1.0.json`](/docmeta/schemas/x-cards/1.0.json) | [Metadata vocabularies](/docmeta/reference/metadata-vocabularies/) |
+| `agentskills:skill:1.0` | the 6 Agent Skills `SKILL.md` fields | `name`, `description` | No | [`agent-skills/1.0.json`](/docmeta/schemas/agent-skills/1.0.json) | [Agent Skills schemas](/docmeta/reference/agent-skills-schemas/) |
+| `anthropic:claude-skill:2.1` | 20 Claude Code `SKILL.md` fields | nothing | No | [`claude-skill/2.1.json`](/docmeta/schemas/claude-skill/2.1.json) | [Agent Skills schemas](/docmeta/reference/agent-skills-schemas/) |
 
-All nineteen use [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects),
-allow additional properties, and are [built-in
+All twenty-one use [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects)
+and are [built-in
 references](/docmeta/reference/schema-resolution/#reference-kinds), so a typo in
 an id is reported as an unknown built-in rather than a missing file.
+
+Twenty of them allow additional properties. `agentskills:skill:1.0` is the one
+exception, and not out of strictness: the tooling that packages a skill for
+distribution *hard-errors* on a key outside the standard's six rather than
+ignoring it, so a schema that tolerated unknown keys would pass exactly the file
+that cannot ship. See [Agent Skills
+schemas](/docmeta/reference/agent-skills-schemas/).
 
 ## The published URLs
 
@@ -67,6 +76,8 @@ https://hawkeyexl.github.io/docmeta/schemas/hugo/0.165.json
 https://hawkeyexl.github.io/docmeta/schemas/jekyll/4.4.json
 https://hawkeyexl.github.io/docmeta/schemas/vitepress/1.6.json
 https://hawkeyexl.github.io/docmeta/schemas/x-cards/1.0.json
+https://hawkeyexl.github.io/docmeta/schemas/agent-skills/1.0.json
+https://hawkeyexl.github.io/docmeta/schemas/claude-skill/2.1.json
 ```
 
 They exist for three jobs: `$ref`-ing a built-in from a schema of your own,
@@ -161,12 +172,21 @@ on cannot fail a page that was already building. `astro:starlight:0.41` and
 *error* without a page title — a page failing that check was already broken, and
 docmeta is only telling you sooner.
 
+The two `SKILL.md` schemas are platform schemas of a different sort: the
+platform is the agent runtime rather than a site generator.
+`anthropic:claude-skill:2.1` requires nothing, because Claude Code marks every
+field optional; `agentskills:skill:1.0` requires `name` and `description`,
+because the open standard does and the packaging tools refuse a skill without
+them. See [Agent Skills
+schemas](/docmeta/reference/agent-skills-schemas/).
+
 Full field tables are on the [Platform
-schemas](/docmeta/reference/platform-schemas/) and [Docusaurus
+schemas](/docmeta/reference/platform-schemas/), [Agent Skills
+schemas](/docmeta/reference/agent-skills-schemas/) and [Docusaurus
 schemas](/docmeta/reference/docusaurus-schemas/) pages.
 
-**Vocabulary schemas** are a third kind, and the newest. They describe a
-document to something *outside* your docs site: a social card renderer
+**Vocabulary schemas** are a third kind. They describe a document to something
+*outside* your docs site: a social card renderer
 (`ogp:article:1.0`), a catalogue or repository (`dcmi:elements:1.1`), or another
 publisher's build (`microsoft:learn:1.0`). Open Graph is the one built-in that
 checks something no build tool checks — nothing fails when `og:image` is
@@ -207,7 +227,7 @@ compose](/docmeta/reference/taxonomy-schemas/#which-ones-compose).
 
 ## What runs when you pass no flags
 
-Only two of the nineteen are in the default set:
+Only two of the twenty-one are in the default set:
 
 ```text
 google:okf:0.1 + passo-uno:seven-action:1.0

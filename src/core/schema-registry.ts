@@ -39,6 +39,8 @@ import hugoPage0165 from "../schemas/hugo/0.165.json" with { type: "json" };
 import jekyllPage44 from "../schemas/jekyll/4.4.json" with { type: "json" };
 import vitepressPage16 from "../schemas/vitepress/1.6.json" with { type: "json" };
 import xCards10 from "../schemas/x-cards/1.0.json" with { type: "json" };
+import agentSkills10 from "../schemas/agent-skills/1.0.json" with { type: "json" };
+import claudeSkill21 from "../schemas/claude-skill/2.1.json" with { type: "json" };
 
 export interface BuiltinInfo {
   id: string;
@@ -67,6 +69,8 @@ const BUILTINS = new Map<string, Record<string, unknown>>([
   ["jekyll:page:4.4", jekyllPage44],
   ["vitepress:page:1.6", vitepressPage16],
   ["x:cards:1.0", xCards10],
+  ["agentskills:skill:1.0", agentSkills10],
+  ["anthropic:claude-skill:2.1", claudeSkill21],
 ]);
 
 export function listBuiltins(): BuiltinInfo[] {
@@ -122,6 +126,8 @@ const PUBLISHED_ALIAS: ReadonlyMap<string, string> = new Map([
   [`${PUBLISHED_BASE}jekyll/4.4.json`, "jekyll:page:4.4"],
   [`${PUBLISHED_BASE}vitepress/1.6.json`, "vitepress:page:1.6"],
   [`${PUBLISHED_BASE}x-cards/1.0.json`, "x:cards:1.0"],
+  [`${PUBLISHED_BASE}agent-skills/1.0.json`, "agentskills:skill:1.0"],
+  [`${PUBLISHED_BASE}claude-skill/2.1.json`, "anthropic:claude-skill:2.1"],
 ]);
 
 /**
