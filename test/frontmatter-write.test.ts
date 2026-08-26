@@ -23,6 +23,49 @@ const fx = (name: string): string =>
 const tail = (s: string, fence: string): string =>
   s.slice(s.indexOf(`\n${fence}\n`));
 
+describe("applyFrontmatter — deletions", () => {
+  it("deletes a YAML key, keeping other keys' comments and the body", () => {
+    const content = "---\n# the title\ntitle: T\nstale: 1\n---\n\nBody.\n";
+    const out = applyFrontmatter(content, {}, { deletions: ["stale"] });
+    expect(out).toBe("---\n# the title\ntitle: T\n---\n\nBody.\n");
+  });
+
+  it("deletes a TOML key as a line splice, comments intact", () => {
+    const content = '+++\n# kept\ntitle = "T"\nstale = 1\n+++\n\nBody.\n';
+    const out = applyFrontmatter(content, {}, { deletions: ["stale"] });
+    expect(out).toBe('+++\n# kept\ntitle = "T"\n+++\n\nBody.\n');
+  });
+
+  it("deletes a JSON key by omission", () => {
+    const content = ';;;\n{\n  "title": "T",\n  "stale": 1\n}\n;;;\n\nBody.\n';
+    const out = applyFrontmatter(content, {}, { deletions: ["stale"] });
+    expect(extractFrontmatter(out, "d.md").data).toEqual({ title: "T" });
+    expect(out).toContain("Body.");
+  });
+
+  it("deleting an absent key is a no-op, byte for byte", () => {
+    const content = "---\ntitle: T\n---\n\nBody.\n";
+    expect(applyFrontmatter(content, {}, { deletions: ["never"] })).toBe(
+      content,
+    );
+  });
+
+  it("delete-only on a block-less document is a no-op, not a bare block", () => {
+    const content = "# Just a document\n";
+    expect(applyFrontmatter(content, {}, { deletions: ["x"] })).toBe(content);
+  });
+
+  it("a key both set and deleted: the set wins", () => {
+    const content = "---\ntitle: T\n---\n\nBody.\n";
+    const out = applyFrontmatter(
+      content,
+      { title: "New" },
+      { deletions: ["title"] },
+    );
+    expect(extractFrontmatter(out, "d.md").data).toEqual({ title: "New" });
+  });
+});
+
 describe("applyFrontmatter — no-ops", () => {
   it("returns the input identically for an empty patch", () => {
     const content = fx("missing-keys.md");

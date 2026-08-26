@@ -100,7 +100,7 @@ the top-level entries for the peer dependencies of an optional package —
 `@rolldown/binding-wasm32-wasi` (vitest → vite → rolldown) — while keeping the
 dependency edges that point at them. The result installs happily, so nothing
 looks wrong locally, and `npm ci` rejects it. Every workflow starts with
-`npm ci`, so on the next push build-test, lint, docs and doc-detective all go
+`npm ci`, so on the next push build-test, lint, docs and docs-as-tests all go
 red at once with `Missing: @emnapi/core@<ver> from lock file`.
 
 **This is not platform-specific**, whatever the symptom suggests. The repo
@@ -118,7 +118,7 @@ clean regeneration removes.
 Still worth doing after any dependency change: **read the lockfile diff**. A
 change that adds packages you cannot name, or removes any, is worth stopping
 for. And `npm link` / `npm unlink` rewrite `package-lock.json` as a side effect
-of something you ran for another reason — running the doc-detective suite
+of something you ran for another reason — running the docs-as-tests suite (Doc Detective)
 locally needs `npm link` — so check `git status` afterwards and
 `git checkout -- package-lock.json` if it was touched.
 

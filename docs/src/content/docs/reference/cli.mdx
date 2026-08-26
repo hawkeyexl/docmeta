@@ -329,10 +329,14 @@ column and stays reachable through `_data`):
 | `_present` | `1` if the file has a metadata block/surface, else `0` — so `WHERE _present = 0` lists files with no metadata at all. |
 | `_data` | The complete extracted metadata as JSON text, for `json_extract`/`->>` reach into nested values and unlifted keys. |
 
-The database is built in memory on every run and discarded; nothing is written
-to disk. The SQL runs read-only — statements that modify the database are
-refused. Like `get`, `query` extracts and reports; it resolves no schema and
-makes no network requests.
+The database is built in memory on every run and discarded (`--db` exports a
+copy; `--write` applies a statement's changes to the files — see below).
+Statements are judged by their **effects** on this disposable projection:
+reads return rows; metadata-column changes become a per-file diff; an added
+row is a file created, a removed row a front matter block stripped, and a
+`_path` move a file rename. Files are never *deleted* through SQL, and the
+other system columns are read-only. Like `get`, `query` resolves no schema
+and makes no network requests.
 
 ### Options
 
@@ -341,6 +345,7 @@ makes no network requests.
 | `--query` | `<sql>` | the `[sql]` positional | The SQL statement. When given, **every** positional is a path. |
 | `--check` | — | off | Treat returned rows as findings: exit 1 if the query returns any, 0 if it returns none. The `pretty` verdict line shows ✓/✗. |
 | `--db` | `<path>` | — | Also write the built database to this file; the SQL is then optional. The file is a regenerated artifact: an existing SQLite database at the path is overwritten, anything else is refused. See [exporting the database](#exporting-the-database). |
+| `--write` | — | off | Apply a mutating statement's changes to the files. Without it, the same statement is a **preview**: the per-file diff it would make, nothing touched. See [writing back](#writing-back). |
 | `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
 | `--exclude` | `<glob>` | — | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
 | `--as` | `<format>` | — | Force an input [format](/docmeta/reference/formats/) (extractor name). Required when reading from stdin. |
@@ -372,20 +377,97 @@ required. This repository's `npm run query:ui` does exactly that for its own
 docs. The export is plain SQLite: `sqlite3`, DuckDB, Grafana, or anything
 else that reads the format works the same way.
 
+### Writing back
+
+An `UPDATE` against `docs` edits the corpus — through the same
+comment-preserving, self-verifying writer `fill` uses, never through text
+substitution:
+
+```sh
+# Preview: the per-file diff, nothing touched
+docmeta query "UPDATE docs SET draft = false WHERE draft IS NULL" docs/
+# Apply it
+docmeta query --write "UPDATE docs SET draft = false WHERE draft IS NULL" docs/
+# Hold it in CI: pending changes fail until someone runs --write
+docmeta query --check "UPDATE docs SET draft = false WHERE draft IS NULL" docs/
+```
+
+Preview is the default on purpose — one statement can touch every file, and
+the human reading the diff is the gate (`fill` writes by default because each
+of its values passed a confidence gate first). Values are restored to the
+types the files had: `1`/`0` back to booleans, JSON text back to arrays and
+objects, with the column's dominant type deciding for a key the file never
+had. A value the restored type cannot hold, invalid JSON, a read-only
+target, a bad or colliding path, or a file that changed on disk since it was
+read — each refuses the **whole run** by file and key before anything is
+written. `ATTACH` and `VACUUM` are refused by name (they can write files of
+their own, outside the effect gate), and `DROP TABLE` is refused as the
+accident-shaped spelling of two real statements.
+
+The vocabulary is standard SQL (proposal 0024):
+
+| Statement | Meaning |
+|---|---|
+| `UPDATE docs SET k = v` | set a key; a corpus-new key widens the table |
+| `UPDATE docs SET k = NULL` | **remove** the key from matching files (absent = no-op) |
+| `UPDATE docs SET k = explicit_null()` | write a literal `k: null` — the rare case |
+| `UPDATE docs SET _path = '…'` | move/rename the file, body byte-preserved; same extension only |
+| `INSERT INTO docs (_path, …) VALUES (…)` | create a file: that front matter, an empty body |
+| `DELETE FROM docs WHERE …` | strip the front matter block; the file and its body survive |
+| `ALTER TABLE docs ADD COLUMN k TYPE [NOT NULL] [DEFAULT v]` | **DDL**: the resolved schema gains property `k` (required if NOT NULL); a DEFAULT backfills every file |
+| `ALTER TABLE docs DROP COLUMN k` | **DDL**: the schema loses `k`, and the key is removed from every file |
+| `ALTER TABLE docs RENAME COLUMN a TO b` | **DDL**: the schema property is renamed, and the key renamed in every file, values carried verbatim |
+
+Key deletion and block-stripping work wherever the metadata lives in fenced
+front matter (markdown, MDX, AsciiDoc, reStructuredText); element-backed
+keys in HTML/XML refuse rather than half-delete, and `INSERT` creates only
+formats whose writer can build a block (markdown, MDX).
+
+**DDL edits the schema itself.** An `ALTER` statement resolves the run's
+schema set (which must be a single set — a corpus split by overrides refuses;
+scope the run to one group) with the same trust boundary as `validate`: a
+document's `$schema` cannot point the edit outside the repository. It then
+evolves the one schema that owns the key: a **hand-maintained local schema
+file is edited in place** — `properties` and `required` only, your indent,
+git as the review surface, and a vendored file's `integrity:` pin refreshed
+in the same write — while an **immutable built-in forks** to a local copy
+(`schemas/<name>-<ver>.local.json` beside the config, `$id` suffixed
+`+local`) with the config entry (either spelling, comments intact) and any
+in-file `$schema` (string or list) repointed in the same write. Every file
+the statement will touch appears in the preview, the config included. When
+ownership is unclear, DDL refuses rather than guesses: a key another schema
+in the set also declares or requires, an `ADD` onto an already-declared
+property (its constraints would be lost), a `DEFAULT` the declared type
+cannot hold, or a set naming several local schema files. URL refs refuse
+with "vendor it first" (`docmeta schemas vendor`). A corpus resolving to the
+built-in default set refuses too: there is no schema of yours to evolve, and
+the `UPDATE` spellings cover every data-only case. The ratchet, whole:
+
+```sh
+docmeta query --write "ALTER TABLE docs
+  ADD COLUMN reviewed TEXT NOT NULL DEFAULT 'pending'" docs/
+# schema now requires `reviewed`, every file carries it, validate stays green
+```
+
 ### Output and exit codes
 
 In `pretty` format: an aligned table (header row, then values; SQL `NULL`
 prints as `(null)`) followed by a row count — or, with `--check`, a ✓/✗ verdict
-line. In `json` format: the bare array of row objects, mirroring `get`'s bare
-array; the `--check` verdict travels in the exit code, not the envelope.
+line. A mutating statement renders as its diff instead:
+`<file>: <key>: <from> -> <to>` per change, then the mode's verdict (applied,
+dry-run hint, or the `--check` ✓/✗). In `json` format: the bare array —
+row objects for a read, `{ file, key, from, to, written }` change objects for
+an edit; the `--check` verdict travels in the exit code, not the envelope.
 
 With `--db` and no SQL, the export summary (`Wrote <path> …`) is the report;
 with both, the rows own stdout and the export note goes to stderr as a
 diagnostic.
 
-Exit `0` — the query ran (with `--check`: and returned no rows). Exit `1` —
-only from `--check`, when rows came back. Exit `2` — operational, including SQL
-that cannot be prepared: a broken query is a usage error, not a finding.
+Exit `0` — the query ran (with `--check`: and returned no rows or pending
+changes; with `--write`: and applied cleanly). Exit `1` — only from `--check`
+without `--write`, when rows or pending changes came back. Exit `2` —
+operational, including SQL that cannot be prepared and every write refusal:
+a broken or refused statement is a usage error, not a finding.
 
 ### Examples
 
@@ -857,7 +939,7 @@ with `No files matched` (exit 2) rather than reporting a green zero.
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
     against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
-    (see .github/workflows/doc-detective.yml), over committed fixtures.
+    (see .github/workflows/docs-as-tests.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"cli-reference","description":"The documented command and flag surface, exercised against the local build."} */}
 {/* step {"description":"validate accepts multiple --schema refs (a set) and a passing file exits 0.","runShell":{"command":"docmeta validate test/fixtures/valid.md -s google:okf:0.1 -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
@@ -886,7 +968,7 @@ with `No files matched` (exit 2) rather than reporting a green zero.
 {/* Everything above stops before inference. The three below actually run it, using
      the local model — the only provider that needs no credential, and so the only
      one testable in CI at all. They are also the only steps here that need the
-     weights; see the cache in .github/workflows/doc-detective.yml.
+     weights; see the cache in .github/workflows/docs-as-tests.yml.
 
      No step clears ANTHROPIC_API_KEY/OPENAI_API_KEY to force the keyless path:
      `VAR= cmd` is bash-only and fails on Windows, where these tests also run. The

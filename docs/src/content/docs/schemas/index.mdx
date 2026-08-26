@@ -327,7 +327,7 @@ Naming the schema inside a document is the most self-contained option, but you c
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
     against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
-    (see .github/workflows/doc-detective.yml), over committed fixtures.
+    (see .github/workflows/docs-as-tests.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"author-a-schema","description":"Schema-authoring claims, demonstrated with the committed fixtures the page itself cites."} */}
 {/* step {"description":"A document points itself at a schema via $schema (schema-ref.md names google:okf:0.1) and validates against it.","runShell":{"command":"npx docmeta validate test/fixtures/schema-ref.md","exitCodes":[0],"stdio":"1 passed"}} */}

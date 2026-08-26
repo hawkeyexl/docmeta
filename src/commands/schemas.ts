@@ -103,7 +103,7 @@ export interface VendorResult {
 }
 
 /** A path spelled the way git and a config both want it: relative, posix. */
-function posixRelative(from: string, to: string): string {
+export function posixRelative(from: string, to: string): string {
   return relative(from, to).split(sep).join("/");
 }
 
@@ -162,7 +162,7 @@ export function vendorFileName(url: string): string {
  * would make the command unusable in an extracted tarball, and staying silent
  * would claim a check that never ran.
  */
-async function assertNotIgnored(
+export async function assertNotIgnored(
   absFile: string,
   absDir: string,
   cwd: string,
@@ -205,7 +205,7 @@ async function assertNotIgnored(
  * wrong place. Parameterizing beat writing a second copy of the three-state
  * logic, which is where the subtle half of this check lives.
  */
-interface IgnoreGuardText {
+export interface IgnoreGuardText {
   /** Git says the path is ignored. `target` is whichever spelling matched. */
   refusal(target: string): string;
   /** Git could not answer at all. `where` is the directory, or ".". */

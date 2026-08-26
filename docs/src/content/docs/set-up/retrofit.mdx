@@ -249,7 +249,7 @@ A repo that went green on day one, a CI gate that has been catching regressions 
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
     against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
-    (see .github/workflows/doc-detective.yml), over committed fixtures.
+    (see .github/workflows/docs-as-tests.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"set-up-retrofit","description":"Start-permissive claim, demonstrated with a require-nothing schema fixture vs. OKF."} */}
 {/* step {"description":"The coverage probe reports what the docset has, and counts the files with no metadata block at all.","runShell":{"command":"npx docmeta schemas infer test/fixtures/infer --no-config","exitCodes":[0],"stdio":"with no metadata block"}} */}

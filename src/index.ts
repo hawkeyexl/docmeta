@@ -4,7 +4,7 @@ export type { ValidateOptions, ValidateRun } from "./commands/validate.js";
 export { runGet } from "./commands/get.js";
 export type { GetOptions, GetFileResult } from "./commands/get.js";
 export { runQuery } from "./commands/query.js";
-export type { QueryOptions, QueryRun } from "./commands/query.js";
+export type { QueryChange, QueryOptions, QueryRun } from "./commands/query.js";
 export {
   getSchemasInfo,
   runVendorSchema,
