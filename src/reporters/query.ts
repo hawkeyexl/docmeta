@@ -69,11 +69,47 @@ function renderChanges(
   c: Colors,
   opts: QueryReportOptions,
 ): string {
-  const lines = changes.map(
-    (ch) =>
-      `${c.dim(`${ch.file}:`)} ${ch.key}: ${cellFrom(ch.from)} -> ${cell(ch.to)}`,
-  );
+  const lines = changes.map((ch) => {
+    if ("config" in ch) {
+      return `${c.dim(`config ${ch.file}:`)} ${ch.key}: ${cellFrom(ch.from)} -> ${cell(ch.to)}`;
+    }
+    if ("schema" in ch) {
+      const fork = ch.forkedFrom ? ` ${c.dim(`(forked from ${ch.forkedFrom})`)}` : "";
+      if (ch.op === "rename") {
+        return `${c.dim(`schema ${ch.file}:`)} ${ch.key} -> ${ch.renamedTo ?? ch.key}${fork}`;
+      }
+      if (ch.op === "drop") {
+        return `${c.dim(`schema ${ch.file}:`)} - ${ch.key}${fork}`;
+      }
+      const detail = [ch.type, ch.required ? "required" : undefined]
+        .filter(Boolean)
+        .join(", ");
+      return `${c.dim(`schema ${ch.file}:`)} + ${ch.key}${detail ? ` (${detail})` : ""}${fork}`;
+    }
+    if ("cleared" in ch) {
+      return `${c.dim(`${ch.file}:`)} (frontmatter removed: ${Object.keys(ch.from).join(", ")})`;
+    }
+    if ("created" in ch) {
+      const kv = Object.entries(ch.to)
+        .map(([k, v]) => `${k}=${cell(v)}`)
+        .join(", ");
+      return `${c.dim(`${ch.file}:`)} (created: ${kv})`;
+    }
+    if ("renamed" in ch) {
+      return `${c.dim(`${ch.file} ->`)} ${ch.renamed} ${c.dim("(moved)")}`;
+    }
+    if ("renamedFrom" in ch) {
+      return `${c.dim(`${ch.file}:`)} ${ch.renamedFrom} -> ${ch.key} ${c.dim("(key renamed)")}`;
+    }
+    if ("deleted" in ch) {
+      return `${c.dim(`${ch.file}:`)} ${ch.key}: ${cellFrom(ch.from)} -> (deleted)`;
+    }
+    return `${c.dim(`${ch.file}:`)} ${ch.key}: ${cellFrom(ch.from)} -> ${cell(ch.to)}`;
+  });
   const n = changes.length;
+  // Deliberately counts every file the run touches — schema and config
+  // included: they are writes the user is approving, and a pure DDL edit
+  // reporting "across 0 files" would claim less than it does.
   const files = new Set(changes.map((ch) => ch.file)).size;
   const count = `${n} change${n === 1 ? "" : "s"} across ${files} file${files === 1 ? "" : "s"}`;
   if (opts.write) {
@@ -92,7 +128,7 @@ function renderChanges(
   return lines.join("\n");
 }
 
-/** A preview's `from` for a key the file never had. */
+/** A preview's `from`: `(unset)` only for a key the file never had. */
 function cellFrom(value: unknown): string {
-  return value === null ? "(unset)" : cell(value);
+  return value === undefined ? "(unset)" : cell(value);
 }

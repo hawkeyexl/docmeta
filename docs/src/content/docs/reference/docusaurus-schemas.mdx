@@ -295,7 +295,7 @@ or use YAML. This applies equally to OKF's `timestamp`.
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
     against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
-    (see .github/workflows/doc-detective.yml), over committed fixtures.
+    (see .github/workflows/docs-as-tests.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"docusaurus-schemas","description":"The three Docusaurus built-ins, demonstrated with the committed fixtures this page describes."} */}
 {/* step {"description":"A docs page carrying every documented field passes.","runShell":{"command":"npx docmeta validate test/fixtures/docusaurus/docs-valid.md -s docusaurus:docs:3.10","exitCodes":[0],"stdio":"1 passed"}} */}

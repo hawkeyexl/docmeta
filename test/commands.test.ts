@@ -1675,8 +1675,11 @@ describe("the inferred draft never requires anything (0010 stress test 1)", () =
 });
 
 describe("dominant type, not a union (0010 stress test 3)", () => {
-  let dir: string;
+  let dir: string | undefined;
 
+  // Writing 904 files has blown the default 10s hook budget on a cold
+  // Windows CI runner; the count is the point of the test, so the budget
+  // moves rather than the corpus shrinking.
   beforeEach(async () => {
     const files: Record<string, string> = {};
     // 900 files where `owner` is a string, 4 where someone wrote a number.
@@ -1687,9 +1690,12 @@ describe("dominant type, not a union (0010 stress test 3)", () => {
       files[`n${i}.md`] = doc({ type: "guide", owner: "7" });
     }
     dir = await makeDocset(files);
-  });
+  }, 60_000);
   afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
+    // `dir` stays undefined when the hook itself failed; there is nothing to
+    // sweep then, and rm(undefined) would bury the real error in a TypeError.
+    if (dir !== undefined) await rm(dir, { recursive: true, force: true });
+    dir = undefined;
   });
 
   it("reports the distribution with counts and emits the dominant type alone", async () => {

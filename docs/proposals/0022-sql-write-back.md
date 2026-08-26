@@ -43,9 +43,14 @@ an UPDATE is refused. This proposal makes it mean something instead:
   and the report is the per-file, per-key diff it *would* make —
   `docs/a.md: last_reviewed: 2026-03-01 -> 2026-08-26` — plus a closing
   `dry run; pass --write to apply`. No file is touched. Exit 0.
-- **With `--write`**: the same diff, applied through `apply()` and
-  `writeFileAtomic`, one file at a time, with the writer's own re-parse
-  verification standing between the patch and the disk.
+- **With `--write`**: the same diff, applied in two phases — every file's new
+  content is computed and verified in memory first, then flushed with
+  `writeFileAtomic` — with the writer's own re-parse verification standing
+  between the patch and the disk. In `--format json`, a preview or an applied
+  edit is the bare array of change objects
+  (`{ file, key, from?, to | deleted, written }`), mirroring a SELECT's bare
+  row array; `from` is omitted for a key the file never had, which keeps
+  "absent" distinguishable from an explicit null.
 - **`--check` composes**: in preview, any pending change is a finding —
   exit 1. That turns a normalization statement into a drift gate: CI fails
   while any file does not match the rule, and `--write` is the remedy the
@@ -92,7 +97,9 @@ per file and key, with a stated precedence:
 2. **The column's dominant type across the corpus**, when the file had no
    value for the key (the `SET draft = 0 WHERE draft IS NULL` case): if
    `draft` is boolean in the files that have it, the new value is written as
-   a boolean.
+   a boolean. Dominant is mechanical: the strict plurality by count of files
+   carrying the key; a tie yields *no* dominant type, and precedence falls
+   through to storage — a heterogeneous column never guesses.
 3. **The SQL storage type as-is**, when neither exists.
 
 Failures refuse rather than guess, naming the file and key: new JSON text
@@ -128,11 +135,23 @@ docmeta query --write "UPDATE docs SET tags = (
 INSERTed or DELETEd rows; any system-column change; a type that cannot be
 restored under the precedence above; JSON that does not parse back to the
 key's shape; any merge the writer's own re-parse verification rejects; a
-write that would touch `<stdin>` (there is no file behind it); and — 0020's
-boundary, inherited — element-backed keys whose write support is read-only in
-that format. Each refusal names the file and key, and a refusal anywhere
-aborts the run before any file is written: a bulk edit that half-applied is
-worse than one that declined.
+write that would touch `<stdin>` (there is no file behind it — and this
+refusal deliberately aborts the **whole run**, path-backed rows included:
+stdin in a write's input set means the corpus is mixed with something
+unwritable, and silently skipping it would be a scope reduction nobody asked
+for; the preview shows the stdin row, so the refusal is predictable); and —
+0020's boundary, inherited — element-backed keys whose write support is
+read-only in that format. Each refusal names the file and key, and a refusal
+anywhere aborts the run before any file is written: a bulk edit that
+half-applied is worse than one that declined.
+
+One honest boundary on "all-or-nothing": it is a property of the *refusal
+and verification* path, made real by the two-phase apply — every file's new
+content exists in memory before the first byte lands. What remains is the
+flush loop itself: `writeFileAtomic` is atomic per file, not across files,
+so an OS-level kill mid-flush can leave a partial corpus. The remedy is
+convergence, not a rollback machine: re-running the same statement in
+preview shows exactly the remainder.
 
 ## The `fill` boundary
 
@@ -229,6 +248,37 @@ touched. Caught by the system-column test expecting its own message: equal
 row counts with a missing key now report the `_path` change by name. (A
 pathological DELETE-plus-INSERT pair cannot exist — one statement — so the
 disambiguation is sound.)
+
+## The deferrals, and what reversing them found
+
+Two limits this proposal set were reversed on request before it merged —
+recorded here rather than rewritten above, on 0020's precedent.
+
+**Corpus-new keys.** The design implied Create came free, and it did not: a
+`SET` target must be a column, and columns are the union of keys files
+*already have*. The fix is a tolerant scan of the statement's SET targets
+that pre-widens the table with empty columns. It is safe by construction —
+anything the scan misses fails exactly as before (`no such column`), and a
+false positive is an all-NULL column no diff ever sees.
+
+**Deletion.** The cost named above — a removal channel through `apply()` —
+was paid: `ApplyOptions.deletions`, advisory by contract (a writer that
+cannot remove a key ignores it; the caller re-extracts and refuses on a
+survivor). One writer covers four formats, because AsciiDoc and RST route
+their writes through the same fenced-front-matter path as markdown and MDX;
+YAML deletes through the Document API, TOML as the degenerate case of its
+line splice, JSON by omission — each still re-parse-verified. Element-backed
+keys in HTML/XML refuse, caught by the read-back rather than a format list.
+The SQL spelling is `drop_key()`, a per-run random sentinel no content can
+collide with and nobody can type, which keeps deletion conditional
+(`WHERE`, `CASE`) — and `ALTER TABLE docs DROP COLUMN` falls out of the
+effect gate as corpus-wide removal for free, since a vanished column reads
+as every file losing the key. `SET key = NULL` still writes an explicit
+null; the two spellings now mean the two different things. *(Revised once
+more by [0024](0024-standard-sql-vocabulary.md) before release: the NULL
+assignment became the removal spelling, `explicit_null()` took the literal,
+and `drop_key()` was removed — the standard-vocabulary push moved the
+decision. The reasoning above stays as written.)*
 
 ## Not breaking
 

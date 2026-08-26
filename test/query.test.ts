@@ -124,16 +124,10 @@ describe("runQuery", () => {
     await expect(q("SELECT nope FROM missing")).rejects.toThrow(DocmetaError);
   });
 
-  it("refuses statements whose effect is not a metadata edit", async () => {
-    // 0022: enforcement moved from PRAGMA query_only to effect-gating — the
-    // statement runs against the disposable projection, and creating or
-    // deleting rows (files, in the corpus's terms) refuses the run.
-    await expect(q("DROP TABLE docs")).rejects.toThrow(
-      /create or delete rows/i,
-    );
-    await expect(
-      q("INSERT INTO docs (_path) VALUES ('x')"),
-    ).rejects.toThrow(/create or delete rows/i);
+  it("DROP TABLE stays refused, naming the statements that do the jobs", async () => {
+    // 0024: DELETE/INSERT became real DML, but "delete the table definition"
+    // is the accident-shaped spelling and keeps its refusal.
+    await expect(q("DROP TABLE docs")).rejects.toThrow(/DELETE FROM docs/);
   });
 
   it("refuses a second statement instead of silently dropping it", async () => {
@@ -236,27 +230,65 @@ describe("runQuery write-back (0022)", () => {
     expect(readFileSync(join(d, "docs", "beta.md"), "utf8")).toBe(before);
   });
 
-  it("SET NULL writes an explicit null, not a deletion", async () => {
+  it("SET NULL removes the key; explicit_null() writes the literal", async () => {
+    // 0024: the standard-vocabulary flip. NULL is the removal spelling.
     const d = copy();
     await w("UPDATE docs SET author = NULL WHERE _path = 'docs/gamma.md'", d, true);
-    expect(readFileSync(join(d, "docs", "gamma.md"), "utf8")).toMatch(
-      /author: null/,
+    const gamma = readFileSync(join(d, "docs", "gamma.md"), "utf8");
+    expect(gamma).not.toContain("author:");
+    // The rare literal null keeps a spelling of its own.
+    await w(
+      "UPDATE docs SET draft = explicit_null() WHERE _path = 'docs/alpha.md'",
+      d,
+      true,
+    );
+    expect(readFileSync(join(d, "docs", "alpha.md"), "utf8")).toMatch(
+      /draft: null/,
     );
   });
 
-  it("refuses system-column changes", async () => {
+  it("refuses changes to the read-only system columns", async () => {
+    // `_path` became the rename spelling (0024); the other three stay locked.
     const d = copy();
     await expect(
-      w("UPDATE docs SET _path = 'renamed.md' WHERE _path = 'docs/beta.md'", d),
+      w("UPDATE docs SET _format = 'html' WHERE _path = 'docs/beta.md'", d),
     ).rejects.toThrow(/system column/i);
   });
 
-  it("refuses ATTACH and VACUUM outright", async () => {
+  it("refuses ATTACH and VACUUM outright, comments included", async () => {
     const d = copy();
     await expect(w("ATTACH DATABASE 'x.db' AS x", d)).rejects.toThrow(
       /ATTACH|refused/,
     );
     await expect(w("VACUUM", d)).rejects.toThrow(/VACUUM|refused/);
+    // A leading comment must not smuggle the statement past the name check.
+    await expect(
+      w("/* bypass */ ATTACH DATABASE 'x.db' AS x", d),
+    ).rejects.toThrow(/ATTACH/);
+    await expect(w("-- c\nVACUUM", d)).rejects.toThrow(/VACUUM/);
+  });
+
+  it("classifies CTE-prefixed DML as an edit even at zero rows", async () => {
+    const d = copy();
+    const run = await w(
+      "WITH t AS (SELECT 1) UPDATE docs SET draft = 0 WHERE 1 = 0",
+      d,
+    );
+    expect(run.changes).toEqual([]);
+  });
+
+  it("backfills a corpus-new key with a plain UPDATE", async () => {
+    // The data-only backfill spelling; the schema-and-data version is
+    // ALTER ADD COLUMN … DEFAULT on a corpus with a schema (query-ddl tests).
+    const d = copy();
+    const run = await w("UPDATE docs SET stale = 7 WHERE stale IS NULL", d);
+    expect(run.changes?.length).toBe(6);
+    expect(
+      run.changes?.every(
+        (c) =>
+          "to" in c && c.to === 7 && "from" in c && c.from === undefined && !c.written,
+      ),
+    ).toBe(true);
   });
 
   it("is all-or-nothing: one refusal writes no file at all", async () => {
@@ -271,6 +303,265 @@ describe("runQuery write-back (0022)", () => {
       ),
     ).rejects.toThrow(/boolean/i);
     expect(readFileSync(join(d, "docs", "beta.md"), "utf8")).toBe(before);
+  });
+
+  it("creates a corpus-new key: SET widens the table", async () => {
+    const d = copy();
+    const run = await w(
+      "UPDATE docs SET reviewed_by = 'maya' WHERE _path = 'docs/alpha.md'",
+      d,
+      true,
+    );
+    // `from` is absent for a key the file never had — distinct from an
+    // explicit null, which would carry `from: null`.
+    expect(run.changes).toEqual([
+      {
+        file: "docs/alpha.md",
+        key: "reviewed_by",
+        from: undefined,
+        to: "maya",
+        written: true,
+      },
+    ]);
+    expect(readFileSync(join(d, "docs", "alpha.md"), "utf8")).toContain(
+      "reviewed_by: maya",
+    );
+  });
+
+  it("deletes a key per file with NULL", async () => {
+    const d = copy();
+    const run = await w(
+      "UPDATE docs SET author = NULL WHERE _path = 'docs/gamma.md'",
+      d,
+      true,
+    );
+    expect(run.changes).toEqual([
+      {
+        file: "docs/gamma.md",
+        key: "author",
+        from: "ghost",
+        deleted: true,
+        written: true,
+      },
+    ]);
+    const gamma = readFileSync(join(d, "docs", "gamma.md"), "utf8");
+    expect(gamma).not.toContain("author:");
+    expect(gamma).toContain("title: Gamma");
+    // Untouched files keep the key.
+    expect(readFileSync(join(d, "docs", "alpha.md"), "utf8")).toContain(
+      "author: ada",
+    );
+  });
+
+  it("deletes a key corpus-wide with an unqualified SET NULL", async () => {
+    // 0024: ALTER is schema DDL now, and this corpus has no schema to edit —
+    // the corpus-wide data spelling is the WHERE-less UPDATE.
+    const d = copy();
+    const run = await w("UPDATE docs SET tags = NULL", d, true);
+    expect(run.changes?.length).toBe(3); // alpha, beta, gamma have tags
+    for (const f of ["alpha", "beta", "gamma"]) {
+      expect(readFileSync(join(d, "docs", `${f}.md`), "utf8")).not.toContain(
+        "tags:",
+      );
+    }
+  });
+
+  it("ALTER on a schemaless corpus refuses, naming the UPDATE spellings", async () => {
+    const d = copy();
+    await expect(
+      w("ALTER TABLE docs DROP COLUMN tags", d),
+    ).rejects.toThrow(/default set|UPDATE/);
+  });
+
+  it("deleting a key a file never had is a no-op for that file", async () => {
+    const d = copy();
+    // Only gamma-adjacent files carry draft; authors do not. Deleting draft
+    // everywhere must not report changes for files without it.
+    const run = await w("UPDATE docs SET draft = NULL", d, true);
+    expect(run.changes?.map((c) => c.file).sort()).toEqual([
+      "docs/alpha.md",
+      "docs/beta.md",
+    ]);
+  });
+
+  it("previews a deletion without touching the file", async () => {
+    const d = copy();
+    const before = readFileSync(join(d, "docs", "gamma.md"), "utf8");
+    const run = await w(
+      "UPDATE docs SET author = NULL WHERE _path = 'docs/gamma.md'",
+      d,
+    );
+    expect(run.changes?.[0]).toEqual({
+      file: "docs/gamma.md",
+      key: "author",
+      from: "ghost",
+      deleted: true,
+      written: false,
+    });
+    expect(readFileSync(join(d, "docs", "gamma.md"), "utf8")).toBe(before);
+  });
+
+  it("refuses deletion where the writer cannot remove the key", async () => {
+    const d = copy();
+    writeFileSync(
+      join(d, "docs", "page.html"),
+      "<html><head><title>Page</title></head><body>x</body></html>\n",
+    );
+    await expect(
+      w("UPDATE docs SET title = NULL WHERE _format = 'html'", d, true),
+    ).rejects.toThrow(/delet/i);
+    // All-or-nothing: the html file is intact.
+    expect(readFileSync(join(d, "docs", "page.html"), "utf8")).toContain(
+      "<title>Page</title>",
+    );
+  });
+
+  it("DELETE refuses an element-backed format at preview time", async () => {
+    const d = copy();
+    writeFileSync(
+      join(d, "docs", "page.html"),
+      "<html><head><title>Page</title></head><body>x</body></html>\n",
+    );
+    // A preview, not a write: the plan itself must refuse — the element
+    // formats have no block to strip, and promising one would be a lie
+    // --write discovers later.
+    await expect(
+      w("DELETE FROM docs WHERE _path = 'docs/page.html'", d),
+    ).rejects.toThrow(/no front matter block to strip/);
+  });
+
+  it("DELETE refuses a native-header RST file, fence-family or not", async () => {
+    const d = copy();
+    // Docinfo fields, no fence: present metadata with nothing strippable.
+    // The refusal must be per-file — the same extractor strips fenced RST.
+    writeFileSync(join(d, "docs", "guide.rst"), ":author: Ada\n\nBody.\n");
+    await expect(
+      w("DELETE FROM docs WHERE _path = 'docs/guide.rst'", d),
+    ).rejects.toThrow(/no front matter block to strip/);
+  });
+
+  it("DELETE strips the block, keeps the body, and converges", async () => {
+    const d = copy();
+    const run = await w("DELETE FROM docs WHERE _path = 'docs/beta.md'", d, true);
+    expect(run.changes?.length).toBe(1);
+    expect(run.changes?.[0]).toMatchObject({
+      file: "docs/beta.md",
+      cleared: true,
+      written: true,
+    });
+    const beta = readFileSync(join(d, "docs", "beta.md"), "utf8");
+    expect(beta).toBe("The beta page.\n");
+    const again = await w("DELETE FROM docs WHERE _path = 'docs/beta.md'", d);
+    expect(again.changes).toEqual([]);
+  });
+
+  it("INSERT creates a file: that frontmatter, an empty body", async () => {
+    const d = copy();
+    // `reviewed` is corpus-new: the INSERT column list widens the table too.
+    const run = await w(
+      "INSERT INTO docs (_path, title, draft, reviewed) VALUES ('docs/delta.md', 'Delta', 0, 'todo')",
+      d,
+      true,
+    );
+    expect(run.changes).toEqual([
+      {
+        file: "docs/delta.md",
+        created: true,
+        to: { draft: false, reviewed: "todo", title: "Delta" },
+        written: true,
+      },
+    ]);
+    const delta = readFileSync(join(d, "docs", "delta.md"), "utf8");
+    expect(delta).toContain("title: Delta");
+    expect(delta).toContain("draft: false");
+    expect(delta).toContain("reviewed: todo");
+  });
+
+  it("INSERT refuses bad paths, existing files, and system columns", async () => {
+    const d = copy();
+    await expect(
+      w("INSERT INTO docs (_path, title) VALUES ('../evil.md', 'X')", d, true),
+    ).rejects.toThrow(/path/i);
+    await expect(
+      w("INSERT INTO docs (_path, title) VALUES ('docs/alpha.md', 'X')", d, true),
+    ).rejects.toThrow(/exists/i);
+    await expect(
+      w("INSERT INTO docs (_path, _format) VALUES ('docs/e.md', 'markdown')", d, true),
+    ).rejects.toThrow(/system/i);
+    await expect(
+      w("INSERT INTO docs (title) VALUES ('X')", d, true),
+    ).rejects.toThrow(/_path/);
+    // The empty string slips past the PRIMARY KEY's NOT NULL, so this is the
+    // guard's own message, not SQLite's.
+    await expect(
+      w("INSERT INTO docs (_path, title) VALUES ('', 'X')", d, true),
+    ).rejects.toThrow(/non-empty _path/);
+    // An unwritable extension refuses at *preview* time — the plan must never
+    // promise a file only --write can discover it cannot build.
+    await expect(
+      w("INSERT INTO docs (_path, title) VALUES ('docs/new.xyz', 'X')", d),
+    ).rejects.toThrow(/no writable format/);
+  });
+
+  it("SET _path renames the file, body byte-preserved", async () => {
+    const d = copy();
+    const bytes = readFileSync(join(d, "docs", "beta.md"), "utf8");
+    const run = await w(
+      "UPDATE docs SET _path = 'docs/renamed-beta.md' WHERE _path = 'docs/beta.md'",
+      d,
+      true,
+    );
+    expect(run.changes).toEqual([
+      { file: "docs/beta.md", renamed: "docs/renamed-beta.md", written: true },
+    ]);
+    expect(existsSync(join(d, "docs", "beta.md"))).toBe(false);
+    expect(readFileSync(join(d, "docs", "renamed-beta.md"), "utf8")).toBe(bytes);
+  });
+
+  it("SET _path renames into a directory that does not exist yet", async () => {
+    const d = copy();
+    const bytes = readFileSync(join(d, "docs", "beta.md"), "utf8");
+    await w(
+      "UPDATE docs SET _path = 'archive/2026/beta.md' WHERE _path = 'docs/beta.md'",
+      d,
+      true,
+    );
+    expect(readFileSync(join(d, "archive", "2026", "beta.md"), "utf8")).toBe(
+      bytes,
+    );
+  });
+
+  it("rename refusals: extension change, collision, mixed edits", async () => {
+    const d = copy();
+    await expect(
+      w("UPDATE docs SET _path = 'docs/beta.html' WHERE _path = 'docs/beta.md'", d),
+    ).rejects.toThrow(/extension/i);
+    await expect(
+      w("UPDATE docs SET _path = 'docs/alpha.md' WHERE _path = 'docs/beta.md'", d),
+    ).rejects.toThrow(/exists/i);
+    await expect(
+      w(
+        "UPDATE docs SET _path = 'docs/x.md', draft = 0 WHERE _path = 'docs/beta.md'",
+        d,
+      ),
+    ).rejects.toThrow(/separately/i);
+  });
+
+  it("a cross-column UPDATE pairs as a key rename, arrays intact", async () => {
+    // The schemaless rename spelling; ALTER RENAME COLUMN does schema and
+    // data together on a corpus with a schema (query-ddl tests).
+    const d = copy();
+    const run = await w("UPDATE docs SET topics = tags, tags = NULL WHERE tags IS NOT NULL", d, true);
+    expect(run.changes).toEqual([
+      { file: "docs/alpha.md", key: "topics", renamedFrom: "tags", to: ["guide", "intro"], written: true },
+      { file: "docs/beta.md", key: "topics", renamedFrom: "tags", to: ["guide"], written: true },
+      { file: "docs/gamma.md", key: "topics", renamedFrom: "tags", to: ["api"], written: true },
+    ]);
+    const alpha = readFileSync(join(d, "docs", "alpha.md"), "utf8");
+    expect(alpha).not.toContain("tags:");
+    // The pairing carries the original value — never the JSON-text projection.
+    const check = await w("SELECT topics FROM docs WHERE _path = 'docs/alpha.md'", d);
+    expect(JSON.parse(check.rows[0]?.topics as string)).toEqual(["guide", "intro"]);
   });
 
   it("refuses a write that touches <stdin>", async () => {
@@ -383,7 +674,7 @@ describe("renderQuery", () => {
   it("renders changes as a diff with the mode's verdict line", () => {
     const changes = [
       { file: "docs/beta.md", key: "draft", from: true, to: false, written: false },
-      { file: "docs/gamma.md", key: "draft", from: null, to: false, written: false },
+      { file: "docs/gamma.md", key: "draft", from: undefined, to: false, written: false },
     ];
     const preview = renderQuery({ columns: [], rows: [], changes });
     expect(preview).toContain("docs/beta.md: draft: true -> false");

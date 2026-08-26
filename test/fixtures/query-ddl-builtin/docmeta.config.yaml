@@ -1,0 +1,5 @@
+# Pinned to a builtin on purpose.
+paths:
+  - "docs/**/*.md"
+schemas:
+  - google:okf:0.1

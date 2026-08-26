@@ -46,7 +46,7 @@ exit code is the caller's.
 | `runQuery` | Run one SQL statement over an in-memory table built from every input's metadata. Backs `docmeta query`. Returns every row — the `--check` verdict is the CLI's exit code, not the result's. |
 | `QueryOptions` (type) | Input to `runQuery`: the same input model plus the `sql` to run and an optional `db` export path (which makes `sql` optional). |
 | `QueryRun` (type) | What `runQuery` resolves to: result `columns` (present even for zero rows), `rows`, a mutating statement's `changes`, and — when `db` was written — its path and size. |
-| `QueryChange` (type) | One cell a mutating statement changed: `file`, `key`, file-space `from`/`to`, and whether it was `written` or previewed. |
+| `QueryChange` (type) | One thing a mutating statement changed, as a union of kinds: a cell set (`key`/`from`/`to`), a key deletion (`deleted`), a key rename (`renamedFrom`), a stripped block (`cleared`), a created file (`created`), a file move (`renamed`), a schema edit (`schema`, with the op, type/required intent, and any `forkedFrom`), or a DDL side effect on the governing config (`config`: a fork's `schemas:` repoint, a refreshed `integrity:` pin) — plus whether it was `written` or previewed. |
 | `runFill` | Propose and write missing metadata with an inference provider. Backs `docmeta fill`. |
 | `FillOptions` (type) | Input to `runFill`: provider, model, confidence threshold, cost ceiling, concurrency, and whether to write. |
 | `FillRun` (type) | What `runFill` resolves to: per-file results plus the run summary. |
