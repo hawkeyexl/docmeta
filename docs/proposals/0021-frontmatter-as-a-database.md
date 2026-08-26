@@ -1,6 +1,6 @@
 # 0021 — the corpus is a database: `docmeta query`
 
-- **Status:** Proposed
+- **Status:** Implemented (#120)
 - **Serves:** Devin · D1, D3 · Maya · M2
 - **Touches:** `src/commands/query.ts`, `src/reporters/query.ts`, `src/cli.ts`, `src/index.ts`, `reference/{cli,api}.mdx`, `test/fixtures/query/`
 - **Relates to:** [0005](0005-command-parity.md) (the surface it must match), [0016](0016-flag-ownership.md) (the flag rules it must not break), [0010](0010-init-and-schema-inference.md) (`schemas infer` is the only existing cross-file scan), [0014](0014-empty-input-is-not-success.md) (what an empty input set means here)
