@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runQuery, type QueryOptions } from "../src/commands/query.js";
+import { renderQuery } from "../src/reporters/query.js";
+import { resolveQueryInputs } from "../src/cli.js";
 import { DocmetaError } from "../src/types.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -140,5 +142,88 @@ describe("runQuery", () => {
     await expect(
       runQuery({ sql: "SELECT 1", inputs: [], cwd: corpus, noConfig: true }),
     ).rejects.toThrow(/No files to read/);
+  });
+});
+
+describe("renderQuery", () => {
+  const run = {
+    columns: ["_path", "n"],
+    rows: [
+      { _path: "docs/a.md", n: 2 },
+      { _path: "x.md", n: null },
+    ],
+  };
+
+  it("aligns columns, prints NULL as (null), and counts rows", () => {
+    expect(renderQuery(run)).toBe(
+      ["_path      n", "docs/a.md  2", "x.md       (null)", "2 rows"].join(
+        "\n",
+      ),
+    );
+  });
+
+  it("prints only the count when no row matched, and knows singular", () => {
+    expect(renderQuery({ columns: ["a"], rows: [] })).toBe("0 rows");
+    expect(renderQuery({ columns: ["a"], rows: [{ a: 1 }] })).toContain(
+      "1 row",
+    );
+  });
+
+  it("check mode renders a red ✗ verdict on rows, a green ✓ on none", () => {
+    const failed = renderQuery(run, { check: true, color: true });
+    expect(failed).toContain("✗ 2 rows — check failed");
+    expect(failed).toContain("[31m");
+    const passed = renderQuery(
+      { columns: ["a"], rows: [] },
+      { check: true, color: true },
+    );
+    expect(passed).toContain("✓ 0 rows");
+    expect(passed).toContain("[32m");
+  });
+});
+
+describe("resolveQueryInputs", () => {
+  // `corpus` holds a real `docs/` directory, so a bare `docs` token exercises
+  // the exists-on-disk leg of `looksLikePath` exactly as `get`'s guard does.
+  it("refuses a path in the SQL slot, naming the remedy", () => {
+    expect(() => resolveQueryInputs("docs", [], undefined, corpus)).toThrow(
+      /looks like a path, not SQL/,
+    );
+  });
+
+  it("--query makes every positional a path", () => {
+    expect(
+      resolveQueryInputs("docs", ["authors"], "SELECT 1", corpus),
+    ).toEqual({ sql: "SELECT 1", paths: ["docs", "authors"] });
+  });
+
+  it("`-` in the SQL slot is stdin, never SQL", () => {
+    expect(resolveQueryInputs("-", ["docs"], "SELECT 1", corpus)).toEqual({
+      sql: "SELECT 1",
+      paths: ["-", "docs"],
+    });
+    expect(() => resolveQueryInputs("-", [], undefined, corpus)).toThrow(
+      /Specify SQL/,
+    );
+  });
+
+  it("requires SQL, and blank SQL does not count", () => {
+    expect(() => resolveQueryInputs(undefined, [], undefined, corpus)).toThrow(
+      /Specify SQL/,
+    );
+    expect(() => resolveQueryInputs("   ", [], undefined, corpus)).toThrow(
+      /Specify SQL/,
+    );
+  });
+
+  it("real SQL is never mistaken for a path", () => {
+    const { sql, paths } = resolveQueryInputs(
+      "SELECT a, b FROM docs",
+      ["docs"],
+      undefined,
+      corpus,
+    );
+    expect(sql).toBe("SELECT a, b FROM docs");
+    expect(paths).toEqual(["docs"]);
   });
 });
