@@ -412,6 +412,52 @@ describe("runQuery DDL — targeting, containment, and the config edit", () => {
     );
   });
 
+  it("refuses RENAME onto a key the set already declares", async () => {
+    const d = copy("query-ddl");
+    const schemaPath = join(d, "schemas", "house.json");
+    writeFileSync(
+      schemaPath,
+      readFileSync(schemaPath, "utf8").replace(
+        '"title": { "type": "string" },',
+        '"title": { "type": "string" },\n    "topics": { "type": "array" },',
+      ),
+    );
+    await expect(
+      ddl("ALTER TABLE docs RENAME COLUMN tags TO topics", d, true),
+    ).rejects.toThrow(/already declared/);
+  });
+
+  it("renames a required-only key faithfully: required moves, no phantom property", async () => {
+    const d = copy("query-ddl");
+    const schemaPath = join(d, "schemas", "house.json");
+    // `legacy` is required but never declared — legal JSON Schema, odd shape.
+    writeFileSync(
+      schemaPath,
+      readFileSync(schemaPath, "utf8").replace(
+        '"required": ["title"]',
+        '"required": ["title", "legacy"]',
+      ),
+    );
+    writeFileSync(
+      join(d, "docs", "one.md"),
+      "---\ntitle: One\nlegacy: keepme\n---\n\nBody one.\n",
+    );
+    writeFileSync(
+      join(d, "docs", "two.md"),
+      "---\ntitle: Two\nlegacy: also\n---\n\nBody two.\n",
+    );
+    await ddl("ALTER TABLE docs RENAME COLUMN legacy TO heritage", d, true);
+    const schema = houseOf(d);
+    expect(schema.required).toEqual(["title", "heritage"]);
+    // Faithful: the half-declared shape renames as-is, no fabricated {}.
+    expect(
+      (schema.properties as Record<string, unknown>).heritage,
+    ).toBeUndefined();
+    expect(readFileSync(join(d, "docs", "one.md"), "utf8")).toContain(
+      "heritage: keepme",
+    );
+  });
+
   it("refuses a DEFAULT the declared type cannot hold", async () => {
     const d = copy("query-ddl");
     await expect(

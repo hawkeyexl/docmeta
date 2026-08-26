@@ -643,6 +643,13 @@ function snapshotColumns(
     type: string;
     notnull: number;
   }[];
+  // The cast trusts node:sqlite's documented row shape; this catches the day
+  // a Node release renames a pragma column, instead of mistyping silently.
+  if (rows.length > 0 && typeof rows[0]?.name !== "string") {
+    throw new DocmetaError(
+      "PRAGMA table_info returned an unexpected row shape; this node:sqlite build is not one docmeta understands.",
+    );
+  }
   return new Map(rows.map((r) => [r.name, { type: r.type, notnull: r.notnull }]));
 }
 
@@ -1022,20 +1029,18 @@ async function planSchemaMutation(
       }
     }
   } else {
-    const declarers = members.filter((m) => constrains(m, op.key));
-    if (declarers.length === 0) {
+    // Destructuring narrows without a third guard: `sole` absent IS the
+    // zero-declarers case, and `rest` non-empty is the shared-key refusal.
+    const [sole, ...rest] = members.filter((m) => constrains(m, op.key));
+    if (!sole) {
       throw new DocmetaError(
         `No schema in the resolved set declares "${op.key}".`,
       );
     }
-    if (declarers.length > 1) {
+    if (rest.length > 0) {
       throw new DocmetaError(
-        `"${op.key}" is constrained by ${String(declarers.length)} schemas in the set (${declarers.map((m) => m.ref).join(", ")}); a DDL statement edits one schema. Evolve them separately.`,
+        `"${op.key}" is constrained by ${String(rest.length + 1)} schemas in the set (${[sole, ...rest].map((m) => m.ref).join(", ")}); a DDL statement edits one schema. Evolve them separately.`,
       );
-    }
-    const sole = declarers[0];
-    if (!sole) {
-      throw new DocmetaError(`No schema in the resolved set declares "${op.key}".`);
     }
     target = sole;
     if (op.op === "rename") {
@@ -1071,7 +1076,10 @@ async function planSchemaMutation(
     // repoint every reference: the config entry, and any in-file `$schema`.
     forkedFrom = target.builtinId;
     const [, name, ver] = target.builtinId.split(":");
-    const forkName = `${name ?? "schema"}-${ver ?? "0"}.local.json`;
+    // Segments reach the filesystem; every shipped id is [a-z0-9._-] but the
+    // filename must not trust that a future one stays so.
+    const safe = (s: string): string => s.replace(/[^A-Za-z0-9._-]/g, "-");
+    const forkName = `${safe(name ?? "schema")}-${safe(ver ?? "0")}.local.json`;
     schemaAbs = resolve(ctx.configDir ?? ctx.cwd, "schemas", forkName);
     assertSchemaWriteWithin(ctx, schemaAbs);
     if (existsSync(schemaAbs)) {
@@ -1216,6 +1224,9 @@ function mutateSchemaObject(
       const to = op.renamedTo ?? op.key;
       const moved = props[op.key];
       props = without(props, op.key);
+      // A required-only key (no `properties` entry — legal, if odd) renames
+      // to a required-only key: the guard keeps the faithful shape rather
+      // than fabricating an empty subschema the author never declared.
       if (moved !== undefined) props[to] = moved;
       required = required.map((r) => (r === op.key ? to : r));
       break;
@@ -1257,7 +1268,9 @@ async function planConfigEdit(
     return { changes: [], repointed: false };
   }
   const text = await readFile(configPath, "utf8");
-  const doc = parseDocument(text);
+  // BOM-strip like every other parse of file text; `expected`/`matchEol`
+  // below still see the raw bytes, which is what freshness and EOL are about.
+  const doc = parseDocument(stripBom(text));
   const display = displayPath(ctx, configPath);
 
   const rawRefOf = (item: unknown): string | undefined => {
@@ -1870,7 +1883,17 @@ async function applyChanges(
   };
   const schemaLast = schemaPlan?.schemaLast ?? false;
   if (!schemaLast) await writeSchema();
-  for (const r of pendingRenames) await rename(r.from, r.to);
+  for (const r of pendingRenames) {
+    try {
+      await rename(r.from, r.to);
+    } catch (err) {
+      // EXDEV and friends arrive as raw fs errors; name the move and keep
+      // the operational exit code instead of an "Unexpected error" trace.
+      throw new DocmetaError(
+        `Cannot move "${r.from}" to "${r.to}": ${(err as Error).message}`,
+      );
+    }
+  }
   for (const p of pendingWrites) await writeFileAtomic(p.path, p.content);
   if (schemaLast) await writeSchema();
   for (const c of changes) c.written = true;

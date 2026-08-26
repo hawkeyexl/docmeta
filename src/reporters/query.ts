@@ -107,6 +107,9 @@ function renderChanges(
     return `${c.dim(`${ch.file}:`)} ${ch.key}: ${cellFrom(ch.from)} -> ${cell(ch.to)}`;
   });
   const n = changes.length;
+  // Deliberately counts every file the run touches — schema and config
+  // included: they are writes the user is approving, and a pure DDL edit
+  // reporting "across 0 files" would claim less than it does.
   const files = new Set(changes.map((ch) => ch.file)).size;
   const count = `${n} change${n === 1 ? "" : "s"} across ${files} file${files === 1 ? "" : "s"}`;
   if (opts.write) {
