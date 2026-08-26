@@ -1615,6 +1615,9 @@ function validateNewPath(p: string, base: string): void {
     refuse("it traverses upward");
   }
   const abs = resolve(base, p);
+  // Named before the escape check: `.` resolves to the base itself, and
+  // "escapes the corpus" would be a baffling description of that.
+  if (abs === resolve(base)) refuse("it points at the corpus root, not a file");
   if (!abs.startsWith(resolve(base) + sep)) refuse("it escapes the corpus");
 }
 
@@ -1692,7 +1695,15 @@ async function applyChanges(
           `"${label}" is gone from disk since it was read; re-run the query.`,
         );
       }
-      pendingRenames.push({ from: path, to: resolve(ctx.base, ops.renamedTo) });
+      // The destination gets the same appeared-since-the-plan re-check the
+      // created files do: rename(2) overwrites silently on POSIX.
+      const toDisk = resolve(ctx.base, ops.renamedTo);
+      if (existsSync(toDisk)) {
+        throw new DocmetaError(
+          `"${ops.renamedTo}" appeared on disk since the plan; re-run the query.`,
+        );
+      }
+      pendingRenames.push({ from: path, to: toDisk });
       continue;
     }
 
