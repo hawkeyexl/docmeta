@@ -452,7 +452,7 @@ instead, so the report stays parseable.
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
     against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
-    (see .github/workflows/doc-detective.yml), over committed fixtures.
+    (see .github/workflows/docs-as-tests.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"output-and-exit-codes","description":"The reference shapes, exercised against the local build."} */}
 {/* step {"description":"json prints a single object with a summary and results.","runShell":{"command":"docmeta validate test/fixtures/bad-timestamp.md --format json","exitCodes":[1],"stdio":"/\"summary\"[\\s\\S]*\"results\"/"}} */}

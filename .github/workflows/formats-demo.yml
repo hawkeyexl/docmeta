@@ -20,6 +20,11 @@
 # `WHERE _present = 0` has something to find, and none carries a `type:`,
 # because the query fixtures exercise retrieval, not any schema.
 #
+# `test/fixtures/query-ddl/` and `query-ddl-builtin/` are excluded with them.
+# Their docs validate against the fixture's *own* config (the house schema, or
+# a pinned builtin) inside the DDL tests; judged against this workflow's
+# default set they are standing alerts for files doing their job.
+#
 # It runs over `test/fixtures/`, which already holds deliberately-invalid
 # documents (missing-type.md, bad-timestamp.md, dd/malformed-yaml.md, …). Those
 # are committed, reproducible, and already the material the docs' worked
@@ -67,6 +72,8 @@ jobs:
           node dist/cli.js validate "test/fixtures/**/*.md" \
             --exclude "test/fixtures/infer/**" \
             --exclude "test/fixtures/query/**" \
+            --exclude "test/fixtures/query-ddl/**" \
+            --exclude "test/fixtures/query-ddl-builtin/**" \
             --allow-empty -f sarif > docmeta.sarif
           echo "results=$(jq '.runs[0].results | length' docmeta.sarif)" >> "$GITHUB_OUTPUT"
 
@@ -95,6 +102,8 @@ jobs:
           node dist/cli.js validate "test/fixtures/**/*.md" \
             --exclude "test/fixtures/infer/**" \
             --exclude "test/fixtures/query/**" \
+            --exclude "test/fixtures/query-ddl/**" \
+            --exclude "test/fixtures/query-ddl-builtin/**" \
             --allow-empty -f junit > docmeta-junit.xml
 
       # GitHub renders no JUnit natively. A third-party reporter action would be
