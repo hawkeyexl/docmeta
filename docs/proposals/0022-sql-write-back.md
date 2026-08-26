@@ -1,6 +1,6 @@
 # 0022 — write-back: an UPDATE against the corpus edits the files
 
-- **Status:** Proposed
+- **Status:** Implemented (#122)
 - **Serves:** Maya · M2, M4 · Devin · D3
 - **Depends on:** [0021](0021-frontmatter-as-a-database.md) — the `docs` table this writes through. Stacked on #120.
 - **Relates to:** [0017](0017-fill-egress-and-bounds.md) (`fill` is the other writer, and the polarity argument below is against its shape), [0020](0020-element-metadata.md) (whose write boundary this inherits), [0016](0016-flag-ownership.md)

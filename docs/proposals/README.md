@@ -45,7 +45,7 @@ changed as a result, and lists what it depends on.
 | [0019](0019-no-docmeta-init.md) | `docmeta init` is rejected, not deferred | Maya · M1 | Accepted |
 | [0020](0020-element-metadata.md) | Element metadata in XML and HTML, and the DITA schema it unblocks | Sara · S1 / Maya · M1, M4 | Implemented |
 | [0021](0021-frontmatter-as-a-database.md) | The corpus is a database: `docmeta query` | Devin · D1, D3 / Maya · M2 | Implemented (#120) |
-| [0022](0022-sql-write-back.md) | Write-back: an UPDATE against the corpus edits the files | Maya · M2, M4 / Devin · D3 | Proposed |
+| [0022](0022-sql-write-back.md) | Write-back: an UPDATE against the corpus edits the files | Maya · M2, M4 / Devin · D3 | Implemented (#122) |
 
 0014 was not in the original review. It surfaced while stress-testing 0004 and
 is the most severe item in the set: **docmeta currently exits `0` when it
