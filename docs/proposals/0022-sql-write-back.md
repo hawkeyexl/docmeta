@@ -230,6 +230,33 @@ row counts with a missing key now report the `_path` change by name. (A
 pathological DELETE-plus-INSERT pair cannot exist — one statement — so the
 disambiguation is sound.)
 
+## The deferrals, and what reversing them found
+
+Two limits this proposal set were reversed on request before it merged —
+recorded here rather than rewritten above, on 0020's precedent.
+
+**Corpus-new keys.** The design implied Create came free, and it did not: a
+`SET` target must be a column, and columns are the union of keys files
+*already have*. The fix is a tolerant scan of the statement's SET targets
+that pre-widens the table with empty columns. It is safe by construction —
+anything the scan misses fails exactly as before (`no such column`), and a
+false positive is an all-NULL column no diff ever sees.
+
+**Deletion.** The cost named above — a removal channel through `apply()` —
+was paid: `ApplyOptions.deletions`, advisory by contract (a writer that
+cannot remove a key ignores it; the caller re-extracts and refuses on a
+survivor). One writer covers four formats, because AsciiDoc and RST route
+their writes through the same fenced-front-matter path as markdown and MDX;
+YAML deletes through the Document API, TOML as the degenerate case of its
+line splice, JSON by omission — each still re-parse-verified. Element-backed
+keys in HTML/XML refuse, caught by the read-back rather than a format list.
+The SQL spelling is `drop_key()`, a per-run random sentinel no content can
+collide with and nobody can type, which keeps deletion conditional
+(`WHERE`, `CASE`) — and `ALTER TABLE docs DROP COLUMN` falls out of the
+effect gate as corpus-wide removal for free, since a vanished column reads
+as every file losing the key. `SET key = NULL` still writes an explicit
+null; the two spellings now mean the two different things.
+
 ## Not breaking
 
 `UPDATE` without `--write` changes from exit 2 (`SQL error: attempt to write
