@@ -213,6 +213,23 @@ only result a user can reason about, and the diff already told them what
 proposals, not one statement's coherent effect. The difference is the
 statement.)
 
+**8. Effect-gating has a blind spot the implementation had to close: SQL that
+writes *other* files.** `ATTACH DATABASE 'x.db'` creates `x.db` on disk, and
+`VACUUM INTO` writes wherever it is pointed — neither touches the `docs` table
+the gate watches. They are the two statements refused by *name* (before
+preparation), the one place syntax is consulted; everything else stays
+effect-judged. Found while implementing, not while designing — which is what
+this section is for.
+
+**9. A `_path` rewrite disguises itself as an add-and-remove.** The effect
+diff keys rows by `_path`, so `UPDATE docs SET _path = 'renamed.md'` shows up
+as one path missing and one appearing — the row-*set* refusal, with a message
+about creating and deleting files that never mentions the column actually
+touched. Caught by the system-column test expecting its own message: equal
+row counts with a missing key now report the `_path` change by name. (A
+pathological DELETE-plus-INSERT pair cannot exist — one statement — so the
+disambiguation is sound.)
+
 ## Not breaking
 
 `UPDATE` without `--write` changes from exit 2 (`SQL error: attempt to write
