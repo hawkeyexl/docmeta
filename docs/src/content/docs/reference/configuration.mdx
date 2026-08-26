@@ -422,7 +422,7 @@ Use config `overrides` when different folders need different schemas.
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
     against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
-    (see .github/workflows/doc-detective.yml), over committed fixtures.
+    (see .github/workflows/docs-as-tests.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"configuration-reference","description":"Config discovery, validation, and merge claims, exercised against the local build."} */}
 {/* step {"description":"An explicit -c to a missing file exits 2 rather than falling back to discovery.","runShell":{"command":"docmeta validate -c does-not-exist.yaml test/fixtures/valid.md","exitCodes":[2],"stdio":"Config file not found"}} */}

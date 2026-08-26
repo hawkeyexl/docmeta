@@ -1,0 +1,5 @@
+# House schema for the DDL tests — this comment must survive rewrites.
+paths:
+  - "docs/**/*.md"
+schemas:
+  - ./schemas/house.json

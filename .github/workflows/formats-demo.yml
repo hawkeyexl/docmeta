@@ -15,6 +15,22 @@
 # code-scanning alert for a file that is doing its job, and fail the `docmeta`
 # check on every PR that touched it.
 #
+# `test/fixtures/query/` is excluded for the same reason. Those files exist to
+# be *queried* by `docmeta query` — one has no frontmatter at all so that
+# `WHERE _present = 0` has something to find, and none carries a `type:`,
+# because the query fixtures exercise retrieval, not any schema.
+#
+# `test/fixtures/query-ddl/` and `query-ddl-builtin/` are excluded with them.
+# Their docs validate against the fixture's *own* config (the house schema, or
+# a pinned builtin) inside the DDL tests; judged against this workflow's
+# default set they are standing alerts for files doing their job.
+#
+# `test/fixtures/default-schema/` is excluded for the same reason. Those
+# fixtures validate against the proposal-0023 draft vocabularies via file refs
+# in `test/default-schema.test.ts`, and several are deliberately invalid for
+# *those* drafts; judged against this workflow's default set they are standing
+# alerts for files doing their job.
+#
 # It runs over `test/fixtures/`, which already holds deliberately-invalid
 # documents (missing-type.md, bad-timestamp.md, dd/malformed-yaml.md, …). Those
 # are committed, reproducible, and already the material the docs' worked
@@ -62,6 +78,9 @@ jobs:
           node dist/cli.js validate "test/fixtures/**/*.md" \
             --exclude "test/fixtures/infer/**" \
             --exclude "test/fixtures/default-schema/**" \
+            --exclude "test/fixtures/query/**" \
+            --exclude "test/fixtures/query-ddl/**" \
+            --exclude "test/fixtures/query-ddl-builtin/**" \
             --allow-empty -f sarif > docmeta.sarif
           echo "results=$(jq '.runs[0].results | length' docmeta.sarif)" >> "$GITHUB_OUTPUT"
 
@@ -89,6 +108,10 @@ jobs:
         run: |
           node dist/cli.js validate "test/fixtures/**/*.md" \
             --exclude "test/fixtures/infer/**" \
+            --exclude "test/fixtures/default-schema/**" \
+            --exclude "test/fixtures/query/**" \
+            --exclude "test/fixtures/query-ddl/**" \
+            --exclude "test/fixtures/query-ddl-builtin/**" \
             --allow-empty -f junit > docmeta-junit.xml
 
       # GitHub renders no JUnit natively. A third-party reporter action would be

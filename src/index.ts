@@ -3,6 +3,8 @@ export { runValidate } from "./commands/validate.js";
 export type { ValidateOptions, ValidateRun } from "./commands/validate.js";
 export { runGet } from "./commands/get.js";
 export type { GetOptions, GetFileResult } from "./commands/get.js";
+export { runQuery } from "./commands/query.js";
+export type { QueryChange, QueryOptions, QueryRun } from "./commands/query.js";
 export {
   getSchemasInfo,
   runVendorSchema,
@@ -92,6 +94,8 @@ export type { FillReportFormat, FillReportOptions } from "./reporters/fill.js";
 // and deriving it a second time is how two spellings of one rule start.
 export { renderGet, stringifyValue } from "./reporters/get.js";
 export type { GetReportOptions } from "./reporters/get.js";
+export { renderQuery } from "./reporters/query.js";
+export type { QueryReportOptions } from "./reporters/query.js";
 export {
   extractFrontmatter,
   locateFrontmatter,

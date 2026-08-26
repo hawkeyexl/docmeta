@@ -160,7 +160,7 @@ whole repo, add a config file and a schema, then wire it into CI.
 
 {/* Doc Detective inline tests: verify this page's documented docmeta behavior
     against the local build, exposed as `docmeta` / `npx docmeta` via `npm link`
-    (see .github/workflows/doc-detective.yml), over committed fixtures.
+    (see .github/workflows/docs-as-tests.yml), over committed fixtures.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"get-started","description":"Install/validate flow and result reading, run against the local CLI build and committed fixtures."} */}
 {/* step {"description":"Node.js prerequisite: `node --version` reports a version (page requires Node 24+).","runShell":{"command":"node --version","exitCodes":[0],"stdio":"/v\\d+\\./"}} */}

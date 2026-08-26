@@ -24,7 +24,7 @@ registration, by design) and the runnable ladders `docs/proposals/0023/ladders/*
    stay (`last-reviewed`, `remove-by`).
 5. **Facts live at their altitude.** `stakeholders` is page-level (who to
    consult about THIS page) — deliberately distinct from the project-level
-   `stakeholders` cut in 0021's addendum; `expertise` fell because level
+   `stakeholders` cut in the exploration brief's addendum (its draft 0021 — not main's query proposal); `expertise` fell because level
    belongs to the persona definitions the page points at.
 6. **Enumerate only what is switched-on and bounded** (`visibility`,
    `lifecycle`); **recommend openly** elsewhere — `risks` uses the open-enum
@@ -42,7 +42,7 @@ intent-scoped ids (superseding the earlier `docmeta:frontmatter:1.0` id
 ruling — the split is why): `docmeta:core:1.0` (required pair; the only
 default-set candidate), `docmeta:stewardship:1.0`, `docmeta:audience:1.0`,
 `docmeta:lifecycle:1.0`, `docmeta:structure:1.0` (honoring the recorded
-0022 naming decision for the relational schema), `docmeta:ai-context:1.0`.
+naming decision recorded in the exploration brief for the relational schema), `docmeta:ai-context:1.0`.
 Disjoint by construction (0 collisions, pinned) — stacking all six behaves
 exactly like the monolith, and every error is attributed to one intent.
 Verified: `npx vitest run test/default-schema.test.ts` — green via file
@@ -82,7 +82,7 @@ generation) and this loses them; the prefix-label convention
 (`deploy:kubernetes`) is the escape hatch, and the model's author should
 get a direct look; the `lifecycle` enum's org-ladder cost; `risks` naming now that assurances (`read-only`,
 `idempotent`) sit in a field called risks; the `stakeholders` name against
-0021's project-level cut (one honest paragraph required).
+the exploration brief's project-level cut (one honest paragraph required).
 
 ## docmeta:evals:1.0 — revised from docevals frontmatter-0.1
 

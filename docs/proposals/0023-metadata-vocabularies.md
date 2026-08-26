@@ -2,9 +2,11 @@
 
 - **Status:** Proposed — open for community review before anything registers
 - **Serves:** Sara · S1 "Define our metadata standard as a schema" · S2 "Wire schemas to the right documents"
-- **Relates to:** the 0021/0022 exploration (an unmerged branch whose briefing
-  seeded this work; those numbers stay reserved for it, which is why this file
-  is 0023 and the log skips two)
+- **Relates to:** an earlier, unmerged house-vocabulary exploration whose
+  briefing seeded this work. That exploration numbered its own drafts 0021
+  and 0022 on its branch; those numbers have since been taken on `main` by
+  the `docmeta query` proposals, so references here to "the exploration's
+  0021/0022" mean the unmerged drafts, never the shipped query records
 - **Touches:** `docs/proposals/0023/` (the nine draft schemas under
   `schemas/`, the verification ladders under `ladders/`, and the working
   design notes), `test/default-schema.test.ts`,

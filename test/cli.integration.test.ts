@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
 import { execFile, execFileSync, execSync, spawnSync } from "node:child_process";
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -246,6 +247,252 @@ describe("docmeta CLI (built bin)", () => {
     const r = run(["get", "type", "--no-config"]);
     expect(r.status).toBe(2);
     expect(r.stderr).toContain("No files");
+  });
+});
+
+describe("cli query (built bin)", () => {
+  const corpus = "test/fixtures/query/docs";
+
+  it("runs SQL over positional paths (parallel to get), warning-free", () => {
+    const r = run([
+      "query",
+      "SELECT _path, title FROM docs WHERE _present = 1 ORDER BY _path",
+      corpus,
+      "-f",
+      "json",
+    ]);
+    expect(r.status).toBe(0);
+    const parsed = JSON.parse(r.stdout) as { _path: string; title: string }[];
+    expect(parsed.map((row) => row.title)).toEqual(["Alpha", "Beta", "Gamma"]);
+    expect(parsed[0]?._path).toBe("test/fixtures/query/docs/alpha.md");
+    // The node:sqlite release-candidate banner must never reach the user.
+    expect(r.stderr).not.toContain("ExperimentalWarning");
+  });
+
+  it("--check exits 1 when the query returns rows", () => {
+    const r = run([
+      "query",
+      "--check",
+      "SELECT slug, count(*) n FROM docs WHERE slug IS NOT NULL GROUP BY slug HAVING n > 1",
+      corpus,
+    ]);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("check failed");
+    expect(r.stdout).toContain("alpha");
+  });
+
+  it("--check exits 0 when the query returns none", () => {
+    const r = run([
+      "query",
+      "--check",
+      "SELECT slug, count(*) n FROM docs GROUP BY slug HAVING n > 1",
+      "test/fixtures/query/authors",
+    ]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("✓ 0 rows");
+  });
+
+  it("--query makes every positional a path, like --fields on get", () => {
+    const r = run([
+      "query",
+      "--query",
+      "SELECT count(*) n FROM docs",
+      corpus,
+      "-f",
+      "json",
+    ]);
+    expect(r.status).toBe(0);
+    expect(JSON.parse(r.stdout)).toEqual([{ n: 4 }]);
+  });
+
+  it("queries piped stdin with --as", () => {
+    const r = run(
+      ["query", "SELECT title FROM docs", "-", "--as", "markdown", "-f", "json"],
+      "---\ntitle: Piped\n---\n",
+    );
+    expect(r.status).toBe(0);
+    expect(JSON.parse(r.stdout)).toEqual([{ title: "Piped" }]);
+  });
+
+  it("exits 2 when the SQL slot holds a path", () => {
+    const r = run(["query", corpus]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("looks like a path, not SQL");
+  });
+
+  it("exits 2 on SQL that cannot be prepared", () => {
+    const r = run(["query", "SELECT nope FROM missing", corpus]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("SQL error");
+  });
+
+  it("exits 2 when given no paths and no config", () => {
+    const r = run(["query", "SELECT 1", "--no-config"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("No files");
+  });
+
+  it("previews, gates, applies, and converges a write (0022)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-write-"));
+    try {
+      // A private copy of the corpus: writes must never touch the fixtures.
+      cpSync(resolve(root, "test", "fixtures", "query"), dir, {
+        recursive: true,
+      });
+      const update = "UPDATE docs SET draft = 0 WHERE draft = 1";
+
+      const preview = run(["query", update, "docs", "authors"], undefined, undefined, dir);
+      expect(preview.status).toBe(0);
+      expect(preview.stdout).toContain("draft: true -> false");
+      expect(preview.stdout).toContain("pass --write to apply");
+      expect(readFileSync(join(dir, "docs", "beta.md"), "utf8")).toContain(
+        "draft: true",
+      );
+
+      const gated = run(["query", "--check", update, "docs", "authors"], undefined, undefined, dir);
+      expect(gated.status).toBe(1);
+      expect(gated.stdout).toContain("check failed");
+
+      const applied = run(["query", "--write", update, "docs", "authors"], undefined, undefined, dir);
+      expect(applied.status).toBe(0);
+      expect(applied.stdout).toContain("— written");
+      expect(readFileSync(join(dir, "docs", "beta.md"), "utf8")).toContain(
+        "draft: false",
+      );
+
+      const converged = run(["query", "--check", update, "docs", "authors"], undefined, undefined, dir);
+      expect(converged.status).toBe(0);
+      expect(converged.stdout).toContain("✓ 0 changes");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("walks the standard vocabulary: create, move, key-rename, strip (0024)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-vocab-"));
+    try {
+      cpSync(resolve(root, "test", "fixtures", "query"), dir, {
+        recursive: true,
+      });
+      const paths = ["docs", "authors"];
+
+      const created = run(
+        ["query", "--write", "INSERT INTO docs (_path, title) VALUES ('docs/new.md', 'New')", ...paths],
+        undefined, undefined, dir,
+      );
+      expect(created.status).toBe(0);
+      expect(created.stdout).toContain("(created:");
+      expect(readFileSync(join(dir, "docs", "new.md"), "utf8")).toContain(
+        "title: New",
+      );
+
+      const moved = run(
+        ["query", "--write", "UPDATE docs SET _path = 'docs/renamed.md' WHERE _path = 'docs/new.md'", ...paths],
+        undefined, undefined, dir,
+      );
+      expect(moved.status).toBe(0);
+      expect(moved.stdout).toContain("(moved)");
+      expect(existsSync(join(dir, "docs", "new.md"))).toBe(false);
+
+      // Schemaless corpora rename keys with the UPDATE spelling — ALTER is
+      // schema DDL (0024) and refuses without an editable schema.
+      const renamedKey = run(
+        ["query", "--write", "UPDATE docs SET topics = tags, tags = NULL WHERE tags IS NOT NULL", ...paths],
+        undefined, undefined, dir,
+      );
+      expect(renamedKey.status).toBe(0);
+      expect(renamedKey.stdout).toContain("(key renamed)");
+
+      const stripped = run(
+        ["query", "--write", "DELETE FROM docs WHERE _path = 'docs/renamed.md'", ...paths],
+        undefined, undefined, dir,
+      );
+      expect(stripped.status).toBe(0);
+      expect(stripped.stdout).toContain("(frontmatter removed:");
+
+      // Converged: deleting an absent key on the stripped file is a no-op.
+      const gate = run(
+        ["query", "--check", "UPDATE docs SET title = NULL WHERE _path = 'docs/renamed.md'", ...paths],
+        undefined, undefined, dir,
+      );
+      expect(gate.status).toBe(0);
+      expect(gate.stdout).toContain("✓ 0 changes");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("runs the DDL ratchet end to end, and refuses it schemaless (0024)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-ddl-"));
+    try {
+      cpSync(resolve(root, "test", "fixtures", "query-ddl"), dir, {
+        recursive: true,
+      });
+      const ratchet =
+        "ALTER TABLE docs ADD COLUMN reviewed TEXT NOT NULL DEFAULT 'pending'";
+
+      const preview = run(["query", ratchet, "docs"], undefined, undefined, dir);
+      expect(preview.status).toBe(0);
+      expect(preview.stdout).toContain("schema schemas/house.json:");
+      expect(preview.stdout).toContain("+ reviewed (string, required)");
+
+      const applied = run(
+        ["query", "--write", ratchet, "docs"],
+        undefined, undefined, dir,
+      );
+      expect(applied.status).toBe(0);
+      expect(applied.stdout).toContain("— written");
+      expect(
+        readFileSync(join(dir, "schemas", "house.json"), "utf8"),
+      ).toContain('"reviewed"');
+
+      const validated = run(["validate", "docs"], undefined, undefined, dir);
+      expect(validated.status).toBe(0);
+
+      const refused = run(
+        [
+          "query",
+          "--no-config",
+          "--write",
+          "ALTER TABLE docs ADD COLUMN audited TEXT",
+          "docs",
+        ],
+        undefined, undefined, dir,
+      );
+      expect(refused.status).toBe(2);
+      expect(refused.stderr).toContain("UPDATE spellings");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("--db exports without SQL, and keeps rows on stdout with it", () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-db-"));
+    try {
+      const dbPath = join(dir, "docs.db");
+      const exported = run(["query", "--db", dbPath, corpus]);
+      expect(exported.status).toBe(0);
+      expect(exported.stdout).toContain("Wrote");
+      expect(existsSync(dbPath)).toBe(true);
+
+      const queried = run([
+        "query",
+        "--db",
+        dbPath,
+        "SELECT count(*) n FROM docs",
+        corpus,
+        "-f",
+        "json",
+      ]);
+      expect(queried.status).toBe(0);
+      // Rows own stdout — the export note must not pollute the parseable
+      // stream. (`run` cannot see stderr on a 0-exit, so the positive half
+      // of that contract is pinned by JSON.parse succeeding at all.)
+      expect(JSON.parse(queried.stdout)).toEqual([{ n: 4 }]);
+      expect(queried.stdout).not.toContain("Wrote");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
