@@ -1,0 +1,74 @@
+---
+title: "docmeta:structure:1.0"
+description: "The proposed structure vocabulary — what a page connects to: products, concepts, and other pages."
+sidebar:
+  order: 5
+  label: "structure"
+---
+
+:::caution[Proposed — not shipped]
+Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-vocabularies/),
+open for community review. Draft schema:
+[`docs/proposals/0023/schemas/structure/1.0.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/structure/1.0.json).
+:::
+
+**The question it answers: what does this page connect to?**
+Relationships between pages — which no generator owns — never position in
+a navigation tree, which every generator does. There is deliberately no
+ordering, no parent, no nav title here.
+
+## Fields
+
+| Field | Type | Notes |
+|---|---|---|
+| `applies-to` | string or list | Flat product/variant/version labels: `operator-1.4`, `kubernetes` |
+| `concepts` | string or list | Controlled glossary terms — curated, where core's `keywords` is free words |
+| `prerequisites` | string or list | Pages, ids, or capabilities the reader needs first |
+| `next-steps` | string or list | Sensible follow-ons, unordered — several of them, not the generator's single `next` |
+| `related-pages` | string or list | Associatively related pages, ids, or URLs |
+
+Every field accepts one string or a non-empty, duplicate-free list.
+
+## Example
+
+```yaml
+---
+title: Install the operator on Kubernetes
+description: Deploy the operator with Helm and verify the rollout.
+applies-to: [operator-1.4, kubernetes]
+concepts: [Operator, Helm chart]
+prerequisites: [create-api-token]
+next-steps: [verify-rollout, configure-alerts]
+related-pages: [operator-architecture]
+---
+```
+
+## Design decisions
+
+- **Relationship, not navigation.** A field that duplicates something the
+  generator already owns under a second name is worse than a collision,
+  because a collision at least fails loudly. `next-steps` is several
+  unordered suggestions; the generator's `next`/`prev` position keys are a
+  different fact and stay with the generator.
+- **`applies-to` is flat, and that was a fight.** Named dimensions
+  (`product:` vs `deployment:` vs `generation:`) were designed and then
+  simplified away; an org that needs axes prefixes labels
+  (`deploy:kubernetes`) or overlays its own schema. This is a headline
+  open question for the review.
+- **Two fields are harvest fallbacks of deeper twins.** `applies-to` and
+  `concepts` share names and shapes with their counterparts inside the
+  [kg vocabulary](/docmeta/proposals/kg/)'s block. The rule is *deeper
+  wins*: when the kg block speaks to a fact, its declaration wins; when it
+  is silent, the page-level field feeds the graph. Both sides accept
+  identical values by construction — same non-empty, duplicate-free list
+  shape — so a promoted fallback can never produce a document the deeper
+  block rejects.
+- **`related-pages` says what it points at.** The suffix exists because
+  `kg.related-concepts` relates *concepts*; each name now names its
+  target.
+
+## What reviewers should poke at
+
+The flat `applies-to`: is the prefix-label convention a good enough escape
+hatch for orgs that genuinely filter by dimension (product vs deployment
+vs generation), or should named axes return?

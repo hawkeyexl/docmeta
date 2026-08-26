@@ -25,6 +25,12 @@
 # a pinned builtin) inside the DDL tests; judged against this workflow's
 # default set they are standing alerts for files doing their job.
 #
+# `test/fixtures/default-schema/` is excluded for the same reason. Those
+# fixtures validate against the proposal-0023 draft vocabularies via file refs
+# in `test/default-schema.test.ts`, and several are deliberately invalid for
+# *those* drafts; judged against this workflow's default set they are standing
+# alerts for files doing their job.
+#
 # It runs over `test/fixtures/`, which already holds deliberately-invalid
 # documents (missing-type.md, bad-timestamp.md, dd/malformed-yaml.md, …). Those
 # are committed, reproducible, and already the material the docs' worked
@@ -71,6 +77,7 @@ jobs:
         run: |
           node dist/cli.js validate "test/fixtures/**/*.md" \
             --exclude "test/fixtures/infer/**" \
+            --exclude "test/fixtures/default-schema/**" \
             --exclude "test/fixtures/query/**" \
             --exclude "test/fixtures/query-ddl/**" \
             --exclude "test/fixtures/query-ddl-builtin/**" \
@@ -101,6 +108,7 @@ jobs:
         run: |
           node dist/cli.js validate "test/fixtures/**/*.md" \
             --exclude "test/fixtures/infer/**" \
+            --exclude "test/fixtures/default-schema/**" \
             --exclude "test/fixtures/query/**" \
             --exclude "test/fixtures/query-ddl/**" \
             --exclude "test/fixtures/query-ddl-builtin/**" \

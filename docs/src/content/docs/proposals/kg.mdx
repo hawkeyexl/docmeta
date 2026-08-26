@@ -1,0 +1,87 @@
+---
+title: "docmeta:kg:1.0"
+description: "The proposed knowledge-graph vocabulary — SKOS concepts, iiRDS typing, and PROV provenance under one closed kg block."
+sidebar:
+  order: 8
+  label: "kg"
+---
+
+:::caution[Proposed — not shipped]
+Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-vocabularies/),
+open for community review. Draft schema:
+[`docs/proposals/0023/schemas/kg/1.0.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/kg/1.0.json).
+:::
+
+**The question it answers: what does the knowledge graph know about this
+page?** A common vocabulary any graph builder or retrieval tool can
+implement. Files without a `kg` key pass; the block itself is closed, so a
+typo'd field fails loudly.
+
+## The block
+
+| Field | Notes |
+|---|---|
+| `label` | The one canonical name of the concept this page is about (`skos:prefLabel`) |
+| `alt-labels` | Every other name — what search matches (`skos:altLabel`) |
+| `broader` · `narrower` | Parent and child concepts; each requires `label` — no synonyms of nothing |
+| `related-concepts` | Associated concepts (`skos:related`) — concepts, where the page-level `related-pages` is pages |
+| `concepts` | What the page covers (`dcterms:subject`) — the deeper twin of the page-level field |
+| `type` | iiRDS topic type: `task` · `concept` · `reference` · `learning` · `troubleshooting` · `form` — the deeper twin of the page-level `type` |
+| `applies-to` · `not-applicable-to` | Product/variant labels, positive and negative scope (`iirds:relates-to-product-variant`) |
+| `about-product-lifecycle` | Which product phases the *content covers* — never the page's own lifecycle: `administration` · `customization` · `update` · `deployment` · `integration` · `deinstallation` |
+| `about-product-aspect` · `not-about-product-aspect` | `architecture` · `interface` · `system-requirement` (iiRDS Software domain) |
+| `sections` | Per-heading-slug typing — the same fields, one heading down |
+| `revision-of` · `derived-from` | Document lineage (`prov:wasRevisionOf`, `prov:wasDerivedFrom`) |
+| `provenance` | The machine-proposal trail: which model proposed which kg fields, at what confidence |
+
+Every label field takes one string or a non-empty, duplicate-free list.
+The three iiRDS enums stay closed — iiRDS publishes the lists, which is
+the authority the no-invented-enums rule asks for.
+
+## Example
+
+```yaml
+kg:
+  label: Operator installation
+  broader: [Operator]
+  related-concepts: [Helm chart]
+  type: task
+  applies-to: [operator-1.4]
+  about-product-lifecycle: [deployment]
+  sections:
+    verify-the-rollout:
+      type: reference
+  provenance:
+    - generated-by: claude-opus-4-6
+      fields: [broader, related-concepts]
+      confidence: { broader: 0.88, related-concepts: 0.9 }
+```
+
+## Design decisions
+
+- **The envelope survives the family's flattening rule** — it is what
+  lets a closed, typo-catching block coexist with an open page.
+- **Deeper wins; the top level is the harvest fallback.** Where the block
+  and a page-level field speak to the same fact — `type`, `concepts`,
+  `applies-to` — the block's declaration wins, per fact, and the
+  page-level field feeds the graph when the block is silent. Absent
+  `kg.type`, an implementer may derive it from the page's `type`
+  (`how-to` → `task`, `tutorial` → `learning`, `explanation` →
+  `concept`); an explicit block always wins.
+- **Plain-language kebab names; the RDF mapping lives in descriptions.**
+  iiRDS itself spells its properties kebab (`has-topic-type`), so mirroring
+  a vocabulary's internal spellings in the key names buys nothing. `label`
+  is `skos:prefLabel`; the field descriptions carry every mapping.
+- **The about- prefix makes about-ness structural.**
+  `about-product-lifecycle: [deinstallation]` describes what the content
+  covers; a page about uninstalling is not a deprecated page. The page's
+  own life is [`lifecycle`](/docmeta/proposals/lifecycle/).
+- **Disjointness (`applies-to` vs `not-applicable-to`) is checked at the
+  graph layer**, not here — one file at a time is what JSON Schema sees.
+
+## What reviewers should poke at
+
+Whether the closed block plus open page-root split lands well for graph
+implementers, and whether the plain-language renames (`label`,
+`about-product-aspect`) read better than the SKOS/iiRDS-mirroring names
+they replaced.

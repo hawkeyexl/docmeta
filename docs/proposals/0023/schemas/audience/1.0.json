@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docmeta:audience:1.0",
+  "title": "docmeta audience vocabulary (1.0)",
+  "description": "Who the page serves and who may see it. `audiences` works on day one in any repo; `personas` and `journeys` are the upgrade path once a content strategy exists to point into. `visibility` is the one enumerated ladder here, because something downstream switches on it and an unrecognized value would fail open — the deliberate asymmetry with `audiences`, whose taxonomy is the org's own. Reader expertise is deliberately absent: level belongs to the persona definitions a page points at, not to the page.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "audiences": {
+      "$ref": "#/$defs/stringList",
+      "description": "Who the page is for, in your own taxonomy — `administrators`, `sre`, `partner-engineers`. Plural because a page usually serves more than one; unenumerated because audience taxonomies are the org's own."
+    },
+    "personas": {
+      "$ref": "#/$defs/stringList",
+      "description": "Ids of the personas this page serves, referencing your content-strategy documents. May dangle if you keep no personas — adopt it when you do."
+    },
+    "journeys": {
+      "$ref": "#/$defs/stringList",
+      "description": "Ids of the user journeys (CUJs) this page belongs to. How a docs set proves coverage of its own strategy."
+    },
+    "intent": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The job the reader is trying to get done, in one line: `deploy the operator on a running cluster`. Retrieval and eval pipelines match questions against this, which is what earns a free-text field its place."
+    },
+    "visibility": {
+      "enum": [
+        "draft",
+        "restricted",
+        "confidential",
+        "internal",
+        "public"
+      ],
+      "description": "Who can see the page, from no audience yet to everyone: `draft` (authors and preview builds only), then the widening ladder `restricted` → `confidential` → `internal` → `public`. One switch folding what would otherwise be two house fields — a draft flag and an access level. Your generator's own draft/unlisted keys remain its rendering controls and are deliberately unclaimed here: a page can be visibility: public while the generator still hides it, and reconciling the two is site tooling's job, not a schema's. Enumerated — unlike `audiences` — because something downstream switches on it, and an unrecognized value would fail open. Distinct from `lifecycle` (docmeta:lifecycle:1.0): `lifecycle: draft` says the content is unfinished, `visibility: draft` says nobody outside the authors can see it."
+    }
+  },
+  "$defs": {
+    "stringList": {
+      "if": {
+        "type": "array"
+      },
+      "then": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "else": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "One non-empty string, or a non-empty list of unique ones — the same shape as kg's labelList."
+    }
+  }
+}
