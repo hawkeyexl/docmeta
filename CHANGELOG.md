@@ -1,3 +1,10 @@
+## [4.5.1](https://github.com/hawkeyexl/docmeta/compare/v4.5.0...v4.5.1) (2026-08-26)
+
+
+### Bug Fixes
+
+* **query:** apply by default and preview with --dry-run, matching fill ([a8e28f7](https://github.com/hawkeyexl/docmeta/commit/a8e28f729600fa8f710b4d9de5e6b6e46db853a1))
+
 # [4.5.0](https://github.com/hawkeyexl/docmeta/compare/v4.4.0...v4.5.0) (2026-08-26)
 
 
