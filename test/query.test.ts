@@ -165,13 +165,15 @@ describe("runQuery write-back (0022)", () => {
     temps.push(d);
     return d;
   }
-  function w(sql: string, cwd: string, write = false) {
+  // `apply` keeps every call site's meaning across the 0025 default flip:
+  // third-arg true still means "land it", absent still means "preview".
+  function w(sql: string, cwd: string, apply = false) {
     return runQuery({
       sql,
       inputs: ["docs", "authors"],
       cwd,
       noConfig: true,
-      write,
+      dryRun: !apply,
     });
   }
 
@@ -592,7 +594,6 @@ describe("runQuery write-back (0022)", () => {
         as: "markdown",
         cwd: d,
         noConfig: true,
-        write: true,
       }),
     ).rejects.toThrow(/stdin/i);
   });
@@ -694,15 +695,16 @@ describe("renderQuery", () => {
       { file: "docs/beta.md", key: "draft", from: true, to: false, written: false },
       { file: "docs/gamma.md", key: "draft", from: undefined, to: false, written: false },
     ];
-    const preview = renderQuery({ columns: [], rows: [], changes });
+    const preview = renderQuery({ columns: [], rows: [], changes }, { dryRun: true });
     expect(preview).toContain("docs/beta.md: draft: true -> false");
     expect(preview).toContain("docs/gamma.md: draft: (unset) -> false");
     expect(preview).toContain("2 changes across 2 files");
-    expect(preview).toContain("pass --write to apply");
-    const written = renderQuery(
-      { columns: [], rows: [], changes: changes.map((ch) => ({ ...ch, written: true })) },
-      { write: true },
-    );
+    expect(preview).toContain("without --dry-run to apply");
+    const written = renderQuery({
+      columns: [],
+      rows: [],
+      changes: changes.map((ch) => ({ ...ch, written: true })),
+    });
     expect(written).toContain("— written");
     const gate = renderQuery({ columns: [], rows: [], changes }, { check: true });
     expect(gate).toContain("✗ 2 changes across 2 files — check failed");

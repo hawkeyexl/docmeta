@@ -330,7 +330,8 @@ column and stays reachable through `_data`):
 | `_data` | The complete extracted metadata as JSON text, for `json_extract`/`->>` reach into nested values and unlifted keys. |
 
 The database is built in memory on every run and discarded (`--db` exports a
-copy; `--write` applies a statement's changes to the files — see below).
+copy; a mutating statement applies to the files, `--dry-run` previews — see
+below).
 Statements are judged by their **effects** on this disposable projection:
 reads return rows; metadata-column changes become a per-file diff; an added
 row is a file created, a removed row a front matter block stripped, and a
@@ -345,7 +346,7 @@ and makes no network requests.
 | `--query` | `<sql>` | the `[sql]` positional | The SQL statement. When given, **every** positional is a path. |
 | `--check` | — | off | Treat returned rows as findings: exit 1 if the query returns any, 0 if it returns none. The `pretty` verdict line shows ✓/✗. |
 | `--db` | `<path>` | — | Also write the built database to this file; the SQL is then optional. The file is a regenerated artifact: an existing SQLite database at the path is overwritten, anything else is refused. See [exporting the database](#exporting-the-database). |
-| `--write` | — | off | Apply a mutating statement's changes to the files. Without it, the same statement is a **preview**: the per-file diff it would make, nothing touched. See [writing back](#writing-back). |
+| `--dry-run` | — | off | Preview a mutating statement instead of applying it: the per-file diff it would make, nothing touched. `--check` implies it — a check judges, it never mutates. See [writing back](#writing-back). |
 | `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
 | `--exclude` | `<glob>` | — | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
 | `--as` | `<format>` | — | Force an input [format](/docmeta/reference/formats/) (extractor name). Required when reading from stdin. |
@@ -385,16 +386,19 @@ substitution:
 
 ```sh
 # Preview: the per-file diff, nothing touched
-docmeta query "UPDATE docs SET draft = false WHERE draft IS NULL" docs/
+docmeta query --dry-run "UPDATE docs SET draft = false WHERE draft IS NULL" docs/
 # Apply it
-docmeta query --write "UPDATE docs SET draft = false WHERE draft IS NULL" docs/
-# Hold it in CI: pending changes fail until someone runs --write
+docmeta query "UPDATE docs SET draft = false WHERE draft IS NULL" docs/
+# Hold it in CI: pending changes fail until someone applies them
 docmeta query --check "UPDATE docs SET draft = false WHERE draft IS NULL" docs/
 ```
 
-Preview is the default on purpose — one statement can touch every file, and
-the human reading the diff is the gate (`fill` writes by default because each
-of its values passed a confidence gate first). Values are restored to the
+A mutating statement applies by default, matching `fill`'s convention — one
+`--dry-run` flag means "show, don't do" across every command that writes
+(proposal 0025 revised 0022's original preview-by-default surface for that
+parity). `--dry-run` previews, and `--check` **implies** the dry run: a check
+judges and sets the exit code, it never mutates, so a CI drift gate is always
+a read-only step. Values are restored to the
 types the files had: `1`/`0` back to booleans, JSON text back to arrays and
 objects, with the column's dominant type deciding for a key the file never
 had. A value the restored type cannot hold, invalid JSON, a read-only
@@ -444,7 +448,7 @@ built-in default set refuses too: there is no schema of yours to evolve, and
 the `UPDATE` spellings cover every data-only case. The ratchet, whole:
 
 ```sh
-docmeta query --write "ALTER TABLE docs
+docmeta query "ALTER TABLE docs
   ADD COLUMN reviewed TEXT NOT NULL DEFAULT 'pending'" docs/
 # schema now requires `reviewed`, every file carries it, validate stays green
 ```
@@ -464,10 +468,11 @@ with both, the rows own stdout and the export note goes to stderr as a
 diagnostic.
 
 Exit `0` — the query ran (with `--check`: and returned no rows or pending
-changes; with `--write`: and applied cleanly). Exit `1` — only from `--check`
-without `--write`, when rows or pending changes came back. Exit `2` —
-operational, including SQL that cannot be prepared and every write refusal:
-a broken or refused statement is a usage error, not a finding.
+changes; a mutating statement: and applied cleanly). Exit `1` — only from
+`--check`, when rows or pending changes came back (`--check` never applies,
+so its findings are always still pending). Exit `2` — operational, including
+SQL that cannot be prepared and every write refusal: a broken or refused
+statement is a usage error, not a finding.
 
 ### Examples
 

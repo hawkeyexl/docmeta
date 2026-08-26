@@ -36,6 +36,11 @@ docmeta query "UPDATE docs SET last_reviewed = date('now')
 
 ## The shape: preview by default, `--write` to apply
 
+> Superseded on this one point by [0025](0025-query-dry-run-polarity.md): the
+> polarity flipped to apply-by-default with `--dry-run`, for parity with
+> `fill`. The argument below stands as written — it is the record of why the
+> other polarity looked right, and 0025 records what outweighed it.
+
 Today that command exits 2: 0021 runs user SQL under `PRAGMA query_only`, so
 an UPDATE is refused. This proposal makes it mean something instead:
 

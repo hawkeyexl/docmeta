@@ -58,7 +58,8 @@ export interface ApplyOptions {
    * (`undefined` values there are ignored by contract). Removing a key that
    * is already absent is a no-op. Writers that cannot remove a key ignore
    * this option, so a caller that needs certainty must re-extract and check —
-   * `runQuery --write` does exactly that and refuses the run on a survivor.
+   * `runQuery`'s apply phase does exactly that and refuses the run on a
+   * survivor.
    */
   deletions?: readonly string[];
   /**

@@ -101,11 +101,12 @@ export interface QueryOptions {
    */
   offline?: boolean;
   /**
-   * `--write`: apply the statement's per-file changes to the underlying
-   * documents. Without it a mutating statement is a preview — the diff it
-   * would make, files untouched. Proposal 0022 is the design record.
+   * `--dry-run`: preview the statement's per-file changes — the diff it
+   * would make, files untouched. Without it a mutating statement applies,
+   * matching `fill`'s convention (proposal 0025; 0022 recorded the original
+   * preview-by-default surface this revises).
    */
-  write?: boolean;
+  dryRun?: boolean;
 }
 
 /**
@@ -278,7 +279,7 @@ export async function runQuery(opts: QueryOptions): Promise<QueryRun> {
       : { resolved: resolve(cwd, opts.db), display: opts.db };
   return runSql(sql, entries, {
     target: db,
-    write: Boolean(opts.write),
+    write: !opts.dryRun,
     base,
     config,
     cwd,

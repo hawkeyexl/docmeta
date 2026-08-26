@@ -144,11 +144,11 @@ a backlog is the long way around. One `ALTER` statement adds the field to your
 schema as required **and** backfills every file, in the same write:
 
 ```bash
-npx docmeta query --write "ALTER TABLE docs
+npx docmeta query "ALTER TABLE docs
   ADD COLUMN reviewed TEXT NOT NULL DEFAULT 'pending'" docs/
 ```
 
-The preview (run it without `--write` first) names every file it will touch
+The preview (run it with `--dry-run` first) names every file it will touch
 and the schema file it will edit; afterwards `validate` is green with no
 baseline entry, because no document is missing the field. The rule of thumb:
 **ratchet when a starting value is honest, baseline when the value is a fact

@@ -127,7 +127,7 @@ const server = createServer((req, res) => {
             sql,
             inputs: corpus.inputs,
             cwd: corpus.cwd,
-            write: Boolean(apply),
+            dryRun: !apply,
           });
           if (apply) {
             // Refresh the export so a Lite reload shows the applied state.

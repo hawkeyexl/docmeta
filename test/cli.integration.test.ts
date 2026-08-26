@@ -355,19 +355,23 @@ describe("cli query (built bin)", () => {
       });
       const update = "UPDATE docs SET draft = 0 WHERE draft = 1";
 
-      const preview = run(["query", update, "docs", "authors"], undefined, undefined, dir);
+      const preview = run(["query", "--dry-run", update, "docs", "authors"], undefined, undefined, dir);
       expect(preview.status).toBe(0);
       expect(preview.stdout).toContain("draft: true -> false");
-      expect(preview.stdout).toContain("pass --write to apply");
+      expect(preview.stdout).toContain("without --dry-run to apply");
       expect(readFileSync(join(dir, "docs", "beta.md"), "utf8")).toContain(
         "draft: true",
       );
 
+      // `--check` implies the dry run: the gate judges, files stay untouched.
       const gated = run(["query", "--check", update, "docs", "authors"], undefined, undefined, dir);
       expect(gated.status).toBe(1);
       expect(gated.stdout).toContain("check failed");
+      expect(readFileSync(join(dir, "docs", "beta.md"), "utf8")).toContain(
+        "draft: true",
+      );
 
-      const applied = run(["query", "--write", update, "docs", "authors"], undefined, undefined, dir);
+      const applied = run(["query", update, "docs", "authors"], undefined, undefined, dir);
       expect(applied.status).toBe(0);
       expect(applied.stdout).toContain("— written");
       expect(readFileSync(join(dir, "docs", "beta.md"), "utf8")).toContain(
@@ -391,7 +395,7 @@ describe("cli query (built bin)", () => {
       const paths = ["docs", "authors"];
 
       const created = run(
-        ["query", "--write", "INSERT INTO docs (_path, title) VALUES ('docs/new.md', 'New')", ...paths],
+        ["query", "INSERT INTO docs (_path, title) VALUES ('docs/new.md', 'New')", ...paths],
         undefined, undefined, dir,
       );
       expect(created.status).toBe(0);
@@ -401,7 +405,7 @@ describe("cli query (built bin)", () => {
       );
 
       const moved = run(
-        ["query", "--write", "UPDATE docs SET _path = 'docs/renamed.md' WHERE _path = 'docs/new.md'", ...paths],
+        ["query", "UPDATE docs SET _path = 'docs/renamed.md' WHERE _path = 'docs/new.md'", ...paths],
         undefined, undefined, dir,
       );
       expect(moved.status).toBe(0);
@@ -411,14 +415,14 @@ describe("cli query (built bin)", () => {
       // Schemaless corpora rename keys with the UPDATE spelling — ALTER is
       // schema DDL (0024) and refuses without an editable schema.
       const renamedKey = run(
-        ["query", "--write", "UPDATE docs SET topics = tags, tags = NULL WHERE tags IS NOT NULL", ...paths],
+        ["query", "UPDATE docs SET topics = tags, tags = NULL WHERE tags IS NOT NULL", ...paths],
         undefined, undefined, dir,
       );
       expect(renamedKey.status).toBe(0);
       expect(renamedKey.stdout).toContain("(key renamed)");
 
       const stripped = run(
-        ["query", "--write", "DELETE FROM docs WHERE _path = 'docs/renamed.md'", ...paths],
+        ["query", "DELETE FROM docs WHERE _path = 'docs/renamed.md'", ...paths],
         undefined, undefined, dir,
       );
       expect(stripped.status).toBe(0);
@@ -445,15 +449,16 @@ describe("cli query (built bin)", () => {
       const ratchet =
         "ALTER TABLE docs ADD COLUMN reviewed TEXT NOT NULL DEFAULT 'pending'";
 
-      const preview = run(["query", ratchet, "docs"], undefined, undefined, dir);
+      const preview = run(
+        ["query", "--dry-run", ratchet, "docs"],
+        undefined, undefined, dir,
+      );
       expect(preview.status).toBe(0);
       expect(preview.stdout).toContain("schema schemas/house.json:");
       expect(preview.stdout).toContain("+ reviewed (string, required)");
+      expect(preview.stdout).toContain("without --dry-run to apply");
 
-      const applied = run(
-        ["query", "--write", ratchet, "docs"],
-        undefined, undefined, dir,
-      );
+      const applied = run(["query", ratchet, "docs"], undefined, undefined, dir);
       expect(applied.status).toBe(0);
       expect(applied.stdout).toContain("— written");
       expect(
@@ -467,7 +472,6 @@ describe("cli query (built bin)", () => {
         [
           "query",
           "--no-config",
-          "--write",
           "ALTER TABLE docs ADD COLUMN audited TEXT",
           "docs",
         ],
