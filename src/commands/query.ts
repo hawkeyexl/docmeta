@@ -154,7 +154,16 @@ export async function runQuery(opts: QueryOptions): Promise<QueryRun> {
         "Reading from stdin (`-`) requires --as <format> to choose an extractor.",
       );
     }
-    readOne(STDIN_LABEL, opts.stdinContent ?? "", forced.extensions[0] ?? "");
+    // Unreachable while every registered extractor has at least one extension,
+    // but a bare "" fallback here would surface as `Unsupported file type ""`
+    // with the --as format name nowhere in it.
+    const ext = forced.extensions[0];
+    if (ext === undefined) {
+      throw new DocmetaError(
+        `Format "${forced.name}" registers no file extension to read stdin as.`,
+      );
+    }
+    readOne(STDIN_LABEL, opts.stdinContent ?? "", ext);
   }
 
   for (const file of files) {
@@ -285,6 +294,8 @@ function topLevelSemicolon(sql: string): number {
         i++;
       }
     } else if (ch === "[") {
+      // SQLite bracket identifiers have no `]]` escape (unlike T-SQL), so a
+      // plain scan to the close is exact and needs no doubling branch.
       while (i < sql.length && sql[i] !== "]") i++;
     } else if (ch === "-" && sql[i + 1] === "-") {
       while (i < sql.length && sql[i] !== "\n") i++;
