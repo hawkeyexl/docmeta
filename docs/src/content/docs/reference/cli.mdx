@@ -425,15 +425,23 @@ formats whose writer can build a block (markdown, MDX).
 
 **DDL edits the schema itself.** An `ALTER` statement resolves the run's
 schema set (which must be a single set — a corpus split by overrides refuses;
-scope the run to one group) and evolves it: a **hand-maintained local schema
+scope the run to one group) with the same trust boundary as `validate`: a
+document's `$schema` cannot point the edit outside the repository. It then
+evolves the one schema that owns the key: a **hand-maintained local schema
 file is edited in place** — `properties` and `required` only, your indent,
-git as the review surface — while an **immutable built-in forks** to a local
-copy (`schemas/<name>-<ver>.local.json`, `$id` suffixed `+local`) with the
-config entry and any in-file `$schema` repointed in the same write. URL refs
-refuse with "vendor it first" (`docmeta schemas vendor`). A corpus running on
-the built-in default set with no config refuses too: there is no schema of
-yours to evolve, and the `UPDATE` spellings cover every data-only case. The
-ratchet, whole:
+git as the review surface, and a vendored file's `integrity:` pin refreshed
+in the same write — while an **immutable built-in forks** to a local copy
+(`schemas/<name>-<ver>.local.json` beside the config, `$id` suffixed
+`+local`) with the config entry (either spelling, comments intact) and any
+in-file `$schema` (string or list) repointed in the same write. Every file
+the statement will touch appears in the preview, the config included. When
+ownership is unclear, DDL refuses rather than guesses: a key another schema
+in the set also declares or requires, an `ADD` onto an already-declared
+property (its constraints would be lost), a `DEFAULT` the declared type
+cannot hold, or a set naming several local schema files. URL refs refuse
+with "vendor it first" (`docmeta schemas vendor`). A corpus resolving to the
+built-in default set refuses too: there is no schema of yours to evolve, and
+the `UPDATE` spellings cover every data-only case. The ratchet, whole:
 
 ```sh
 docmeta query --write "ALTER TABLE docs

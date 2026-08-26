@@ -79,6 +79,7 @@ database for <a href="/?url=${basename(db)}">Datasette Lite</a>.</p>
           ? "0 changes"
           : body.changes.map(c => {
               const tail = c.written ? "  [written]" : "";
+              if (c.config) return "config " + c.file + ": " + c.key + ": " + JSON.stringify(c.from) + " -> " + JSON.stringify(c.to) + tail;
               if (c.schema) return "schema " + c.file + ": " + c.op + " " + c.key + (c.renamedTo ? " -> " + c.renamedTo : "") + (c.forkedFrom ? " (forked from " + c.forkedFrom + ")" : "") + tail;
               if (c.cleared) return c.file + ": (frontmatter removed)" + tail;
               if (c.created) return c.file + ": (created: " + JSON.stringify(c.to) + ")" + tail;

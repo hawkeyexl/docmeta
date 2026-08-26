@@ -37,6 +37,7 @@ import {
   frontmatterInnerText,
 } from "./frontmatter.js";
 import { dropUndefined, deepEqual } from "./patch-util.js";
+import { detectJsonIndent } from "../core/json-text.js";
 
 const FENCE: Record<FrontmatterFlavor, string> = {
   yaml: "---",
@@ -244,7 +245,7 @@ function mergeJson(
   deletions: readonly string[] = [],
 ): string {
   const parsed = parseJsonBlockText(inner);
-  const indent = /^\{\s*\n([ \t]+)/.exec(inner)?.[1] ?? "  ";
+  const indent = detectJsonIndent(inner);
   const merged = Object.fromEntries(
     Object.entries({ ...parsed, ...patch }).filter(
       ([key]) => !deletions.includes(key),

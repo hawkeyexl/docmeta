@@ -70,6 +70,9 @@ function renderChanges(
   opts: QueryReportOptions,
 ): string {
   const lines = changes.map((ch) => {
+    if ("config" in ch) {
+      return `${c.dim(`config ${ch.file}:`)} ${ch.key}: ${cellFrom(ch.from)} -> ${cell(ch.to)}`;
+    }
     if ("schema" in ch) {
       const fork = ch.forkedFrom ? ` ${c.dim(`(forked from ${ch.forkedFrom})`)}` : "";
       if (ch.op === "rename") {

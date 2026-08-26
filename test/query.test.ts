@@ -484,6 +484,19 @@ describe("runQuery write-back (0022)", () => {
     expect(readFileSync(join(d, "docs", "renamed-beta.md"), "utf8")).toBe(bytes);
   });
 
+  it("SET _path renames into a directory that does not exist yet", async () => {
+    const d = copy();
+    const bytes = readFileSync(join(d, "docs", "beta.md"), "utf8");
+    await w(
+      "UPDATE docs SET _path = 'archive/2026/beta.md' WHERE _path = 'docs/beta.md'",
+      d,
+      true,
+    );
+    expect(readFileSync(join(d, "archive", "2026", "beta.md"), "utf8")).toBe(
+      bytes,
+    );
+  });
+
   it("rename refusals: extension change, collision, mixed edits", async () => {
     const d = copy();
     await expect(

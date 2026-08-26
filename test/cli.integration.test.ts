@@ -422,6 +422,50 @@ describe("cli query (built bin)", () => {
     }
   });
 
+  it("runs the DDL ratchet end to end, and refuses it schemaless (0024)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-ddl-"));
+    try {
+      cpSync(resolve(root, "test", "fixtures", "query-ddl"), dir, {
+        recursive: true,
+      });
+      const ratchet =
+        "ALTER TABLE docs ADD COLUMN reviewed TEXT NOT NULL DEFAULT 'pending'";
+
+      const preview = run(["query", ratchet, "docs"], undefined, undefined, dir);
+      expect(preview.status).toBe(0);
+      expect(preview.stdout).toContain("schema schemas/house.json:");
+      expect(preview.stdout).toContain("+ reviewed (string, required)");
+
+      const applied = run(
+        ["query", "--write", ratchet, "docs"],
+        undefined, undefined, dir,
+      );
+      expect(applied.status).toBe(0);
+      expect(applied.stdout).toContain("— written");
+      expect(
+        readFileSync(join(dir, "schemas", "house.json"), "utf8"),
+      ).toContain('"reviewed"');
+
+      const validated = run(["validate", "docs"], undefined, undefined, dir);
+      expect(validated.status).toBe(0);
+
+      const refused = run(
+        [
+          "query",
+          "--no-config",
+          "--write",
+          "ALTER TABLE docs ADD COLUMN audited TEXT",
+          "docs",
+        ],
+        undefined, undefined, dir,
+      );
+      expect(refused.status).toBe(2);
+      expect(refused.stderr).toContain("UPDATE spellings");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("--db exports without SQL, and keeps rows on stdout with it", () => {
     const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-db-"));
     try {

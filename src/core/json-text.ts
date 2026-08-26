@@ -35,6 +35,17 @@ export function stripBom(text: string): string {
 }
 
 /**
+ * The indent an object-per-line JSON file uses, read off its first indented
+ * line. The known blind spot is shared by every caller on purpose: a
+ * single-line or minified file yields the two-space fallback and gets
+ * re-emitted pretty-printed — acceptable for files whose edits are meant to be
+ * read in a diff, and better stated once here than diverging per copy.
+ */
+export function detectJsonIndent(text: string): string {
+  return /^\{\s*\n([ \t]+)/.exec(text)?.[1] ?? "  ";
+}
+
+/**
  * `JSON.stringify`, with the return type it actually has.
  *
  * `lib.es5.d.ts` declares the common overload as returning `string`, and that

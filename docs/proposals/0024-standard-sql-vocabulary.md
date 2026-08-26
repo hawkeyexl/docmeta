@@ -210,6 +210,32 @@ WHERE, backfill via `WHERE k IS NULL`, cross-column rename pairing). This
 retires the file-only ALTER behavior 0022 shipped un-released; the tests and
 the demo footage that showed it were updated rather than grandfathered.
 
+**13. A schema write is a schema read with higher stakes — found in review.**
+The first implementation resolved the set without the trust boundary
+`validate` passes, so a document's `$schema: ../outside.json` could direct
+DDL to *rewrite a file outside the repository* — a ref every read path
+refuses. Same lesson in miniature three more times: the config edit
+re-derived the config's path instead of using the one discovery loaded
+(wrong or missing file under `-c`, `.yml`, or an ancestor config), the
+repoint matched only the string spelling of a `schemas:` entry and of
+`$schema`, and an in-place edit left a vendored file's `integrity:` pin
+stale, bricking every later run. The rule that fixes all four: DDL goes
+through the same machinery as reading — `trustRoot`, the discovered
+`configPath`, both entry spellings, the pin map — never a parallel
+reimplementation of it.
+
+**14. The set is the contract, not the target schema — found in review.**
+DROP/RENAME edited the first schema that declared the key; a sibling in the
+same set that also declared or *required* it kept failing the corpus after a
+"successful" write (this repo's own docs override pairs a house schema with
+`astro:starlight:0.41`, which requires `title`). DDL now loads every member
+of the set and refuses when ownership is shared — same for `ADD` onto a
+property any member already declares, where the silent path would have
+clobbered its constraints. And because SQLite accepts `INTEGER … DEFAULT
+'high'`, the declared type and the backfill value are reconciled before
+anything is written: one statement must not produce a corpus that fails the
+schema it just gained.
+
 ## Not breaking
 
 Every statement here lands before the stack releases, so the surface ships standard from
