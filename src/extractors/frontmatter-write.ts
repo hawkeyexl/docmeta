@@ -77,8 +77,13 @@ export function applyFrontmatter(
   );
   if (Object.keys(clean).length === 0 && deletions.length === 0) return content;
 
-  // No block: nothing to delete from, so deletions are no-ops by contract.
-  if (!loc) return createBlock(content, clean, options.newBlockFlavor ?? "yaml");
+  // No block: nothing to delete from, so deletions are no-ops by contract —
+  // only a set may create a block. Without this guard a delete-only call on a
+  // block-less document would insert a bare `---\n---\n`.
+  if (!loc) {
+    if (Object.keys(clean).length === 0) return content;
+    return createBlock(content, clean, options.newBlockFlavor ?? "yaml");
+  }
 
   const inner = frontmatterInnerText(content, loc);
   const merged = mergeBlock(loc.flavor, inner, clean, deletions);
@@ -225,8 +230,11 @@ function mergeJson(
 ): string {
   const parsed = parseJsonBlockText(inner);
   const indent = /^\{\s*\n([ \t]+)/.exec(inner)?.[1] ?? "  ";
-  const merged: Record<string, unknown> = { ...parsed, ...patch };
-  for (const key of deletions) delete merged[key];
+  const merged = Object.fromEntries(
+    Object.entries({ ...parsed, ...patch }).filter(
+      ([key]) => !deletions.includes(key),
+    ),
+  );
   return JSON.stringify(merged, null, indent);
 }
 
@@ -459,11 +467,11 @@ function verify(
   patch: MetadataPatch,
   deletions: readonly string[] = [],
 ): void {
-  const expected: Record<string, unknown> = {
-    ...parseBlock(flavor, inner),
-    ...patch,
-  };
-  for (const key of deletions) delete expected[key];
+  const expected = Object.fromEntries(
+    Object.entries({ ...parseBlock(flavor, inner), ...patch }).filter(
+      ([key]) => !deletions.includes(key),
+    ),
+  );
   const actual = parseBlock(flavor, merged);
   if (!deepEqual(actual, expected)) {
     throw new DocmetaError(

@@ -83,19 +83,19 @@ export interface QueryOptions {
   write?: boolean;
 }
 
-/** One cell a statement changed, in file-space values on both sides. */
-export interface QueryChange {
+/**
+ * One cell a statement changed, in file-space values on both sides. The two
+ * variants are exclusive by type: a set carries `to`, a deletion —
+ * `drop_key()` or a dropped column, as opposed to an explicit `null` —
+ * carries `deleted: true`.
+ */
+export type QueryChange = {
   file: string;
   key: string;
   from: unknown;
-  /** The new value. Absent when the change is a deletion. */
-  to?: unknown;
-  /** The key is removed from the file entirely — `drop_key()` or a dropped
-   * column — as opposed to being set to an explicit `null`. */
-  deleted?: boolean;
   /** True once `write` has applied it; always false in a preview. */
   written: boolean;
-}
+} & ({ to: unknown; deleted?: never } | { deleted: true; to?: never });
 
 export interface QueryRun {
   /** Result column names, in SELECT order — present even for zero rows. */
