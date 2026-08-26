@@ -560,24 +560,29 @@ function diffProjection(
   before: Map<string, Record<string, unknown>>,
   after: Map<string, Record<string, unknown>>,
 ): ProjectionDiff {
-  const removed = [...before.keys()].filter((p) => !after.has(p)).sort();
-  const added = [...after.keys()].filter((p) => !before.has(p)).sort();
+  const allRemoved = [...before.keys()].filter((p) => !after.has(p)).sort();
+  const allAdded = [...after.keys()].filter((p) => !before.has(p)).sort();
 
+  // Greedy pairing in sorted order, tracked in sets rather than spliced out
+  // of the arrays — same outcome, no quadratic index churn on a bulk rename.
   const renamedFiles: { from: string; to: string }[] = [];
-  for (const from of [...removed]) {
+  const pairedFrom = new Set<string>();
+  const pairedTo = new Set<string>();
+  for (const from of allRemoved) {
     const was = before.get(from);
     if (!was) continue;
-    const toIdx = added.findIndex((p) => {
+    const to = allAdded.find((p) => {
+      if (pairedTo.has(p)) return false;
       const now = after.get(p);
       return now !== undefined && rowsEqualExceptPath(was, now);
     });
-    if (toIdx === -1) continue;
-    const to = added[toIdx];
     if (to === undefined) continue;
     renamedFiles.push({ from, to });
-    removed.splice(removed.indexOf(from), 1);
-    added.splice(toIdx, 1);
+    pairedFrom.add(from);
+    pairedTo.add(to);
   }
+  const removed = allRemoved.filter((p) => !pairedFrom.has(p));
+  const added = allAdded.filter((p) => !pairedTo.has(p));
   if (removed.length > 0 && added.length > 0) {
     // Leftover unpaired adds and removes together can only mean a `_path`
     // change combined with cell edits — no single-statement DML produces
@@ -1552,6 +1557,10 @@ function buildChanges(
 
   // INSERT: an added row creates a file.
   for (const [file, row] of diff.createdRows) {
+    // An *omitted* _path never reaches here — the PRIMARY KEY's NOT NULL
+    // rejects it in SQLite. What does arrive and still refuses: the empty
+    // string (NOT NULL admits it) and a BLOB (TEXT affinity never coerces
+    // blobs), neither of which names a file.
     if (typeof row._path !== "string" || row._path === "") {
       throw new DocmetaError("INSERT requires a non-empty _path.");
     }

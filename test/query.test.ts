@@ -467,6 +467,11 @@ describe("runQuery write-back (0022)", () => {
     await expect(
       w("INSERT INTO docs (title) VALUES ('X')", d, true),
     ).rejects.toThrow(/_path/);
+    // The empty string slips past the PRIMARY KEY's NOT NULL, so this is the
+    // guard's own message, not SQLite's.
+    await expect(
+      w("INSERT INTO docs (_path, title) VALUES ('', 'X')", d, true),
+    ).rejects.toThrow(/non-empty _path/);
     // An unwritable extension refuses at *preview* time — the plan must never
     // promise a file only --write can discover it cannot build.
     await expect(
