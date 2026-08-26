@@ -414,14 +414,32 @@ The vocabulary is standard SQL (proposal 0024):
 | `UPDATE docs SET _path = '…'` | move/rename the file, body byte-preserved; same extension only |
 | `INSERT INTO docs (_path, …) VALUES (…)` | create a file: that front matter, an empty body |
 | `DELETE FROM docs WHERE …` | strip the front matter block; the file and its body survive |
-| `ALTER TABLE docs ADD COLUMN k … DEFAULT v` | backfill a key across the corpus |
-| `ALTER TABLE docs DROP COLUMN k` | remove a key everywhere |
-| `ALTER TABLE docs RENAME COLUMN a TO b` | rename a key everywhere, values carried verbatim |
+| `ALTER TABLE docs ADD COLUMN k TYPE [NOT NULL] [DEFAULT v]` | **DDL**: the resolved schema gains property `k` (required if NOT NULL); a DEFAULT backfills every file |
+| `ALTER TABLE docs DROP COLUMN k` | **DDL**: the schema loses `k`, and the key is removed from every file |
+| `ALTER TABLE docs RENAME COLUMN a TO b` | **DDL**: the schema property is renamed, and the key renamed in every file, values carried verbatim |
 
 Key deletion and block-stripping work wherever the metadata lives in fenced
 front matter (markdown, MDX, AsciiDoc, reStructuredText); element-backed
 keys in HTML/XML refuse rather than half-delete, and `INSERT` creates only
 formats whose writer can build a block (markdown, MDX).
+
+**DDL edits the schema itself.** An `ALTER` statement resolves the run's
+schema set (which must be a single set — a corpus split by overrides refuses;
+scope the run to one group) and evolves it: a **hand-maintained local schema
+file is edited in place** — `properties` and `required` only, your indent,
+git as the review surface — while an **immutable built-in forks** to a local
+copy (`schemas/<name>-<ver>.local.json`, `$id` suffixed `+local`) with the
+config entry and any in-file `$schema` repointed in the same write. URL refs
+refuse with "vendor it first" (`docmeta schemas vendor`). A corpus running on
+the built-in default set with no config refuses too: there is no schema of
+yours to evolve, and the `UPDATE` spellings cover every data-only case. The
+ratchet, whole:
+
+```sh
+docmeta query --write "ALTER TABLE docs
+  ADD COLUMN reviewed TEXT NOT NULL DEFAULT 'pending'" docs/
+# schema now requires `reviewed`, every file carries it, validate stays green
+```
 
 ### Output and exit codes
 

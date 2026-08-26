@@ -6,10 +6,14 @@
  * identically. Proposal 0021 is the design record.
  */
 import { randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { dirname, isAbsolute, resolve, extname, sep } from "node:path";
-import { resolveElements } from "../core/resolve-schema.js";
+import {
+  FILE_SCHEMA_KEY,
+  resolveElements,
+  resolveSchemaSetWithSource,
+} from "../core/resolve-schema.js";
 import { writeFileAtomic } from "../core/write-file.js";
 import { stripFrontmatter } from "../extractors/frontmatter-write.js";
 import { deepEqual } from "../extractors/patch-util.js";
@@ -36,6 +40,8 @@ import {
   type ConfigNotice,
   type DocmetaConfig,
 } from "../core/config.js";
+import { classifyRef, loadSchema } from "../core/schema-registry.js";
+import { parseDocument, isSeq, isScalar } from "yaml";
 
 export interface QueryOptions {
   /**
@@ -99,6 +105,17 @@ export type QueryChange = { file: string; written: boolean } & (
   | { cleared: true; from: Record<string, unknown> }
   | { created: true; to: Record<string, unknown> }
   | { renamed: string }
+  | {
+      /** A DDL statement edited the schema itself (0024): `file` is the
+       * schema written — an in-place edit, or the fork of a builtin. */
+      schema: true;
+      op: "add" | "drop" | "rename";
+      key: string;
+      renamedTo?: string;
+      type?: string;
+      required?: boolean;
+      forkedFrom?: string;
+    }
 );
 
 export interface QueryRun {
@@ -235,6 +252,7 @@ export async function runQuery(opts: QueryOptions): Promise<QueryRun> {
     write: Boolean(opts.write),
     base,
     config,
+    cwd,
   });
 }
 
@@ -251,6 +269,8 @@ interface RunContext {
   /** Directory file labels resolve against (see `resolveRunConfig`). */
   base: string;
   config: DocmetaConfig | null;
+  /** The run's working directory — schema refs resolve from here. */
+  cwd: string;
 }
 
 /**
@@ -385,8 +405,10 @@ async function runSql(
     db.function("explicit_null", () => sentinel);
 
     // 0022: the statement runs freely against this disposable projection and
-    // is judged by its effects, not its syntax. A read leaves no diff.
+    // is judged by its effects, not its syntax. A read leaves no diff. The
+    // column snapshot (0024) is what makes DDL an effect too.
     const before = snapshotRows(db);
+    const colBefore = snapshotColumns(db);
     let columns: string[];
     let rows: Record<string, unknown>[];
     try {
@@ -416,6 +438,7 @@ async function runSql(
       );
     }
     const diff = diffProjection(before, after);
+    const schemaOps = columnDiffOps(colBefore, snapshotColumns(db), before, after);
     // Structural, not textual: a read always yields result columns, DML and
     // DDL (without RETURNING) never do — so `WITH … UPDATE …` classifies
     // correctly even when it matches zero rows. The residual: RETURNING DML
@@ -425,13 +448,23 @@ async function runSql(
       diff.cells.length > 0 ||
       diff.clearedRows.length > 0 ||
       diff.createdRows.size > 0 ||
-      diff.renamedFiles.length > 0;
+      diff.renamedFiles.length > 0 ||
+      schemaOps.length > 0;
     if (!hasEffects && !mutatingIntent) {
       return { columns, rows, ...(dbInfo ? { db: dbInfo } : {}) };
     }
 
-    const changes = buildChanges(diff, entries, sentinel, ctx);
-    if (ctx.write) await applyChanges(changes, entries, ctx);
+    // DDL edits the schema itself (0024); its plan carries both the schema
+    // change records and — for a builtin fork — the reference repoints.
+    const schemaPlan =
+      schemaOps.length > 0
+        ? await planSchemaMutation(schemaOps, entries, ctx)
+        : undefined;
+    const changes = [
+      ...(schemaPlan?.changes ?? []),
+      ...buildChanges(diff, entries, sentinel, ctx),
+    ];
+    if (ctx.write) await applyChanges(changes, entries, ctx, schemaPlan?.writes);
     return { columns, rows, changes, ...(dbInfo ? { db: dbInfo } : {}) };
   } finally {
     db.close();
@@ -544,6 +577,295 @@ function rowsEqualExceptPath(
     if (!Object.is(a[key], b[key])) return false;
   }
   return true;
+}
+
+/** Declared shape of one projection column, from `PRAGMA table_info`. */
+function snapshotColumns(
+  db: { prepare(sql: string): { all(): unknown[] } },
+): Map<string, { type: string; notnull: number }> {
+  const rows = db.prepare("PRAGMA table_info(docs)").all() as {
+    name: string;
+    type: string;
+    notnull: number;
+  }[];
+  return new Map(rows.map((r) => [r.name, { type: r.type, notnull: r.notnull }]));
+}
+
+interface SchemaOp {
+  op: "add" | "drop" | "rename";
+  key: string;
+  renamedTo?: string;
+  type?: string;
+  required?: boolean;
+}
+
+/**
+ * DDL, read as an effect: the column set changed. A removed/added pair whose
+ * per-row values are identical is a column rename; the rest are drops and
+ * adds, an add carrying its declared type and NOT NULL as schema intent.
+ */
+function columnDiffOps(
+  before: Map<string, { type: string; notnull: number }>,
+  after: Map<string, { type: string; notnull: number }>,
+  rowsBefore: Map<string, Record<string, unknown>>,
+  rowsAfter: Map<string, Record<string, unknown>>,
+): SchemaOp[] {
+  const removed = [...before.keys()].filter((c) => !after.has(c));
+  const added = [...after.keys()].filter((c) => !before.has(c));
+  const ops: SchemaOp[] = [];
+  for (const from of [...removed]) {
+    const to = added.find((a) =>
+      [...rowsBefore.keys()].every((path) =>
+        Object.is(rowsBefore.get(path)?.[from], rowsAfter.get(path)?.[a]),
+      ),
+    );
+    if (!to) continue;
+    ops.push({ op: "rename", key: from, renamedTo: to });
+    removed.splice(removed.indexOf(from), 1);
+    added.splice(added.indexOf(to), 1);
+  }
+  for (const key of removed) ops.push({ op: "drop", key });
+  for (const key of added) {
+    const decl = after.get(key);
+    ops.push({
+      op: "add",
+      key,
+      type: mapDeclaredType(decl?.type ?? ""),
+      required: decl?.notnull === 1,
+    });
+  }
+  return ops;
+}
+
+/** SQLite declared type → JSON Schema type, by SQLite's own affinity rules. */
+function mapDeclaredType(declared: string): string | undefined {
+  if (/INT/i.test(declared)) return "integer";
+  if (/CHAR|CLOB|TEXT/i.test(declared)) return "string";
+  if (/REAL|FLOA|DOUB|NUMERIC|DEC/i.test(declared)) return "number";
+  return undefined;
+}
+
+interface SchemaPlan {
+  changes: QueryChange[];
+  writes: { path: string; content: string }[];
+}
+
+/**
+ * 0024's DDL pipeline: resolve the run's single schema set, pick the target,
+ * and plan the mutation — an in-place edit for a hand-maintained local file,
+ * a fork (plus reference repoints) for an immutable builtin. Every refusal
+ * here costs nothing: no file has been touched.
+ */
+async function planSchemaMutation(
+  ops: SchemaOp[],
+  entries: QueryEntry[],
+  ctx: RunContext,
+): Promise<SchemaPlan> {
+  // One schema set for the whole run, or nothing mutates.
+  let refs: string[] | undefined;
+  let source = "default";
+  for (const e of entries) {
+    const resolved = resolveSchemaSetWithSource({
+      filePath: e.label,
+      fileSchema: e.extracted.data[FILE_SCHEMA_KEY],
+      config: ctx.config,
+      fileBase: ctx.cwd,
+    });
+    if (refs === undefined) {
+      refs = resolved.schemas;
+      source = resolved.source;
+    } else if (JSON.stringify(refs) !== JSON.stringify(resolved.schemas)) {
+      throw new DocmetaError(
+        `DDL needs the corpus to resolve to one schema set, and this run's is split ("${e.label}" resolves differently). Scope the run to one override group.`,
+      );
+    }
+  }
+  if (!refs || source === "default") {
+    throw new DocmetaError(
+      "DDL edits the resolved schema, and this corpus runs on the built-in default set. Add a config naming a schema to evolve — for data-only edits, the UPDATE spellings cover every case.",
+    );
+  }
+
+  const kinds = refs.map((ref) => ({ ref, kind: classifyRef(ref).kind }));
+  const fileRefs = kinds.filter((k) => k.kind === "file");
+  const builtinRefs = kinds.filter((k) => k.kind === "builtin");
+  const urlRefs = kinds.filter((k) => k.kind === "url");
+
+  // The target: for DROP/RENAME the schema that declares the key; for ADD the
+  // single local file, else the first builtin (forked), else refuse.
+  const first = ops[0];
+  if (!first) return { changes: [], writes: [] };
+  let target: { ref: string; kind: "file" | "builtin" } | undefined;
+  if (first.op === "add") {
+    if (fileRefs.length === 1) {
+      const ref = fileRefs[0];
+      if (ref) target = { ref: ref.ref, kind: "file" };
+    } else if (fileRefs.length === 0 && builtinRefs.length > 0) {
+      const ref = builtinRefs[0];
+      if (ref) target = { ref: ref.ref, kind: "builtin" };
+    }
+  } else {
+    for (const k of [...fileRefs, ...builtinRefs]) {
+      const schema =
+        k.kind === "file"
+          ? (JSON.parse(
+              await readFile(resolve(ctx.base, k.ref), "utf8"),
+            ) as Record<string, unknown>)
+          : await loadSchema(k.ref);
+      const props = schema.properties as Record<string, unknown> | undefined;
+      if (props && first.key in props) {
+        target = { ref: k.ref, kind: k.kind as "file" | "builtin" };
+        break;
+      }
+    }
+  }
+  if (!target) {
+    if (urlRefs.length > 0) {
+      throw new DocmetaError(
+        `No local schema in the set takes this DDL, and "${urlRefs[0]?.ref ?? ""}" is a URL — vendor it first (docmeta schemas vendor), then evolve the local copy.`,
+      );
+    }
+    throw new DocmetaError(
+      first.op === "add"
+        ? "DDL could not pick a schema to add to; name one with --schema."
+        : `No schema in the resolved set declares "${first.key}".`,
+    );
+  }
+
+  const writes: { path: string; content: string }[] = [];
+  const changes: QueryChange[] = [];
+
+  let schemaText: string;
+  let schemaOutPath: string;
+  let forkedFrom: string | undefined;
+  if (target.kind === "file") {
+    schemaOutPath = target.ref.replace(/^\.\//, "");
+    schemaText = await readFile(resolve(ctx.base, schemaOutPath), "utf8");
+  } else {
+    // A builtin is immutable by invariant — fork it beside the config and
+    // repoint every reference: the config entry, and any in-file `$schema`.
+    forkedFrom = target.ref;
+    const [, name, ver] = target.ref.split(":");
+    schemaOutPath = `schemas/${name ?? "schema"}-${ver ?? "0"}.local.json`;
+    if (existsSync(resolve(ctx.base, schemaOutPath))) {
+      throw new DocmetaError(
+        `"${schemaOutPath}" already exists; refusing to overwrite it with a fork of ${target.ref}.`,
+      );
+    }
+    const bundled = await loadSchema(target.ref);
+    schemaText = JSON.stringify(
+      { ...bundled, $id: `${target.ref}+local` },
+      null,
+      2,
+    );
+    const newRef = `./${schemaOutPath}`;
+    if (ctx.config) {
+      writes.push(rewriteConfigSchemaRef(ctx, target.ref, newRef));
+    }
+    for (const e of entries) {
+      const fileSchema = e.extracted.data[FILE_SCHEMA_KEY];
+      if (fileSchema === target.ref) {
+        changes.push({
+          file: e.label,
+          key: FILE_SCHEMA_KEY,
+          from: fileSchema,
+          to: newRef,
+          written: false,
+        });
+      }
+    }
+  }
+
+  const indent = /^\{\s*\n([ \t]+)/.exec(schemaText)?.[1] ?? "  ";
+  let schema = JSON.parse(schemaText) as Record<string, unknown>;
+  for (const op of ops) {
+    schema = mutateSchemaObject(schema, op);
+    changes.unshift({
+      file: schemaOutPath,
+      schema: true,
+      op: op.op,
+      key: op.key,
+      ...(op.renamedTo !== undefined ? { renamedTo: op.renamedTo } : {}),
+      ...(op.type !== undefined ? { type: op.type } : {}),
+      ...(op.required ? { required: true } : {}),
+      ...(forkedFrom !== undefined ? { forkedFrom } : {}),
+      written: false,
+    });
+  }
+  writes.unshift({
+    path: resolve(ctx.base, schemaOutPath),
+    content: `${JSON.stringify(schema, null, indent)}\n`,
+  });
+  return { changes, writes };
+}
+
+/** Apply one DDL op to a schema object, touching properties/required only. */
+function mutateSchemaObject(
+  schema: Record<string, unknown>,
+  op: SchemaOp,
+): Record<string, unknown> {
+  let props = {
+    ...((schema.properties as Record<string, unknown> | undefined) ?? {}),
+  };
+  let required = Array.isArray(schema.required)
+    ? [...(schema.required as unknown[])]
+    : [];
+  switch (op.op) {
+    case "add":
+      props[op.key] = op.type !== undefined ? { type: op.type } : {};
+      if (op.required && !required.includes(op.key)) required.push(op.key);
+      break;
+    case "drop": {
+      const { [op.key]: _dropped, ...rest } = props;
+      void _dropped;
+      props = rest;
+      required = required.filter((r) => r !== op.key);
+      break;
+    }
+    case "rename": {
+      const to = op.renamedTo ?? op.key;
+      const { [op.key]: moved, ...rest } = props;
+      rest[to] = moved;
+      props = rest;
+      required = required.map((r) => (r === op.key ? to : r));
+      break;
+    }
+  }
+  // Set-or-remove explicitly: a spread of the original schema would carry the
+  // old `required` back in whenever the new list is empty.
+  const out: Record<string, unknown> = { ...schema, properties: props };
+  if (required.length > 0) out.required = required;
+  else delete out.required;
+  return out;
+}
+
+/**
+ * Repoint one schema ref in docmeta.config.yaml — through the YAML Document
+ * API, so every comment and untouched line survives.
+ */
+function rewriteConfigSchemaRef(
+  ctx: RunContext,
+  oldRef: string,
+  newRef: string,
+): { path: string; content: string } {
+  const configPath = resolve(ctx.base, "docmeta.config.yaml");
+  const doc = parseDocument(readFileSync(configPath, "utf8"));
+  const repoint = (node: unknown): void => {
+    if (!isSeq(node)) return;
+    for (const item of node.items) {
+      if (isScalar(item) && item.value === oldRef) item.value = newRef;
+    }
+  };
+  repoint(doc.get("schemas", true));
+  const overrides = doc.get("overrides", true);
+  if (isSeq(overrides)) {
+    for (const entry of overrides.items) {
+      if (entry && typeof entry === "object" && "get" in entry) {
+        repoint((entry as { get(k: string, keep: true): unknown }).get("schemas", true));
+      }
+    }
+  }
+  return { path: configPath, content: doc.toString({ lineWidth: 0 }) };
 }
 
 type FileType = "boolean" | "number" | "bigint" | "string" | "array" | "object";
@@ -817,8 +1139,9 @@ async function applyChanges(
   changes: QueryChange[],
   entries: QueryEntry[],
   ctx: RunContext,
+  schemaWrites: { path: string; content: string }[] = [],
 ): Promise<void> {
-  if (changes.length === 0) return;
+  if (changes.length === 0 && schemaWrites.length === 0) return;
   const byLabel = new Map(entries.map((e) => [e.label, e]));
   interface FileOps {
     patch: MetadataPatch;
@@ -834,6 +1157,7 @@ async function applyChanges(
         "A write cannot touch <stdin>: there is no file behind it.",
       );
     }
+    if ("schema" in c) continue; // satisfied by schemaWrites, below
     const group = grouped.get(c.file) ?? { patch: {}, deletions: [] };
     if ("cleared" in c) group.cleared = true;
     else if ("created" in c) group.created = c.to;
@@ -938,8 +1262,17 @@ async function applyChanges(
     }
     pendingWrites.push({ path, content: applied });
   }
+  // Parent directories first: a fork's schemas/ dir or an INSERT into a new
+  // subtree may not exist yet, and atomic writes create files, never dirs.
+  for (const w of schemaWrites) {
+    await mkdir(dirname(w.path), { recursive: true });
+    await writeFileAtomic(w.path, w.content);
+  }
   for (const r of pendingRenames) await rename(r.from, r.to);
-  for (const p of pendingWrites) await writeFileAtomic(p.path, p.content);
+  for (const p of pendingWrites) {
+    await mkdir(dirname(p.path), { recursive: true });
+    await writeFileAtomic(p.path, p.content);
+  }
   for (const c of changes) c.written = true;
 }
 

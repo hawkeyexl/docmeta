@@ -394,8 +394,10 @@ describe("cli query (built bin)", () => {
       expect(moved.stdout).toContain("(moved)");
       expect(existsSync(join(dir, "docs", "new.md"))).toBe(false);
 
+      // Schemaless corpora rename keys with the UPDATE spelling — ALTER is
+      // schema DDL (0024) and refuses without an editable schema.
       const renamedKey = run(
-        ["query", "--write", "ALTER TABLE docs RENAME COLUMN tags TO topics", ...paths],
+        ["query", "--write", "UPDATE docs SET topics = tags, tags = NULL WHERE tags IS NOT NULL", ...paths],
         undefined, undefined, dir,
       );
       expect(renamedKey.status).toBe(0);

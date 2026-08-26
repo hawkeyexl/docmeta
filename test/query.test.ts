@@ -277,12 +277,11 @@ describe("runQuery write-back (0022)", () => {
     expect(run.changes).toEqual([]);
   });
 
-  it("sees an ALTER ADD COLUMN DEFAULT backfill as the change it is", async () => {
+  it("backfills a corpus-new key with a plain UPDATE", async () => {
+    // The data-only backfill spelling; the schema-and-data version is
+    // ALTER ADD COLUMN … DEFAULT on a corpus with a schema (query-ddl tests).
     const d = copy();
-    const run = await w(
-      "ALTER TABLE docs ADD COLUMN stale INTEGER DEFAULT 7",
-      d,
-    );
+    const run = await w("UPDATE docs SET stale = 7 WHERE stale IS NULL", d);
     expect(run.changes?.length).toBe(6);
     expect(
       run.changes?.every(
@@ -354,15 +353,24 @@ describe("runQuery write-back (0022)", () => {
     );
   });
 
-  it("deletes a key corpus-wide with ALTER TABLE DROP COLUMN", async () => {
+  it("deletes a key corpus-wide with an unqualified SET NULL", async () => {
+    // 0024: ALTER is schema DDL now, and this corpus has no schema to edit —
+    // the corpus-wide data spelling is the WHERE-less UPDATE.
     const d = copy();
-    const run = await w("ALTER TABLE docs DROP COLUMN tags", d, true);
+    const run = await w("UPDATE docs SET tags = NULL", d, true);
     expect(run.changes?.length).toBe(3); // alpha, beta, gamma have tags
     for (const f of ["alpha", "beta", "gamma"]) {
       expect(readFileSync(join(d, "docs", `${f}.md`), "utf8")).not.toContain(
         "tags:",
       );
     }
+  });
+
+  it("ALTER on a schemaless corpus refuses, naming the UPDATE spellings", async () => {
+    const d = copy();
+    await expect(
+      w("ALTER TABLE docs DROP COLUMN tags", d),
+    ).rejects.toThrow(/default set|UPDATE/);
   });
 
   it("deleting a key a file never had is a no-op for that file", async () => {
@@ -492,9 +500,11 @@ describe("runQuery write-back (0022)", () => {
     ).rejects.toThrow(/separately/i);
   });
 
-  it("ALTER RENAME COLUMN pairs as a key rename, arrays intact", async () => {
+  it("a cross-column UPDATE pairs as a key rename, arrays intact", async () => {
+    // The schemaless rename spelling; ALTER RENAME COLUMN does schema and
+    // data together on a corpus with a schema (query-ddl tests).
     const d = copy();
-    const run = await w("ALTER TABLE docs RENAME COLUMN tags TO topics", d, true);
+    const run = await w("UPDATE docs SET topics = tags, tags = NULL WHERE tags IS NOT NULL", d, true);
     expect(run.changes).toEqual([
       { file: "docs/alpha.md", key: "topics", renamedFrom: "tags", to: ["guide", "intro"], written: true },
       { file: "docs/beta.md", key: "topics", renamedFrom: "tags", to: ["guide"], written: true },
