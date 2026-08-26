@@ -111,6 +111,33 @@ Demanding a field that documents don't yet carry fails every one of them at once
 
 This add-then-ratchet pattern is the heart of tightening a standard without a flag day. The full walkthrough, including staging the rollout across a large repo and using config to apply the stricter schema gradually, lives in [Roll out a new required field without breaking the build](/docmeta/set-up/new-required-field/).
 
+### DDL: schema and corpus move in one statement
+
+When the corpus and the schema live in the same repo, the three steps above
+collapse into one statement. `docmeta query` treats the resolved schema as the
+table definition, so `ALTER TABLE` edits it:
+
+```bash
+npx docmeta query --write "ALTER TABLE docs
+  ADD COLUMN reviewed TEXT NOT NULL DEFAULT 'pending'" docs/
+```
+
+adds `reviewed` to `properties` and `required` **and** backfills every file in
+the same write — the corpus is compliant with the stricter schema the moment
+the schema is stricter. `DROP COLUMN` and `RENAME COLUMN` retire and rename a
+key from the schema and every file together, and each statement is a preview
+until `--write`.
+
+What "the schema" means follows your reference kind: a **file** schema you
+maintain is edited in place — your indent, git as the review surface, an
+`integrity:` pin refreshed if the config carries one — while a **built-in** is
+immutable and forks to a local copy with the config and any in-file `$schema`
+repointed in the same write. What DDL deliberately does *not* do is bump your
+version for you: the preview names the schema file it will edit, and encoding
+the new version — the filename, the `$id`, the URL — stays the deliberate move
+this page is about. Additive `ADD` is the minor-version case; `DROP` and
+`RENAME` are the breaking ones.
+
 ## Dialects are detected, not configured
 
 The second thing that can break a schema isn't a field you changed; it's the JSON Schema *dialect* you wrote it in. JSON Schema has evolved through several versions (draft-04, draft-06, draft-07, 2019-09, 2020-12), and they aren't fully compatible: a schema written for one dialect can fail to compile under another. docmeta handles this for you. It reads each schema's own `$schema` line, the URI at the top that names the dialect's *meta-schema*, and compiles that schema with the matching validation engine.
