@@ -1,3 +1,16 @@
+# [4.4.0](https://github.com/hawkeyexl/docmeta/compare/v4.3.0...v4.4.0) (2026-08-26)
+
+
+### Bug Fixes
+
+* **extractors:** normalize TOML's native dates to the strings they were written as ([1ac5162](https://github.com/hawkeyexl/docmeta/commit/1ac5162eef000d8b1425388cbb1c161c2d107e85))
+* **schemas:** split Hugo's build flags, and give X Cards' pixel floor both channels ([de6379d](https://github.com/hawkeyexl/docmeta/commit/de6379dcf7caf3b0f17dd48a093faeb5dcc8b03f))
+
+
+### Features
+
+* **schemas:** add Hugo, Jekyll, VitePress and X Cards ([de1b8af](https://github.com/hawkeyexl/docmeta/commit/de1b8afbb98ce08a34ec39b2441be3859e907442))
+
 # [4.3.0](https://github.com/hawkeyexl/docmeta/compare/v4.2.0...v4.3.0) (2026-08-26)
 
 
