@@ -1,6 +1,9 @@
 ---
 title: "Proposal: the metadata vocabularies"
 description: Nine proposed frontmatter vocabularies for maintained, machine-consumable docs — open for community review before anything ships.
+sidebar:
+  order: 0
+  label: "Overview"
 ---
 
 :::caution[This is a proposal, not a shipped feature]
@@ -9,7 +12,10 @@ design put in front of the documentation community for review — the
 decisions below are real, and they are still reversible. The full record
 lives in the repo as
 [proposal 0023](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023-metadata-vocabularies.md),
-with the draft schemas under `src/schemas/`.
+with the draft schemas under
+[`docs/proposals/0023/schemas/`](https://github.com/hawkeyexl/docmeta/tree/main/docs/proposals/0023/schemas).
+Each vocabulary's dedicated page is linked from the tables below and
+listed in the sidebar.
 :::
 
 docmeta is a CLI that validates the presence and format of document
@@ -23,25 +29,29 @@ generator defines and no standard owns.
 ## The nine vocabularies
 
 Six page-level vocabularies, split by intent so each is one adoption
-decision:
+decision — **each has a dedicated page** (the sidebar lists all nine) with
+its fields, examples, design rationale, and its own review asks:
 
 | Id | The question it answers | Fields |
 |---|---|---|
-| `docmeta:core:1.0` | What is this page? | `title`* · `description`* · `id` · `type` · `keywords` · `authors` · `language` |
-| `docmeta:stewardship:1.0` | Is it cared for? | `owner` · `stakeholders` · `reviewed-by` · `last-reviewed` · `review-interval` · `verified-against` · `source-of-truth` |
-| `docmeta:audience:1.0` | Who does it serve, and who may see it? | `audiences` · `personas` · `journeys` · `intent` · `visibility` |
-| `docmeta:lifecycle:1.0` | Where is it in its life? | `lifecycle` · `replaced-by` · `supersedes` · `remove-by` |
-| `docmeta:structure:1.0` | What does it connect to? | `applies-to` · `concepts` · `prerequisites` · `next-steps` · `related-pages` |
-| `docmeta:ai-context:1.0` | How did machines make it — and how may they use it? | `generated-by` · `provenance` · `risks` · `sample-questions` |
+| [`docmeta:core:1.0`](/docmeta/proposals/core/) | What is this page? | `title`* · `description`* · `id` · `type` · `keywords` · `authors` · `language` |
+| [`docmeta:stewardship:1.0`](/docmeta/proposals/stewardship/) | Is it cared for? | `owner` · `stakeholders` · `reviewed-by` · `last-reviewed` · `review-interval` · `verified-against` · `source-of-truth` |
+| [`docmeta:audience:1.0`](/docmeta/proposals/audience/) | Who does it serve, and who may see it? | `audiences` · `personas` · `journeys` · `intent` · `visibility` |
+| [`docmeta:lifecycle:1.0`](/docmeta/proposals/lifecycle/) | Where is it in its life? | `lifecycle` · `replaced-by` · `supersedes` · `remove-by` |
+| [`docmeta:structure:1.0`](/docmeta/proposals/structure/) | What does it connect to? | `applies-to` · `concepts` · `prerequisites` · `next-steps` · `related-pages` |
+| [`docmeta:ai-context:1.0`](/docmeta/proposals/ai-context/) | How did machines make it — and how may they use it? | `generated-by` · `provenance` · `risks` · `sample-questions` |
 
-And three revisions of sibling tools' in-progress contracts, redesigned to
-the same conventions with no capability lost:
+And three more common vocabularies for quality and knowledge-graph
+metadata — schemas any tool can implement and compose on top of, whose
+designs descend from three tools' in-progress drafts (those tools are the
+expected first implementers, not the owners), redesigned to the same
+conventions with no capability lost:
 
-| Id | Derived from | Declares |
+| Id | Design lineage | Declares |
 |---|---|---|
-| `docmeta:evals:1.0` | docevals `frontmatter-0.1` | Per-page quality assertions under `evals`, graded by AI, command, human, or tool |
-| `docmeta:kg:1.0` | dockg `frontmatter-0.8` | The knowledge-graph block under `kg` — SKOS concepts, iiRDS typing, PROV provenance |
-| `docmeta:artifact-evals:1.0` | moose-tracevals `artifact-evals-0.2` | Session assertions for skills and agent definitions, under `metadata.evals` |
+| [`docmeta:evals:1.0`](/docmeta/proposals/evals/) | docevals `frontmatter-0.1` | Per-page quality assertions under `evals`, graded by AI, command, human, or tool |
+| [`docmeta:kg:1.0`](/docmeta/proposals/kg/) | dockg `frontmatter-0.8` | The knowledge-graph block under `kg` — SKOS concepts, iiRDS typing, PROV provenance |
+| [`docmeta:artifact-evals:1.0`](/docmeta/proposals/artifact-evals/) | moose-tracevals `artifact-evals-0.2` | Session assertions for skills and agent definitions, under `metadata.evals` |
 
 Only `docmeta:core:1.0` is intended for docmeta's default set — a bare run
 would then require every page to carry a non-empty `title` and

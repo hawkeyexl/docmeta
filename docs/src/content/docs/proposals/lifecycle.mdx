@@ -1,0 +1,81 @@
+---
+title: "docmeta:lifecycle:1.0"
+description: "The proposed lifecycle vocabulary — where a page is in its life, and what a deprecation owes its readers."
+sidebar:
+  order: 4
+  label: "lifecycle"
+---
+
+:::caution[Proposed — not shipped]
+Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-vocabularies/),
+open for community review. Draft schema:
+[`docs/proposals/0023/schemas/lifecycle/1.0.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/lifecycle/1.0.json).
+:::
+
+**The question it answers: where is this page in its life?** And its one
+rule: a deprecated page must say what comes next — a successor, a removal
+date, or both.
+
+## Fields
+
+| Field | Type | Notes |
+|---|---|---|
+| `lifecycle` | enum | `draft` · `published` · `deprecated` · `archived` |
+| `replaced-by` | string, non-empty | The page, id, or URL that supersedes this one |
+| `supersedes` | string or list | Pages this one replaced — the record that survives once the old page is deleted |
+| `remove-by` | W3CDTF date | When the page should be removed — a date, not a flag |
+
+**The conditional:** `lifecycle: deprecated` requires `replaced-by` or
+`remove-by` (or both). A page can be end-of-life without a successor —
+requiring a replacement unconditionally would force a lie into it — but
+"deprecated" with no horizon and no successor is a permanent state, which
+is what the rule forbids.
+
+## Examples
+
+```yaml
+---
+title: Configure the legacy exporter
+description: The exporter settings for operator releases before 1.4.
+lifecycle: deprecated
+replaced-by: configure-the-collector
+remove-by: 2027-01-01
+---
+```
+
+The valid no-successor form:
+
+```yaml
+lifecycle: deprecated
+remove-by: 2027-01-01     # ends without a replacement — legal
+```
+
+## Design decisions
+
+- **A closed enum, chosen with eyes open.** The family's default is *never
+  invent an enum* — but this ladder catches `depreciated`-style typos and
+  makes the deprecation rule airtight, at the recorded cost that an
+  org-specific ladder (`experimental`, `retired`) must override the key.
+  This and `visibility` are the only invented enums in all nine
+  vocabularies, both keys something downstream switches on.
+- **`remove-by` is a date because a flag rots.** Following Ansible's
+  deprecation practice: a removal *date* creates a horizon a build can act
+  on; a boolean creates a graveyard.
+- **The inverse edges live on two files, and this schema says so.**
+  `replaced-by` (old page → new) and `supersedes` (new page → old)
+  describe one fact from two files, and JSON Schema validates one file at
+  a time — the pair is deliberately not cross-checked here. A knowledge
+  graph is where the two edges reconcile: the
+  [kg vocabulary](/docmeta/proposals/kg/)'s `revision-of` emits the same
+  `prov:wasRevisionOf` predicate. Same honesty as the review dates: a
+  record with a stated limit beats a gate that pretends.
+- **Editorial state, not access.** Who may *see* the page is
+  [`visibility`](/docmeta/proposals/audience/); the two axes are
+  independent, and `lifecycle: draft` + `visibility: internal` (unfinished,
+  but visible inside the org) is a legal, real page.
+
+## What reviewers should poke at
+
+The enum's ladder cost — is `draft · published · deprecated · archived`
+universal enough to justify rejecting every org's `experimental` and
+`retired` until they override the key?

@@ -2,11 +2,12 @@
 
 **Status: design phase — proposal drafted, review open. Nothing is
 canonical.** The record is `docs/proposals/0023-metadata-vocabularies.md`;
-the community-facing page is
-`docs/src/content/docs/proposals/frontmatter-vocabularies.mdx` (passes the
-dogfood gate and the docs build). Nine draft schemas live unregistered
-under `src/schemas/` — the six house ids below plus evals, kg, and
-artifact-evals. Spec-by-example: `test/default-schema.test.ts` (red until
+the community-facing surface is the docs site's Proposals group — a hub
+overview (`docs/src/content/docs/proposals/frontmatter-vocabularies.mdx`)
+plus one dedicated page per vocabulary, nine in all (all pass the dogfood
+gate and the docs build). Nine draft schemas live unregistered under
+`docs/proposals/0023/schemas/` — the six house ids below plus evals, kg,
+and artifact-evals. Spec-by-example: `test/default-schema.test.ts` (red until
 registration, by design) and the runnable ladders `docs/proposals/0023/ladders/*.cjs` (plus `compat-check.cjs`, the composability cross-check) — and `test/default-schema.test.ts` runs green via file refs, with only default-set membership skipped until registration.
 
 ## The principles (settled through the field walk)

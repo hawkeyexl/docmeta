@@ -1,0 +1,82 @@
+---
+title: "docmeta:core:1.0"
+description: "The proposed descriptive floor — what the page is called, what it is for, and the shared keys every generator recognizes."
+sidebar:
+  order: 1
+  label: "core"
+---
+
+:::caution[Proposed — not shipped]
+Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-vocabularies/),
+open for community review. Draft schema:
+[`docs/proposals/0023/schemas/core/1.0.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/core/1.0.json).
+:::
+
+**The question it answers: what is this page?** Core is the descriptive
+floor of the family and the only vocabulary intended for docmeta's default
+set — the one every page meets on day one, in any repo, with no strategy,
+no review process, and no tooling beyond a title and a sentence.
+
+## Fields
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `title` | string, non-empty | **yes** | One string, never empty, never an array |
+| `description` | string, non-empty | **yes** | One full sentence; the search snippet and the first thing retrieval reads |
+| `id` | string, non-empty | — | Stable identifier, independent of path; what `related-pages`, `prerequisites`, `replaced-by` point at |
+| `type` | string, non-empty | — | What kind of content this is; taxonomy schemas (Diátaxis, TGDP) narrow it, `kg.type` is its iiRDS twin |
+| `keywords` | string or list of non-empty strings | — | Search words; a comma-separated string is the AsciiDoc form Antora reads |
+| `authors` | string, object, or list of them | — | Attribution — who wrote it; `owner` (stewardship) is who fixes it |
+| `language` | string, non-empty | — | One BCP 47 tag recommended (`en`, `pt-BR`), not enforced |
+
+## Examples
+
+The floor:
+
+```yaml
+---
+title: Install the operator on Kubernetes
+description: Deploy the operator with Helm and verify the rollout.
+---
+```
+
+Everything core knows about:
+
+```yaml
+---
+title: Install the operator on Kubernetes
+description: Deploy the operator with Helm and verify the rollout.
+id: install-operator-k8s
+type: how-to
+keywords: [helm, operator, kubernetes]
+authors:
+  - Jane Doe
+  - name: Sam Reviewer          # MyST/Docusaurus person objects are legal
+language: en
+---
+```
+
+## Design decisions
+
+- **Weak floors teach bad habits.** Every string core claims is non-empty,
+  and `title`/`description`/`type`/`language` are single values. This is
+  deliberately stricter than the loosest schemas sharing these keys —
+  Docusaurus permits empty titles, Dublin Core repeats its elements — and
+  those are the *only* exceptions to the family's compatibility rule. Each
+  one is pinned as an expected-reject in the automated composability check,
+  so an unrecorded exception fails CI.
+- **Claim content, never rendering.** There is no `slug`, `layout`,
+  `image`, or `tags` here. Rendering keys stay with your generator; core
+  describes what the page *is*.
+- **Derivable facts stay out.** No creation `date`, no `updated` stamp —
+  git already knows both, and hand-typed copies go stale silently.
+- **`authors` is attribution, not stewardship.** It accepts every
+  documented MyST and Docusaurus person form (and nothing looser — no bare
+  numbers, no empty lists); the party answerable for the page lives in the
+  [stewardship vocabulary](/docmeta/proposals/stewardship/).
+
+## What reviewers should poke at
+
+Whether requiring `title` + `description` on bare runs is the right default
+nudge, and whether the non-empty floor's strictness against Docusaurus's
+documented empty-title tolerance is worth the recorded exception.

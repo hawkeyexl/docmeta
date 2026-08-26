@@ -1,0 +1,100 @@
+---
+title: "docmeta:artifact-evals:1.0"
+description: "The proposed artifact-eval vocabulary — session assertions for skills, agent definitions, and project rules, under metadata.evals."
+sidebar:
+  order: 9
+  label: "artifact-evals"
+---
+
+:::caution[Proposed — not shipped]
+Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-vocabularies/),
+open for community review. Draft schema:
+[`docs/proposals/0023/schemas/artifact-evals/1.0.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/artifact-evals/1.0.json).
+:::
+
+**The question it answers: what must a session that used this artifact
+have done?** Instruction artifacts — skills, agent definitions,
+project-rules files — carry evals about the *sessions* that run with them.
+A common vocabulary any session-grading tool can implement; its design
+descends from moose-tracevals' draft, its expected first implementer.
+
+## Keys
+
+The [page-side trio](/docmeta/proposals/evals/), one level down — because
+an artifact's top-level frontmatter is the host tool's contract, and
+`metadata` is the host's sanctioned extension bag:
+
+| Key | Type | Notes |
+|---|---|---|
+| `metadata.evals` | string, or non-empty list of entries | One assertion, or the list |
+| `metadata.eval-skip` | boolean (default false) | Skip the artifact's evals — reported, never silent |
+| `metadata.eval-provenance` | list of entries | The machine-proposal trail |
+
+Entries share the page-side shape: `id` + `assertion` (both required on
+the object form), `type`, `severity` (default error), `evidence`,
+`examples` with one-or-several anchors, `provider`, the command family
+with the same guard rails, `options`, `severity-map`, `skip`.
+
+## Graders
+
+A full open enum: recommended values `ai` (default) · `human` · `command`
+· `tool-usage` · `skill-invoked` · `file-access` · `turn-count` · `cost` ·
+`regex` · `json-output`, plus the page side's `tool:*` spelling so one
+grader name ports across both vocabularies — and any kebab name is legal,
+validated against the implementer's grader registry at run time, so a new
+grader never needs a schema version. Two semantics differ from the page
+side by nature: `human` is judged **per session** (every trace is new, so
+no verdict caching), and `command` receives **`{trace}`** — the session's
+trace path — where the page side substitutes `{file}`.
+
+## Example
+
+```yaml
+---
+name: fix-bug
+description: Fix a reported bug, reproducing it with a failing test first.
+metadata:
+  evals:
+    - id: used-read
+      assertion: The session read at least one source file before editing.
+      grader: tool-usage
+      options: { tool: Read, expect: used }
+    - id: honored-tdd
+      assertion: The session wrote a failing test before the fix.
+      grader: ai
+      type: capability
+      examples:
+        pass:
+          - A test edit lands before the src edit, and the first run fails.
+        fail: The fix lands first and a test is added afterwards.
+    - Reproduce the bug with a failing test before applying the fix.
+  eval-provenance:
+    - generated-by: claude-fable-5
+      evals: [used-read, honored-tdd]
+      confidence: { used-read: 0.91, honored-tdd: 0.86 }
+---
+```
+
+## Design decisions
+
+- **The envelope is the host's, not ours.** The one place the family's
+  flattening rule deliberately cannot reach: a skill's top-level
+  frontmatter belongs to the tool that runs it, and `metadata` is its
+  extension point. `metadata` stays open — other tools' members pass
+  untouched — while entry objects are closed; implementers reserve the
+  `eval` prefix *inside* `metadata` for the same loud-typo guard the page
+  side applies at its root.
+- **Ids are required on object entries.** The lineage contract's
+  optional, position-derived names orphaned cached verdicts whenever
+  entries moved; if an eval is worth an object, it is worth a stable name.
+- **The grader enum is fully open** because — unlike the page side — no
+  schema conditional switches on it: every object entry requires an
+  assertion regardless. The one cost, stated in the schema: a stale
+  legacy grader name passes the schema and is rejected by the registry.
+
+## What reviewers should poke at
+
+Whether one entry vocabulary across pages and artifacts (differing only
+in envelope and grader family, each for a stated reason) carries its
+weight, and whether the per-session `human` semantics are documented
+clearly enough that implementers won't try to cache verdicts.

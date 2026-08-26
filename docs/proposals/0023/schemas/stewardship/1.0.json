@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "docmeta:stewardship:1.0",
   "title": "docmeta stewardship vocabulary (1.0)",
-  "description": "Is this page cared for: ownership, review, and the anchors that make drift detectable. Every field is a fact only a human can assert — dates the repo can derive (creation, last change) are deliberately absent, because git owns them and hand-typed copies go stale. The review dates are records, not freshness gates: JSON Schema cannot compare a date to today, and deriving the due date from `last-reviewed` + `review-interval` belongs to tooling that can read a clock (docevals' freshness grader reads `last-reviewed`).",
+  "description": "Is this page cared for: ownership, review, and the anchors that make drift detectable. Every field is a fact only a human can assert — dates the repo can derive (creation, last change) are deliberately absent, because git owns them and hand-typed copies go stale. The review dates are records, not freshness gates: JSON Schema cannot compare a date to today, and deriving the due date from `last-reviewed` + `review-interval` belongs to tooling that can read a clock (any freshness grader reads `last-reviewed`; docevals ships one).",
   "type": "object",
   "additionalProperties": true,
   "properties": {
@@ -20,7 +20,7 @@
     },
     "last-reviewed": {
       "$ref": "#/$defs/w3cdtf",
-      "description": "When the page was last reviewed, as a W3CDTF date. The same field docevals' freshness grader reads. A record, not a freshness gate — JSON Schema cannot compare a date to today."
+      "description": "When the page was last reviewed, as a W3CDTF date. The field freshness tooling reads to derive review deadlines (docevals' grader is one implementer). A record, not a freshness gate — JSON Schema cannot compare a date to today."
     },
     "review-interval": {
       "type": "string",

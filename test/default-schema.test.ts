@@ -25,10 +25,11 @@
  *    docmeta house schemas, so a page stacking all six gets every error
  *    attributed to exactly one intent.
  *
- * 3. **Sibling namespaces are not claimed.** `evals` (docmeta:evals:1.0),
+ * 3. **Companion namespaces are not claimed.** `evals` (docmeta:evals:1.0),
  *    `kg` (docmeta:kg:1.0) and `metadata` (docmeta:artifact-evals:1.0) are
- *    validated by their own schemas; claiming them here — even loosely —
- *    would put them on `docmeta fill`'s menu, and each has its own fill loop.
+ *    common vocabularies validated by their own schemas and implemented by
+ *    their own tools; claiming them here — even loosely — would put them on
+ *    `docmeta fill`'s menu, and each has its own fill loop.
  */
 import { describe, it, expect } from "vitest";
 import { fileURLToPath } from "node:url";
@@ -365,19 +366,19 @@ describe("the six house vocabularies", () => {
     expect(bad.ok).toBe(false);
   });
 
-  it("leaves the sibling namespaces alone, and they validate under their own drafts", async () => {
+  it("leaves the companion namespaces alone, and they validate under their own drafts", async () => {
     // `evals`, `kg` and `metadata.evals` are unclaimed by the house schemas;
-    // stacked with the sibling drafts themselves, the fixture's blocks are
+    // stacked with the companion drafts themselves, the fixture's blocks are
     // checked by their owners — proving the fixture speaks the current
     // shapes, not the superseded 0.1/0.2/0.8 ones.
-    const houseOnly = await check("sibling-namespaces.md");
+    const houseOnly = await check("companion-namespaces.md");
     expect(houseOnly.errors).toEqual([]);
-    const stacked = await check("sibling-namespaces.md", [...HOUSE, ...SIBLINGS]);
+    const stacked = await check("companion-namespaces.md", [...HOUSE, ...SIBLINGS]);
     expect(stacked.errors).toEqual([]);
     expect(stacked.ok).toBe(true);
   });
 
-  it("does not claim the sibling namespaces even loosely", async () => {
+  it("does not claim the companion namespaces even loosely", async () => {
     for (const ref of HOUSE) {
       const schema = (await loadSchema(ref)) as {
         properties: Record<string, unknown>;
@@ -477,8 +478,8 @@ describe.skip("the default set (flips on registration)", () => {
     expect(fromCore.some((e) => e.message.includes("description"))).toBe(true);
   });
 
-  it("leaves the sibling tools' namespaces alone on a bare run", async () => {
-    const r = await check("sibling-namespaces.md", []);
+  it("leaves the companion namespaces alone on a bare run", async () => {
+    const r = await check("companion-namespaces.md", []);
     expect(r.errors).toEqual([]);
     expect(r.ok).toBe(true);
   });

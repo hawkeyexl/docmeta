@@ -1,0 +1,80 @@
+---
+title: "docmeta:stewardship:1.0"
+description: "The proposed ownership and review vocabulary — who is answerable for a page, when it was verified, and what reality it is checked against."
+sidebar:
+  order: 2
+  label: "stewardship"
+---
+
+:::caution[Proposed — not shipped]
+Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-vocabularies/),
+open for community review. Draft schema:
+[`docs/proposals/0023/schemas/stewardship/1.0.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/stewardship/1.0.json).
+:::
+
+**The question it answers: is this page cared for?** Every field here is a
+fact only a human can assert — who owns the page, who to consult, when it
+was last verified and against what. Dates the repo can derive (creation,
+last change) are deliberately absent: git owns them, and hand-typed copies
+lie.
+
+## Fields
+
+| Field | Type | Notes |
+|---|---|---|
+| `owner` | string or list | The party answerable — a name, handle, chat channel, or team slug; the one field every ownership system from Backstage to GitLab requires |
+| `stakeholders` | string or list | Who has a stake in this page being right: the feature's engineer, the product owner, the support lead. Page-level on purpose — the right people differ page by page |
+| `reviewed-by` | string or list | Who did the last pass (`reviewers` belongs to MyST's scholarly objects, hence the spelling) |
+| `last-reviewed` | W3CDTF date | When the last review happened — the field freshness tooling reads |
+| `review-interval` | ISO 8601 duration | How often review is due: `P90D`, `P1Y` — machine-comparable, unlike `90d` |
+| `verified-against` | string, non-empty | The product version or spec the content was checked against: `operator 1.4.2` |
+| `source-of-truth` | string or list | Where reality lives — a repo path, an API spec; the anchor a drift check compares the page against |
+
+All list fields accept one string or a non-empty, duplicate-free list.
+
+## Example
+
+```yaml
+---
+title: Install the operator on Kubernetes
+description: Deploy the operator with Helm and verify the rollout.
+owner: platform-docs
+stakeholders: [jane.doe, pm-alex]
+reviewed-by: [sam.reviewer]
+last-reviewed: 2026-08-20
+review-interval: P90D
+verified-against: operator 1.4.2
+source-of-truth: https://github.com/example/operator/tree/main/helm
+---
+```
+
+## Design decisions
+
+- **Records, not gates.** JSON Schema cannot compare a date to today, so a
+  `last-reviewed` from 1998 validates — deliberately, and pinned by a test.
+  Deriving the due date (`last-reviewed` + `review-interval`) and judging it
+  belongs to tooling that can read a clock; any freshness grader can
+  consume these fields, and docevals ships one that reads `last-reviewed`
+  by default.
+- **There is no stored due-date field.** It would be derivable from the
+  two fields that exist, and derivable fields lie — the same rule that
+  keeps `updated` out of core.
+- **Dates are field-ranged W3CDTF.** Reduced precision is legal (`2026`,
+  `2026-08`), a timestamp requires its timezone (the W3CDTF profile
+  mandates it), and impossible dates like `2026-13-45` fail here rather
+  than becoming `Invalid Date` — and a silently never-overdue page — in
+  the tooling downstream. Not calendar-exact: February 31 is a reviewer's
+  catch.
+- **`stakeholders`, not `sme`.** Broader than a subject-matter expert on
+  purpose: the product owner and the support lead have a stake in the page
+  being right without being its technical authority. Project-wide
+  stakeholder lists stay in project docs — this field is for the people
+  who differ page by page.
+
+## What reviewers should poke at
+
+Whether `owner` should eventually be required for teams adopting this
+vocabulary (it is optional as proposed), and whether the
+`verified-against` / `last-reviewed` distinction — reviewed *against
+something* vs reviewed *at some time* — reads clearly enough from the field
+names alone.

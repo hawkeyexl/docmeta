@@ -41,9 +41,10 @@ same `runValidate` path shipped code uses — with one `describe.skip` block
 (default-set membership, the only thing file refs cannot test) that the
 registration PR flips on. Registration, publication, and the default-set
 change land in that follow-up PR only after the community review this
-proposal exists to invite. The review-facing page is
-`docs/src/content/docs/proposals/frontmatter-vocabularies.mdx`, published in
-the site's Proposals sidebar group.
+proposal exists to invite. The review surface is the site's Proposals sidebar group: a hub overview
+(`docs/src/content/docs/proposals/frontmatter-vocabularies.mdx`) plus a
+dedicated page per vocabulary — nine pages, each with fields, examples,
+rationale, and its own review asks.
 
 ## Why a family, and why now
 
@@ -60,8 +61,9 @@ eval-instrumented → drift-monitored, with `intent`, `source-of-truth`,
 `risks`, and per-page sample questions); a survey of 225 writing skills' entry
 criteria as a metadata demand signal; the registry's own key space (19
 built-ins, 220 distinct keys once the in-flight platform schemas land); and
-the in-progress metadata contracts of three sibling tools — docevals, dockg,
-and moose-tracevals — which this family revises rather than works around.
+the in-progress metadata contracts of three tools in the same family —
+docevals, dockg, and moose-tracevals — whose drafts this proposal promotes
+into common vocabularies rather than working around them.
 
 ## The principles
 
@@ -98,9 +100,10 @@ cutting, and each names what it cut.
 7. **Compose, don't duplicate.** `action` stays with
    `passo-uno:seven-action:1.0` in the default set; the classification story
    is three layers — `type` (what the page is), `action` (what the reader is
-   doing), `intent` (the specific job). The sibling namespaces `evals`, `kg`
-   and `metadata` are never claimed by the house ids: a claimed key lands on
-   `docmeta fill`'s menu, and each block has its own fill loop.
+   doing), `intent` (the specific job). The `evals`, `kg` and `metadata`
+   namespaces are never claimed by the house ids: a claimed key lands on
+   `docmeta fill`'s menu, and each of those vocabularies has its own fill
+   loop in the tools that implement it.
 8. **Deeper wins; the top level is the harvest fallback.** Where a `kg` block
    field and a page-level field speak to the same fact — `type`, `concepts`,
    `applies-to`, `supersedes`/`revision-of` — the deeper declaration wins,
@@ -177,13 +180,21 @@ open-world · read-only · idempotent`; the first four from the
 context-engineering model, the last three mirroring MCP's tool annotations),
 `sample-questions`.
 
-## The sibling revisions
+## The quality and graph vocabularies
 
-All three sibling tools recorded "schemas are published by the tool that owns
-them" and each carries a *don't re-propose a docmeta built-in* rule. This
-proposal reverses that decision deliberately, with a new dividing line:
-**docmeta publishes the family's metadata vocabularies; the tools own
-behavior, graders, graphs, and runtimes.** Each repo owes a superseding ADR
+`docmeta:evals`, `docmeta:kg`, and `docmeta:artifact-evals` are **common
+vocabularies**, exactly like the six house ids: any tool can implement them,
+and other schemas can compose on top of them. They are not sibling-owned
+contracts that docmeta happens to host. Their designs descend from three
+tools' in-progress drafts — docevals, dockg, and moose-tracevals — and those
+tools are the expected first implementers, which is why each gets a fidelity
+ledger below: the ledger records design lineage, not ownership.
+
+All three source tools had recorded "schemas are published by the tool that
+owns them" with *don't re-propose a docmeta built-in* rules. This proposal
+reverses that deliberately, with a new dividing line: **docmeta publishes
+common metadata vocabularies; tools implement behavior — graders, graphs,
+runtimes — against them.** Each source repo owes a superseding ADR
 (supersede, never amend). The reversal is cheap now and only now: docevals
 and moose-tracevals have never shipped, so every break below is loud and
 free.
@@ -282,7 +293,7 @@ The spec suite validates through the shipped `runValidate` path (file refs
 into the drafts) and pins disjointness, attribution, the enums, the
 conditionals, and the freshness limitation; only default-set membership is
 skipped until registration. Each ladder includes the migration negatives —
-old spellings and shapes failing loudly — and each sibling revision includes
+old spellings and shapes failing loudly — and each lineage-bearing vocabulary includes
 a translated capability-fidelity case proving no capability was lost. The
 compat-check probes every shared key with the other claimants' most extreme
 legal values, expects exactly the recorded exceptions, and exits non-zero on

@@ -1,0 +1,98 @@
+---
+title: "docmeta:evals:1.0"
+description: "The proposed page-eval vocabulary — named, testable assertions about a page, graded by AI, command, human, or tool."
+sidebar:
+  order: 7
+  label: "evals"
+---
+
+:::caution[Proposed — not shipped]
+Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-vocabularies/),
+open for community review. Draft schema:
+[`docs/proposals/0023/schemas/evals/1.0.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/evals/1.0.json).
+:::
+
+**The question it answers: what must be true of this page?** A common
+vocabulary for per-page quality assertions that any grader, judge, or CI
+tool can implement, and that other schemas can compose on top of. Its
+design descends from docevals' draft contract, and docevals is its
+expected first implementer — not its owner.
+
+## Keys
+
+Four page-level keys, all under the reserved `eval-` prefix or the `evals`
+key itself:
+
+| Key | Type | Notes |
+|---|---|---|
+| `evals` | string, or non-empty list of entries | One assertion, or the list |
+| `eval-suite` | string, non-empty | Named suite from the implementer's config; page entries win on id collision |
+| `eval-skip` | boolean (default false) | Skip the page's evals — reported, never silent |
+| `eval-provenance` | list of entries | The machine-proposal trail, one entry per model |
+
+An entry is a **string shorthand** (an AI-judged assertion at error
+severity), a **`use:` reference** to a config-defined eval, or an **inline
+definition**: `id` (required, kebab), `assertion`, `type`
+(`capability`/`regression`), `grader`, `provider`, `evidence`, `examples`
+(pass/fail anchors, one or several), the command family (`command`,
+`success-exit-codes`, `timeout-ms`, `generated-assertion-hash`),
+`options`, `severity` (`error`/`warning`/`info`, default error),
+`severity-map`, `skip`.
+
+## Graders
+
+`ai` (default — a model or an agent, selected per-eval with `provider`) ·
+`command` (an executable; `{file}` is the page path) · `human` (a review
+queue) · `tool:*` (named integrations — an open namespace). The structural
+three stay closed because schema conditionals switch on them: `ai` and
+`human` require an `assertion`; `command` requires an `assertion` *or* a
+`command` — omitting the command is the generation contract, where tooling
+generates a check script from the assertion and writes `command` +
+`generated-assertion-hash` back. An entry carrying a `command` must say
+`grader: command`; a hash is never legal without its command.
+
+## Examples
+
+```yaml
+evals: The documented install command matches the current package name.
+```
+
+```yaml
+eval-suite: how-to
+evals:
+  - id: install-command-current
+    assertion: The install command matches the current package name.
+  - id: links-resolve
+    grader: command
+    command: ["npx", "linkinator", "{file}"]
+  - id: install-verified
+    assertion: The Helm install steps produce a Ready operator pod.
+    grader: human
+    severity: warning
+```
+
+## Design decisions
+
+- **Flat, like the rest of the family.** The lineage contract nested
+  settings inside an object; here the list is the value and the settings
+  are page-level `eval-*` keys. The page root is open where the old block
+  was closed, so implementers should **reserve the `eval-` prefix** and
+  reject unrecognized `eval-*` keys — restoring the loud-typo property at
+  the root.
+- **Ids are required on object entries** (the string shorthand is the
+  legitimately id-less form): position-derived names orphan cached
+  verdicts whenever entries move.
+- **Errors name the actual fault.** Entries branch by `if`/`then` rather
+  than `oneOf`, so a typo'd field inside an object reports against that
+  key instead of collapsing to "must be string".
+- **`eval-provenance`** is the family's machine-proposal trail (see
+  [ai-context](/docmeta/proposals/ai-context/)): entries retire under
+  human review, and a surviving entry means unreviewed machine-proposed
+  evals.
+
+## What reviewers should poke at
+
+Whether the `eval-` prefix reservation is an acceptable ask of
+implementers, and whether the closed structural graders plus the open
+`tool:*` namespace is the right split (its artifact-side counterpart is a
+[full open enum](/docmeta/proposals/artifact-evals/), for stated reasons).
