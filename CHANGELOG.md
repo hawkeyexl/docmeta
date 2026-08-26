@@ -1,3 +1,34 @@
+# [4.3.0](https://github.com/hawkeyexl/docmeta/compare/v4.2.0...v4.3.0) (2026-08-26)
+
+
+### Bug Fixes
+
+* **query:** close the comment-prefix guard bypass, classify DML structurally ([8acb460](https://github.com/hawkeyexl/docmeta/commit/8acb460886dfba8bd51ac549d6f1243ae9126aab))
+* **query:** compare schema sets order-insensitively in the split guard ([90d974e](https://github.com/hawkeyexl/docmeta/commit/90d974ed73138ccba3490017a4bb129f403694db))
+* **query:** create the export's parent directories ([f269aa1](https://github.com/hawkeyexl/docmeta/commit/f269aa194e024838afc329b9784a2f9f541dc1bd))
+* **query:** harden the DDL edges the folded review flagged ([44c8ba1](https://github.com/hawkeyexl/docmeta/commit/44c8ba1b6800ea46c8c6868bdd152fb6fc88bc4d))
+* **query:** honest no-op for delete-only on a block-less document ([1685c2a](https://github.com/hawkeyexl/docmeta/commit/1685c2a81b85ed358cea367dbb487dce758cba82))
+* **query:** judge DELETE's strippability per extraction, not per extractor ([e24b03f](https://github.com/hawkeyexl/docmeta/commit/e24b03f568bb0585149dfcd198f5fbc42ca80f9a))
+* **query:** load the projection in one transaction, and answer the query_only question in place ([fa000f7](https://github.com/hawkeyexl/docmeta/commit/fa000f7c36a06a79e5033b6510a6ef850783145e))
+* **query:** name the format when stdin has no extension to read as ([6cf6d8e](https://github.com/hawkeyexl/docmeta/commit/6cf6d8e99df8f35eb12dfc872211942838b5d031))
+* **query:** narrow a schema's required list to its string entries ([50bc4ad](https://github.com/hawkeyexl/docmeta/commit/50bc4adf37c7ec1db2431efccd2e54b74970f95c))
+* **query:** re-check the rename destination at apply time ([a80bcdd](https://github.com/hawkeyexl/docmeta/commit/a80bcddb7352cfb36a15b7eecec61a94d963f10e))
+* **query:** refuse an element-backed DELETE at preview time ([3da692a](https://github.com/hawkeyexl/docmeta/commit/3da692ad6332b15c08530bd40564988bc0d0cbfe))
+* **query:** route DDL through the trust, config, and pin machinery it bypassed ([020eb07](https://github.com/hawkeyexl/docmeta/commit/020eb07e1a0f9d8df6349d3c3d03215ba5ccc66a))
+* **query:** strip the BOM before sniffing a schema's indent ([b56e04f](https://github.com/hawkeyexl/docmeta/commit/b56e04ffef594bb5ae10ce528d9ac18a9001fed9))
+* **query:** surface the unwritable-INSERT refusal at preview time ([640c1af](https://github.com/hawkeyexl/docmeta/commit/640c1af8fd6a654aec2b3c819d6d9ca24b9a394e))
+* **query:** write content before moving files, and let refusals name a bigint ([2bcee63](https://github.com/hawkeyexl/docmeta/commit/2bcee63764fffc6a279bce9ffd81d36c10d2c998))
+
+
+### Features
+
+* **query:** --db writes the corpus database for any SQLite front-end ([59ba86e](https://github.com/hawkeyexl/docmeta/commit/59ba86ec491e2aca71d578a8b72175c5deeec100))
+* **query:** --write applies an UPDATE to the files, preview by default ([afdc74c](https://github.com/hawkeyexl/docmeta/commit/afdc74c132182ad2e251a9003d4d2d337cd507d5))
+* **query:** full CRUD — corpus-new keys and key deletion ([fdd1167](https://github.com/hawkeyexl/docmeta/commit/fdd1167b66924c16efccde3a01399b4c3914d051))
+* **query:** run SQL across the metadata corpus, --check as a CI gate ([8cd7624](https://github.com/hawkeyexl/docmeta/commit/8cd76243c113166432fb4f83688a51332d41ba91))
+* **query:** schema DDL — fork builtins, edit local schemas in place ([53a23c2](https://github.com/hawkeyexl/docmeta/commit/53a23c2ef7afe515fc744c913e1a0f516ff4ba14))
+* **query:** standard DML — DELETE strips, INSERT creates, _path moves, NULL deletes ([d794bd9](https://github.com/hawkeyexl/docmeta/commit/d794bd9ed3b543dfe47a31feb8b526611cc4e576))
+
 # [4.2.0](https://github.com/hawkeyexl/docmeta/compare/v4.1.3...v4.2.0) (2026-08-24)
 
 
