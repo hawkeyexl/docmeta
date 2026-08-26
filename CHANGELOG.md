@@ -1,3 +1,10 @@
+# [4.5.0](https://github.com/hawkeyexl/docmeta/compare/v4.4.0...v4.5.0) (2026-08-26)
+
+
+### Features
+
+* **schemas:** add the two Agent Skills SKILL.md schemas ([98f705b](https://github.com/hawkeyexl/docmeta/commit/98f705bc0115db2bc5387b577e71750acffd3124))
+
 # [4.4.0](https://github.com/hawkeyexl/docmeta/compare/v4.3.0...v4.4.0) (2026-08-26)
 
 
