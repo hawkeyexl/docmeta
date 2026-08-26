@@ -1,11 +1,14 @@
 /**
  * Serve a `docmeta query --db` export to Datasette Lite — a browsable SQL UI
  * over the corpus with no Python (or anything else) installed. Datasette Lite
- * is Datasette compiled to WebAssembly, running entirely in the browser; the
- * only local piece it needs is an HTTP URL for the database file, which is
- * what this ~40-line server provides. CORS is open because lite.datasette.io
- * is the cross-origin consumer, and browsers treat 127.0.0.1 as a secure
- * context, so the https page may fetch from it.
+ * is Datasette compiled to WebAssembly, running entirely in the browser.
+ *
+ * The Lite shell (index.html, webworker.js) is proxied from lite.datasette.io
+ * and served from this process, so the page, the worker, and the database all
+ * share one plain-http local origin. That single-origin shape is the point:
+ * an https-hosted Lite fetching a http://127.0.0.1 database is mixed content,
+ * which some browsers block inside workers — same-origin has no such edge.
+ * Pyodide itself still loads from its CDN, so the first open needs network.
  *
  * Usage:  node scripts/query-ui.mjs [path/to/query.db] [port] [--no-open]
  * Or:     npm run query:ui   (exports the repo's own docs first)
@@ -21,21 +24,54 @@ const db = resolve(args[0] ?? ".docmeta/query.db");
 const port = Number(args[1] ?? 8765);
 statSync(db); // fail fast, with the path in the error, if the export is missing
 
+const LITE = "https://lite.datasette.io";
+const shellCache = new Map(); // pathname -> { body: Buffer, type: string }
+
 const server = createServer((req, res) => {
-  // Whatever the request path, the answer is the database. The server exists
-  // to hand Datasette Lite this one file and nothing else.
-  const bytes = readFileSync(db);
-  res.writeHead(200, {
-    "Content-Type": "application/octet-stream",
-    "Content-Length": bytes.length,
-    "Access-Control-Allow-Origin": "*",
-  });
-  res.end(bytes);
+  const { pathname } = new URL(req.url ?? "/", `http://127.0.0.1:${String(port)}`);
+
+  if (pathname === `/${basename(db)}`) {
+    // Re-read per request, so re-running the export refreshes a mere reload.
+    const bytes = readFileSync(db);
+    res.writeHead(200, {
+      "Content-Type": "application/octet-stream",
+      "Content-Length": bytes.length,
+    });
+    res.end(bytes);
+    return;
+  }
+
+  // Everything else is the Lite shell, fetched once and cached for the
+  // session. Whatever assets upstream introduces are proxied the same way.
+  const cached = shellCache.get(pathname);
+  if (cached) {
+    res.writeHead(200, { "Content-Type": cached.type });
+    res.end(cached.body);
+    return;
+  }
+  fetch(`${LITE}${pathname === "/" ? "/index.html" : pathname}`)
+    .then(async (upstream) => {
+      if (!upstream.ok) {
+        res.writeHead(upstream.status).end();
+        return;
+      }
+      const entry = {
+        body: Buffer.from(await upstream.arrayBuffer()),
+        type: upstream.headers.get("content-type") ?? "text/html",
+      };
+      shellCache.set(pathname, entry);
+      res.writeHead(200, { "Content-Type": entry.type });
+      res.end(entry.body);
+    })
+    .catch((err) => {
+      res.writeHead(502, { "Content-Type": "text/plain" });
+      res.end(`Could not reach ${LITE}: ${err.message}\n`);
+    });
 });
 
 server.listen(port, "127.0.0.1", () => {
-  const fileUrl = `http://127.0.0.1:${String(port)}/${basename(db)}`;
-  const ui = `https://lite.datasette.io/?url=${encodeURIComponent(fileUrl)}`;
+  // A relative url= keeps the database fetch same-origin, worker included.
+  const ui = `http://127.0.0.1:${String(port)}/?url=${basename(db)}`;
   console.log(`Serving ${db}`);
   console.log(`Datasette Lite: ${ui}`);
   console.log("Ctrl-C to stop.");
