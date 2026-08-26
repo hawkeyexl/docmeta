@@ -5,6 +5,7 @@
  * config `paths:` fallback) mirrors `get` so the two commands behave
  * identically. Proposal 0021 is the design record.
  */
+import { randomBytes } from "node:crypto";
 import { mkdir, open, readFile, rm } from "node:fs/promises";
 import { dirname, resolve, extname } from "node:path";
 import { resolveElements } from "../core/resolve-schema.js";
@@ -87,7 +88,11 @@ export interface QueryChange {
   file: string;
   key: string;
   from: unknown;
-  to: unknown;
+  /** The new value. Absent when the change is a deletion. */
+  to?: unknown;
+  /** The key is removed from the file entirely — `drop_key()` or a dropped
+   * column — as opposed to being set to an explicit `null`. */
+  deleted?: boolean;
   /** True once `write` has applied it; always false in a preview. */
   written: boolean;
 }
@@ -298,6 +303,15 @@ async function runSql(
       if (key !== "" && !RESERVED.has(key)) keys.add(key);
     }
   }
+  // A SET target no file has yet still deserves a column — that is how a
+  // corpus-new key is created. The scan is tolerant and only ever *adds*
+  // empty columns: anything it misses fails exactly as before ("no such
+  // column"), and a false positive is an all-NULL column nothing diffs.
+  if (sql !== "") {
+    for (const key of collectSetTargets(sql)) {
+      if (key !== "" && !RESERVED.has(key)) keys.add(key);
+    }
+  }
   const dataColumns = [...keys].sort();
 
   const { DatabaseSync } = await loadSqlite();
@@ -354,6 +368,11 @@ async function runSql(
       );
     }
 
+    // `drop_key()` marks a cell for key deletion. The sentinel is random per
+    // run, so no real content can collide with it and nothing can type it.
+    const sentinel = `docmeta:drop:${randomBytes(16).toString("hex")}`;
+    db.function("drop_key", () => sentinel);
+
     // 0022: the statement runs freely against this disposable projection and
     // is judged by its effects, not its syntax. A read leaves no diff.
     const before = snapshotRows(db);
@@ -381,7 +400,7 @@ async function runSql(
       return { columns, rows, ...(dbInfo ? { db: dbInfo } : {}) };
     }
 
-    const changes = restoreChanges(effects, entries);
+    const changes = restoreChanges(effects, entries, sentinel);
     if (ctx.write) await applyChanges(changes, entries, ctx);
     return { columns, rows, changes, ...(dbInfo ? { db: dbInfo } : {}) };
   } finally {
@@ -467,6 +486,7 @@ function fileTypeOf(value: unknown): FileType | undefined {
 function restoreChanges(
   effects: CellEffect[],
   entries: QueryEntry[],
+  sentinel: string,
 ): QueryChange[] {
   const originals = new Map(entries.map((e) => [e.label, e.extracted.data]));
   const dominant = new Map<string, FileType | undefined>();
@@ -489,13 +509,22 @@ function restoreChanges(
     return result;
   };
 
-  return effects.map(({ file, key, to }) => {
+  const changes: QueryChange[] = [];
+  for (const { file, key, to } of effects) {
     const original = originals.get(file)?.[key];
     // The variable annotation (not just the return position) is what lets
     // control-flow analysis treat a `refuse(...)` call as terminating.
     const refuse: (why: string) => never = (why) => {
       throw new DocmetaError(`"${key}" in ${file}: ${why}`);
     };
+    // Deletion: `drop_key()` marked the cell, or a dropped column removed it.
+    // Deleting a key the file never had is a no-op, not a change.
+    if (to === sentinel || to === undefined) {
+      if (original !== undefined) {
+        changes.push({ file, key, from: original, deleted: true, written: false });
+      }
+      continue;
+    }
     if (to instanceof Uint8Array) refuse("a BLOB cannot be written back");
     const targetType = fileTypeOf(original) ?? dominantFor(key);
     let restored: unknown = to;
@@ -539,14 +568,15 @@ function restoreChanges(
           break;
       }
     }
-    return {
+    changes.push({
       file,
       key,
       from: original === undefined ? null : original,
       to: restored,
       written: false,
-    };
-  });
+    });
+  }
+  return changes;
 }
 
 /**
@@ -563,20 +593,21 @@ async function applyChanges(
 ): Promise<void> {
   if (changes.length === 0) return;
   const byLabel = new Map(entries.map((e) => [e.label, e]));
-  const grouped = new Map<string, MetadataPatch>();
+  const grouped = new Map<string, { patch: MetadataPatch; deletions: string[] }>();
   for (const c of changes) {
     if (c.file === STDIN_LABEL) {
       throw new DocmetaError(
         "A write cannot touch <stdin>: there is no file behind it.",
       );
     }
-    const patch = grouped.get(c.file) ?? {};
-    patch[c.key] = c.to;
-    grouped.set(c.file, patch);
+    const group = grouped.get(c.file) ?? { patch: {}, deletions: [] };
+    if (c.deleted) group.deletions.push(c.key);
+    else group.patch[c.key] = c.to;
+    grouped.set(c.file, group);
   }
 
   const pending: { path: string; content: string }[] = [];
-  for (const [label, patch] of grouped) {
+  for (const [label, { patch, deletions }] of grouped) {
     const entry = byLabel.get(label);
     if (!entry) throw new DocmetaError(`No loaded entry for "${label}".`);
     if (!entry.extractor.apply) {
@@ -591,23 +622,155 @@ async function applyChanges(
     const current = entry.extractor.extract(content, label, {
       elements: resolveElements(label, ctx.config),
     });
-    for (const key of Object.keys(patch)) {
+    for (const key of [...Object.keys(patch), ...deletions]) {
       if (!deepEqual(current.data[key], entry.extracted.data[key])) {
         throw new DocmetaError(
           `"${label}" changed on disk since it was read ("${key}" moved); re-run the query.`,
         );
       }
     }
-    pending.push({
-      path,
-      content: entry.extractor.apply(content, patch, {
-        filePath: label,
-        elements: resolveElements(label, ctx.config),
-      }),
+    const applied = entry.extractor.apply(content, patch, {
+      filePath: label,
+      elements: resolveElements(label, ctx.config),
+      deletions,
     });
+    if (deletions.length > 0) {
+      // `deletions` is advisory in the ApplyOptions contract — a writer that
+      // cannot remove a key ignores it. Certainty comes from reading back.
+      const check = entry.extractor.extract(applied, label, {
+        elements: resolveElements(label, ctx.config),
+      });
+      for (const key of deletions) {
+        if (check.data[key] !== undefined) {
+          throw new DocmetaError(
+            `"${label}": the ${entry.extractor.name} writer cannot delete "${key}".`,
+          );
+        }
+      }
+    }
+    pending.push({ path, content: applied });
   }
   for (const p of pending) await writeFileAtomic(p.path, p.content);
   for (const c of changes) c.written = true;
+}
+
+/**
+ * Column names a statement SETs, so the table can be widened before it runs.
+ * Tolerant by design: it walks strings and comments with the same rules as
+ * the semicolon scan, and bails out at anything unexpected — a miss merely
+ * leaves today's "no such column" error in place.
+ */
+function collectSetTargets(sql: string): string[] {
+  const targets: string[] = [];
+  let i = 0;
+  const n = sql.length;
+  const isWord = (ch: string | undefined): boolean =>
+    ch !== undefined && /[A-Za-z0-9_]/.test(ch);
+  while (i < n) {
+    const ch = sql[i];
+    if (ch === "'" || ch === '"' || ch === "`") {
+      i = skipQuoted(sql, i, ch);
+    } else if (ch === "[") {
+      while (i < n && sql[i] !== "]") i++;
+      i++;
+    } else if (ch === "-" && sql[i + 1] === "-") {
+      while (i < n && sql[i] !== "\n") i++;
+    } else if (ch === "/" && sql[i + 1] === "*") {
+      i += 2;
+      while (i < n && !(sql[i] === "*" && sql[i + 1] === "/")) i++;
+      i += 2;
+    } else if (
+      (ch === "s" || ch === "S") &&
+      /^set$/i.test(sql.slice(i, i + 3)) &&
+      !isWord(sql[i - 1]) &&
+      !isWord(sql[i + 3])
+    ) {
+      i += 3;
+      // Assignment list: identifier `=` expression, comma-separated, ending
+      // at a top-level WHERE/FROM/RETURNING or the end of the statement.
+      for (;;) {
+        while (i < n && /\s/.test(sql[i] ?? "")) i++;
+        const name = readIdentifier(sql, i);
+        if (!name) return targets;
+        targets.push(name.value);
+        i = name.end;
+        while (i < n && /\s/.test(sql[i] ?? "")) i++;
+        if (sql[i] !== "=") return targets;
+        const next = skipExpression(sql, i + 1);
+        if (next.terminator !== ",") return targets;
+        i = next.end + 1;
+      }
+    } else {
+      i++;
+    }
+  }
+  return targets;
+}
+
+/** Index just past a quoted region starting at `from` (doubling escapes). */
+function skipQuoted(sql: string, from: number, quote: string): number {
+  let i = from + 1;
+  while (i < sql.length) {
+    if (sql[i] === quote) {
+      if (sql[i + 1] === quote) {
+        i += 2;
+        continue;
+      }
+      return i + 1;
+    }
+    i++;
+  }
+  return i;
+}
+
+function readIdentifier(
+  sql: string,
+  from: number,
+): { value: string; end: number } | undefined {
+  const ch = sql[from];
+  if (ch === '"' || ch === "`") {
+    const end = skipQuoted(sql, from, ch);
+    const raw = sql.slice(from + 1, end - 1);
+    return { value: raw.replaceAll(ch + ch, ch), end };
+  }
+  if (ch === "[") {
+    let i = from + 1;
+    while (i < sql.length && sql[i] !== "]") i++;
+    return { value: sql.slice(from + 1, i), end: i + 1 };
+  }
+  const m = /^[A-Za-z_][A-Za-z0-9_]*/.exec(sql.slice(from));
+  return m ? { value: m[0], end: from + m[0].length } : undefined;
+}
+
+/**
+ * Skip one SET-clause expression. Ends at a top-level `,` (another
+ * assignment) or a top-level WHERE/FROM/RETURNING keyword or end-of-string.
+ */
+function skipExpression(
+  sql: string,
+  from: number,
+): { end: number; terminator: "," | "end" } {
+  let depth = 0;
+  let i = from;
+  const n = sql.length;
+  while (i < n) {
+    const ch = sql[i];
+    if (ch === "'" || ch === '"' || ch === "`") {
+      i = skipQuoted(sql, i, ch);
+      continue;
+    }
+    if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    else if (depth === 0) {
+      if (ch === ",") return { end: i, terminator: "," };
+      if (/^(where|from|returning)\b/i.test(sql.slice(i, i + 10)) &&
+          !/[A-Za-z0-9_]/.test(sql[i - 1] ?? "")) {
+        return { end: i, terminator: "end" };
+      }
+    }
+    i++;
+  }
+  return { end: i, terminator: "end" };
 }
 
 /** Any key becomes a legal quoted identifier by doubling internal quotes. */

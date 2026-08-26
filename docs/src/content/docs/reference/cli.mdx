@@ -399,9 +399,20 @@ objects, with the column's dominant type deciding for a key the file never
 had. A value the restored type cannot hold, invalid JSON, a system-column or
 row-set effect, a read-only target, or a file that changed on disk since it
 was read — each refuses the **whole run** by file and key before anything is
-written. `SET key = NULL` writes an explicit `null`; deleting a key is not
-supported. `ATTACH` and `VACUUM` are refused by name: they can write files of
+written. `ATTACH` and `VACUUM` are refused by name: they can write files of
 their own, outside the effect gate.
+
+Writes are full CRUD on keys:
+
+- **Create** — `SET` a key no file has yet and the table widens to hold it;
+  the new key is added to every file the `WHERE` matches.
+- **Delete** — `SET key = drop_key() WHERE …` removes the key from matching
+  files (deleting where it is already absent is a no-op), and
+  `ALTER TABLE docs DROP COLUMN key` removes it corpus-wide. Distinct from
+  `SET key = NULL`, which writes an explicit `null` value. Deletion works
+  wherever the key lives in fenced front matter (markdown, MDX, AsciiDoc,
+  reStructuredText); element-backed keys in HTML/XML refuse rather than
+  half-delete.
 
 ### Output and exit codes
 

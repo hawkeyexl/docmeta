@@ -45,6 +45,14 @@ export interface ApplyOptions {
   /** Flavor to use when creating a block from scratch. Default "yaml". */
   newBlockFlavor?: FrontmatterFlavor;
   /**
+   * Top-level keys to remove entirely — deletion, where `patch` can only set
+   * (`undefined` values there are ignored by contract). Removing a key that
+   * is already absent is a no-op. Writers that cannot remove a key ignore
+   * this option, so a caller that needs certainty must re-extract and check —
+   * `runQuery --write` does exactly that and refuses the run on a survivor.
+   */
+  deletions?: readonly string[];
+  /**
    * The document's path, when the caller knows it. `extract` receives one and
    * `apply` did not, which left a writer unable to use the extension as a
    * signal — the XML writer needs it to tell a DITA topic from hand-rolled XML

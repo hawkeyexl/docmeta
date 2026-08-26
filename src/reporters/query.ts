@@ -71,7 +71,9 @@ function renderChanges(
 ): string {
   const lines = changes.map(
     (ch) =>
-      `${c.dim(`${ch.file}:`)} ${ch.key}: ${cellFrom(ch.from)} -> ${cell(ch.to)}`,
+      `${c.dim(`${ch.file}:`)} ${ch.key}: ${cellFrom(ch.from)} -> ${
+        ch.deleted ? "(deleted)" : cell(ch.to)
+      }`,
   );
   const n = changes.length;
   const files = new Set(changes.map((ch) => ch.file)).size;

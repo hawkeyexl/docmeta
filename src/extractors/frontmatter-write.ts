@@ -70,13 +70,19 @@ export function applyFrontmatter(
   }
 
   const clean = dropUndefined(patch);
-  if (Object.keys(clean).length === 0) return content;
+  // A key both set and deleted would be ambiguous; the set wins, matching the
+  // rule that `patch` is applied and `deletions` removes what remains.
+  const deletions = (options.deletions ?? []).filter(
+    (k) => !Object.prototype.hasOwnProperty.call(clean, k),
+  );
+  if (Object.keys(clean).length === 0 && deletions.length === 0) return content;
 
+  // No block: nothing to delete from, so deletions are no-ops by contract.
   if (!loc) return createBlock(content, clean, options.newBlockFlavor ?? "yaml");
 
   const inner = frontmatterInnerText(content, loc);
-  const merged = mergeBlock(loc.flavor, inner, clean);
-  verify(loc.flavor, inner, merged, clean);
+  const merged = mergeBlock(loc.flavor, inner, clean, deletions);
+  verify(loc.flavor, inner, merged, clean, deletions);
 
   /* c8 ignore next 3 -- defensive: every serializer above emits LF only. */
   if (merged.includes("\r")) {
@@ -118,7 +124,12 @@ export function applyFencedOnly(
       `This ${format} document has no fenced front matter block; docmeta can only write fenced front matter for ${format}. Add a fenced block, or set the field manually.`,
     );
   }
-  if (Object.keys(dropUndefined(patch)).length === 0) return content;
+  if (
+    Object.keys(dropUndefined(patch)).length === 0 &&
+    (options?.deletions ?? []).length === 0
+  ) {
+    return content;
+  }
   return applyFrontmatter(content, patch, options);
 }
 // ---------------------------------------------------------------------------
@@ -156,18 +167,23 @@ function mergeBlock(
   flavor: FrontmatterFlavor,
   inner: string,
   patch: MetadataPatch,
+  deletions: readonly string[] = [],
 ): string {
   switch (flavor) {
     case "yaml":
-      return mergeYaml(inner, patch);
+      return mergeYaml(inner, patch, deletions);
     case "toml":
-      return mergeToml(inner, patch);
+      return mergeToml(inner, patch, deletions);
     case "json":
-      return mergeJson(inner, patch);
+      return mergeJson(inner, patch, deletions);
   }
 }
 
-function mergeYaml(inner: string, patch: MetadataPatch): string {
+function mergeYaml(
+  inner: string,
+  patch: MetadataPatch,
+  deletions: readonly string[] = [],
+): string {
   const doc = parseDocument(inner);
   if (doc.errors.length > 0) {
     throw new DocmetaError(
@@ -194,15 +210,24 @@ function mergeYaml(inner: string, patch: MetadataPatch): string {
       doc.set(key, value);
     }
   }
+  // Deleting through the Document API removes the key's node — and its own
+  // comments with it — while every other node stays untouched.
+  for (const key of deletions) doc.delete(key);
   // lineWidth: 0 disables folding. The default (80) would wrap long values onto
   // continuation lines, rewriting keys the patch never touched.
   return doc.toString({ lineWidth: 0 }).replace(/\n$/, "");
 }
 
-function mergeJson(inner: string, patch: MetadataPatch): string {
+function mergeJson(
+  inner: string,
+  patch: MetadataPatch,
+  deletions: readonly string[] = [],
+): string {
   const parsed = parseJsonBlockText(inner);
   const indent = /^\{\s*\n([ \t]+)/.exec(inner)?.[1] ?? "  ";
-  return JSON.stringify({ ...parsed, ...patch }, null, indent);
+  const merged: Record<string, unknown> = { ...parsed, ...patch };
+  for (const key of deletions) delete merged[key];
+  return JSON.stringify(merged, null, indent);
 }
 
 // ---------------------------------------------------------------------------
@@ -327,7 +352,11 @@ function emitTomlLine(key: string, value: unknown): string {
   return line;
 }
 
-function mergeToml(inner: string, patch: MetadataPatch): string {
+function mergeToml(
+  inner: string,
+  patch: MetadataPatch,
+  deletions: readonly string[] = [],
+): string {
   const lines = inner === "" ? [] : inner.split("\n");
   const { assignments, rootEnd } = scanRootTable(lines);
   const byKey = new Map(assignments.map((a) => [a.key, a]));
@@ -346,6 +375,15 @@ function mergeToml(inner: string, patch: MetadataPatch): string {
     }
     replaced.set(hit.start, line);
     for (let i = hit.start + 1; i < hit.end; i++) dropped.add(i);
+  }
+
+  // Deletion is the replacement's degenerate case: the whole span goes,
+  // nothing comes back. The same splice discipline keeps comments and every
+  // untouched line byte-identical.
+  for (const key of deletions) {
+    const hit = byKey.get(key);
+    if (!hit) continue;
+    for (let i = hit.start; i < hit.end; i++) dropped.add(i);
   }
 
   // New keys go at the end of the root table, above any blank lines that
@@ -419,8 +457,13 @@ function verify(
   inner: string,
   merged: string,
   patch: MetadataPatch,
+  deletions: readonly string[] = [],
 ): void {
-  const expected = { ...parseBlock(flavor, inner), ...patch };
+  const expected: Record<string, unknown> = {
+    ...parseBlock(flavor, inner),
+    ...patch,
+  };
+  for (const key of deletions) delete expected[key];
   const actual = parseBlock(flavor, merged);
   if (!deepEqual(actual, expected)) {
     throw new DocmetaError(

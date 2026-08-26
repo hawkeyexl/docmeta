@@ -273,6 +273,106 @@ describe("runQuery write-back (0022)", () => {
     expect(readFileSync(join(d, "docs", "beta.md"), "utf8")).toBe(before);
   });
 
+  it("creates a corpus-new key: SET widens the table", async () => {
+    const d = copy();
+    const run = await w(
+      "UPDATE docs SET reviewed_by = 'maya' WHERE _path = 'docs/alpha.md'",
+      d,
+      true,
+    );
+    expect(run.changes).toEqual([
+      {
+        file: "docs/alpha.md",
+        key: "reviewed_by",
+        from: null,
+        to: "maya",
+        written: true,
+      },
+    ]);
+    expect(readFileSync(join(d, "docs", "alpha.md"), "utf8")).toContain(
+      "reviewed_by: maya",
+    );
+  });
+
+  it("deletes a key per file with drop_key()", async () => {
+    const d = copy();
+    const run = await w(
+      "UPDATE docs SET author = drop_key() WHERE _path = 'docs/gamma.md'",
+      d,
+      true,
+    );
+    expect(run.changes).toEqual([
+      {
+        file: "docs/gamma.md",
+        key: "author",
+        from: "ghost",
+        deleted: true,
+        written: true,
+      },
+    ]);
+    const gamma = readFileSync(join(d, "docs", "gamma.md"), "utf8");
+    expect(gamma).not.toContain("author:");
+    expect(gamma).toContain("title: Gamma");
+    // Untouched files keep the key.
+    expect(readFileSync(join(d, "docs", "alpha.md"), "utf8")).toContain(
+      "author: ada",
+    );
+  });
+
+  it("deletes a key corpus-wide with ALTER TABLE DROP COLUMN", async () => {
+    const d = copy();
+    const run = await w("ALTER TABLE docs DROP COLUMN tags", d, true);
+    expect(run.changes?.length).toBe(3); // alpha, beta, gamma have tags
+    for (const f of ["alpha", "beta", "gamma"]) {
+      expect(readFileSync(join(d, "docs", `${f}.md`), "utf8")).not.toContain(
+        "tags:",
+      );
+    }
+  });
+
+  it("deleting a key a file never had is a no-op for that file", async () => {
+    const d = copy();
+    // Only gamma-adjacent files carry draft; authors do not. Deleting draft
+    // everywhere must not report changes for files without it.
+    const run = await w("UPDATE docs SET draft = drop_key()", d, true);
+    expect(run.changes?.map((c) => c.file).sort()).toEqual([
+      "docs/alpha.md",
+      "docs/beta.md",
+    ]);
+  });
+
+  it("previews a deletion without touching the file", async () => {
+    const d = copy();
+    const before = readFileSync(join(d, "docs", "gamma.md"), "utf8");
+    const run = await w(
+      "UPDATE docs SET author = drop_key() WHERE _path = 'docs/gamma.md'",
+      d,
+    );
+    expect(run.changes?.[0]).toEqual({
+      file: "docs/gamma.md",
+      key: "author",
+      from: "ghost",
+      deleted: true,
+      written: false,
+    });
+    expect(readFileSync(join(d, "docs", "gamma.md"), "utf8")).toBe(before);
+  });
+
+  it("refuses deletion where the writer cannot remove the key", async () => {
+    const d = copy();
+    writeFileSync(
+      join(d, "docs", "page.html"),
+      "<html><head><title>Page</title></head><body>x</body></html>\n",
+    );
+    await expect(
+      w("UPDATE docs SET title = drop_key() WHERE _format = 'html'", d, true),
+    ).rejects.toThrow(/delet/i);
+    // All-or-nothing: the html file is intact.
+    expect(readFileSync(join(d, "docs", "page.html"), "utf8")).toContain(
+      "<title>Page</title>",
+    );
+  });
+
   it("refuses a write that touches <stdin>", async () => {
     const d = copy();
     await expect(

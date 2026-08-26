@@ -77,7 +77,7 @@ database for <a href="/?url=${basename(db)}">Datasette Lite</a>.</p>
       ? "refused: " + body.error
       : (body.changes.length === 0
           ? "0 changes"
-          : body.changes.map(c => c.file + ": " + c.key + ": " + JSON.stringify(c.from) + " -> " + JSON.stringify(c.to) + (c.written ? "  [written]" : "")).join("\\n"))
+          : body.changes.map(c => c.file + ": " + c.key + ": " + JSON.stringify(c.from) + " -> " + (c.deleted ? "(deleted)" : JSON.stringify(c.to)) + (c.written ? "  [written]" : "")).join("\\n"))
         + (apply ? "\\n\\napplied — reload Datasette Lite to see it" : "\\n\\npreview only");
   }
   document.getElementById("preview").onclick = () => go(false);
