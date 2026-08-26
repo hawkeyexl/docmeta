@@ -13,6 +13,15 @@ export interface ExtractedMetadata {
   data: Record<string, unknown>;
   /** Whether a metadata block was found at all. */
   present: boolean;
+  /**
+   * Whether the metadata came from a removable fenced front matter block.
+   * A per-extraction fact, deliberately not an extractor capability: RST and
+   * AsciiDoc read a fenced block when one exists and fall back to native
+   * docinfo/attribute parsing when not, so the same extractor yields both
+   * answers. Absent (element-backed, native-header) means `DELETE FROM docs`
+   * has no block whose removal would leave the document whole, and refuses.
+   */
+  fenced?: boolean;
   /** Name of the extractor/format that produced this (e.g. "markdown"). */
   format: string;
   /**
@@ -96,15 +105,6 @@ export interface MetadataExtractor {
    * added could be declared before it can do either.
    */
   implemented: boolean;
-  /**
-   * Whether this format's metadata lives in a removable front matter block —
-   * the fence family (markdown, MDX, AsciiDoc, reStructuredText). Absent
-   * means element-backed or native-header metadata, which `DELETE FROM docs`
-   * refuses to strip: there is no block whose removal leaves the document
-   * whole. A third capability axis beside `implemented` (read) and the
-   * presence of `apply` (write).
-   */
-  fenced?: boolean;
   /**
    * Extract metadata from raw file content.
    *

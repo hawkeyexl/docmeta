@@ -1560,13 +1560,16 @@ function buildChanges(
   for (const file of diff.clearedRows) {
     const extracted = meta.get(file);
     if (!extracted?.present) continue;
-    // Refused at plan time, not discovered at apply: element-backed and
-    // native-header formats have no block whose removal leaves the document
-    // whole, and the preview must never promise a strip the writer refuses.
-    const extractor = extractorOf.get(file);
-    if (extractor && extractor.fenced !== true) {
+    // Refused at plan time, not discovered at apply: this extraction did not
+    // come from a fenced block — element-backed metadata, or an RST/AsciiDoc
+    // file read through its native-header fallback — so there is nothing
+    // whose removal leaves the document whole, and the preview must never
+    // promise a strip the writer refuses. Per-file truth, not extractor
+    // capability: the same RST extractor answers both ways.
+    if (extracted.fenced !== true) {
+      const name = extractorOf.get(file)?.name ?? extracted.format;
       throw new DocmetaError(
-        `"${file}": the ${extractor.name} format has no front matter block to strip.`,
+        `"${file}": the ${name} format has no front matter block to strip.`,
       );
     }
     changes.push({ file, cleared: true, from: extracted.data, written: false });

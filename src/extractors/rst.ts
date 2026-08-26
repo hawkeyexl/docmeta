@@ -153,7 +153,6 @@ export const rstExtractor: MetadataExtractor = {
   name: "rst",
   extensions: [".rst"],
   implemented: true,
-  fenced: true,
   apply: (content, patch, options) =>
     applyFencedOnly(content, patch, options, "rst"),
   extract(content) {

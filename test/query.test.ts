@@ -430,6 +430,16 @@ describe("runQuery write-back (0022)", () => {
     ).rejects.toThrow(/no front matter block to strip/);
   });
 
+  it("DELETE refuses a native-header RST file, fence-family or not", async () => {
+    const d = copy();
+    // Docinfo fields, no fence: present metadata with nothing strippable.
+    // The refusal must be per-file — the same extractor strips fenced RST.
+    writeFileSync(join(d, "docs", "guide.rst"), ":author: Ada\n\nBody.\n");
+    await expect(
+      w("DELETE FROM docs WHERE _path = 'docs/guide.rst'", d),
+    ).rejects.toThrow(/no front matter block to strip/);
+  });
+
   it("DELETE strips the block, keeps the body, and converges", async () => {
     const d = copy();
     const run = await w("DELETE FROM docs WHERE _path = 'docs/beta.md'", d, true);
