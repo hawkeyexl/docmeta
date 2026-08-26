@@ -35,6 +35,10 @@ import ogp10 from "../schemas/ogp/1.0.json" with { type: "json" };
 import dcmi11 from "../schemas/dcmi/1.1.json" with { type: "json" };
 import microsoftLearn10 from "../schemas/microsoft-learn/1.0.json" with { type: "json" };
 import ditaMetadata13 from "../schemas/dita/1.3.json" with { type: "json" };
+import hugoPage0165 from "../schemas/hugo/0.165.json" with { type: "json" };
+import jekyllPage44 from "../schemas/jekyll/4.4.json" with { type: "json" };
+import vitepressPage16 from "../schemas/vitepress/1.6.json" with { type: "json" };
+import xCards10 from "../schemas/x-cards/1.0.json" with { type: "json" };
 
 export interface BuiltinInfo {
   id: string;
@@ -59,6 +63,10 @@ const BUILTINS = new Map<string, Record<string, unknown>>([
   ["dcmi:elements:1.1", dcmi11],
   ["microsoft:learn:1.0", microsoftLearn10],
   ["oasis:dita-metadata:1.3", ditaMetadata13],
+  ["hugo:page:0.165", hugoPage0165],
+  ["jekyll:page:4.4", jekyllPage44],
+  ["vitepress:page:1.6", vitepressPage16],
+  ["x:cards:1.0", xCards10],
 ]);
 
 export function listBuiltins(): BuiltinInfo[] {
@@ -110,6 +118,10 @@ const PUBLISHED_ALIAS: ReadonlyMap<string, string> = new Map([
   [`${PUBLISHED_BASE}dcmi/1.1.json`, "dcmi:elements:1.1"],
   [`${PUBLISHED_BASE}microsoft-learn/1.0.json`, "microsoft:learn:1.0"],
   [`${PUBLISHED_BASE}dita/1.3.json`, "oasis:dita-metadata:1.3"],
+  [`${PUBLISHED_BASE}hugo/0.165.json`, "hugo:page:0.165"],
+  [`${PUBLISHED_BASE}jekyll/4.4.json`, "jekyll:page:4.4"],
+  [`${PUBLISHED_BASE}vitepress/1.6.json`, "vitepress:page:1.6"],
+  [`${PUBLISHED_BASE}x-cards/1.0.json`, "x:cards:1.0"],
 ]);
 
 /**

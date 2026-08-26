@@ -100,6 +100,36 @@ describe("toml frontmatter", () => {
     expect(r.data.tags).toEqual(["a", "b"]);
   });
 
+  it("normalizes a native TOML date to the string it was authored as", () => {
+    // TOML has real date types, so an unquoted date parses to a Date rather
+    // than a string — and Ajv fails `"type": "string"` against a Date object.
+    // Every flavor is normalized back to its authored spelling, so a schema
+    // sees the same value whether the fence is YAML or TOML.
+    const r = markdownExtractor.extract(
+      [
+        "+++",
+        "offset = 2026-06-25T10:00:00Z",
+        "shifted = 2026-06-25T10:00:00+02:00",
+        "localdt = 2026-06-25T10:00:00",
+        "day = 2026-06-25",
+        "days = [2026-06-25, 2026-06-26]",
+        "",
+        "[nested]",
+        "day = 2026-06-25",
+        "+++",
+      ].join("\n"),
+      "x.md",
+    );
+    expect(r.data.offset).toBe("2026-06-25T10:00:00.000Z");
+    expect(r.data.shifted).toBe("2026-06-25T10:00:00.000+02:00");
+    expect(r.data.localdt).toBe("2026-06-25T10:00:00.000");
+    // a local date stays a plain date — normalizing must not widen it into a
+    // datetime, which would break `"format": "date"`
+    expect(r.data.day).toBe("2026-06-25");
+    expect(r.data.days).toEqual(["2026-06-25", "2026-06-26"]);
+    expect(r.data.nested).toEqual({ day: "2026-06-25" });
+  });
+
   it("maps top-level keys to source lines", () => {
     const r = toml();
     // line 1 is the opening +++, so `type` is line 2

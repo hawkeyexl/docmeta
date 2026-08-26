@@ -114,6 +114,19 @@ describe("runValidate", () => {
     expect(err?.line).toBe(4);
   });
 
+  it("accepts a native TOML date against a string/date-time field", async () => {
+    // `timestamp = 2026-06-25T10:00:00Z` is idiomatic TOML — unquoted, so it
+    // parses to a date object rather than a string. OKF types `timestamp` as
+    // `"type": "string"`, so without normalization the correct spelling is the
+    // one that fails and the quoted spelling is the one that passes.
+    const { results } = await runValidate({
+      inputs: ["test/fixtures/toml-native-date.md"],
+      cwd: root,
+    });
+    expect(results[0]?.errors).toEqual([]);
+    expect(results[0]?.ok).toBe(true);
+  });
+
   it("handles mdx via the markdown frontmatter logic", async () => {
     const { results } = await runValidate({
       inputs: ["test/fixtures/sample.mdx"],

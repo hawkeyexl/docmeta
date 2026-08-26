@@ -1,14 +1,15 @@
 /**
  * Behavior of the built-in metadata *vocabulary* schemas — Open Graph, Dublin
- * Core and Microsoft Learn — exercised through the real validate path.
+ * Core, Microsoft Learn and X Cards — exercised through the real validate path.
  *
  * These are editorial rather than platform schemas: they describe an agreement
  * about what a document says about itself, not the front matter one tool will
- * parse. Two of the three demand fields, and for opposite reasons. Open Graph
+ * parse. Three of the four demand fields, and for different reasons. Open Graph
  * names four properties as required in the protocol itself; Microsoft Learn
- * names five that its publishing build refuses. Dublin Core requires nothing at
- * all — the DCMI Recommendation marks no element mandatory — so it is a format
- * check over fifteen optional elements.
+ * names five that its publishing build refuses; X Cards names exactly one,
+ * because it is the only card tag with no `og:` fallback to stand in for it.
+ * Dublin Core requires nothing at all — the DCMI Recommendation marks no
+ * element mandatory — so it is a format check over fifteen optional elements.
  */
 import { describe, it, expect } from "vitest";
 import { fileURLToPath } from "node:url";
@@ -24,6 +25,7 @@ const root = resolve(here, "..");
 const OGP = "ogp:article:1.0";
 const DCMI = "dcmi:elements:1.1";
 const MSLEARN = "microsoft:learn:1.0";
+const XCARDS = "x:cards:1.0";
 
 /** Validate one vocabulary fixture against an explicit schema set. */
 async function check(fixture: string, cliSchemas: string[]) {
@@ -232,20 +234,121 @@ describe("microsoft:learn:1.0", () => {
   });
 });
 
+describe("x:cards:1.0", () => {
+  it("accepts a summary_large_image card", async () => {
+    const r = await check("x-card-valid.html", [XCARDS]);
+    expect(r.errors).toEqual([]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("fails a page with card tags but no twitter:card", async () => {
+    // The one tag with no `og:` fallback. Without it X picks no card type at
+    // all, so the other three tags do nothing — which is exactly the state
+    // this fixture is in and nothing else would report.
+    const r = await check("x-card-missing-card.html", [XCARDS]);
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]?.message).toBe(
+      "must have required property 'twitter:card'",
+    );
+  });
+
+  it("fails an image served over plain HTTP", async () => {
+    const r = await check("x-card-http-image.html", [XCARDS]);
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]?.instancePath).toBe("/twitter:image");
+  });
+
+  it("fails an email address written into a handle field", async () => {
+    const r = await check("x-card-bad-handle.html", [XCARDS]);
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]?.instancePath).toBe("/twitter:site");
+  });
+
+  it("requires the player tags once the card type is player", async () => {
+    const r = await check("x-card-player-incomplete.html", [XCARDS]);
+    expect(r.ok).toBe(false);
+    expect(r.errors.map((e) => e.message)).toContain(
+      "must have required property 'twitter:player'",
+    );
+  });
+
+  it("does not demand the player tags of any other card type", async () => {
+    // The conditional keys off `player` alone, so a summary card carrying no
+    // player tags is complete rather than half-written.
+    const r = await check("x-card-valid.html", [XCARDS]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("rejects a zero dimension in both channels, not just one", async () => {
+    // `twitter:player:width` is typed string|integer to serve HTML (where every
+    // attribute is a string) and front matter (where it can be a number). A
+    // `minimum` is ignored on a string and a `pattern` on a number, so each
+    // branch needs its own spelling of the floor — otherwise "0" sails through
+    // the channel that carries almost all real traffic.
+    const { results } = await runValidate({
+      inputs: ["-"],
+      as: "html",
+      stdinContent: [
+        "<!doctype html><html><head><title>T</title>",
+        '<meta name="twitter:card" content="player" />',
+        '<meta name="twitter:title" content="T" />',
+        '<meta name="twitter:image" content="https://example.com/p.png" />',
+        '<meta name="twitter:player" content="https://example.com/embed" />',
+        '<meta name="twitter:player:width" content="0" />',
+        '<meta name="twitter:player:height" content="360" />',
+        "</head><body></body></html>",
+        "",
+      ].join("\n"),
+      cliSchemas: [XCARDS],
+      cwd: root,
+    });
+    expect(results[0]?.ok).toBe(false);
+    expect(results[0]?.errors[0]?.instancePath).toBe("/twitter:player:width");
+  });
+
+  it("requires only twitter:card, because the rest fall back to og:", async () => {
+    const schema = (await loadSchema(XCARDS)) as { required?: string[] };
+    expect(schema.required).toEqual(["twitter:card"]);
+  });
+
+  it("reads dimensions from HTML, where every attribute is a string", async () => {
+    // `twitter:player:width` is typed for both channels: an HTML `content=`
+    // attribute is always a string, while front matter can carry a number.
+    // Typing it `integer` alone would fail every real HTML page.
+    const { results } = await runValidate({
+      inputs: ["-"],
+      as: "html",
+      stdinContent:
+        '<!doctype html><html><head><title>T</title>\n' +
+        '<meta name="twitter:card" content="player" />\n' +
+        '<meta name="twitter:title" content="T" />\n' +
+        '<meta name="twitter:image" content="https://example.com/p.png" />\n' +
+        '<meta name="twitter:player" content="https://example.com/embed" />\n' +
+        '<meta name="twitter:player:width" content="640" />\n' +
+        '<meta name="twitter:player:height" content="360" />\n' +
+        "</head><body></body></html>\n",
+      cliSchemas: [XCARDS],
+      cwd: root,
+    });
+    expect(results[0]?.errors).toEqual([]);
+    expect(results[0]?.ok).toBe(true);
+  });
+});
+
 describe("the vocabulary schemas are opt-in", () => {
-  for (const id of [OGP, DCMI, MSLEARN]) {
+  for (const id of [OGP, DCMI, MSLEARN, XCARDS]) {
     it(`${id} is not in the default set`, () => {
       expect(DEFAULT_SCHEMAS).not.toContain(id);
     });
   }
 
-  it("all three are listed by the schemas command", () => {
+  it("all four are listed by the schemas command", () => {
     const ids = getSchemasInfo().builtins.map((b) => b.id);
-    for (const id of [OGP, DCMI, MSLEARN]) expect(ids).toContain(id);
+    for (const id of [OGP, DCMI, MSLEARN, XCARDS]) expect(ids).toContain(id);
   });
 
-  it("all three tolerate unknown keys", async () => {
-    for (const id of [OGP, DCMI, MSLEARN]) {
+  it("all four tolerate unknown keys", async () => {
+    for (const id of [OGP, DCMI, MSLEARN, XCARDS]) {
       const schema = (await loadSchema(id)) as {
         additionalProperties?: boolean;
       };

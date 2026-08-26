@@ -17,6 +17,7 @@
  */
 import { parseDocument, LineCounter, isMap, isSeq, isScalar } from "yaml";
 import { parse as parseToml } from "smol-toml";
+import { isoDateValue } from "./date-value.js";
 import type { ExtractedMetadata, FrontmatterFlavor } from "../types.js";
 
 type Flavor = FrontmatterFlavor;
@@ -285,6 +286,31 @@ function parseJsonBlock(
   return { data, present: true, format, lineFor: positionForFactory(map) };
 }
 
+/**
+ * Replace TOML's native dates with the strings they were authored as.
+ *
+ * TOML is the only flavor with a real date type: `date = 2026-06-25` parses to
+ * a `Date`, where the same line under a YAML or JSON fence yields a string. A
+ * schema sees the parsed value, so without this a field typed `"string"` —
+ * OKF's `timestamp`, Hugo's `date` and `lastmod` — rejects the *unquoted*
+ * spelling, which is the idiomatic one, and accepts only the quoted one.
+ *
+ * The per-value spelling is `isoDateValue`, shared with `schemas infer` so the
+ * two cannot disagree about what a `Date` looks like as JSON.
+ *
+ * Recursive, because a date can sit inside a `[table]` or an array.
+ */
+function withoutNativeDates(value: unknown): unknown {
+  if (value instanceof Date) return isoDateValue(value);
+  if (Array.isArray(value)) return value.map(withoutNativeDates);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, withoutNativeDates(v)]),
+    );
+  }
+  return value;
+}
+
 function parseTomlBlock(
   raw: string,
   prefixLines: number,
@@ -300,7 +326,7 @@ function parseTomlBlock(
     );
   }
   // A valid TOML document is always a table, but stay uniform with the others.
-  const data = rootObject(parsed, "TOML");
+  const data = rootObject(withoutNativeDates(parsed), "TOML");
   const map = buildTomlLineMap(raw, prefixLines);
   return { data, present: true, format, lineFor: positionForFactory(map) };
 }

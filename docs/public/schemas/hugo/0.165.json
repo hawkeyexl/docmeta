@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hugo:page:0.165",
+  "title": "Hugo front matter v0.165",
+  "description": "The front matter fields Hugo itself defines, as of 0.165. Hugo requires nothing — a page with no front matter at all builds — so this schema can only ever fail a page on the shape of a value it already carries. That is most of the value: `weight` must be an integer and `draft` a boolean, and the usual way a Hugo page goes quietly wrong is a quoted number or a `draft: \"false\"` that is true. Custom keys and taxonomy terms such as `tags` and `categories` are user-configured rather than defined by Hugo, so they are tolerated rather than described here. Dates are plain strings on purpose: Hugo parses several layouts, including bare years and Unix timestamps, so a `format` here would reject input Hugo accepts. Hugo's default fence is TOML, whose native dates docmeta normalizes to the string they were written as. See https://gohugo.io/content-management/front-matter/",
+  "type": "object",
+  "additionalProperties": true,
+  "$defs": {
+    "date": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A date string. Hugo accepts several layouts, so only the type is checked."
+    },
+    "stringList": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "listFlag": {
+      "description": "How the page is listed: a boolean, or one of the three names `build.list` accepts. Kept separate from `renderFlag` because the two options do not share a vocabulary — `local` is meaningful only here, and merging the sets would accept `link` on the wrong one.",
+      "if": { "type": "string" },
+      "then": { "enum": ["always", "never", "local"] },
+      "else": { "type": "boolean" }
+    },
+    "renderFlag": {
+      "description": "How the page is rendered: a boolean, or one of the three names `build.render` accepts. `link` is meaningful only here — see `listFlag`.",
+      "if": { "type": "string" },
+      "then": { "enum": ["always", "never", "link"] },
+      "else": { "type": "boolean" }
+    }
+  },
+  "properties": {
+    "aliases": {
+      "$ref": "#/$defs/stringList",
+      "description": "Page-relative or site-relative paths that redirect to this page."
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Per-page build options.",
+      "properties": {
+        "list": { "$ref": "#/$defs/listFlag" },
+        "render": { "$ref": "#/$defs/renderFlag" },
+        "publishResources": { "type": "boolean" }
+      }
+    },
+    "cascade": {
+      "description": "Values passed down to descendant pages unless overwritten. A map, or an array of maps each carrying a `_target` filter.",
+      "if": { "type": "array" },
+      "then": { "items": { "type": "object" } },
+      "else": { "type": "object" }
+    },
+    "date": {
+      "$ref": "#/$defs/date",
+      "description": "The date associated with the page, typically its creation date."
+    },
+    "description": {
+      "type": "string",
+      "description": "Rendered into a meta element for search engines."
+    },
+    "draft": {
+      "type": "boolean",
+      "description": "A draft is not rendered unless `--buildDrafts` is passed. A quoted `\"false\"` is a string, and every string is truthy — this is the check that catches it."
+    },
+    "expiryDate": {
+      "$ref": "#/$defs/date",
+      "description": "After this date the page is no longer rendered."
+    },
+    "headless": {
+      "type": "boolean",
+      "description": "Makes a leaf bundle headless: its resources stay available but it publishes no page."
+    },
+    "isCJKLanguage": {
+      "type": "boolean",
+      "description": "Counts words the CJK way, which changes summaries and reading time."
+    },
+    "keywords": {
+      "$ref": "#/$defs/stringList",
+      "description": "Keywords, typically rendered into a meta element."
+    },
+    "lastmod": {
+      "$ref": "#/$defs/date",
+      "description": "The date the page was last modified."
+    },
+    "layout": {
+      "type": "string",
+      "description": "A template name overriding the default lookup order."
+    },
+    "linkTitle": {
+      "type": "string",
+      "description": "A shorter title for lists and navigation."
+    },
+    "markup": {
+      "type": "string",
+      "description": "The content format identifier, such as `md` or `html`."
+    },
+    "menus": {
+      "description": "Menus this page joins: one name, several names, or a map giving each entry its own options.",
+      "if": { "type": "object" },
+      "then": { "type": "object" },
+      "else": {
+        "if": { "type": "array" },
+        "then": { "$ref": "#/$defs/stringList" },
+        "else": { "type": "string" }
+      }
+    },
+    "outputs": {
+      "$ref": "#/$defs/stringList",
+      "description": "Output formats to render this page in, such as `html` and `json`."
+    },
+    "params": {
+      "type": "object",
+      "description": "Custom page parameters, reached as `.Params` in templates."
+    },
+    "publishDate": {
+      "$ref": "#/$defs/date",
+      "description": "Before this date the page is not rendered."
+    },
+    "resources": {
+      "type": "array",
+      "description": "Metadata attached to the page's resources. Each entry needs the `src` glob it applies to.",
+      "items": {
+        "type": "object",
+        "required": ["src"],
+        "additionalProperties": true,
+        "properties": {
+          "src": { "type": "string", "minLength": 1 },
+          "name": { "type": "string" },
+          "title": { "type": "string" },
+          "params": { "type": "object" }
+        }
+      }
+    },
+    "sitemap": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Per-page sitemap options.",
+      "properties": {
+        "changefreq": {
+          "type": "string",
+          "enum": [
+            "always",
+            "hourly",
+            "daily",
+            "weekly",
+            "monthly",
+            "yearly",
+            "never"
+          ],
+          "description": "One of the seven values the sitemap protocol defines. Anything else is ignored by consumers."
+        },
+        "priority": { "type": "number", "minimum": 0, "maximum": 1 },
+        "disable": { "type": "boolean" }
+      }
+    },
+    "sites": {
+      "type": "object",
+      "description": "The sites matrix and its complements."
+    },
+    "slug": {
+      "type": "string",
+      "description": "Overrides the final segment of the URL path."
+    },
+    "summary": {
+      "type": "string",
+      "description": "An explicit summary, used instead of the one Hugo derives."
+    },
+    "title": {
+      "type": "string",
+      "description": "The page title. Not required: Hugo falls back to a title derived from the file name."
+    },
+    "translationKey": {
+      "type": "string",
+      "description": "Relates translations of one page across languages."
+    },
+    "type": {
+      "type": "string",
+      "description": "The content type, overriding the one derived from the section."
+    },
+    "url": {
+      "type": "string",
+      "description": "Overrides the entire URL path, ignoring the file's position in the section tree."
+    },
+    "weight": {
+      "type": "integer",
+      "description": "Sort weight within a collection; lower sorts first. An integer — a quoted number sorts as a string, which is the classic way a Hugo menu comes out in the wrong order."
+    }
+  }
+}

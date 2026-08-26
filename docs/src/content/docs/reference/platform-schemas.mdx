@@ -1,11 +1,11 @@
 ---
 title: Built-in platform schemas
-description: The Starlight, Antora, Sphinx, and MyST front matter schemas shipped with docmeta, covering every field they check, what each one requires and why, and how they compose with a vocabulary.
+description: The Starlight, Antora, Sphinx, MyST, Hugo, Jekyll, and VitePress front matter schemas shipped with docmeta, covering every field they check, what each one requires and why, and how they compose with a vocabulary.
 ---
 
 import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-Four built-ins describe the front matter contract of a documentation toolchain
+Seven built-ins describe the front matter contract of a documentation toolchain
 that is not Docusaurus. Like the [Docusaurus
 schemas](/docmeta/reference/docusaurus-schemas/), they are *platform* schemas:
 they say what your site generator accepts, not what your team has agreed a page
@@ -17,6 +17,9 @@ should say. That makes them safe to stack under any vocabulary.
 | `antora:page:3.1` | Antora 3.1 | `.adoc`, `.asciidoc` | `title` |
 | `sphinx:docinfo:9.1` | Sphinx 9.1 | `.rst` | nothing |
 | `myst:frontmatter:1.10` | mystmd 1.10 | `.md` | nothing |
+| `hugo:page:0.165` | Hugo 0.165 | `.md` | nothing |
+| `jekyll:page:4.4` | Jekyll 4.4 | `.md`, `.markdown` | nothing |
+| `vitepress:page:1.6` | VitePress 1.6 | `.md` | nothing |
 
 ## What a platform schema requires
 
@@ -30,6 +33,14 @@ carries. Starlight and Antora both error without a page title, so both schemas
 demand `title` — a page failing that check was already broken, and docmeta is
 telling you at review time instead of at build time. MyST requires nothing
 because it will lift a missing `title` from the first heading in the document.
+
+Hugo, Jekyll and VitePress require nothing either, and for the plainest reason
+of the lot: all three render a page that has no front matter at all. Hugo falls
+back to a title derived from the file name, VitePress has a default for every
+option, and in Jekyll it is the *presence* of the `---` block, not its contents,
+that marks a file for processing — an empty one is valid. That makes all three
+pure shape checks, which is where their value is. The mistakes they catch are
+the ones the generator accepts without complaint and then acts on wrongly.
 
 ## `astro:starlight:0.41`
 
@@ -156,6 +167,104 @@ authoritative and complete, because an enum assembled from examples rejects
 correct documents.
 </Aside>
 
+## `hugo:page:0.165`
+
+The 28 fields Hugo itself defines. Everything else you see in a Hugo site —
+`tags`, `categories`, `series`, and whatever your theme reads — is a
+user-configured taxonomy or a custom parameter rather than something Hugo
+defines, so it passes as an unknown key.
+
+| Field | Type | Notes |
+|---|---|---|
+| `title`, `linkTitle`, `description`, `summary` | string | None required; Hugo derives a title from the file name. |
+| `date`, `lastmod`, `publishDate`, `expiryDate` | string | Typed, not format-checked. See the aside below. |
+| `draft`, `headless`, `isCJKLanguage` | boolean | A quoted `"false"` fails here, which is the point. |
+| `weight` | integer | Lower sorts first. A quoted number sorts as a string. |
+| `aliases`, `keywords`, `outputs` | string array | |
+| `slug`, `url`, `layout`, `markup`, `type`, `translationKey` | string | |
+| `menus` | string \| array \| map | One menu, several, or a map of per-menu options. |
+| `cascade` | map \| array of maps | The array form carries a `_target` filter per entry. |
+| `build` | map | `list`, `render`, `publishResources`. |
+| `sitemap` | map | `changefreq` is enumerated; `priority` is 0–1. |
+| `resources` | array | Each entry needs `src`. |
+| `params`, `sites` | map | |
+
+The two checks that pay for this schema are `weight` and `draft`. Both are
+routinely written quoted, both are accepted by Hugo without a word, and both
+then behave wrongly: a string `weight` sorts lexically, so `"10"` lands before
+`"9"`, and `draft: "false"` is a non-empty string, which is truthy, so the page
+does not publish.
+
+<Aside type="note" title="Hugo's dates are typed but not format-checked">
+`date` and its siblings are `string` with no `format`. Hugo parses several
+layouts — a full timestamp, a bare `2026-06-25`, a bare year, a Unix timestamp —
+so pinning one format here would fail input Hugo accepts, and asserting
+something untrue about the tool is the thing a platform schema must not do.
+
+TOML is worth a note of its own. Hugo's `+++` fence has a real date type, so
+`date = 2026-06-25` parses to a date rather than a string; docmeta normalizes it
+back to the spelling it was written as before validating, so the same schema
+fits both fences and a local date does not silently become a timestamp.
+</Aside>
+
+## `jekyll:page:4.4`
+
+Deliberately the smallest built-in, because Jekyll's own contract is small:
+three global variables and four more for posts.
+
+| Field | Type | Notes |
+|---|---|---|
+| `layout` | string \| null | `null` or `none` suppresses the layout, so null is allowed. |
+| `permalink` | string | Overrides the built URL. |
+| `published` | boolean | `false` keeps the document out of the site. |
+| `date` | string | Overrides the date parsed from the file name. |
+| `category`, `categories`, `tags` | string \| string array | A YAML list or a space-separated string. |
+
+The check worth having is `published`. `published: "false"` is a string, every
+string is truthy, and the post you meant to hold back goes live.
+
+<Aside type="caution" title="Your `nav_order` is not Jekyll's">
+Most keys in a real Jekyll site come from a theme or a plugin, not from Jekyll:
+`nav_order`, `parent`, `has_children` are just-the-docs; `redirect_from` is
+jekyll-redirect-from. None are described here, and all pass as unknown keys.
+Pair this schema with one of your own if you want them checked.
+</Aside>
+
+## `vitepress:page:1.6`
+
+The four options every VitePress theme honours, plus the default theme's
+page-level toggles.
+
+| Field | Type | Notes |
+|---|---|---|
+| `title`, `description` | string | Override the site-level values. |
+| `titleTemplate` | string \| boolean | `false` drops the suffix. |
+| `head` | array | `[tag, attrs]` pairs injected into `<head>`. |
+| `layout` | `doc` \| `home` \| `page` | Anything else is rejected. |
+| `hero`, `features` | object, array | Home-layout blocks; typed but not pinned. |
+| `outline` | level \| `[from, to]` \| `deep` \| `false` | 1–6. |
+| `aside` | boolean \| `left` | |
+| `lastUpdated` | boolean \| string | A flag, or a date overriding the stamp. |
+| `navbar`, `sidebar`, `editLink`, `footer`, `isHome` | boolean | Page-level toggles. |
+| `pageClass` | string | |
+
+`outline` is the field this schema exists for. It takes four different shapes,
+and VitePress ignores a value it does not recognise rather than complaining — so
+`outline: 9` silently gives you the default rather than a deep outline.
+
+<Aside type="note" title="`sidebar: false` hides the sidebar; it does not configure one">
+The page-level `sidebar` is a boolean toggle. A VitePress sidebar's *contents*
+are configured in `.vitepress/config.ts`, not in front matter, so a page that
+sets `sidebar:` to an object is doing something VitePress will not read. This
+schema types it as a boolean, which reports that.
+</Aside>
+
+<Aside type="caution" title="Pinned to 1.6 while 2.0 is in alpha">
+VitePress 1.6 is the stable line. 2.0 was still in alpha when this schema was
+written, so it is deliberately not described — a pin to a moving alpha would
+promise a contract that is still changing. A 2.0 line will ship as a new id.
+</Aside>
+
 ## Composing with a vocabulary
 
 A platform schema claims the keys your generator reads. A vocabulary claims the
@@ -206,6 +315,37 @@ overrides:
   - files: "**/*.md"
     schemas:
       - myst:frontmatter:1.10
+```
+
+</TabItem>
+<TabItem label="A Hugo site">
+
+Hugo's content root is `content/`, and a docs section usually sits under it:
+
+```yaml title="docmeta.config.yaml"
+schemas:
+  - google:okf:0.1
+overrides:
+  - files: "content/**"
+    schemas:
+      - hugo:page:0.165
+      - diataxis:diataxis:1.0
+```
+
+</TabItem>
+<TabItem label="A Jekyll or VitePress site">
+
+Both keep pages at the repo root, so the split is by directory rather than by
+extension:
+
+```yaml title="docmeta.config.yaml"
+overrides:
+  - files: "_posts/**"
+    schemas:
+      - jekyll:page:4.4
+  - files: "docs/**"
+    schemas:
+      - vitepress:page:1.6
 ```
 
 </TabItem>

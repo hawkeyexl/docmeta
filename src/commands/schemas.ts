@@ -20,6 +20,7 @@ import {
   listFormats,
   supportedExtensions,
 } from "../extractors/index.js";
+import { isoDateValue } from "../extractors/date-value.js";
 import { integrityOf } from "../core/integrity.js";
 import { gitIgnored } from "../core/gitignore.js";
 import {
@@ -566,14 +567,6 @@ function jsonTypeOf(value: unknown): string {
   }
 }
 
-/** The comparable form of a value: a Date is its ISO spelling, per `jsonTypeOf`. */
-function normalizeValue(value: unknown): unknown {
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? String(value) : value.toISOString();
-  }
-  return value;
-}
-
 const FORMAT_TESTS: [string, RegExp][] = [
   ["date", /^\d{4}-\d{2}-\d{2}$/],
   ["date-time", /^\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}/],
@@ -628,7 +621,7 @@ function recordValue(
   }
   stats.locations.set(type, where);
 
-  const normalized = normalizeValue(value);
+  const normalized = isoDateValue(value);
   if (normalized === "") stats.sawEmptyString = true;
 
   // Objects and arrays are keyed by their JSON too, so a repeated `tags: []`

@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import { applyFrontmatter } from "../src/extractors/frontmatter-write.js";
+import { markdownExtractor } from "../src/extractors/markdown.js";
 import { extractFrontmatter } from "../src/extractors/frontmatter.js";
 import { DocmetaError } from "../src/types.js";
 
@@ -308,5 +309,43 @@ describe("applyFrontmatter — round trip", () => {
   it.each(FIXTURES)("is idempotent: %s", (name) => {
     const once = applyFrontmatter(fx(name), PATCH);
     expect(applyFrontmatter(once, PATCH)).toBe(once);
+  });
+});
+
+describe("TOML native dates across the read and write paths", () => {
+  const TOML = [
+    "+++",
+    'type = "concept"',
+    'title = "Cache"',
+    "date = 2026-06-25",
+    "+++",
+    "",
+    "# Body",
+    "",
+  ].join("\n");
+
+  it("leaves an untouched native date exactly as authored", () => {
+    // The read path normalizes a TomlDate to its string spelling; the write
+    // path must not rewrite the source line while doing so.
+    const out = applyFrontmatter(TOML, { description: "added" });
+    expect(out).toContain("date = 2026-06-25");
+    expect(markdownExtractor.extract(out, "x.md").data.date).toBe("2026-06-25");
+  });
+
+  it("writes a Date value and passes its own verify step", () => {
+    // The reason `parseBlock` keeps TOML dates native while `extractFrontmatter`
+    // normalizes them. `emitTomlLine` accepts a Date and stringifyToml emits an
+    // unquoted date for it, so verification re-reads a Date and compares it
+    // against the Date in the patch. Normalizing `parseBlock` "for consistency"
+    // makes deepEqual compare a string to a Date, and every Date write is
+    // refused. This test is what fails if someone does that.
+    const out = applyFrontmatter(TOML, {
+      lastmod: new Date("2026-07-01T00:00:00Z"),
+    });
+    expect(out).toMatch(/lastmod = 2026-07-01/);
+    // And the read path still hands a schema a string, not a Date.
+    expect(typeof markdownExtractor.extract(out, "x.md").data.lastmod).toBe(
+      "string",
+    );
   });
 });
