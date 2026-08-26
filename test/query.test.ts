@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -117,11 +124,16 @@ describe("runQuery", () => {
     await expect(q("SELECT nope FROM missing")).rejects.toThrow(DocmetaError);
   });
 
-  it("refuses to let user SQL write", async () => {
-    await expect(q("DROP TABLE docs")).rejects.toThrow(DocmetaError);
+  it("refuses statements whose effect is not a metadata edit", async () => {
+    // 0022: enforcement moved from PRAGMA query_only to effect-gating — the
+    // statement runs against the disposable projection, and creating or
+    // deleting rows (files, in the corpus's terms) refuses the run.
+    await expect(q("DROP TABLE docs")).rejects.toThrow(
+      /create or delete rows/i,
+    );
     await expect(
       q("INSERT INTO docs (_path) VALUES ('x')"),
-    ).rejects.toThrow(/readonly|read-only/i);
+    ).rejects.toThrow(/create or delete rows/i);
   });
 
   it("refuses a second statement instead of silently dropping it", async () => {
@@ -144,6 +156,136 @@ describe("runQuery", () => {
     await expect(
       runQuery({ sql: "SELECT 1", inputs: [], cwd: corpus, noConfig: true }),
     ).rejects.toThrow(/No files to read/);
+  });
+});
+
+describe("runQuery write-back (0022)", () => {
+  const temps: string[] = [];
+  afterAll(() => {
+    for (const t of temps) rmSync(t, { recursive: true, force: true });
+  });
+  /** A throwaway copy of the corpus, so writes never touch the fixtures. */
+  function copy(): string {
+    const d = mkdtempSync(join(tmpdir(), "docmeta-write-"));
+    cpSync(corpus, d, { recursive: true });
+    temps.push(d);
+    return d;
+  }
+  function w(sql: string, cwd: string, write = false) {
+    return runQuery({
+      sql,
+      inputs: ["docs", "authors"],
+      cwd,
+      noConfig: true,
+      write,
+    });
+  }
+
+  it("previews an UPDATE as per-file changes, touching nothing", async () => {
+    const d = copy();
+    const before = readFileSync(join(d, "docs", "beta.md"), "utf8");
+    const run = await w("UPDATE docs SET draft = 0 WHERE draft = 1", d);
+    expect(run.changes).toEqual([
+      { file: "docs/beta.md", key: "draft", from: true, to: false, written: false },
+    ]);
+    expect(readFileSync(join(d, "docs", "beta.md"), "utf8")).toBe(before);
+  });
+
+  it("applies with write: booleans restored, body preserved, then converges", async () => {
+    const d = copy();
+    const run = await w("UPDATE docs SET draft = 0 WHERE draft = 1", d, true);
+    expect(run.changes).toEqual([
+      { file: "docs/beta.md", key: "draft", from: true, to: false, written: true },
+    ]);
+    const after = readFileSync(join(d, "docs", "beta.md"), "utf8");
+    expect(after).toContain("draft: false");
+    expect(after).toContain("The beta page.");
+    const again = await w("UPDATE docs SET draft = 0 WHERE draft = 1", d);
+    expect(again.changes).toEqual([]);
+  });
+
+  it("restores array values edited as JSON text", async () => {
+    const d = copy();
+    await w(
+      `UPDATE docs SET tags = (
+         SELECT json_group_array(CASE t.value WHEN 'guide' THEN 'guides' ELSE t.value END)
+         FROM json_each(docs.tags) t)
+       WHERE _path = 'docs/beta.md'`,
+      d,
+      true,
+    );
+    const check = await w("SELECT tags FROM docs WHERE _path = 'docs/beta.md'", d);
+    expect(JSON.parse(check.rows[0]?.tags as string)).toEqual(["guides"]);
+  });
+
+  it("types a new key by the column's dominant type", async () => {
+    const d = copy();
+    // gamma never had draft; alpha (false) and beta (true) make it boolean.
+    await w("UPDATE docs SET draft = 0 WHERE _path = 'docs/gamma.md'", d, true);
+    expect(readFileSync(join(d, "docs", "gamma.md"), "utf8")).toContain(
+      "draft: false",
+    );
+  });
+
+  it("refuses a value the restored type cannot hold", async () => {
+    const d = copy();
+    const before = readFileSync(join(d, "docs", "beta.md"), "utf8");
+    await expect(
+      w("UPDATE docs SET draft = 2 WHERE _path = 'docs/beta.md'", d, true),
+    ).rejects.toThrow(/boolean/i);
+    expect(readFileSync(join(d, "docs", "beta.md"), "utf8")).toBe(before);
+  });
+
+  it("SET NULL writes an explicit null, not a deletion", async () => {
+    const d = copy();
+    await w("UPDATE docs SET author = NULL WHERE _path = 'docs/gamma.md'", d, true);
+    expect(readFileSync(join(d, "docs", "gamma.md"), "utf8")).toMatch(
+      /author: null/,
+    );
+  });
+
+  it("refuses system-column changes", async () => {
+    const d = copy();
+    await expect(
+      w("UPDATE docs SET _path = 'renamed.md' WHERE _path = 'docs/beta.md'", d),
+    ).rejects.toThrow(/system column/i);
+  });
+
+  it("refuses ATTACH and VACUUM outright", async () => {
+    const d = copy();
+    await expect(w("ATTACH DATABASE 'x.db' AS x", d)).rejects.toThrow(
+      /ATTACH|refused/,
+    );
+    await expect(w("VACUUM", d)).rejects.toThrow(/VACUUM|refused/);
+  });
+
+  it("is all-or-nothing: one refusal writes no file at all", async () => {
+    const d = copy();
+    const before = readFileSync(join(d, "docs", "beta.md"), "utf8");
+    await expect(
+      w(
+        `UPDATE docs SET draft = CASE _path WHEN 'docs/beta.md' THEN 0 ELSE 2 END
+         WHERE _path IN ('docs/beta.md', 'docs/gamma.md')`,
+        d,
+        true,
+      ),
+    ).rejects.toThrow(/boolean/i);
+    expect(readFileSync(join(d, "docs", "beta.md"), "utf8")).toBe(before);
+  });
+
+  it("refuses a write that touches <stdin>", async () => {
+    const d = copy();
+    await expect(
+      runQuery({
+        sql: "UPDATE docs SET title = 'X' WHERE _path = '<stdin>'",
+        inputs: ["docs", "-"],
+        stdinContent: "---\ntitle: Piped\n---\n",
+        as: "markdown",
+        cwd: d,
+        noConfig: true,
+        write: true,
+      }),
+    ).rejects.toThrow(/stdin/i);
   });
 });
 
@@ -236,6 +378,28 @@ describe("renderQuery", () => {
     expect(renderQuery({ columns: ["a"], rows: [{ a: 1 }] })).toContain(
       "1 row",
     );
+  });
+
+  it("renders changes as a diff with the mode's verdict line", () => {
+    const changes = [
+      { file: "docs/beta.md", key: "draft", from: true, to: false, written: false },
+      { file: "docs/gamma.md", key: "draft", from: null, to: false, written: false },
+    ];
+    const preview = renderQuery({ columns: [], rows: [], changes });
+    expect(preview).toContain("docs/beta.md: draft: true -> false");
+    expect(preview).toContain("docs/gamma.md: draft: (unset) -> false");
+    expect(preview).toContain("2 changes across 2 files");
+    expect(preview).toContain("pass --write to apply");
+    const written = renderQuery(
+      { columns: [], rows: [], changes: changes.map((ch) => ({ ...ch, written: true })) },
+      { write: true },
+    );
+    expect(written).toContain("— written");
+    const gate = renderQuery({ columns: [], rows: [], changes }, { check: true });
+    expect(gate).toContain("✗ 2 changes across 2 files — check failed");
+    expect(
+      renderQuery({ columns: [], rows: [], changes: [] }, { check: true }),
+    ).toContain("✓ 0 changes");
   });
 
   it("check mode renders a red ✗ verdict on rows, a green ✓ on none", () => {

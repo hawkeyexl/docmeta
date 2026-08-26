@@ -477,6 +477,8 @@ interface QueryCliOptions extends InputCliOptions {
   check?: boolean;
   /** `--db <path>`: also write the built database; SQL becomes optional. */
   db?: string;
+  /** `--write`: apply a mutating statement's changes; default is preview. */
+  write?: boolean;
   allowEmpty?: boolean;
   /** `--no-gitignore`; commander's `true` default, see `gitignoreFlag`. */
   gitignore: boolean;
@@ -820,6 +822,10 @@ export function buildProgram(): Command {
       "--db <path>",
       "also write the built database to this file; SQL is then optional",
     )
+    .option(
+      "--write",
+      "apply a mutating statement's changes to the files (without it, preview the diff)",
+    )
     .option("--ext <list>", "comma-separated extensions for directory walks")
     .option("--exclude <glob>", "glob to exclude; repeatable", collect, [])
     .option("--as <format>", "force an input format (e.g. markdown, mdx)")
@@ -878,6 +884,7 @@ export function buildProgram(): Command {
           const run = await runQuery({
             sql,
             db: options.db,
+            write: Boolean(options.write),
             inputs: paths,
             as: options.as,
             exclude: options.exclude,
@@ -906,14 +913,18 @@ export function buildProgram(): Command {
           }
           switch (format) {
             case "json":
-              // The bare row array, mirroring `get`'s bare result array. The
-              // `--check` verdict travels in the exit code, not the envelope.
-              process.stdout.write(`${JSON.stringify(run.rows, null, 2)}\n`);
+              // The bare array, mirroring `get`'s bare result array: changes
+              // for a metadata edit, rows for a read. The `--check` verdict
+              // travels in the exit code, not the envelope.
+              process.stdout.write(
+                `${JSON.stringify(run.changes ?? run.rows, null, 2)}\n`,
+              );
               break;
             case "pretty": {
               const text = renderQuery(run, {
                 color: resolveColor(command.parent ?? command),
                 check: Boolean(options.check),
+                write: Boolean(options.write),
               });
               if (text.length > 0) process.stdout.write(`${text}\n`);
               break;
@@ -925,9 +936,12 @@ export function buildProgram(): Command {
               );
             }
           }
-          // Rows from a `--check` run are findings; a plain query's rows are
-          // the answer the user asked for, so both outcomes are success.
-          process.exitCode = options.check && run.rows.length > 0 ? 1 : 0;
+          // Rows from a `--check` run are findings, and so are a preview's
+          // pending changes — the drift gate. Applied changes are the work
+          // done, so `--write` always succeeds or fails outright.
+          const findings = run.changes ? run.changes.length : run.rows.length;
+          process.exitCode =
+            options.check && !options.write && findings > 0 ? 1 : 0;
         } catch (err) {
           fail(err);
         }

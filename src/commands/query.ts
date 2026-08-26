@@ -8,7 +8,14 @@
 import { mkdir, open, readFile, rm } from "node:fs/promises";
 import { dirname, resolve, extname } from "node:path";
 import { resolveElements } from "../core/resolve-schema.js";
-import { DocmetaError, type ExtractedMetadata } from "../types.js";
+import { writeFileAtomic } from "../core/write-file.js";
+import { deepEqual } from "../extractors/patch-util.js";
+import {
+  DocmetaError,
+  type ExtractedMetadata,
+  type MetadataExtractor,
+  type MetadataPatch,
+} from "../types.js";
 import {
   extractorByName,
   extractorForExtension,
@@ -21,7 +28,11 @@ import {
   STDIN_TOKEN,
   STDIN_LABEL,
 } from "../core/load-files.js";
-import { resolveRunConfig, type ConfigNotice } from "../core/config.js";
+import {
+  resolveRunConfig,
+  type ConfigNotice,
+  type DocmetaConfig,
+} from "../core/config.js";
 
 export interface QueryOptions {
   /**
@@ -63,6 +74,22 @@ export interface QueryOptions {
    * loads a schema, so there is no network dependency to suppress.
    */
   offline?: boolean;
+  /**
+   * `--write`: apply the statement's per-file changes to the underlying
+   * documents. Without it a mutating statement is a preview — the diff it
+   * would make, files untouched. Proposal 0022 is the design record.
+   */
+  write?: boolean;
+}
+
+/** One cell a statement changed, in file-space values on both sides. */
+export interface QueryChange {
+  file: string;
+  key: string;
+  from: unknown;
+  to: unknown;
+  /** True once `write` has applied it; always false in a preview. */
+  written: boolean;
 }
 
 export interface QueryRun {
@@ -71,6 +98,11 @@ export interface QueryRun {
   rows: Record<string, unknown>[];
   /** Set when `db` was written: where, and how big the table is. */
   db?: { path: string; files: number; columns: number };
+  /**
+   * Present when the statement was a metadata edit: every cell it changed
+   * (empty when a mutating statement matched nothing). Absent on reads.
+   */
+  changes?: QueryChange[];
 }
 
 /**
@@ -145,7 +177,7 @@ export async function runQuery(opts: QueryOptions): Promise<QueryRun> {
     action: "queried",
   });
 
-  const entries: { label: string; extracted: ExtractedMetadata }[] = [];
+  const entries: QueryEntry[] = [];
 
   const readOne = (label: string, content: string, extension: string): void => {
     const extractor = forced ?? extractorForExtension(extension);
@@ -157,7 +189,7 @@ export async function runQuery(opts: QueryOptions): Promise<QueryRun> {
     const extracted = extractor.extract(content, label, {
       elements: resolveElements(label, config),
     });
-    entries.push({ label, extracted });
+    entries.push({ label, extracted, extractor });
   };
 
   if (usingStdin) {
@@ -189,7 +221,27 @@ export async function runQuery(opts: QueryOptions): Promise<QueryRun> {
     opts.db === undefined
       ? undefined
       : { resolved: resolve(cwd, opts.db), display: opts.db };
-  return runSql(sql, entries, db);
+  return runSql(sql, entries, {
+    target: db,
+    write: Boolean(opts.write),
+    base,
+    config,
+  });
+}
+
+interface QueryEntry {
+  label: string;
+  extracted: ExtractedMetadata;
+  /** The extractor that read it — a write goes back through the same one. */
+  extractor: MetadataExtractor;
+}
+
+interface RunContext {
+  target?: { resolved: string; display: string };
+  write: boolean;
+  /** Directory file labels resolve against (see `resolveRunConfig`). */
+  base: string;
+  config: DocmetaConfig | null;
 }
 
 /**
@@ -226,14 +278,17 @@ async function prepareDbTarget(resolved: string, display: string): Promise<void>
 }
 
 /**
- * Build the `docs` table — in memory, or at `db.resolved` when exporting —
- * and run the user's statement over it (none, when only exporting).
+ * Build the `docs` table — in memory, or at the export target — run the
+ * user's statement over it (none, when only exporting), and judge what the
+ * statement *did*: reads return rows; metadata edits become per-file changes,
+ * previewed or (with `write`) applied through the extractors' writers.
  */
 async function runSql(
   sql: string,
-  entries: { label: string; extracted: ExtractedMetadata }[],
-  target?: { resolved: string; display: string },
+  entries: QueryEntry[],
+  ctx: RunContext,
 ): Promise<QueryRun> {
+  const target = ctx.target;
   // Data columns are the union of top-level keys across the corpus — the same
   // scan boundary `schemas infer` chose. Sorted, so the column order (and any
   // `SELECT *`) is deterministic regardless of file order.
@@ -287,27 +342,272 @@ async function runSql(
         ...dataColumns.map((c) => bindValue(extracted.data[c])),
       );
     }
-    // From here on this connection is the user's to read, never to write.
-    // Per-connection only: an exported file stays writable for whatever
-    // opens it next.
-    db.exec("PRAGMA query_only = 1");
-
     if (sql === "") {
       return { columns: [], rows: [], ...(dbInfo ? { db: dbInfo } : {}) };
     }
+
+    // ATTACH and VACUUM INTO write files of their own, outside the table the
+    // effect gate below watches — the only statements refused by name.
+    if (/^(attach|vacuum)\b/i.test(sql)) {
+      throw new DocmetaError(
+        `${sql.split(/\s/, 1)[0]?.toUpperCase() ?? "That statement"} is refused: it can write outside the docs table.`,
+      );
+    }
+
+    // 0022: the statement runs freely against this disposable projection and
+    // is judged by its effects, not its syntax. A read leaves no diff.
+    const before = snapshotRows(db);
+    let columns: string[];
+    let rows: Record<string, unknown>[];
     try {
       const stmt = db.prepare(sql);
-      const columns = stmt.columns().map((c) => c.name);
+      columns = stmt.columns().map((c) => c.name);
       // node:sqlite types rows as unknown[]; each row is a name->value record.
-      const rows = stmt.all() as Record<string, unknown>[];
-      return { columns, rows, ...(dbInfo ? { db: dbInfo } : {}) };
+      rows = stmt.all();
     } catch (err) {
-      if (err instanceof DocmetaError) throw err;
       throw new DocmetaError(`SQL error: ${(err as Error).message}`);
     }
+    let after: Map<string, Record<string, unknown>>;
+    try {
+      after = snapshotRows(db);
+    } catch {
+      // The table itself is gone — DROP is the limit case of deleting rows.
+      throw new DocmetaError(ROW_SET_MESSAGE);
+    }
+    const effects = diffSnapshots(before, after);
+    const mutatingIntent =
+      /^(update|insert|delete|replace|drop|alter|create)\b/i.test(sql);
+    if (effects.length === 0 && !mutatingIntent) {
+      return { columns, rows, ...(dbInfo ? { db: dbInfo } : {}) };
+    }
+
+    const changes = restoreChanges(effects, entries);
+    if (ctx.write) await applyChanges(changes, entries, ctx);
+    return { columns, rows, changes, ...(dbInfo ? { db: dbInfo } : {}) };
   } finally {
     db.close();
   }
+}
+
+const ROW_SET_MESSAGE =
+  "The statement would create or delete rows; files are not created or deleted through SQL.";
+
+/** Every row of the projection, keyed by `_path`. */
+function snapshotRows(
+  db: { prepare(sql: string): { all(): unknown[] } },
+): Map<string, Record<string, unknown>> {
+  const rows = db.prepare("SELECT * FROM docs").all() as Record<
+    string,
+    unknown
+  >[];
+  return new Map(rows.map((r) => [String(r._path), r]));
+}
+
+interface CellEffect {
+  file: string;
+  key: string;
+  /** SQL-space value the statement left behind. */
+  to: unknown;
+}
+
+/**
+ * What the statement did, judged cell by cell. Row creation or deletion and
+ * any system-column change refuse the whole run — since only the projection
+ * changed, refusing costs nothing.
+ */
+function diffSnapshots(
+  before: Map<string, Record<string, unknown>>,
+  after: Map<string, Record<string, unknown>>,
+): CellEffect[] {
+  if (before.size !== after.size) throw new DocmetaError(ROW_SET_MESSAGE);
+  const effects: CellEffect[] = [];
+  for (const [path, was] of before) {
+    const now = after.get(path);
+    if (!now) {
+      // Same row count but a path is gone: the statement rewrote `_path`,
+      // which the keying otherwise disguises as an add-and-remove.
+      throw new DocmetaError(
+        `The statement changed system column "_path" for "${path}"; system columns are read-only.`,
+      );
+    }
+    for (const key of Object.keys(was)) {
+      if (Object.is(was[key], now[key])) continue;
+      if (RESERVED.has(key)) {
+        throw new DocmetaError(
+          `The statement changed system column "${key}" for "${path}"; system columns are read-only.`,
+        );
+      }
+      effects.push({ file: path, key, to: now[key] });
+    }
+  }
+  effects.sort((a, b) =>
+    a.file === b.file ? a.key.localeCompare(b.key) : a.file.localeCompare(b.file),
+  );
+  return effects;
+}
+
+type FileType = "boolean" | "number" | "bigint" | "string" | "array" | "object";
+
+function fileTypeOf(value: unknown): FileType | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (Array.isArray(value)) return "array";
+  const t = typeof value;
+  if (t === "boolean" || t === "number" || t === "bigint" || t === "string") {
+    return t;
+  }
+  return t === "object" ? "object" : undefined;
+}
+
+/**
+ * File-space restoration of SQL-space cells — proposal 0022's inverse map.
+ * Target type precedence: the file's own original type, then the column's
+ * dominant type across the corpus, then the storage type as-is. Failures
+ * refuse by file and key rather than guess.
+ */
+function restoreChanges(
+  effects: CellEffect[],
+  entries: QueryEntry[],
+): QueryChange[] {
+  const originals = new Map(entries.map((e) => [e.label, e.extracted.data]));
+  const dominant = new Map<string, FileType | undefined>();
+  const dominantFor = (key: string): FileType | undefined => {
+    if (dominant.has(key)) return dominant.get(key);
+    const counts = new Map<FileType, number>();
+    for (const e of entries) {
+      const t = fileTypeOf(e.extracted.data[key]);
+      if (t) counts.set(t, (counts.get(t) ?? 0) + 1);
+    }
+    let best: FileType | undefined;
+    let bestN = 0;
+    let tied = false;
+    for (const [t, n] of counts) {
+      if (n > bestN) [best, bestN, tied] = [t, n, false];
+      else if (n === bestN) tied = true;
+    }
+    const result = tied ? undefined : best;
+    dominant.set(key, result);
+    return result;
+  };
+
+  return effects.map(({ file, key, to }) => {
+    const original = originals.get(file)?.[key];
+    // The variable annotation (not just the return position) is what lets
+    // control-flow analysis treat a `refuse(...)` call as terminating.
+    const refuse: (why: string) => never = (why) => {
+      throw new DocmetaError(`"${key}" in ${file}: ${why}`);
+    };
+    if (to instanceof Uint8Array) refuse("a BLOB cannot be written back");
+    const targetType = fileTypeOf(original) ?? dominantFor(key);
+    let restored: unknown = to;
+    if (to !== null && targetType !== undefined) {
+      switch (targetType) {
+        case "boolean":
+          if (to === 1) restored = true;
+          else if (to === 0) restored = false;
+          else refuse(`${JSON.stringify(to)} is not a boolean`);
+          break;
+        case "array":
+        case "object": {
+          if (typeof to !== "string") {
+            refuse(`${JSON.stringify(to)} is not JSON text for a ${targetType}`);
+          }
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(to);
+          } catch {
+            refuse(`the new value is not valid JSON for a ${targetType}`);
+          }
+          const kind = Array.isArray(parsed) ? "array" : typeof parsed;
+          if (kind !== targetType) {
+            refuse(`the new value is ${kind}, and the key holds ${targetType}`);
+          }
+          restored = parsed;
+          break;
+        }
+        case "number":
+        case "bigint":
+          if (typeof to !== "number" && typeof to !== "bigint") {
+            refuse(`${JSON.stringify(to)} is not a number`);
+          }
+          break;
+        case "string":
+          if (typeof to !== "string") {
+            refuse(
+              `${JSON.stringify(to)} is not a string; quote it in the statement`,
+            );
+          }
+          break;
+      }
+    }
+    return {
+      file,
+      key,
+      from: original === undefined ? null : original,
+      to: restored,
+      written: false,
+    };
+  });
+}
+
+/**
+ * All-or-nothing apply: phase one computes every file's new content — any
+ * refusal (unwritable format, a corpus that moved underneath the run, or the
+ * writer's own re-parse verification) aborts before a single byte lands;
+ * phase two writes atomically. A half-applied bulk edit would leave the
+ * corpus in a state no statement describes.
+ */
+async function applyChanges(
+  changes: QueryChange[],
+  entries: QueryEntry[],
+  ctx: RunContext,
+): Promise<void> {
+  if (changes.length === 0) return;
+  const byLabel = new Map(entries.map((e) => [e.label, e]));
+  const grouped = new Map<string, MetadataPatch>();
+  for (const c of changes) {
+    if (c.file === STDIN_LABEL) {
+      throw new DocmetaError(
+        "A write cannot touch <stdin>: there is no file behind it.",
+      );
+    }
+    const patch = grouped.get(c.file) ?? {};
+    patch[c.key] = c.to;
+    grouped.set(c.file, patch);
+  }
+
+  const pending: { path: string; content: string }[] = [];
+  for (const [label, patch] of grouped) {
+    const entry = byLabel.get(label);
+    if (!entry) throw new DocmetaError(`No loaded entry for "${label}".`);
+    if (!entry.extractor.apply) {
+      throw new DocmetaError(
+        `"${label}": the ${entry.extractor.name} format is read-only.`,
+      );
+    }
+    const path = resolve(ctx.base, label);
+    const content = await readFile(path, "utf8");
+    // The patch was computed against load-time data; if the file moved since,
+    // applying it would encode a state nobody previewed.
+    const current = entry.extractor.extract(content, label, {
+      elements: resolveElements(label, ctx.config),
+    });
+    for (const key of Object.keys(patch)) {
+      if (!deepEqual(current.data[key], entry.extracted.data[key])) {
+        throw new DocmetaError(
+          `"${label}" changed on disk since it was read ("${key}" moved); re-run the query.`,
+        );
+      }
+    }
+    pending.push({
+      path,
+      content: entry.extractor.apply(content, patch, {
+        filePath: label,
+        elements: resolveElements(label, ctx.config),
+      }),
+    });
+  }
+  for (const p of pending) await writeFileAtomic(p.path, p.content);
+  for (const c of changes) c.written = true;
 }
 
 /** Any key becomes a legal quoted identifier by doubling internal quotes. */

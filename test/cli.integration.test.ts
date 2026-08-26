@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
 import { execFile, execFileSync, execSync, spawnSync } from "node:child_process";
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -329,6 +330,42 @@ describe("cli query (built bin)", () => {
     const r = run(["query", "SELECT 1", "--no-config"]);
     expect(r.status).toBe(2);
     expect(r.stderr).toContain("No files");
+  });
+
+  it("previews, gates, applies, and converges a write (0022)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-write-"));
+    try {
+      // A private copy of the corpus: writes must never touch the fixtures.
+      cpSync(resolve(root, "test", "fixtures", "query"), dir, {
+        recursive: true,
+      });
+      const update = "UPDATE docs SET draft = 0 WHERE draft = 1";
+
+      const preview = run(["query", update, "docs", "authors"], undefined, undefined, dir);
+      expect(preview.status).toBe(0);
+      expect(preview.stdout).toContain("draft: true -> false");
+      expect(preview.stdout).toContain("pass --write to apply");
+      expect(readFileSync(join(dir, "docs", "beta.md"), "utf8")).toContain(
+        "draft: true",
+      );
+
+      const gated = run(["query", "--check", update, "docs", "authors"], undefined, undefined, dir);
+      expect(gated.status).toBe(1);
+      expect(gated.stdout).toContain("check failed");
+
+      const applied = run(["query", "--write", update, "docs", "authors"], undefined, undefined, dir);
+      expect(applied.status).toBe(0);
+      expect(applied.stdout).toContain("— written");
+      expect(readFileSync(join(dir, "docs", "beta.md"), "utf8")).toContain(
+        "draft: false",
+      );
+
+      const converged = run(["query", "--check", update, "docs", "authors"], undefined, undefined, dir);
+      expect(converged.status).toBe(0);
+      expect(converged.stdout).toContain("✓ 0 changes");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("--db exports without SQL, and keeps rows on stdout with it", () => {
