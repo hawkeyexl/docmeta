@@ -962,7 +962,12 @@ async function planSchemaMutation(
     sources.add(resolved.source);
     if (refs === undefined) {
       refs = resolved.schemas;
-    } else if (JSON.stringify(refs) !== JSON.stringify(resolved.schemas)) {
+    } else if (
+      // Order-insensitive, like seqResolvesToRunSet below: a document that
+      // lists the same refs in another order names the same contract.
+      JSON.stringify([...refs].sort()) !==
+      JSON.stringify([...resolved.schemas].sort())
+    ) {
       throw new DocmetaError(
         `DDL needs the corpus to resolve to one schema set, and this run's is split ("${e.label}" resolves differently). Scope the run to one override group.`,
       );

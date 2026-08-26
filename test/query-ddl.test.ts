@@ -365,6 +365,23 @@ describe("runQuery DDL — targeting, containment, and the config edit", () => {
     expect(message).not.toContain("--schema");
   });
 
+  it("treats a reordered $schema list as the same set, not a split", async () => {
+    const d = copy("query-ddl");
+    writeFileSync(join(d, "schemas", "extra.json"), '{\n  "type": "object"\n}\n');
+    writeFileSync(
+      join(d, "docmeta.config.yaml"),
+      'paths:\n  - "docs/**/*.md"\nschemas:\n  - ./schemas/house.json\n  - ./schemas/extra.json\n',
+    );
+    // two.md spells the identical set in the opposite order.
+    writeFileSync(
+      join(d, "docs", "two.md"),
+      '---\n$schema: ["./schemas/extra.json", "./schemas/house.json"]\ntitle: Two\n---\n\nBody two.\n',
+    );
+    await ddl("ALTER TABLE docs DROP COLUMN title", d, true);
+    const schema = houseOf(d);
+    expect((schema.properties as Record<string, unknown>).title).toBeUndefined();
+  });
+
   it("refuses DROP when a sibling schema still requires the key", async () => {
     const d = copy("query-ddl");
     writeFileSync(
