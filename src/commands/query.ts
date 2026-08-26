@@ -1172,8 +1172,13 @@ function mutateSchemaObject(
   ): Record<string, unknown> =>
     Object.fromEntries(Object.entries(obj).filter(([k]) => k !== key));
   let props = { ...(propsOf(schema) ?? {}) };
+  // Spec-invalid non-string entries are dropped rather than carried: every
+  // comparison below is against a string key, so they could only persist as
+  // junk this rewrite pretended not to see.
   let required = Array.isArray(schema.required)
-    ? [...(schema.required as unknown[])]
+    ? (schema.required as unknown[]).filter(
+        (r): r is string => typeof r === "string",
+      )
     : [];
   switch (op.op) {
     case "add":
