@@ -195,6 +195,21 @@ blocks; AsciiDoc and RST refuse because a bare `---` is a transition or an open-
 (the writer's existing refusal, surfaced); element formats have no block to create. The
 refusal names the format and the reason.
 
+**11. The schema spread resurrected `required` — found by the DROP test.**
+Building the mutated schema as `{ ...schema, properties, ...(required.length
+? { required } : {}) }` quietly carried the *original* `required` back in
+whenever the new list was empty, and masked removals otherwise. The mutation
+now sets or removes the member explicitly. Recorded because it is the exact
+shape of bug a spread-with-conditional idiom invites.
+
+**12. ALTER on a schemaless corpus refuses — the semantic consequence stated.**
+Once DDL means "edit the schema," a corpus on the built-in default set has
+nothing DDL may touch, so `ALTER` there refuses and the message names the
+`UPDATE` spellings that cover every data-only case (`SET k = NULL` with no
+WHERE, backfill via `WHERE k IS NULL`, cross-column rename pairing). This
+retires the file-only ALTER behavior 0022 shipped un-released; the tests and
+the demo footage that showed it were updated rather than grandfathered.
+
 ## Not breaking
 
 Every statement here lands before the stack releases, so the surface ships standard from
