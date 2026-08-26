@@ -1,5 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { dirname, resolve } from "node:path";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runQuery, type QueryOptions } from "../src/commands/query.js";
 import { renderQuery } from "../src/reporters/query.js";
@@ -145,6 +147,64 @@ describe("runQuery", () => {
   });
 });
 
+describe("runQuery --db", () => {
+  let tmp: string;
+  beforeAll(() => {
+    tmp = mkdtempSync(join(tmpdir(), "docmeta-query-db-"));
+  });
+  afterAll(() => {
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it("writes a reopenable database, with SQL optional", async () => {
+    const path = join(tmp, "out.db");
+    const run = await q("", { db: path });
+    expect(run.rows).toEqual([]);
+    expect(run.db).toEqual({ path, files: 6, columns: 4 + 7 });
+    expect(existsSync(path)).toBe(true);
+    // Reopen the artifact with a fresh connection: the table must be there.
+    const { DatabaseSync } = await import("node:sqlite");
+    const db = new DatabaseSync(path, { readOnly: true });
+    try {
+      expect(db.prepare("SELECT count(*) n FROM docs").get()).toEqual({
+        n: 6,
+      });
+      expect(
+        db.prepare("SELECT title FROM docs WHERE _path = 'docs/beta.md'").get(),
+      ).toEqual({ title: "Beta" });
+    } finally {
+      db.close();
+    }
+  });
+
+  it("runs the SQL and writes the database in one go", async () => {
+    const path = join(tmp, "both.db");
+    const run = await q("SELECT count(*) n FROM docs", { db: path });
+    expect(run.rows).toEqual([{ n: 6 }]);
+    expect(run.db?.files).toBe(6);
+    expect(existsSync(path)).toBe(true);
+  });
+
+  it("overwrites its own artifact on a re-run", async () => {
+    const path = join(tmp, "again.db");
+    await q("", { db: path });
+    const run = await q("", { db: path });
+    expect(run.db?.files).toBe(6);
+  });
+
+  it("refuses to overwrite a file that is not a SQLite database", async () => {
+    const path = join(tmp, "precious.txt");
+    writeFileSync(path, "not a database\n");
+    await expect(q("", { db: path })).rejects.toThrow(
+      /not a SQLite database/,
+    );
+  });
+
+  it("still requires SQL when --db is absent", async () => {
+    await expect(q("")).rejects.toThrow(/SQL/);
+  });
+});
+
 describe("renderQuery", () => {
   const run = {
     columns: ["_path", "n"],
@@ -225,5 +285,34 @@ describe("resolveQueryInputs", () => {
     );
     expect(sql).toBe("SELECT a, b FROM docs");
     expect(paths).toEqual(["docs"]);
+  });
+
+  it("comma-free SQL with (*) is SQL, not a glob", () => {
+    // picomatch reads `count(*)` as an extglob, so without the whitespace
+    // guard this exact statement was refused as a path — and, with --db,
+    // silently demoted to a no-match glob input instead of run.
+    const statement = "SELECT count(*) n FROM docs";
+    expect(
+      resolveQueryInputs(statement, ["docs"], undefined, corpus).sql,
+    ).toBe(statement);
+    expect(
+      resolveQueryInputs(statement, ["docs"], undefined, corpus, true).sql,
+    ).toBe(statement);
+  });
+
+  it("--db makes the SQL optional: a lone path stays a path", () => {
+    expect(
+      resolveQueryInputs("docs", ["authors"], undefined, corpus, true),
+    ).toEqual({ sql: "", paths: ["docs", "authors"] });
+    expect(resolveQueryInputs(undefined, [], undefined, corpus, true)).toEqual({
+      sql: "",
+      paths: [],
+    });
+  });
+
+  it("--db with SQL still runs it", () => {
+    expect(
+      resolveQueryInputs("SELECT 1", ["docs"], undefined, corpus, true),
+    ).toEqual({ sql: "SELECT 1", paths: ["docs"] });
   });
 });

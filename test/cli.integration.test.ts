@@ -330,6 +330,35 @@ describe("cli query (built bin)", () => {
     expect(r.status).toBe(2);
     expect(r.stderr).toContain("No files");
   });
+
+  it("--db exports without SQL, and keeps rows on stdout with it", () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-db-"));
+    try {
+      const dbPath = join(dir, "docs.db");
+      const exported = run(["query", "--db", dbPath, corpus]);
+      expect(exported.status).toBe(0);
+      expect(exported.stdout).toContain("Wrote");
+      expect(existsSync(dbPath)).toBe(true);
+
+      const queried = run([
+        "query",
+        "--db",
+        dbPath,
+        "SELECT count(*) n FROM docs",
+        corpus,
+        "-f",
+        "json",
+      ]);
+      expect(queried.status).toBe(0);
+      // Rows own stdout — the export note must not pollute the parseable
+      // stream. (`run` cannot see stderr on a 0-exit, so the positive half
+      // of that contract is pinned by JSON.parse succeeding at all.)
+      expect(JSON.parse(queried.stdout)).toEqual([{ n: 4 }]);
+      expect(queried.stdout).not.toContain("Wrote");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 // Exit 0 means "every file passed". With no files there is no verdict, so

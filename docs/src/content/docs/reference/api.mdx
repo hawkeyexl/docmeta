@@ -44,8 +44,8 @@ exit code is the caller's.
 | `GetOptions` (type) | Input to `runGet`: the same input model plus the `fields` to read. |
 | `GetFileResult` (type) | One `runGet` result: the file, whether metadata was `present`, and the resolved `values`. |
 | `runQuery` | Run one SQL statement over an in-memory table built from every input's metadata. Backs `docmeta query`. Returns every row — the `--check` verdict is the CLI's exit code, not the result's. |
-| `QueryOptions` (type) | Input to `runQuery`: the same input model plus the `sql` to run. |
-| `QueryRun` (type) | What `runQuery` resolves to: result `columns` (present even for zero rows) and `rows`. |
+| `QueryOptions` (type) | Input to `runQuery`: the same input model plus the `sql` to run and an optional `db` export path (which makes `sql` optional). |
+| `QueryRun` (type) | What `runQuery` resolves to: result `columns` (present even for zero rows), `rows`, and — when `db` was written — its path and size. |
 | `runFill` | Propose and write missing metadata with an inference provider. Backs `docmeta fill`. |
 | `FillOptions` (type) | Input to `runFill`: provider, model, confidence threshold, cost ceiling, concurrency, and whether to write. |
 | `FillRun` (type) | What `runFill` resolves to: per-file results plus the run summary. |

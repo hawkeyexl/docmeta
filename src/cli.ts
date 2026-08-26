@@ -228,20 +228,34 @@ export function resolveGetInputs(
  * plausible-looking run. Real SQL never trips `looksLikePath`: a statement
  * with a column list contains a comma, and anything else with a space cannot
  * name a file that exists.
+ *
+ * `--db` relaxes exactly one of those guards: exporting needs no SQL, so with
+ * `sqlOptional` a path-shaped first positional is a path and an absent
+ * statement means "just write the database".
  */
 export function resolveQueryInputs(
   sqlArg: string | undefined,
   pathsArg: string[],
   queryOption: unknown,
   cwd: string,
+  sqlOptional = false,
 ): { sql: string; paths: string[] } {
   const flag = typeof queryOption === "string" ? queryOption : undefined;
 
   if (
     flag === undefined &&
     sqlArg !== undefined &&
-    looksLikePath(sqlArg, cwd, pathsArg.length === 0)
+    // A token with whitespace is never a path: every real statement has
+    // spaces, and without this test `SELECT count(*) FROM docs` reads as a
+    // *glob* — picomatch parses `(*)` as an extglob — the one SQL shape the
+    // comma test inside looksLikePath does not catch.
+    !/\s/.test(sqlArg) &&
+    // With SQL optional there is no "forgot the statement" reading to
+    // protect, so a shapeless token that really exists on disk is a path
+    // even when other paths follow — hence `alone` is forced on.
+    looksLikePath(sqlArg, cwd, sqlOptional || pathsArg.length === 0)
   ) {
+    if (sqlOptional) return { sql: "", paths: [sqlArg, ...pathsArg] };
     throw new DocmetaError(
       `"${sqlArg}" looks like a path, not SQL. Pass the SQL first (docmeta query "SELECT _path FROM docs" ${sqlArg}) or use --query.`,
     );
@@ -249,7 +263,7 @@ export function resolveQueryInputs(
 
   const source = flag ?? (sqlArg === STDIN ? undefined : sqlArg);
   const sql = source?.trim() ?? "";
-  if (sql === "") {
+  if (sql === "" && !sqlOptional) {
     throw new DocmetaError(
       'Specify SQL to run. Pass it first (docmeta query "SELECT _path FROM docs" docs/) or use --query.',
     );
@@ -461,6 +475,8 @@ interface QueryCliOptions extends InputCliOptions {
   query?: string;
   /** `--check`: any row returned is a finding, so exit 1. */
   check?: boolean;
+  /** `--db <path>`: also write the built database; SQL becomes optional. */
+  db?: string;
   allowEmpty?: boolean;
   /** `--no-gitignore`; commander's `true` default, see `gitignoreFlag`. */
   gitignore: boolean;
@@ -800,6 +816,10 @@ export function buildProgram(): Command {
       "--check",
       "treat returned rows as findings: exit 1 if the query returns any",
     )
+    .option(
+      "--db <path>",
+      "also write the built database to this file; SQL is then optional",
+    )
     .option("--ext <list>", "comma-separated extensions for directory walks")
     .option("--exclude <glob>", "glob to exclude; repeatable", collect, [])
     .option("--as <format>", "force an input format (e.g. markdown, mdx)")
@@ -829,6 +849,7 @@ export function buildProgram(): Command {
         '  docmeta query "SELECT t.value tag, count(*) n FROM docs, json_each(docs.tags) t GROUP BY tag" docs/',
         '  docmeta query --check "SELECT slug, count(*) n FROM docs GROUP BY slug HAVING n > 1" docs/',
         '  cat page.md | docmeta query "SELECT title FROM docs" - --as markdown',
+        "  docmeta query --db docs.db docs/       # export only; open with any SQLite UI",
       ].join("\n"),
     )
     .action(
@@ -845,6 +866,7 @@ export function buildProgram(): Command {
             pathsArg,
             options.query,
             process.cwd(),
+            typeof options.db === "string",
           );
           const exts: string[] | undefined = options.ext
             ? splitList(options.ext)
@@ -855,6 +877,7 @@ export function buildProgram(): Command {
 
           const run = await runQuery({
             sql,
+            db: options.db,
             inputs: paths,
             as: options.as,
             exclude: options.exclude,
@@ -867,6 +890,20 @@ export function buildProgram(): Command {
             offline: options.offline ? true : undefined,
             onNotice: notice,
           });
+          // With SQL, the rows own stdout and the export is a diagnostic;
+          // export-only, the export summary IS the report.
+          if (run.db && sql === "") {
+            process.stdout.write(
+              format === "json"
+                ? `${JSON.stringify(run.db, null, 2)}\n`
+                : `Wrote ${run.db.path} (${run.db.files} files, ${run.db.columns} columns)\n`,
+            );
+            process.exitCode = 0;
+            return;
+          }
+          if (run.db) {
+            notice(`wrote ${run.db.path} (${run.db.files} files)`);
+          }
           switch (format) {
             case "json":
               // The bare row array, mirroring `get`'s bare result array. The

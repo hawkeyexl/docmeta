@@ -5,7 +5,7 @@
  * config `paths:` fallback) mirrors `get` so the two commands behave
  * identically. Proposal 0021 is the design record.
  */
-import { readFile } from "node:fs/promises";
+import { open, readFile, rm } from "node:fs/promises";
 import { resolve, extname } from "node:path";
 import { resolveElements } from "../core/resolve-schema.js";
 import { DocmetaError, type ExtractedMetadata } from "../types.js";
@@ -24,8 +24,18 @@ import {
 import { resolveRunConfig, type ConfigNotice } from "../core/config.js";
 
 export interface QueryOptions {
-  /** One SQL statement. The table is `docs`; see the system columns below. */
+  /**
+   * One SQL statement. The table is `docs`; see the system columns below.
+   * May be empty when `db` is set — export without querying.
+   */
   sql: string;
+  /**
+   * `--db`: also write the built database to this file, for any SQLite
+   * front-end (sqlite3, Datasette, duckdb) to open afterwards. The file is a
+   * regenerated artifact: an existing SQLite file at the path is overwritten,
+   * anything else is refused.
+   */
+  db?: string;
   inputs: string[];
   as?: string;
   exclude?: string[];
@@ -59,6 +69,8 @@ export interface QueryRun {
   /** Result column names, in SELECT order — present even for zero rows. */
   columns: string[];
   rows: Record<string, unknown>[];
+  /** Set when `db` was written: where, and how big the table is. */
+  db?: { path: string; files: number; columns: number };
 }
 
 /**
@@ -77,10 +89,10 @@ type SqlValue = null | number | bigint | string;
 export async function runQuery(opts: QueryOptions): Promise<QueryRun> {
   const cwd = opts.cwd ?? process.cwd();
   const sql = opts.sql.trim();
-  if (sql === "") {
+  if (sql === "" && opts.db === undefined) {
     throw new DocmetaError("Specify SQL to run.");
   }
-  assertSingleStatement(sql);
+  if (sql !== "") assertSingleStatement(sql);
 
   // Explicit CLI inputs win, else config `paths:`; `base` is whichever of the
   // two directories those inputs were written relative to.
@@ -171,13 +183,56 @@ export async function runQuery(opts: QueryOptions): Promise<QueryRun> {
     readOne(file, content, extname(file));
   }
 
-  return runSql(sql, entries);
+  // The export path resolves like every positional the user typed: from
+  // where they are standing, not from the config's directory.
+  const db =
+    opts.db === undefined
+      ? undefined
+      : { resolved: resolve(cwd, opts.db), display: opts.db };
+  return runSql(sql, entries, db);
 }
 
-/** Build the in-memory `docs` table and run the user's statement over it. */
+/**
+ * Only two byte patterns may be overwritten by `--db`: a SQLite database
+ * (docmeta's own artifact, or anyone else's — both are regenerable-shaped)
+ * and an empty file. Anything else at the path is somebody's data.
+ */
+async function prepareDbTarget(resolved: string, display: string): Promise<void> {
+  let handle;
+  try {
+    handle = await open(resolved, "r");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw err;
+  }
+  try {
+    const { bytesRead, buffer } = await handle.read(
+      Buffer.alloc(16),
+      0,
+      16,
+      0,
+    );
+    const magic = Buffer.from("SQLite format 3\0", "latin1");
+    const isSqlite = bytesRead === 16 && buffer.equals(magic);
+    if (bytesRead !== 0 && !isSqlite) {
+      throw new DocmetaError(
+        `"${display}" exists and is not a SQLite database; refusing to overwrite it.`,
+      );
+    }
+  } finally {
+    await handle.close();
+  }
+  await rm(resolved);
+}
+
+/**
+ * Build the `docs` table — in memory, or at `db.resolved` when exporting —
+ * and run the user's statement over it (none, when only exporting).
+ */
 async function runSql(
   sql: string,
   entries: { label: string; extracted: ExtractedMetadata }[],
+  target?: { resolved: string; display: string },
 ): Promise<QueryRun> {
   // Data columns are the union of top-level keys across the corpus — the same
   // scan boundary `schemas infer` chose. Sorted, so the column order (and any
@@ -191,7 +246,15 @@ async function runSql(
   const dataColumns = [...keys].sort();
 
   const { DatabaseSync } = await loadSqlite();
-  const db = new DatabaseSync(":memory:");
+  if (target) await prepareDbTarget(target.resolved, target.display);
+  const db = new DatabaseSync(target ? target.resolved : ":memory:");
+  const dbInfo = target
+    ? {
+        path: target.display,
+        files: entries.length,
+        columns: SYSTEM_COLUMNS.length + dataColumns.length,
+      }
+    : undefined;
   try {
     // Data columns get no type affinity, so SQLite stores exactly the value
     // each file had and never coerces one file's string into another's number.
@@ -212,15 +275,20 @@ async function runSql(
         ...dataColumns.map((c) => bindValue(extracted.data[c])),
       );
     }
-    // From here on the database is the user's to read, never to write.
+    // From here on this connection is the user's to read, never to write.
+    // Per-connection only: an exported file stays writable for whatever
+    // opens it next.
     db.exec("PRAGMA query_only = 1");
 
+    if (sql === "") {
+      return { columns: [], rows: [], ...(dbInfo ? { db: dbInfo } : {}) };
+    }
     try {
       const stmt = db.prepare(sql);
       const columns = stmt.columns().map((c) => c.name);
       // node:sqlite types rows as unknown[]; each row is a name->value record.
       const rows = stmt.all() as Record<string, unknown>[];
-      return { columns, rows };
+      return { columns, rows, ...(dbInfo ? { db: dbInfo } : {}) };
     } catch (err) {
       if (err instanceof DocmetaError) throw err;
       throw new DocmetaError(`SQL error: ${(err as Error).message}`);

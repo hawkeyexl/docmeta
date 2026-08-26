@@ -301,7 +301,7 @@ docmeta query [sql] [paths...] [options]
 
 | Argument | Description |
 |---|---|
-| `[sql]` | One SQL statement, run against the `docs` table described below, when `--query` is not used. A second statement after a `;` is refused rather than silently ignored. |
+| `[sql]` | One SQL statement, run against the `docs` table described below, when `--query` is not used. A second statement after a `;` is refused rather than silently ignored. Optional when `--db` is given — exporting needs no query. |
 | `[paths...]` | Files, directories, or globs to load. Use `-` to read from stdin. Optional — falls back to config `paths:`. See the [shared input model](#shared-input-model). |
 
 The same rule as `get`'s field list applies: if `--query` is present, **every**
@@ -340,6 +340,7 @@ makes no network requests.
 |---|---|---|---|
 | `--query` | `<sql>` | the `[sql]` positional | The SQL statement. When given, **every** positional is a path. |
 | `--check` | — | off | Treat returned rows as findings: exit 1 if the query returns any, 0 if it returns none. The `pretty` verdict line shows ✓/✗. |
+| `--db` | `<path>` | — | Also write the built database to this file; the SQL is then optional. The file is a regenerated artifact: an existing SQLite database at the path is overwritten, anything else is refused. See [exporting the database](#exporting-the-database). |
 | `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
 | `--exclude` | `<glob>` | — | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
 | `--as` | `<format>` | — | Force an input [format](/docmeta/reference/formats/) (extractor name). Required when reading from stdin. |
@@ -354,12 +355,33 @@ There is no `-q/--quiet`: `get` uses it to hide files and `validate` to hide
 passes, and a query result has no analogous noise — the rows are exactly what
 was asked for.
 
+### Exporting the database
+
+`--db <path>` writes the same table to a SQLite file for any other tool to
+open. With no SQL, the export is the whole job:
+
+```sh
+docmeta query --db docs.db docs/
+datasette docs.db        # a browsable UI and JSON API over the corpus
+```
+
+[Datasette](https://datasette.io/) is the natural front-end, and its
+[Datasette Lite](https://lite.datasette.io/) build runs entirely in the
+browser — serve the file over local HTTP with CORS and nothing but Node is
+required. This repository's `npm run query:ui` does exactly that for its own
+docs. The export is plain SQLite: `sqlite3`, DuckDB, Grafana, or anything
+else that reads the format works the same way.
+
 ### Output and exit codes
 
 In `pretty` format: an aligned table (header row, then values; SQL `NULL`
 prints as `(null)`) followed by a row count — or, with `--check`, a ✓/✗ verdict
 line. In `json` format: the bare array of row objects, mirroring `get`'s bare
 array; the `--check` verdict travels in the exit code, not the envelope.
+
+With `--db` and no SQL, the export summary (`Wrote <path> …`) is the report;
+with both, the rows own stdout and the export note goes to stderr as a
+diagnostic.
 
 Exit `0` — the query ran (with `--check`: and returned no rows). Exit `1` —
 only from `--check`, when rows came back. Exit `2` — operational, including SQL
