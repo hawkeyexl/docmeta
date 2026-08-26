@@ -477,8 +477,8 @@ interface QueryCliOptions extends InputCliOptions {
   check?: boolean;
   /** `--db <path>`: also write the built database; SQL becomes optional. */
   db?: string;
-  /** `--write`: apply a mutating statement's changes; default is preview. */
-  write?: boolean;
+  /** `--dry-run`: preview a mutating statement's diff; default applies. */
+  dryRun?: boolean;
   allowEmpty?: boolean;
   /** `--no-gitignore`; commander's `true` default, see `gitignoreFlag`. */
   gitignore: boolean;
@@ -823,8 +823,8 @@ export function buildProgram(): Command {
       "also write the built database to this file; SQL is then optional",
     )
     .option(
-      "--write",
-      "apply a mutating statement's changes to the files (without it, preview the diff)",
+      "--dry-run",
+      "preview a mutating statement's diff without applying it (--check implies this)",
     )
     .option("--ext <list>", "comma-separated extensions for directory walks")
     .option("--exclude <glob>", "glob to exclude; repeatable", collect, [])
@@ -881,10 +881,13 @@ export function buildProgram(): Command {
             ? await readStdin()
             : undefined;
 
+          // `--check` implies a dry run: a check judges and exits, it never
+          // mutates — which keeps every CI drift gate a read-only step.
+          const dryRun = Boolean(options.dryRun) || Boolean(options.check);
           const run = await runQuery({
             sql,
             db: options.db,
-            write: Boolean(options.write),
+            dryRun,
             inputs: paths,
             as: options.as,
             exclude: options.exclude,
@@ -924,7 +927,7 @@ export function buildProgram(): Command {
               const text = renderQuery(run, {
                 color: resolveColor(command.parent ?? command),
                 check: Boolean(options.check),
-                write: Boolean(options.write),
+                dryRun,
               });
               if (text.length > 0) process.stdout.write(`${text}\n`);
               break;
@@ -936,12 +939,11 @@ export function buildProgram(): Command {
               );
             }
           }
-          // Rows from a `--check` run are findings, and so are a preview's
-          // pending changes — the drift gate. Applied changes are the work
-          // done, so `--write` always succeeds or fails outright.
+          // Rows from a `--check` run are findings, and so are its pending
+          // changes — the drift gate (`--check` never applies). An applied
+          // statement is the work done, so it succeeds or fails outright.
           const findings = run.changes ? run.changes.length : run.rows.length;
-          process.exitCode =
-            options.check && !options.write && findings > 0 ? 1 : 0;
+          process.exitCode = options.check && findings > 0 ? 1 : 0;
         } catch (err) {
           fail(err);
         }

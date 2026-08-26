@@ -35,8 +35,9 @@ function copy(fixture: string): string {
   temps.push(d);
   return d;
 }
-function ddl(sql: string, cwd: string, write = false) {
-  return runQuery({ sql, inputs: ["docs"], cwd, write });
+// `apply` keeps every call site's meaning across the 0025 default flip.
+function ddl(sql: string, cwd: string, apply = false) {
+  return runQuery({ sql, inputs: ["docs"], cwd, dryRun: !apply });
 }
 const houseOf = (d: string): Record<string, unknown> =>
   JSON.parse(readFileSync(join(d, "schemas", "house.json"), "utf8")) as Record<
@@ -184,7 +185,6 @@ describe("runQuery DDL — targeting, containment, and the config edit", () => {
         sql: "ALTER TABLE docs DROP COLUMN title",
         inputs: ["docs/one.md"],
         cwd: repo,
-        write: true,
       }),
     ).rejects.toThrow(/outside/);
     expect(readFileSync(outside, "utf8")).toBe(outsideBody);
@@ -212,7 +212,7 @@ describe("runQuery DDL — targeting, containment, and the config edit", () => {
       inputs: ["docs"],
       cwd: d,
       configPath: join(d, "custom.yaml"),
-      write: true,
+
     });
     expect(readFileSync(join(d, "custom.yaml"), "utf8")).toContain(
       "./schemas/okf-0.1.local.json",
@@ -270,7 +270,7 @@ describe("runQuery DDL — targeting, containment, and the config edit", () => {
       sql: "ALTER TABLE docs ADD COLUMN reviewed TEXT",
       inputs: ["docs/other.md"],
       cwd: d,
-      write: true,
+
     });
     expect(
       run.changes?.some(

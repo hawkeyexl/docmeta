@@ -118,15 +118,15 @@ collapse into one statement. `docmeta query` treats the resolved schema as the
 table definition, so `ALTER TABLE` edits it:
 
 ```bash
-npx docmeta query --write "ALTER TABLE docs
+npx docmeta query "ALTER TABLE docs
   ADD COLUMN reviewed TEXT NOT NULL DEFAULT 'pending'" docs/
 ```
 
 adds `reviewed` to `properties` and `required` **and** backfills every file in
 the same write — the corpus is compliant with the stricter schema the moment
 the schema is stricter. `DROP COLUMN` and `RENAME COLUMN` retire and rename a
-key from the schema and every file together, and each statement is a preview
-until `--write`.
+key from the schema and every file together; run any of them with `--dry-run`
+first to see the exact plan before it applies.
 
 What "the schema" means follows your reference kind: a **file** schema you
 maintain is edited in place — your indent, git as the review surface, an

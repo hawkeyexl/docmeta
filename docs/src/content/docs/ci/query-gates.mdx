@@ -113,17 +113,18 @@ checkout of the docmeta repo itself, `node scripts/query-ui.mjs` serves that
 export into Datasette Lite in your browser, write panel included — it is repo
 tooling, not part of the published package.
 
-## Writes exist, and preview is the default
+## Writes exist, and `--dry-run` previews them
 
 The same table accepts standard DML — `UPDATE` sets keys (`SET k = NULL`
 removes them), `INSERT` creates files, `DELETE` strips a metadata block, and
-`ALTER TABLE` evolves the governing schema itself. Every mutating statement is
-a **preview** until you pass `--write`; the preview is the exact diff, and
-`--check` counts pending changes as findings, which turns any backfill into a
-drift gate:
+`ALTER TABLE` evolves the governing schema itself. A mutating statement
+applies by default, the same convention `fill` uses; `--dry-run` shows the
+exact diff without touching a file, and `--check` **implies** the dry run
+while counting pending changes as findings — which turns any backfill into a
+read-only drift gate:
 
 ```bash
-npx docmeta query "UPDATE docs SET reviewed = 'todo'
+npx docmeta query --dry-run "UPDATE docs SET reviewed = 'todo'
   WHERE reviewed IS NULL AND _present = 1" docs/
 ```
 
@@ -131,7 +132,7 @@ npx docmeta query "UPDATE docs SET reviewed = 'todo'
 docs/alpha.md: reviewed: (unset) -> todo
 docs/beta.md:  reviewed: (unset) -> todo
 docs/gamma.md: reviewed: (unset) -> todo
-3 changes across 3 files — dry run; pass --write to apply
+3 changes across 3 files — dry run; run again without --dry-run to apply
 ```
 
 Statements that could write outside the corpus refuse by name — `ATTACH`,
@@ -172,6 +173,6 @@ below.
 {/* step {"description":"A tag census: json_each reaches into array values, plain SQL aggregates.","runShell":{"command":"npx docmeta query \"SELECT t.value tag, count(*) n FROM docs, json_each(docs.tags) t GROUP BY tag ORDER BY n DESC, tag\" test/fixtures/query/docs","exitCodes":[0],"stdio":"/guide  2[\\s\\S]*3 rows/"}} */}
 {/* step {"description":"A LEFT JOIN finds the author no page has, and --check turns the row into exit 1.","runShell":{"command":"npx docmeta query --check \"SELECT d._path, d.author FROM docs d LEFT JOIN docs a ON a.slug = d.author AND a._path LIKE '%authors%' WHERE d._path LIKE '%query/docs%' AND d.author IS NOT NULL AND a._path IS NULL\" test/fixtures/query/docs test/fixtures/query/authors","exitCodes":[1],"stdio":"/ghost[\\s\\S]*check failed/"}} */}
 {/* step {"description":"Duplicate slugs, the GROUP BY ... HAVING shape of the same gate.","runShell":{"command":"npx docmeta query --check \"SELECT slug, count(*) n FROM docs GROUP BY slug HAVING n > 1\" test/fixtures/query/docs","exitCodes":[1],"stdio":"/alpha  2[\\s\\S]*check failed/"}} */}
-{/* step {"description":"A mutating statement without --write is a preview: the exact diff, files untouched, exit 0.","runShell":{"command":"npx docmeta query \"UPDATE docs SET reviewed = 'todo' WHERE reviewed IS NULL AND _present = 1\" test/fixtures/query/docs","exitCodes":[0],"stdio":"/reviewed: \\(unset\\) -> todo[\\s\\S]*dry run; pass --write to apply/"}} */}
+{/* step {"description":"--dry-run previews a mutating statement: the exact diff, files untouched, exit 0.","runShell":{"command":"npx docmeta query --dry-run \"UPDATE docs SET reviewed = 'todo' WHERE reviewed IS NULL AND _present = 1\" test/fixtures/query/docs","exitCodes":[0],"stdio":"/reviewed: \\(unset\\) -> todo[\\s\\S]*dry run; run again without --dry-run to apply/"}} */}
 {/* step {"description":"DROP TABLE refuses by name and points at the statements that do the real jobs (exit 2).","runShell":{"command":"npx docmeta query \"DROP TABLE docs\" test/fixtures/query/docs","exitCodes":[2],"stdio":"DROP TABLE is refused"}} */}
 {/* test end */}

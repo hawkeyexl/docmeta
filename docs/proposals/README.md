@@ -47,6 +47,7 @@ changed as a result, and lists what it depends on.
 | [0021](0021-frontmatter-as-a-database.md) | The corpus is a database: `docmeta query` | Devin · D1, D3 / Maya · M2 | Implemented (#120) |
 | [0022](0022-sql-write-back.md) | Write-back: an UPDATE against the corpus edits the files | Maya · M2, M4 / Devin · D3 | Implemented (#122) |
 | [0024](0024-standard-sql-vocabulary.md) | Standard SQL vocabulary: DML edits the files, DDL edits the schema | Maya · M2, M3 / Sara · S1, S3 / Devin · D3 | Implemented (#125, #126) |
+| [0025](0025-query-dry-run-polarity.md) | query writes by default, `--dry-run` previews | Devin · D4 / Maya · M2 | Implemented |
 
 0014 was not in the original review. It surfaced while stress-testing 0004 and
 is the most severe item in the set: **docmeta currently exits `0` when it

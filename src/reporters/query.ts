@@ -15,8 +15,8 @@ export interface QueryReportOptions {
   color?: boolean;
   /** `--check`: append a ✓/✗ verdict line instead of the plain count. */
   check?: boolean;
-  /** `--write`: the changes were applied, not previewed. */
-  write?: boolean;
+  /** `--dry-run` (or `--check`): the changes were previewed, not applied. */
+  dryRun?: boolean;
 }
 
 /** SQL NULL prints as `(null)`; everything else as `get` prints values. */
@@ -112,18 +112,20 @@ function renderChanges(
   // reporting "across 0 files" would claim less than it does.
   const files = new Set(changes.map((ch) => ch.file)).size;
   const count = `${n} change${n === 1 ? "" : "s"} across ${files} file${files === 1 ? "" : "s"}`;
-  if (opts.write) {
-    lines.push(n > 0 ? c.green(`✓ ${count} — written`) : c.dim("0 changes"));
-  } else if (opts.check) {
+  // `--check` outranks the dry-run hint: it implies the dry run, and its
+  // verdict is the line the exit code answers to.
+  if (opts.check) {
     lines.push(
       n > 0 ? c.red(`✗ ${count} — check failed`) : c.green("✓ 0 changes"),
     );
-  } else {
+  } else if (opts.dryRun) {
     lines.push(
       n > 0
-        ? `${count} — ${c.dim("dry run; pass --write to apply")}`
+        ? `${count} — ${c.dim("dry run; run again without --dry-run to apply")}`
         : c.dim("0 changes"),
     );
+  } else {
+    lines.push(n > 0 ? c.green(`✓ ${count} — written`) : c.dim("0 changes"));
   }
   return lines.join("\n");
 }
