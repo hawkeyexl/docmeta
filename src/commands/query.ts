@@ -5,8 +5,8 @@
  * config `paths:` fallback) mirrors `get` so the two commands behave
  * identically. Proposal 0021 is the design record.
  */
-import { open, readFile, rm } from "node:fs/promises";
-import { resolve, extname } from "node:path";
+import { mkdir, open, readFile, rm } from "node:fs/promises";
+import { dirname, resolve, extname } from "node:path";
 import { resolveElements } from "../core/resolve-schema.js";
 import { DocmetaError, type ExtractedMetadata } from "../types.js";
 import {
@@ -246,8 +246,20 @@ async function runSql(
   const dataColumns = [...keys].sort();
 
   const { DatabaseSync } = await loadSqlite();
-  if (target) await prepareDbTarget(target.resolved, target.display);
-  const db = new DatabaseSync(target ? target.resolved : ":memory:");
+  if (target) {
+    // SQLite creates the file but never its directories — `.docmeta/` on a
+    // fresh checkout is exactly the path that does not exist yet.
+    await mkdir(dirname(target.resolved), { recursive: true });
+    await prepareDbTarget(target.resolved, target.display);
+  }
+  let db: InstanceType<typeof DatabaseSync>;
+  try {
+    db = new DatabaseSync(target ? target.resolved : ":memory:");
+  } catch (err) {
+    throw new DocmetaError(
+      `Cannot open "${target?.display ?? ":memory:"}": ${(err as Error).message}`,
+    );
+  }
   const dbInfo = target
     ? {
         path: target.display,

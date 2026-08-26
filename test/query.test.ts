@@ -185,6 +185,15 @@ describe("runQuery --db", () => {
     expect(existsSync(path)).toBe(true);
   });
 
+  it("creates the export's parent directories", async () => {
+    // .docmeta/query.db on a fresh checkout is the real-world case: SQLite
+    // creates files, never directories.
+    const path = join(tmp, "nested", "deeper", "out.db");
+    const run = await q("", { db: path });
+    expect(run.db?.files).toBe(6);
+    expect(existsSync(path)).toBe(true);
+  });
+
   it("overwrites its own artifact on a re-run", async () => {
     const path = join(tmp, "again.db");
     await q("", { db: path });
