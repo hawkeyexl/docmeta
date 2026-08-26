@@ -282,6 +282,100 @@ docmeta get owner "docs/**/*.md" -q          # only the files that set it
 cat page.md | docmeta get title - --as markdown
 ```
 
+## `query`
+
+Run one SQL statement over the metadata of every input file at once. Where
+[`get`](#get) answers per file, `query` answers across the corpus — filters,
+aggregation, and joins, including the cross-file rules no single-document
+schema can express: every `author:` names an author page that exists, no two
+pages share a `slug:`, nothing published is stale. With `--check`, returned
+rows are findings and the exit code says so, which makes any such rule a CI
+gate.
+
+```sh
+docmeta query --query <sql> [paths...] [options]
+docmeta query [sql] [paths...] [options]
+```
+
+### Arguments
+
+| Argument | Description |
+|---|---|
+| `[sql]` | One SQL statement, run against the `docs` table described below, when `--query` is not used. A second statement after a `;` is refused rather than silently ignored. |
+| `[paths...]` | Files, directories, or globs to load. Use `-` to read from stdin. Optional — falls back to config `paths:`. See the [shared input model](#shared-input-model). |
+
+The same rule as `get`'s field list applies: if `--query` is present, **every**
+positional is a path; otherwise the first positional is the SQL. A token in the
+SQL slot that looks like a path is an error naming the remedy, and `-` is
+always stdin, never SQL.
+
+### The `docs` table
+
+One row per input file. Your top-level metadata keys become columns, holding
+the values the files had: strings and numbers as themselves, booleans as
+`1`/`0`, arrays and objects as JSON text — which SQLite's
+[`json_each`](https://sqlite.org/json1.html) and `->>` query directly. A key
+that is absent from a file is SQL `NULL` in that row. Unusual key names are
+ordinary quoted identifiers: `SELECT "sidebar position" FROM docs`.
+
+Four columns are docmeta's own, prefixed so frontmatter cannot collide with
+them (a frontmatter key with exactly one of these names is not lifted to a
+column and stays reachable through `_data`):
+
+| Column | Value |
+|---|---|
+| `_path` | The file's path as docmeta prints it everywhere: relative, `/`-separated on every platform, sorted. `<stdin>` for piped input. |
+| `_format` | Extractor name (`markdown`, `html`, `xml`, …). |
+| `_present` | `1` if the file has a metadata block/surface, else `0` — so `WHERE _present = 0` lists files with no metadata at all. |
+| `_data` | The complete extracted metadata as JSON text, for `json_extract`/`->>` reach into nested values and unlifted keys. |
+
+The database is built in memory on every run and discarded; nothing is written
+to disk. The SQL runs read-only — statements that modify the database are
+refused. Like `get`, `query` extracts and reports; it resolves no schema and
+makes no network requests.
+
+### Options
+
+| Option | Argument | Default | Description |
+|---|---|---|---|
+| `--query` | `<sql>` | the `[sql]` positional | The SQL statement. When given, **every** positional is a path. |
+| `--check` | — | off | Treat returned rows as findings: exit 1 if the query returns any, 0 if it returns none. The `pretty` verdict line shows ✓/✗. |
+| `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
+| `--exclude` | `<glob>` | — | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
+| `--as` | `<format>` | — | Force an input [format](/docmeta/reference/formats/) (extractor name). Required when reading from stdin. |
+| `-f, --format` | `<pretty\|json>` | `pretty` | Output format. An unknown value is an error (exit 2). |
+| `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). When set, the file must exist or docmeta exits 2. |
+| `--no-config` | — | off | Ignore any discovered config file. `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
+| `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
+| `--no-gitignore` | — | on | Load files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
+| `--offline` | — | off | Accepted for parity with the other commands. It has no effect here: `query` never loads a schema, so it makes no network requests to suppress. |
+
+There is no `-q/--quiet`: `get` uses it to hide files and `validate` to hide
+passes, and a query result has no analogous noise — the rows are exactly what
+was asked for.
+
+### Output and exit codes
+
+In `pretty` format: an aligned table (header row, then values; SQL `NULL`
+prints as `(null)`) followed by a row count — or, with `--check`, a ✓/✗ verdict
+line. In `json` format: the bare array of row objects, mirroring `get`'s bare
+array; the `--check` verdict travels in the exit code, not the envelope.
+
+Exit `0` — the query ran (with `--check`: and returned no rows). Exit `1` —
+only from `--check`, when rows came back. Exit `2` — operational, including SQL
+that cannot be prepared: a broken query is a usage error, not a finding.
+
+### Examples
+
+```sh
+docmeta query "SELECT _path, title FROM docs WHERE draft = 1" docs/
+docmeta query "SELECT t.value tag, count(*) n FROM docs, json_each(docs.tags) t GROUP BY tag ORDER BY n DESC" docs/
+docmeta query --check "SELECT slug, count(*) n FROM docs WHERE slug IS NOT NULL GROUP BY slug HAVING n > 1" docs/
+docmeta query --check "SELECT d._path, d.author FROM docs d LEFT JOIN docs a ON a._path GLOB 'authors/*' AND a.slug = d.author WHERE d.author IS NOT NULL AND a._path IS NULL" docs/ authors/
+docmeta query "SELECT _path FROM docs WHERE _present = 0" docs/   # nothing to validate yet
+cat page.md | docmeta query "SELECT title FROM docs" - --as markdown
+```
+
 ## `fill`
 
 Infer values for the metadata properties that are missing or invalid, and write

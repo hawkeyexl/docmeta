@@ -43,6 +43,9 @@ exit code is the caller's.
 | `runGet` | Read named metadata fields from each input. Backs `docmeta get`. Always returns every file it saw — `--quiet` filtering lives in the reporter. |
 | `GetOptions` (type) | Input to `runGet`: the same input model plus the `fields` to read. |
 | `GetFileResult` (type) | One `runGet` result: the file, whether metadata was `present`, and the resolved `values`. |
+| `runQuery` | Run one SQL statement over an in-memory table built from every input's metadata. Backs `docmeta query`. Returns every row — the `--check` verdict is the CLI's exit code, not the result's. |
+| `QueryOptions` (type) | Input to `runQuery`: the same input model plus the `sql` to run. |
+| `QueryRun` (type) | What `runQuery` resolves to: result `columns` (present even for zero rows) and `rows`. |
 | `runFill` | Propose and write missing metadata with an inference provider. Backs `docmeta fill`. |
 | `FillOptions` (type) | Input to `runFill`: provider, model, confidence threshold, cost ceiling, concurrency, and whether to write. |
 | `FillRun` (type) | What `runFill` resolves to: per-file results plus the run summary. |
@@ -166,6 +169,8 @@ caller can never mistake a filtered run for an empty one.
 | `isCommonFormat` | Type guard for the narrower set, used by `get`. |
 | `renderGet` | The reporter behind `docmeta get`. |
 | `GetReportOptions` (type) | `color` and `quiet` for `renderGet`. |
+| `renderQuery` | The reporter behind `docmeta query`: the aligned table, the row count, and the `--check` verdict line. |
+| `QueryReportOptions` (type) | `color` and `check` for `renderQuery`. |
 | `stringifyValue` | How a single field value is spelled: `(unset)` when missing, JSON for anything that is not a string. |
 | `renderFill` | The reporter behind `docmeta fill`, across the fill formats. |
 | `renderFillGithub` | GitHub Actions annotations for the work `fill` could not do — one `::error` per unfilled required property. |

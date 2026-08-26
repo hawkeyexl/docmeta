@@ -249,6 +249,89 @@ describe("docmeta CLI (built bin)", () => {
   });
 });
 
+describe("cli query (built bin)", () => {
+  const corpus = "test/fixtures/query/docs";
+
+  it("runs SQL over positional paths (parallel to get), warning-free", () => {
+    const r = run([
+      "query",
+      "SELECT _path, title FROM docs WHERE _present = 1 ORDER BY _path",
+      corpus,
+      "-f",
+      "json",
+    ]);
+    expect(r.status).toBe(0);
+    const parsed = JSON.parse(r.stdout) as { _path: string; title: string }[];
+    expect(parsed.map((row) => row.title)).toEqual(["Alpha", "Beta", "Gamma"]);
+    expect(parsed[0]?._path).toBe("test/fixtures/query/docs/alpha.md");
+    // The node:sqlite release-candidate banner must never reach the user.
+    expect(r.stderr).not.toContain("ExperimentalWarning");
+  });
+
+  it("--check exits 1 when the query returns rows", () => {
+    const r = run([
+      "query",
+      "--check",
+      "SELECT slug, count(*) n FROM docs WHERE slug IS NOT NULL GROUP BY slug HAVING n > 1",
+      corpus,
+    ]);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("check failed");
+    expect(r.stdout).toContain("alpha");
+  });
+
+  it("--check exits 0 when the query returns none", () => {
+    const r = run([
+      "query",
+      "--check",
+      "SELECT slug, count(*) n FROM docs GROUP BY slug HAVING n > 1",
+      "test/fixtures/query/authors",
+    ]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("✓ 0 rows");
+  });
+
+  it("--query makes every positional a path, like --fields on get", () => {
+    const r = run([
+      "query",
+      "--query",
+      "SELECT count(*) n FROM docs",
+      corpus,
+      "-f",
+      "json",
+    ]);
+    expect(r.status).toBe(0);
+    expect(JSON.parse(r.stdout)).toEqual([{ n: 4 }]);
+  });
+
+  it("queries piped stdin with --as", () => {
+    const r = run(
+      ["query", "SELECT title FROM docs", "-", "--as", "markdown", "-f", "json"],
+      "---\ntitle: Piped\n---\n",
+    );
+    expect(r.status).toBe(0);
+    expect(JSON.parse(r.stdout)).toEqual([{ title: "Piped" }]);
+  });
+
+  it("exits 2 when the SQL slot holds a path", () => {
+    const r = run(["query", corpus]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("looks like a path, not SQL");
+  });
+
+  it("exits 2 on SQL that cannot be prepared", () => {
+    const r = run(["query", "SELECT nope FROM missing", corpus]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("SQL error");
+  });
+
+  it("exits 2 when given no paths and no config", () => {
+    const r = run(["query", "SELECT 1", "--no-config"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("No files");
+  });
+});
+
 // Exit 0 means "every file passed". With no files there is no verdict, so
 // reporting success turns a broken glob or a moved directory into a
 // permanently green gate that checks nothing.

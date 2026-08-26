@@ -279,7 +279,18 @@ growing into each other. If dockg one day queries arbitrary frontmatter keys,
 it will have reversed its own ADR 01008; that is the signal to renegotiate,
 and this file is the record of what was agreed and why.
 
-**10. Why SQL and not a friendlier DSL (GROQ, JMESPath, a `--where` grammar)?**
+**10. The unit suite proved the engine; only the built binary caught the
+bundler.** All fifteen core tests passed while every CLI integration test
+failed with `Cannot find package 'sqlite'`: tsup strips `node:` prefixes by
+default (`removeNodeProtocol`, an old-Node compat shim), and `node:sqlite` is a
+prefix-only builtin, so the strip manufactures an import of a package that does
+not exist. Raw esbuild output was verbatim-correct — the repro that located the
+layer. Fixed in `tsup.config.ts` (`removeNodeProtocol: false`; engines ≥ 24
+need no strip), and pinned by the integration suite, which is the only place it
+can be seen. The same tests also pin that the ExperimentalWarning filter
+actually works through the built binary.
+
+**11. Why SQL and not a friendlier DSL (GROQ, JMESPath, a `--where` grammar)?**
 Because the ask is joins, and every DSL that starts friendlier than SQL grows
 toward it under join pressure (Dataview → Datacore). SQL is the one query
 language a Devin already knows, LLMs write reliably, and docmeta does not have
