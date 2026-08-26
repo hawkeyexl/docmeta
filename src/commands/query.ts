@@ -6,10 +6,12 @@
  * identically. Proposal 0021 is the design record.
  */
 import { randomBytes } from "node:crypto";
-import { mkdir, open, readFile, rm } from "node:fs/promises";
-import { dirname, resolve, extname } from "node:path";
+import { existsSync } from "node:fs";
+import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
+import { dirname, isAbsolute, resolve, extname, sep } from "node:path";
 import { resolveElements } from "../core/resolve-schema.js";
 import { writeFileAtomic } from "../core/write-file.js";
+import { stripFrontmatter } from "../extractors/frontmatter-write.js";
 import { deepEqual } from "../extractors/patch-util.js";
 import {
   DocmetaError,
@@ -84,18 +86,20 @@ export interface QueryOptions {
 }
 
 /**
- * One cell a statement changed, in file-space values on both sides. The two
- * variants are exclusive by type: a set carries `to`, a deletion —
- * `drop_key()` or a dropped column, as opposed to an explicit `null` —
- * carries `deleted: true`.
+ * One thing a statement changed, in file-space terms. Cell-level kinds carry
+ * a `key` (a set, a deletion via `SET k = NULL` / `ALTER DROP COLUMN`, or a
+ * key rename); file-level kinds carry the whole event (`cleared` — the block
+ * stripped by DELETE; `created` — a file INSERT made; `renamed` — a `_path`
+ * move). Exactly one kind per object.
  */
-export type QueryChange = {
-  file: string;
-  key: string;
-  from: unknown;
-  /** True once `write` has applied it; always false in a preview. */
-  written: boolean;
-} & ({ to: unknown; deleted?: never } | { deleted: true; to?: never });
+export type QueryChange = { file: string; written: boolean } & (
+  | { key: string; from: unknown; to: unknown }
+  | { key: string; from: unknown; deleted: true }
+  | { key: string; renamedFrom: string; to: unknown }
+  | { cleared: true; from: Record<string, unknown> }
+  | { created: true; to: Record<string, unknown> }
+  | { renamed: string }
+);
 
 export interface QueryRun {
   /** Result column names, in SELECT order — present even for zero rows. */
@@ -308,7 +312,10 @@ async function runSql(
   // empty columns: anything it misses fails exactly as before ("no such
   // column"), and a false positive is an all-NULL column nothing diffs.
   if (sql !== "") {
-    for (const key of collectSetTargets(sql)) {
+    for (const key of [
+      ...collectSetTargets(sql),
+      ...collectInsertTargets(sql),
+    ]) {
       if (key !== "" && !RESERVED.has(key)) keys.add(key);
     }
   }
@@ -371,10 +378,11 @@ async function runSql(
       );
     }
 
-    // `drop_key()` marks a cell for key deletion. The sentinel is random per
-    // run, so no real content can collide with it and nothing can type it.
-    const sentinel = `docmeta:drop:${randomBytes(16).toString("hex")}`;
-    db.function("drop_key", () => sentinel);
+    // 0024: `SET k = NULL` is the removal spelling, so the literal `k: null`
+    // gets a function instead — `explicit_null()` returns a per-run random
+    // sentinel no real content can collide with and nothing can type.
+    const sentinel = `docmeta:null:${randomBytes(16).toString("hex")}`;
+    db.function("explicit_null", () => sentinel);
 
     // 0022: the statement runs freely against this disposable projection and
     // is judged by its effects, not its syntax. A read leaves no diff.
@@ -387,35 +395,48 @@ async function runSql(
       // node:sqlite types rows as unknown[]; each row is a name->value record.
       rows = stmt.all();
     } catch (err) {
-      throw new DocmetaError(`SQL error: ${(err as Error).message}`);
+      const message = (err as Error).message;
+      if (message.includes("UNIQUE constraint failed: docs._path")) {
+        // INSERT of a loaded path, or a rename onto one — the projection's
+        // primary key catches it before any disk check can.
+        throw new DocmetaError(
+          "That _path already exists in the corpus.",
+        );
+      }
+      throw new DocmetaError(`SQL error: ${message}`);
     }
     let after: Map<string, Record<string, unknown>>;
     try {
       after = snapshotRows(db);
     } catch {
-      // The table itself is gone — DROP is the limit case of deleting rows.
-      throw new DocmetaError(ROW_SET_MESSAGE);
+      // The table itself is gone. "Delete the table definition" is the
+      // accident-shaped spelling of two real statements; name them both.
+      throw new DocmetaError(
+        "DROP TABLE is refused. DELETE FROM docs WHERE … strips metadata from files; ALTER TABLE docs DROP COLUMN removes one key.",
+      );
     }
-    const effects = diffSnapshots(before, after);
+    const diff = diffProjection(before, after);
     // Structural, not textual: a read always yields result columns, DML and
     // DDL (without RETURNING) never do — so `WITH … UPDATE …` classifies
     // correctly even when it matches zero rows. The residual: RETURNING DML
     // that matches nothing reads as an empty result, which is what it shows.
     const mutatingIntent = columns.length === 0;
-    if (effects.length === 0 && !mutatingIntent) {
+    const hasEffects =
+      diff.cells.length > 0 ||
+      diff.clearedRows.length > 0 ||
+      diff.createdRows.size > 0 ||
+      diff.renamedFiles.length > 0;
+    if (!hasEffects && !mutatingIntent) {
       return { columns, rows, ...(dbInfo ? { db: dbInfo } : {}) };
     }
 
-    const changes = restoreChanges(effects, entries, sentinel);
+    const changes = buildChanges(diff, entries, sentinel, ctx);
     if (ctx.write) await applyChanges(changes, entries, ctx);
     return { columns, rows, changes, ...(dbInfo ? { db: dbInfo } : {}) };
   } finally {
     db.close();
   }
 }
-
-const ROW_SET_MESSAGE =
-  "The statement would create or delete rows; files are not created or deleted through SQL.";
 
 /** Every row of the projection, keyed by `_path`. */
 function snapshotRows(
@@ -435,26 +456,58 @@ interface CellEffect {
   to: unknown;
 }
 
+interface ProjectionDiff {
+  cells: CellEffect[];
+  /** Rows the statement removed — DELETE, meaning: strip the block. */
+  clearedRows: string[];
+  /** Rows the statement added — INSERT, meaning: create the file. */
+  createdRows: Map<string, Record<string, unknown>>;
+  /** Rows whose only change is `_path` — a file move. */
+  renamedFiles: { from: string; to: string }[];
+}
+
 /**
- * What the statement did, judged cell by cell. Row creation or deletion and
- * any system-column change refuse the whole run — since only the projection
- * changed, refusing costs nothing.
+ * What the statement did, judged by effects (0024). Common rows diff cell by
+ * cell; a removed row is a DELETE (strip), an added row an INSERT (create),
+ * and a removed/added pair identical in everything but `_path` is a rename.
+ * Mixing a rename with cell edits in one statement refuses — each deserves
+ * its own preview. Non-`_path` system columns stay read-only.
  */
-function diffSnapshots(
+function diffProjection(
   before: Map<string, Record<string, unknown>>,
   after: Map<string, Record<string, unknown>>,
-): CellEffect[] {
-  if (before.size !== after.size) throw new DocmetaError(ROW_SET_MESSAGE);
-  const effects: CellEffect[] = [];
+): ProjectionDiff {
+  const removed = [...before.keys()].filter((p) => !after.has(p)).sort();
+  const added = [...after.keys()].filter((p) => !before.has(p)).sort();
+
+  const renamedFiles: { from: string; to: string }[] = [];
+  for (const from of [...removed]) {
+    const was = before.get(from);
+    if (!was) continue;
+    const toIdx = added.findIndex((p) => {
+      const now = after.get(p);
+      return now !== undefined && rowsEqualExceptPath(was, now);
+    });
+    if (toIdx === -1) continue;
+    const to = added[toIdx];
+    if (to === undefined) continue;
+    renamedFiles.push({ from, to });
+    removed.splice(removed.indexOf(from), 1);
+    added.splice(toIdx, 1);
+  }
+  if (removed.length > 0 && added.length > 0) {
+    // Leftover unpaired adds and removes together can only mean a `_path`
+    // change combined with cell edits — no single-statement DML produces
+    // both a genuine strip and a genuine create.
+    throw new DocmetaError(
+      "The statement changed _path and other cells together; rename and edit separately, so each has its own preview.",
+    );
+  }
+
+  const cells: CellEffect[] = [];
   for (const [path, was] of before) {
     const now = after.get(path);
-    if (!now) {
-      // Same row count but a path is gone: the statement rewrote `_path`,
-      // which the keying otherwise disguises as an add-and-remove.
-      throw new DocmetaError(
-        `The statement changed system column "_path" for "${path}"; system columns are read-only.`,
-      );
-    }
+    if (!now) continue; // removed — handled as a cleared row
     // The union of both sides: a column ALTER ADD introduced exists only in
     // `now`, and with a DEFAULT it backfills every row — a real change a
     // before-keys-only scan would silently miss.
@@ -465,13 +518,32 @@ function diffSnapshots(
           `The statement changed system column "${key}" for "${path}"; system columns are read-only.`,
         );
       }
-      effects.push({ file: path, key, to: now[key] });
+      cells.push({ file: path, key, to: now[key] });
     }
   }
-  effects.sort((a, b) =>
+  cells.sort((a, b) =>
     a.file === b.file ? a.key.localeCompare(b.key) : a.file.localeCompare(b.file),
   );
-  return effects;
+  return {
+    cells,
+    clearedRows: removed,
+    createdRows: new Map(
+      added.map((p) => [p, after.get(p) ?? {}] as const),
+    ),
+    renamedFiles: renamedFiles.sort((a, b) => a.from.localeCompare(b.from)),
+  };
+}
+
+/** Row equality over every column except `_path` — the rename signature. */
+function rowsEqualExceptPath(
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+): boolean {
+  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (key === "_path") continue;
+    if (!Object.is(a[key], b[key])) return false;
+  }
+  return true;
 }
 
 type FileType = "boolean" | "number" | "bigint" | "string" | "array" | "object";
@@ -487,17 +559,20 @@ function fileTypeOf(value: unknown): FileType | undefined {
 }
 
 /**
- * File-space restoration of SQL-space cells — proposal 0022's inverse map.
- * Target type precedence: the file's own original type, then the column's
- * dominant type across the corpus, then the storage type as-is. Failures
- * refuse by file and key rather than guess.
+ * File-space changes from the projection diff — 0022's inverse map plus
+ * 0024's file-level kinds. Type precedence for a restored cell: the file's
+ * own original type, then the column's dominant type, then storage as-is.
+ * Failures refuse by file and key rather than guess.
  */
-function restoreChanges(
-  effects: CellEffect[],
+function buildChanges(
+  diff: ProjectionDiff,
   entries: QueryEntry[],
   sentinel: string,
+  ctx: RunContext,
 ): QueryChange[] {
+  const effects = diff.cells;
   const originals = new Map(entries.map((e) => [e.label, e.extracted.data]));
+  const meta = new Map(entries.map((e) => [e.label, e.extracted]));
   const dominant = new Map<string, FileType | undefined>();
   const dominantFor = (key: string): FileType | undefined => {
     if (dominant.has(key)) return dominant.get(key);
@@ -518,70 +593,198 @@ function restoreChanges(
     return result;
   };
 
-  const changes: QueryChange[] = [];
-  for (const { file, key, to } of effects) {
-    const original = originals.get(file)?.[key];
+  const restoreValue = (
+    file: string,
+    key: string,
+    to: unknown,
+    targetType: FileType | undefined,
+  ): unknown => {
     // The variable annotation (not just the return position) is what lets
     // control-flow analysis treat a `refuse(...)` call as terminating.
     const refuse: (why: string) => never = (why) => {
       throw new DocmetaError(`"${key}" in ${file}: ${why}`);
     };
-    // Deletion: `drop_key()` marked the cell, or a dropped column removed it.
-    // Deleting a key the file never had is a no-op, not a change.
-    if (to === sentinel || to === undefined) {
+    if (to instanceof Uint8Array) refuse("a BLOB cannot be written back");
+    if (to === null || targetType === undefined) return to;
+    switch (targetType) {
+      case "boolean":
+        if (to === 1) return true;
+        if (to === 0) return false;
+        refuse(`${JSON.stringify(to)} is not a boolean`);
+        break;
+      case "array":
+      case "object": {
+        if (typeof to !== "string") {
+          refuse(`${JSON.stringify(to)} is not JSON text for a ${targetType}`);
+        }
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(to);
+        } catch {
+          refuse(`the new value is not valid JSON for a ${targetType}`);
+        }
+        const kind = Array.isArray(parsed) ? "array" : typeof parsed;
+        if (kind !== targetType) {
+          refuse(`the new value is ${kind}, and the key holds ${targetType}`);
+        }
+        return parsed;
+      }
+      case "number":
+      case "bigint":
+        if (typeof to !== "number" && typeof to !== "bigint") {
+          refuse(`${JSON.stringify(to)} is not a number`);
+        }
+        return to;
+      case "string":
+        if (typeof to !== "string") {
+          refuse(
+            `${JSON.stringify(to)} is not a string; quote it in the statement`,
+          );
+        }
+        return to;
+    }
+    return to;
+  };
+
+  // Key-rename pairing pre-pass (per file): a deletion of `a` and a creation
+  // of `b` whose SQL value equals `bindValue(original a)` is a rename, and it
+  // carries the original file value verbatim — an array must never round-trip
+  // through its JSON-text projection (0024 § stress test 1).
+  type Pair = { key: string; renamedFrom: string; to: unknown };
+  const consumedDeletes = new Set<CellEffect>();
+  const pairForCreate = new Map<CellEffect, Pair>();
+  const byFile = new Map<string, CellEffect[]>();
+  for (const e of effects) {
+    const list = byFile.get(e.file) ?? [];
+    list.push(e);
+    byFile.set(e.file, list);
+  }
+  for (const [file, list] of byFile) {
+    const data = originals.get(file) ?? {};
+    const dels = list.filter(
+      (e) =>
+        (e.to === null || e.to === undefined) && data[e.key] !== undefined,
+    );
+    const adds = list.filter(
+      (e) => data[e.key] === undefined && e.to != null && e.to !== sentinel,
+    );
+    for (const d of dels) {
+      const bound = bindValue(data[d.key]);
+      const match = adds.find(
+        (a) => !pairForCreate.has(a) && Object.is(a.to, bound),
+      );
+      if (!match) continue;
+      consumedDeletes.add(d);
+      pairForCreate.set(match, {
+        key: match.key,
+        renamedFrom: d.key,
+        to: data[d.key],
+      });
+    }
+  }
+
+  const changes: QueryChange[] = [];
+  for (const effect of effects) {
+    const { file, key, to } = effect;
+    if (consumedDeletes.has(effect)) continue;
+    const pair = pairForCreate.get(effect);
+    if (pair) {
+      changes.push({ file, ...pair, written: false });
+      continue;
+    }
+    const original = originals.get(file)?.[key];
+    // `explicit_null()` bypasses the type map by design: the statement asked
+    // for the literal, whatever type the key held.
+    if (to === sentinel) {
+      changes.push({ file, key, from: original, to: null, written: false });
+      continue;
+    }
+    // Deletion: `SET k = NULL` (0024's standard spelling) or a dropped
+    // column. Deleting a key the file never had is a no-op, not a change.
+    if (to === null || to === undefined) {
       if (original !== undefined) {
         changes.push({ file, key, from: original, deleted: true, written: false });
       }
       continue;
     }
-    if (to instanceof Uint8Array) refuse("a BLOB cannot be written back");
     const targetType = fileTypeOf(original) ?? dominantFor(key);
-    let restored: unknown = to;
-    if (to !== null && targetType !== undefined) {
-      switch (targetType) {
-        case "boolean":
-          if (to === 1) restored = true;
-          else if (to === 0) restored = false;
-          else refuse(`${JSON.stringify(to)} is not a boolean`);
-          break;
-        case "array":
-        case "object": {
-          if (typeof to !== "string") {
-            refuse(`${JSON.stringify(to)} is not JSON text for a ${targetType}`);
-          }
-          let parsed: unknown;
-          try {
-            parsed = JSON.parse(to);
-          } catch {
-            refuse(`the new value is not valid JSON for a ${targetType}`);
-          }
-          const kind = Array.isArray(parsed) ? "array" : typeof parsed;
-          if (kind !== targetType) {
-            refuse(`the new value is ${kind}, and the key holds ${targetType}`);
-          }
-          restored = parsed;
-          break;
-        }
-        case "number":
-        case "bigint":
-          if (typeof to !== "number" && typeof to !== "bigint") {
-            refuse(`${JSON.stringify(to)} is not a number`);
-          }
-          break;
-        case "string":
-          if (typeof to !== "string") {
-            refuse(
-              `${JSON.stringify(to)} is not a string; quote it in the statement`,
-            );
-          }
-          break;
-      }
-    }
     // `from` stays `undefined` for a key the file never had — JSON output
     // omits it — which keeps "absent" distinguishable from an explicit null.
-    changes.push({ file, key, from: original, to: restored, written: false });
+    changes.push({
+      file,
+      key,
+      from: original,
+      to: restoreValue(file, key, to, targetType),
+      written: false,
+    });
   }
+
+  // DELETE: a removed row strips the block. A file that had none is a no-op.
+  for (const file of diff.clearedRows) {
+    const extracted = meta.get(file);
+    if (!extracted?.present) continue;
+    changes.push({ file, cleared: true, from: extracted.data, written: false });
+  }
+
+  // INSERT: an added row creates a file.
+  for (const [file, row] of diff.createdRows) {
+    if (typeof row._path !== "string" || row._path === "") {
+      throw new DocmetaError("INSERT requires a non-empty _path.");
+    }
+    for (const sys of SYSTEM_COLUMNS) {
+      if (sys !== "_path" && row[sys] != null) {
+        throw new DocmetaError(
+          `INSERT may not set system column "${sys}".`,
+        );
+      }
+    }
+    validateNewPath(file, ctx.base);
+    if (existsSync(resolve(ctx.base, file))) {
+      throw new DocmetaError(
+        `"${file}" already exists; INSERT creates new files only.`,
+      );
+    }
+    const to: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(row)) {
+      if (RESERVED.has(key) || value === null || value === undefined) continue;
+      to[key] =
+        value === sentinel
+          ? null
+          : restoreValue(file, key, value, dominantFor(key));
+    }
+    changes.push({ file, created: true, to, written: false });
+  }
+
+  // A `_path` move renames the file.
+  for (const { from, to } of diff.renamedFiles) {
+    validateNewPath(to, ctx.base);
+    if (extname(to).toLowerCase() !== extname(from).toLowerCase()) {
+      throw new DocmetaError(
+        `"${from}" -> "${to}": a rename may not change the extension.`,
+      );
+    }
+    if (existsSync(resolve(ctx.base, to))) {
+      throw new DocmetaError(
+        `"${to}" already exists; the rename would overwrite it.`,
+      );
+    }
+    changes.push({ file: from, renamed: to, written: false });
+  }
+
   return changes;
+}
+
+/** A path an INSERT or rename may target: relative, contained, no traversal. */
+function validateNewPath(p: string, base: string): void {
+  const refuse = (why: string): never => {
+    throw new DocmetaError(`"${p}" is not a usable path: ${why}.`);
+  };
+  if (isAbsolute(p)) refuse("it is absolute");
+  if (p.split(/[\\/]/).some((segment) => segment === "..")) {
+    refuse("it traverses upward");
+  }
+  const abs = resolve(base, p);
+  if (!abs.startsWith(resolve(base) + sep)) refuse("it escapes the corpus");
 }
 
 /** The statement with leading whitespace and comments removed. */
@@ -617,7 +820,14 @@ async function applyChanges(
 ): Promise<void> {
   if (changes.length === 0) return;
   const byLabel = new Map(entries.map((e) => [e.label, e]));
-  const grouped = new Map<string, { patch: MetadataPatch; deletions: string[] }>();
+  interface FileOps {
+    patch: MetadataPatch;
+    deletions: string[];
+    cleared?: boolean;
+    created?: Record<string, unknown>;
+    renamedTo?: string;
+  }
+  const grouped = new Map<string, FileOps>();
   for (const c of changes) {
     if (c.file === STDIN_LABEL) {
       throw new DocmetaError(
@@ -625,46 +835,100 @@ async function applyChanges(
       );
     }
     const group = grouped.get(c.file) ?? { patch: {}, deletions: [] };
-    if (c.deleted) group.deletions.push(c.key);
-    else group.patch[c.key] = c.to;
+    if ("cleared" in c) group.cleared = true;
+    else if ("created" in c) group.created = c.to;
+    else if ("renamed" in c) group.renamedTo = c.renamed;
+    else if ("deleted" in c) group.deletions.push(c.key);
+    else if ("renamedFrom" in c) {
+      group.patch[c.key] = c.to;
+      group.deletions.push(c.renamedFrom);
+    } else group.patch[c.key] = c.to;
     grouped.set(c.file, group);
   }
 
-  const pending: { path: string; content: string }[] = [];
-  for (const [label, { patch, deletions }] of grouped) {
+  const pendingWrites: { path: string; content: string }[] = [];
+  const pendingRenames: { from: string; to: string }[] = [];
+  for (const [label, ops] of grouped) {
+    const path = resolve(ctx.base, label);
+
+    if (ops.renamedTo !== undefined) {
+      if (!existsSync(path)) {
+        throw new DocmetaError(
+          `"${label}" is gone from disk since it was read; re-run the query.`,
+        );
+      }
+      pendingRenames.push({ from: path, to: resolve(ctx.base, ops.renamedTo) });
+      continue;
+    }
+
+    if (ops.created !== undefined) {
+      const extractor = extractorForExtension(extname(label));
+      if (!extractor?.apply) {
+        throw new DocmetaError(
+          `"${label}": no writable format for that extension.`,
+        );
+      }
+      pendingWrites.push({
+        path,
+        content: extractor.apply("", ops.created, {
+          filePath: label,
+          elements: resolveElements(label, ctx.config),
+        }),
+      });
+      continue;
+    }
+
     const entry = byLabel.get(label);
     if (!entry) throw new DocmetaError(`No loaded entry for "${label}".`);
+    const content = await readFile(path, "utf8");
+    // The change was computed against load-time data; if the file moved
+    // since, applying it would encode a state nobody previewed.
+    const current = entry.extractor.extract(content, label, {
+      elements: resolveElements(label, ctx.config),
+    });
+
+    if (ops.cleared) {
+      if (!deepEqual(current.data, entry.extracted.data)) {
+        throw new DocmetaError(
+          `"${label}" changed on disk since it was read; re-run the query.`,
+        );
+      }
+      const stripped = stripFrontmatter(content);
+      if (stripped === content) {
+        // No fenced block to remove — element-backed metadata, or a native
+        // header the fence writer does not own. Effect-judged, no name list.
+        throw new DocmetaError(
+          `"${label}": the ${entry.extractor.name} format has no front matter block to strip.`,
+        );
+      }
+      pendingWrites.push({ path, content: stripped });
+      continue;
+    }
+
     if (!entry.extractor.apply) {
       throw new DocmetaError(
         `"${label}": the ${entry.extractor.name} format is read-only.`,
       );
     }
-    const path = resolve(ctx.base, label);
-    const content = await readFile(path, "utf8");
-    // The patch was computed against load-time data; if the file moved since,
-    // applying it would encode a state nobody previewed.
-    const current = entry.extractor.extract(content, label, {
-      elements: resolveElements(label, ctx.config),
-    });
-    for (const key of [...Object.keys(patch), ...deletions]) {
+    for (const key of [...Object.keys(ops.patch), ...ops.deletions]) {
       if (!deepEqual(current.data[key], entry.extracted.data[key])) {
         throw new DocmetaError(
           `"${label}" changed on disk since it was read ("${key}" moved); re-run the query.`,
         );
       }
     }
-    const applied = entry.extractor.apply(content, patch, {
+    const applied = entry.extractor.apply(content, ops.patch, {
       filePath: label,
       elements: resolveElements(label, ctx.config),
-      deletions,
+      deletions: ops.deletions,
     });
-    if (deletions.length > 0) {
+    if (ops.deletions.length > 0) {
       // `deletions` is advisory in the ApplyOptions contract — a writer that
       // cannot remove a key ignores it. Certainty comes from reading back.
       const check = entry.extractor.extract(applied, label, {
         elements: resolveElements(label, ctx.config),
       });
-      for (const key of deletions) {
+      for (const key of ops.deletions) {
         if (check.data[key] !== undefined) {
           throw new DocmetaError(
             `"${label}": the ${entry.extractor.name} writer cannot delete "${key}".`,
@@ -672,9 +936,10 @@ async function applyChanges(
         }
       }
     }
-    pending.push({ path, content: applied });
+    pendingWrites.push({ path, content: applied });
   }
-  for (const p of pending) await writeFileAtomic(p.path, p.content);
+  for (const r of pendingRenames) await rename(r.from, r.to);
+  for (const p of pendingWrites) await writeFileAtomic(p.path, p.content);
   for (const c of changes) c.written = true;
 }
 
@@ -729,6 +994,32 @@ function collectSetTargets(sql: string): string[] {
     }
   }
   return targets;
+}
+
+/**
+ * Column names an INSERT's column list carries, so a corpus-new key can be
+ * introduced by creation too. Same tolerance contract as `collectSetTargets`.
+ */
+function collectInsertTargets(sql: string): string[] {
+  const head = stripLeadingTrivia(sql);
+  if (!/^(insert|replace)\b/i.test(head)) return [];
+  const open = head.indexOf("(");
+  if (open === -1) return [];
+  const targets: string[] = [];
+  let i = open + 1;
+  for (;;) {
+    while (i < head.length && /\s/.test(head[i] ?? "")) i++;
+    const id = readIdentifier(head, i);
+    if (!id) return targets;
+    targets.push(id.value);
+    i = id.end;
+    while (i < head.length && /\s/.test(head[i] ?? "")) i++;
+    if (head[i] === ",") {
+      i++;
+      continue;
+    }
+    return targets;
+  }
 }
 
 /** Index just past a quoted region starting at `from` (doubling escapes). */

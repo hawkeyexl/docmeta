@@ -69,12 +69,27 @@ function renderChanges(
   c: Colors,
   opts: QueryReportOptions,
 ): string {
-  const lines = changes.map(
-    (ch) =>
-      `${c.dim(`${ch.file}:`)} ${ch.key}: ${cellFrom(ch.from)} -> ${
-        ch.deleted ? "(deleted)" : cell(ch.to)
-      }`,
-  );
+  const lines = changes.map((ch) => {
+    if ("cleared" in ch) {
+      return `${c.dim(`${ch.file}:`)} (frontmatter removed: ${Object.keys(ch.from).join(", ")})`;
+    }
+    if ("created" in ch) {
+      const kv = Object.entries(ch.to)
+        .map(([k, v]) => `${k}=${cell(v)}`)
+        .join(", ");
+      return `${c.dim(`${ch.file}:`)} (created: ${kv})`;
+    }
+    if ("renamed" in ch) {
+      return `${c.dim(`${ch.file} ->`)} ${ch.renamed} ${c.dim("(moved)")}`;
+    }
+    if ("renamedFrom" in ch) {
+      return `${c.dim(`${ch.file}:`)} ${ch.renamedFrom} -> ${ch.key} ${c.dim("(key renamed)")}`;
+    }
+    if ("deleted" in ch) {
+      return `${c.dim(`${ch.file}:`)} ${ch.key}: ${cellFrom(ch.from)} -> (deleted)`;
+    }
+    return `${c.dim(`${ch.file}:`)} ${ch.key}: ${cellFrom(ch.from)} -> ${cell(ch.to)}`;
+  });
   const n = changes.length;
   const files = new Set(changes.map((ch) => ch.file)).size;
   const count = `${n} change${n === 1 ? "" : "s"} across ${files} file${files === 1 ? "" : "s"}`;

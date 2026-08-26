@@ -332,10 +332,11 @@ column and stays reachable through `_data`):
 The database is built in memory on every run and discarded (`--db` exports a
 copy; `--write` applies a statement's changes to the files — see below).
 Statements are judged by their **effects** on this disposable projection:
-reads return rows; changes to metadata columns become a per-file diff; and
-creating or deleting rows, or touching a system column, refuses the run —
-files are never created, deleted, or renamed through SQL. Like `get`, `query`
-resolves no schema and makes no network requests.
+reads return rows; metadata-column changes become a per-file diff; an added
+row is a file created, a removed row a front matter block stripped, and a
+`_path` move a file rename. Files are never *deleted* through SQL, and the
+other system columns are read-only. Like `get`, `query` resolves no schema
+and makes no network requests.
 
 ### Options
 
@@ -396,23 +397,31 @@ the human reading the diff is the gate (`fill` writes by default because each
 of its values passed a confidence gate first). Values are restored to the
 types the files had: `1`/`0` back to booleans, JSON text back to arrays and
 objects, with the column's dominant type deciding for a key the file never
-had. A value the restored type cannot hold, invalid JSON, a system-column or
-row-set effect, a read-only target, or a file that changed on disk since it
-was read — each refuses the **whole run** by file and key before anything is
-written. `ATTACH` and `VACUUM` are refused by name: they can write files of
-their own, outside the effect gate.
+had. A value the restored type cannot hold, invalid JSON, a read-only
+target, a bad or colliding path, or a file that changed on disk since it was
+read — each refuses the **whole run** by file and key before anything is
+written. `ATTACH` and `VACUUM` are refused by name (they can write files of
+their own, outside the effect gate), and `DROP TABLE` is refused as the
+accident-shaped spelling of two real statements.
 
-Writes are full CRUD on keys:
+The vocabulary is standard SQL (proposal 0024):
 
-- **Create** — `SET` a key no file has yet and the table widens to hold it;
-  the new key is added to every file the `WHERE` matches.
-- **Delete** — `SET key = drop_key() WHERE …` removes the key from matching
-  files (deleting where it is already absent is a no-op), and
-  `ALTER TABLE docs DROP COLUMN key` removes it corpus-wide. Distinct from
-  `SET key = NULL`, which writes an explicit `null` value. Deletion works
-  wherever the key lives in fenced front matter (markdown, MDX, AsciiDoc,
-  reStructuredText); element-backed keys in HTML/XML refuse rather than
-  half-delete.
+| Statement | Meaning |
+|---|---|
+| `UPDATE docs SET k = v` | set a key; a corpus-new key widens the table |
+| `UPDATE docs SET k = NULL` | **remove** the key from matching files (absent = no-op) |
+| `UPDATE docs SET k = explicit_null()` | write a literal `k: null` — the rare case |
+| `UPDATE docs SET _path = '…'` | move/rename the file, body byte-preserved; same extension only |
+| `INSERT INTO docs (_path, …) VALUES (…)` | create a file: that front matter, an empty body |
+| `DELETE FROM docs WHERE …` | strip the front matter block; the file and its body survive |
+| `ALTER TABLE docs ADD COLUMN k … DEFAULT v` | backfill a key across the corpus |
+| `ALTER TABLE docs DROP COLUMN k` | remove a key everywhere |
+| `ALTER TABLE docs RENAME COLUMN a TO b` | rename a key everywhere, values carried verbatim |
+
+Key deletion and block-stripping work wherever the metadata lives in fenced
+front matter (markdown, MDX, AsciiDoc, reStructuredText); element-backed
+keys in HTML/XML refuse rather than half-delete, and `INSERT` creates only
+formats whose writer can build a block (markdown, MDX).
 
 ### Output and exit codes
 

@@ -103,6 +103,21 @@ export function applyFrontmatter(
 }
 
 /**
+ * Remove the fenced front matter block entirely — fences included, plus the
+ * single blank separator line that conventionally follows the close. This is
+ * not the same as deleting every key, which leaves an empty block behind
+ * (`_present` still 1). A document with no located block returns unchanged.
+ */
+export function stripFrontmatter(content: string): string {
+  const loc = locateFrontmatter(content);
+  if (!loc) return content;
+  const bom = content.slice(0, loc.openStart);
+  let rest = content.slice(loc.closeEnd);
+  if (rest.startsWith(loc.eol)) rest = rest.slice(loc.eol.length);
+  return bom + rest;
+}
+
+/**
  * Write-back for formats that *also* have a native metadata syntax (rst
  * docinfo, AsciiDoc document headers). Those native reads are lossy — values
  * are coerced through a YAML scalar parse, and an rst `title` is synthesized

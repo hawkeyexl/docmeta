@@ -368,6 +368,58 @@ describe("cli query (built bin)", () => {
     }
   });
 
+  it("walks the standard vocabulary: create, move, key-rename, strip (0024)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-vocab-"));
+    try {
+      cpSync(resolve(root, "test", "fixtures", "query"), dir, {
+        recursive: true,
+      });
+      const paths = ["docs", "authors"];
+
+      const created = run(
+        ["query", "--write", "INSERT INTO docs (_path, title) VALUES ('docs/new.md', 'New')", ...paths],
+        undefined, undefined, dir,
+      );
+      expect(created.status).toBe(0);
+      expect(created.stdout).toContain("(created:");
+      expect(readFileSync(join(dir, "docs", "new.md"), "utf8")).toContain(
+        "title: New",
+      );
+
+      const moved = run(
+        ["query", "--write", "UPDATE docs SET _path = 'docs/renamed.md' WHERE _path = 'docs/new.md'", ...paths],
+        undefined, undefined, dir,
+      );
+      expect(moved.status).toBe(0);
+      expect(moved.stdout).toContain("(moved)");
+      expect(existsSync(join(dir, "docs", "new.md"))).toBe(false);
+
+      const renamedKey = run(
+        ["query", "--write", "ALTER TABLE docs RENAME COLUMN tags TO topics", ...paths],
+        undefined, undefined, dir,
+      );
+      expect(renamedKey.status).toBe(0);
+      expect(renamedKey.stdout).toContain("(key renamed)");
+
+      const stripped = run(
+        ["query", "--write", "DELETE FROM docs WHERE _path = 'docs/renamed.md'", ...paths],
+        undefined, undefined, dir,
+      );
+      expect(stripped.status).toBe(0);
+      expect(stripped.stdout).toContain("(frontmatter removed:");
+
+      // Converged: deleting an absent key on the stripped file is a no-op.
+      const gate = run(
+        ["query", "--check", "UPDATE docs SET title = NULL WHERE _path = 'docs/renamed.md'", ...paths],
+        undefined, undefined, dir,
+      );
+      expect(gate.status).toBe(0);
+      expect(gate.stdout).toContain("✓ 0 changes");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("--db exports without SQL, and keeps rows on stdout with it", () => {
     const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-db-"));
     try {

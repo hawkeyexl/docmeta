@@ -77,7 +77,15 @@ database for <a href="/?url=${basename(db)}">Datasette Lite</a>.</p>
       ? "refused: " + body.error
       : (body.changes.length === 0
           ? "0 changes"
-          : body.changes.map(c => c.file + ": " + c.key + ": " + JSON.stringify(c.from) + " -> " + (c.deleted ? "(deleted)" : JSON.stringify(c.to)) + (c.written ? "  [written]" : "")).join("\\n"))
+          : body.changes.map(c => {
+              const tail = c.written ? "  [written]" : "";
+              if (c.cleared) return c.file + ": (frontmatter removed)" + tail;
+              if (c.created) return c.file + ": (created: " + JSON.stringify(c.to) + ")" + tail;
+              if (c.renamed) return c.file + " -> " + c.renamed + " (moved)" + tail;
+              if (c.renamedFrom) return c.file + ": " + c.renamedFrom + " -> " + c.key + " (key renamed)" + tail;
+              if (c.deleted) return c.file + ": " + c.key + ": " + JSON.stringify(c.from) + " -> (deleted)" + tail;
+              return c.file + ": " + c.key + ": " + JSON.stringify(c.from) + " -> " + JSON.stringify(c.to) + tail;
+            }).join("\\n"))
         + (apply ? "\\n\\napplied — reload Datasette Lite to see it" : "\\n\\npreview only");
   }
   document.getElementById("preview").onclick = () => go(false);
