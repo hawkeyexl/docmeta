@@ -17,7 +17,7 @@ Home — "What do you want to do?" router + 30-second proof
 │
 ├─ Set up validation  (Maya)       → M1, M2, M3, M4
 │
-├─ Run it in CI       (Devin)      → D1, D2, D3
+├─ Run it in CI       (Devin)      → D1, D2, D3, D4
 │
 ├─ Define & evolve schemas (Sara)  → S1, S2, S3
 │
@@ -60,7 +60,7 @@ Home — "What do you want to do?" router + 30-second proof
 | Stand up validation for your repo | M1 | ★ | Anchor guide threading install → config → schema → CI. |
 | Create your `docmeta.config.yaml` | M1 | ★ | paths, exclude, schemas, discovery keys with types and defaults. |
 | Apply different schemas to different folders | M3 | ★ | Overrides, glob precedence, multi-schema per file. |
-| Roll out a new required field without breaking the build | M2 | | Tool-supported ratchet (0001): the field goes `required` immediately and `--write-baseline` records the backlog. Rewritten from the four-stage manual rollout, whose hand-maintained `overrides:` glob list the baseline replaces. |
+| Roll out a new required field without breaking the build | M2 | | Tool-supported ratchet (0001): the field goes `required` immediately and `--write-baseline` records the backlog. Rewritten from the four-stage manual rollout, whose hand-maintained `overrides:` glob list the baseline replaces. Now also carries the DDL one-statement ratchet (0024) for fields whose backfill value is uniform. |
 | Retrofit docmeta into an existing docs repo | M1/M2 | | Start lenient, tighten over time. Cross-cutting guide. Step 5 now ratchets via the baseline, in step with the M2 page. |
 | Run `fill` under a data-egress policy | M4 | | The security-review answers for the step 7 `fill` pass: what each inference call transmits (path as matched, the whole metadata block, the whole file including front matter, each candidate's lifted subschema with its `description`, and every `$defs`/`definitions` block referenced or not), what the pre-gating cache retains, and the `--local` / `--offline` / `--max-turns` bounds. Consequences and decisions only — the flag surface stays in the drift-checked CLI reference. Source of truth: `src/commands/fill-prompt.ts`, `src/commands/fill.ts`. |
 
@@ -73,6 +73,7 @@ Home — "What do you want to do?" router + 30-second proof
 | Exit codes & PR annotations contract | D1 | ★ | 0/1/2 semantics, `--format github` annotation output. |
 | Govern a shared schema across repos | D2 | | Vendoring (`schemas vendor`, integrity pins), and the URL form with its tradeoff: remote `$schema`, 10 s timeout, caching, versioning. |
 | Consume results programmatically | D3 | | `--format json`, `get` command, TypeScript API. |
+| Gate on rules that span files | D4 | | `docmeta query`: the one-row-per-file table, joins as `--check` CI gates (dangling refs, duplicate slugs), `-f json` and the `--db` export, preview-by-default writes named but not manualed. Doc-detective steps run the real gates over `test/fixtures/query/`. Source of truth: `src/commands/query.ts`, drift-checked via the CLI reference. |
 
 ### Define & evolve schemas (Sara)
 
@@ -80,7 +81,7 @@ Home — "What do you want to do?" router + 30-second proof
 |---|---|---|---|
 | Author a schema for your metadata standard | S1 | ★ | Required/recommended, `uri`/`date-time` formats; uses `extra.schema.json` fixture. |
 | How schema resolution works & how to wire it | S2 | ★ | The 5-level precedence chain; `$schema` in a file; ref kinds (builtin/file/url). |
-| Versioning & dialects | S3 | | 2020-12 through draft-04; evolve without breaking CI. |
+| Versioning & dialects | S3 | | 2020-12 through draft-04; evolve without breaking CI. Includes the DDL section (0024): ALTER edits the resolved schema and migrates the corpus in one statement — in place for a file schema, fork for a built-in — with versioning left the deliberate move. |
 | Built-in OKF schema, explained | S1 | | `google:okf:0.1`: fields, dialect, spec link. |
 | Built-in taxonomy schemas | S1 | | `diataxis:diataxis:1.0`, `tgdp:templates:1.0`, and `passo-uno:seven-action:1.0`: vocabularies, why `type` vs `action`, which pair competes for `type`, why both `type` schemas require their key and Seven-Action does not, composing with OKF, crosswalk. |
 | Built-in Docusaurus schemas | S1, M3 | | `docusaurus:docs:3.10`, `docusaurus:blog:3.10`, `docusaurus:pages:3.10`: the three plugin front matter contracts, field by field. Platform rather than editorial — they require nothing, so they are format checks that compose with any vocabulary. Covers what they deliberately skip (cross-field TOC levels, unknown keys) and the per-directory override config a Docusaurus site needs. |

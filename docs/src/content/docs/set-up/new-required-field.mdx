@@ -134,6 +134,32 @@ The baseline makes the backlog safe to carry, not smaller. To actually work it d
 A required-field rule flags **every** non-compliant file, including files with no frontmatter block at all — a blank doc has no `owner` any more than a doc that simply omits it. These are recorded in the baseline like anything else, so they will not surprise the build; just do not read a green run as evidence that they have frontmatter.
 </Aside>
 
+## When a backfill is honest: the one-statement ratchet
+
+A baseline exists because most required fields have **per-document values
+nobody can invent in bulk** — every page's `owner` is a fact you have to go
+find. But some rollouts start from a uniform value that is simply true:
+`reviewed: pending`, `visibility: internal`, `locale: en`. For those, carrying
+a backlog is the long way around. One `ALTER` statement adds the field to your
+schema as required **and** backfills every file, in the same write:
+
+```bash
+npx docmeta query --write "ALTER TABLE docs
+  ADD COLUMN reviewed TEXT NOT NULL DEFAULT 'pending'" docs/
+```
+
+The preview (run it without `--write` first) names every file it will touch
+and the schema file it will edit; afterwards `validate` is green with no
+baseline entry, because no document is missing the field. The rule of thumb:
+**ratchet when a starting value is honest, baseline when the value is a fact
+per document.** The two compose — ratchet the uniform fields, baseline the
+rest.
+
+`ALTER` edits the schema the corpus resolves — your file in place, or a local
+fork if the corpus runs on a built-in. [Gate on rules that span
+files](/docmeta/ci/query-gates/) introduces the query surface this rides on,
+and [the CLI reference](/docmeta/reference/cli/#query) has the full DDL rules.
+
 ## What you have now
 
 A required field that went live the day you wrote it, a build that stayed green, and a single file that says exactly how much legacy debt is left — visible on every run, shrinking as contributors touch their pages. No parallel lenient schema, no hand-maintained list of which folders are clean, nothing to keep in sync.

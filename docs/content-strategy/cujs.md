@@ -44,6 +44,10 @@ Devin wants a single canonical schema stored in a central repo and referenced by
 
 Devin needs programmatic access to validation output: `--format json` for machine-readable results, the `get` command to extract metadata values from files in scripts, and the TypeScript API for teams building tools on top of docmeta.
 
+### D4 · Enforce rules that span files
+
+Per-file schema validation cannot see a dangling cross-reference, a duplicate slug, or a taxonomy drifting across the corpus. Devin needs to phrase those rules as SQL over the metadata table `docmeta query` builds — one row per file — and wire `--check` (rows are findings, exit 1) in beside the validate gate. The same journey covers feeding that table onward (`-f json`, the `--db` SQLite export) and knowing the write surface exists behind preview-by-default, without this page becoming the write surface's manual — the CLI reference owns the vocabulary.
+
 ---
 
 ## Sara, Schema Author
