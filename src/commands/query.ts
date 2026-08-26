@@ -15,7 +15,7 @@ import {
   resolveElements,
   resolveSchemaSetWithSource,
 } from "../core/resolve-schema.js";
-import { detectJsonIndent, stripBom } from "../core/json-text.js";
+import { detectJsonIndent, stripBom, toJsonText } from "../core/json-text.js";
 import { integrityOf } from "../core/integrity.js";
 import {
   assertNotIgnored,
@@ -1431,18 +1431,22 @@ function buildChanges(
     const refuse: (why: string) => never = (why) => {
       throw new DocmetaError(`"${key}" in ${file}: ${why}`);
     };
+    // JSON.stringify throws on bigint — a refusal must never crash while
+    // trying to describe the value it is refusing.
+    const show = (v: unknown): string =>
+      typeof v === "bigint" ? `${String(v)}n` : (toJsonText(v) ?? "undefined");
     if (to instanceof Uint8Array) refuse("a BLOB cannot be written back");
     if (to === null || targetType === undefined) return to;
     switch (targetType) {
       case "boolean":
-        if (to === 1) return true;
-        if (to === 0) return false;
-        refuse(`${JSON.stringify(to)} is not a boolean`);
-        break;
+        // A SQL expression can come back as bigint; 1n is as boolean as 1.
+        if (to === 1 || to === 1n) return true;
+        if (to === 0 || to === 0n) return false;
+        refuse(`${show(to)} is not a boolean`);
       case "array":
       case "object": {
         if (typeof to !== "string") {
-          refuse(`${JSON.stringify(to)} is not JSON text for a ${targetType}`);
+          refuse(`${show(to)} is not JSON text for a ${targetType}`);
         }
         let parsed: unknown;
         try {
@@ -1459,14 +1463,12 @@ function buildChanges(
       case "number":
       case "bigint":
         if (typeof to !== "number" && typeof to !== "bigint") {
-          refuse(`${JSON.stringify(to)} is not a number`);
+          refuse(`${show(to)} is not a number`);
         }
         return to;
       case "string":
         if (typeof to !== "string") {
-          refuse(
-            `${JSON.stringify(to)} is not a string; quote it in the statement`,
-          );
+          refuse(`${show(to)} is not a string; quote it in the statement`);
         }
         return to;
     }
@@ -1883,6 +1885,12 @@ async function applyChanges(
   };
   const schemaLast = schemaPlan?.schemaLast ?? false;
   if (!schemaLast) await writeSchema();
+  // Content before moves: a statement may rename one file while editing
+  // others, and writes are the failure-prone step (disk full, permissions).
+  // With renames last, a write failure leaves every file under its old name
+  // with some new values — the statement re-runs to convergence — instead of
+  // a completed rename whose "already exists" guard blocks the re-run.
+  for (const p of pendingWrites) await writeFileAtomic(p.path, p.content);
   for (const r of pendingRenames) {
     try {
       await rename(r.from, r.to);
@@ -1894,7 +1902,6 @@ async function applyChanges(
       );
     }
   }
-  for (const p of pendingWrites) await writeFileAtomic(p.path, p.content);
   if (schemaLast) await writeSchema();
   for (const c of changes) c.written = true;
 }

@@ -531,6 +531,24 @@ describe("runQuery write-back (0022)", () => {
     );
   });
 
+  it("renames one file while editing another in the same statement", async () => {
+    const d = copy();
+    // One row's _path moves, a different row's cell changes — the same-row
+    // mix stays refused, but cross-file combinations are one statement.
+    const run = await w(
+      "UPDATE docs SET " +
+        "_path = CASE _path WHEN 'docs/beta.md' THEN 'docs/moved-beta.md' ELSE _path END, " +
+        "draft = CASE _path WHEN 'docs/alpha.md' THEN 1 ELSE draft END",
+      d,
+      true,
+    );
+    expect(run.changes?.length).toBe(2);
+    expect(existsSync(join(d, "docs", "moved-beta.md"))).toBe(true);
+    expect(readFileSync(join(d, "docs", "alpha.md"), "utf8")).toContain(
+      "draft: true",
+    );
+  });
+
   it("rename refusals: extension change, collision, mixed edits", async () => {
     const d = copy();
     await expect(
