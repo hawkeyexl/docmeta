@@ -118,8 +118,13 @@ const server = createServer((req, res) => {
       void (async () => {
         try {
           const { sql, apply } = JSON.parse(raw);
+          if (typeof sql !== "string" || sql.trim() === "") {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "missing sql field" }));
+            return;
+          }
           const run = await runQuery({
-            sql: String(sql),
+            sql,
             inputs: corpus.inputs,
             cwd: corpus.cwd,
             write: Boolean(apply),
@@ -183,6 +188,11 @@ const server = createServer((req, res) => {
     });
 });
 
+// EADDRINUSE and friends deserve one readable line, not an unhandled throw.
+server.on("error", (err) => {
+  console.error(`Cannot listen on 127.0.0.1:${String(port)}: ${err.message}`);
+  process.exit(1);
+});
 server.listen(port, "127.0.0.1", () => {
   // A relative url= keeps the database fetch same-origin, worker included.
   const ui = `http://127.0.0.1:${String(port)}/?url=${basename(db)}`;

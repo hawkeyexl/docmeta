@@ -415,6 +415,9 @@ async function runSql(
     const insert = db.prepare(
       `INSERT INTO docs VALUES (${["?", "?", "?", "?", ...dataColumns.map(() => "?")].join(", ")})`,
     );
+    // One transaction for the bulk load: each bare run() would otherwise
+    // commit on its own, which is where a large corpus spends its load time.
+    db.exec("BEGIN");
     for (const { label, extracted } of entries) {
       insert.run(
         label,
@@ -424,6 +427,7 @@ async function runSql(
         ...dataColumns.map((c) => bindValue(extracted.data[c])),
       );
     }
+    db.exec("COMMIT");
     if (sql === "") {
       return { columns: [], rows: [], ...(dbInfo ? { db: dbInfo } : {}) };
     }
@@ -432,6 +436,12 @@ async function runSql(
     // effect gate below watches — the only statements refused by name. The
     // check runs on the first real token: `/* c */ ATTACH …` must not slip
     // past a first-character regex on the strength of a comment.
+    //
+    // Deliberately NOT `PRAGMA query_only`: writes to the projection are the
+    // feature since 0022 (the effect gate below is the guard), and the
+    // snapshot reads share this handle. The residue is confined to a `--db`
+    // export — a statement may add its own tables or indexes to that file,
+    // which is a regenerable artifact by declared contract.
     const head = stripLeadingTrivia(sql);
     if (/^(attach|vacuum)\b/i.test(head)) {
       throw new DocmetaError(
