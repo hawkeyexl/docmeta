@@ -97,13 +97,28 @@ function asLine(value: unknown): number | undefined {
 /**
  * The fallback prose when a check declares no `message`: `col=value` over the
  * remaining columns, so a lazy `SELECT _path AS path, slug FROM …` is still
- * usable — not so it is a good idea; write a message.
+ * usable — not so it is a good idea; write a message. A NULL cell says
+ * nothing, so it is omitted rather than rendered as a literal `null`; when
+ * every remaining cell is NULL the generic fallback stands.
  */
 function synthesizeMessage(
   extras: readonly string[],
   row: Record<string, unknown>,
 ): string {
-  const pairs = extras.map((c) => `${c}=${String(row[c])}`);
+  const pairs = extras.flatMap((c) => {
+    const value = row[c];
+    if (value === null || value === undefined) return [];
+    // SQL cells are string | number | bigint (a BLOB cannot arise from the
+    // projection's text/numeric columns); the JSON fallback keeps a future
+    // surprise printable rather than "[object Object]".
+    const text =
+      typeof value === "string"
+        ? value
+        : typeof value === "number" || typeof value === "bigint"
+          ? String(value)
+          : JSON.stringify(value);
+    return [`${c}=${text}`];
+  });
   return pairs.length > 0 ? pairs.join(", ") : "check matched";
 }
 

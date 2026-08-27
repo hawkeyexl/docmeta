@@ -1060,6 +1060,9 @@ export function buildProgram(): Command {
           if (run.db) {
             notice(`wrote ${run.db.path} (${run.db.files} files)`);
           }
+          // Narrowing guard: past this return, `format` is
+          // `pretty | json | csv`, which is what keeps the switch below
+          // compile-time exhaustive.
           if (isQueryFindingsFormat(format)) {
             renderQueryFindings(run, format);
             return;
@@ -1095,10 +1098,13 @@ export function buildProgram(): Command {
               break;
             }
             default: {
-              // The findings formats returned above; anything else was
-              // rejected by isQueryFormat. Reaching here is a wiring bug.
+              // Exhaustive: the findings formats returned above and narrowed
+              // the union, so adding a value to QUERY_FORMATS without a case
+              // here (or a findings-format branch) is a compile error. The
+              // throw is the runtime half, as in `render`.
+              const unreachable: never = format;
               throw new DocmetaError(
-                `Unknown --format ${JSON.stringify(format)}. Use ${QUERY_FORMAT_LIST}.`,
+                `Unknown --format ${JSON.stringify(unreachable)}. Use ${QUERY_FORMAT_LIST}.`,
               );
             }
           }
