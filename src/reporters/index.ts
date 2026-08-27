@@ -137,8 +137,25 @@ export function isQueryFormat(value: string): value is QueryFormat {
  * with `--check`, and only when the result carries the `path` column the
  * finding convention is built from.
  */
-export const QUERY_FINDINGS_FORMATS: ReadonlySet<QueryFormat> =
-  new Set<QueryFormat>(["github", "sarif", "junit"]);
+export const QUERY_FINDINGS_FORMATS = [
+  "github",
+  "sarif",
+  "junit",
+] as const satisfies readonly QueryFormat[];
+
+export type QueryFindingsFormat = (typeof QUERY_FINDINGS_FORMATS)[number];
+
+/**
+ * A *narrowing* guard on purpose: the CLI's query switch handles the findings
+ * formats in an early return, and this is what lets its remaining cases stay
+ * compile-time exhaustive over `pretty | json` — a bare `Set.has` would leave
+ * the union unnarrowed and force the `never` guard out.
+ */
+export function isQueryFindingsFormat(
+  value: QueryFormat,
+): value is QueryFindingsFormat {
+  return (QUERY_FINDINGS_FORMATS as readonly string[]).includes(value);
+}
 
 /**
  * Formats something other than a person reads.

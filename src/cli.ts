@@ -30,18 +30,18 @@ import {
   COMMON_FORMATS,
   COMMON_FORMAT_LIST,
   OMITTED_WHEN_CLEAN,
-  QUERY_FINDINGS_FORMATS,
   QUERY_FORMATS,
   QUERY_FORMAT_LIST,
   REPORT_FORMATS,
   REPORT_FORMAT_LIST,
   isCommonFormat,
   isMachineFormat,
+  isQueryFindingsFormat,
   isQueryFormat,
   isReportFormat,
   render,
   type CommonFormat,
-  type QueryFormat,
+  type QueryFindingsFormat,
 } from "./reporters/index.js";
 import { rowsToFindings } from "./core/checks.js";
 import type { QueryRun } from "./commands/query.js";
@@ -298,7 +298,7 @@ export function resolveQueryInputs(
  *
  * Exit semantics stay `--check`'s own: rows mean findings mean exit 1.
  */
-function renderQueryFindings(run: QueryRun, format: QueryFormat): void {
+function renderQueryFindings(run: QueryRun, format: QueryFindingsFormat): void {
   if (run.changes) {
     throw new DocmetaError(
       `--format ${format} renders result rows with a \`path\` column; this statement produced pending changes, not rows. Use pretty or json for the change preview.`,
@@ -946,7 +946,7 @@ export function buildProgram(): Command {
           }
           // The findings formats render findings, and only `--check` produces
           // them. Gated before the run so the refusal costs nothing.
-          if (QUERY_FINDINGS_FORMATS.has(format) && !options.check) {
+          if (isQueryFindingsFormat(format) && !options.check) {
             throw new DocmetaError(
               `--format ${format} renders findings, which only --check produces. Add --check, or use pretty or json.`,
             );
@@ -998,7 +998,9 @@ export function buildProgram(): Command {
           if (run.db) {
             notice(`wrote ${run.db.path} (${run.db.files} files)`);
           }
-          if (QUERY_FINDINGS_FORMATS.has(format)) {
+          // Narrowing guard: past this return, `format` is `pretty | json`,
+          // which is what keeps the switch below compile-time exhaustive.
+          if (isQueryFindingsFormat(format)) {
             renderQueryFindings(run, format);
             return;
           }
@@ -1021,10 +1023,13 @@ export function buildProgram(): Command {
               break;
             }
             default: {
-              // The findings formats returned above; anything else was
-              // rejected by isQueryFormat. Reaching here is a wiring bug.
+              // Exhaustive: the findings formats returned above and narrowed
+              // the union, so adding a value to QUERY_FORMATS without a case
+              // here (or a findings-format branch) is a compile error. The
+              // throw is the runtime half, as in `render`.
+              const unreachable: never = format;
               throw new DocmetaError(
-                `Unknown --format ${JSON.stringify(format)}. Use ${QUERY_FORMAT_LIST}.`,
+                `Unknown --format ${JSON.stringify(unreachable)}. Use ${QUERY_FORMAT_LIST}.`,
               );
             }
           }
