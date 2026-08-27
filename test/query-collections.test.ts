@@ -246,6 +246,37 @@ describe("named collections (0027): views over override groups", () => {
     expect(message).toContain("re-run over one group's files");
   });
 
+  it("a plain SELECT never walks resolution: no views, no exclusion notice", async () => {
+    // 0021's founding rule, kept under 0027: a read that names no collection
+    // resolves nothing. The observable proxy is the "$schema won" notice —
+    // it can only come from the membership walk, so a plain SELECT with
+    // named overrides configured must not produce it.
+    const notices: string[] = [];
+    const run = await q("SELECT _path FROM docs ORDER BY _path LIMIT 1", {
+      onNotice: (m) => notices.push(m),
+    });
+    expect(run.rows).toEqual([{ _path: "authors/ada.md" }]);
+    expect(notices.find((m) => m.includes("authors/self.md"))).toBeUndefined();
+  });
+
+  it("a case-variant collection reference still resolves lazily", async () => {
+    // SQLite table names are case-insensitive: the engine reports
+    // `no such table: Authors`, which must still case-fold to the configured
+    // collection and trigger the build-and-retry.
+    const run = await q('SELECT _path FROM "Authors" ORDER BY _path');
+    expect(run.rows.map((r) => r._path)).toEqual([
+      "authors/ada.md",
+      "authors/deep.md",
+      "authors/grace.md",
+    ]);
+  });
+
+  it("a genuinely unknown table surfaces normally, without a rebuild loop", async () => {
+    await expect(q("SELECT * FROM nowhere")).rejects.toThrow(
+      /no such table: nowhere/,
+    );
+  });
+
   it("corpus checks read the same views", async () => {
     const dir = tempCopy();
     writeFileSync(

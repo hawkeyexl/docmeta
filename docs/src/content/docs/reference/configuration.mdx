@@ -336,7 +336,10 @@ chain](/docmeta/reference/schema-resolution/#precedence):
 
 - A file inside `authors/**` that names its **own `$schema`** — even the
   identical schema — resolves as a document ref, not an override, and exits
-  the view. docmeta prints a stderr notice naming the file and why.
+  the view. docmeta prints a stderr notice naming the file and why, whenever
+  the run actually builds the views — a statement that names a collection, a
+  `--db` export, or a check run. A `query` statement that never touches a
+  collection resolves nothing and prints no membership notice.
 - Trust settings move membership: under
   [`schemaTrust.documentRefs: none`](#schematrust) the document's `$schema` is
   ignored, the override wins the file back, and the view grows. A per-file

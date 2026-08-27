@@ -481,19 +481,27 @@ async function runSql(
   try {
     createDocsTable(db, entries, dataColumns);
     // Named collections (0027): one view per named override, of the files it
-    // won resolution for. `collectCollections` walks resolution only when the
-    // config names a collection at all, so a config without `name:` builds a
-    // byte-identical SQL surface to today. Before the export-only return, so
-    // a `--db` file carries the views (0027 § stress test 5).
-    createCollectionViews(
-      db,
-      collectCollections(entries, {
-        config: ctx.config,
-        fileBase: ctx.cwd,
-        trustRoot: ctx.trustRoot,
-        ...(ctx.onNotice ? { onNotice: ctx.onNotice } : {}),
-      }),
-    );
+    // won resolution for — built LAZILY on the normal path, because 0021's
+    // founding rule is that plain reads resolve nothing: a statement that
+    // never names a collection must not pay the per-file resolution walk
+    // membership costs. The build happens on demand (below, when the engine
+    // reports the collection's table as missing) — with one eager exception:
+    // a `--db` export must carry the views (0027 § stress test 5), empty-SQL
+    // export-only runs included.
+    let viewsBuilt = false;
+    const buildViews = (): void => {
+      createCollectionViews(
+        db,
+        collectCollections(entries, {
+          config: ctx.config,
+          fileBase: ctx.cwd,
+          trustRoot: ctx.trustRoot,
+          ...(ctx.onNotice ? { onNotice: ctx.onNotice } : {}),
+        }),
+      );
+      viewsBuilt = true;
+    };
+    if (target) buildViews();
     if (sql === "") {
       return { columns: [], rows: [], ...(dbInfo ? { db: dbInfo } : {}) };
     }
@@ -526,109 +534,169 @@ async function runSql(
     // 0022: the statement runs freely against this disposable projection and
     // is judged by its effects, not its syntax. A read leaves no diff. The
     // column snapshot (0024) is what makes DDL an effect too.
-    const before = snapshotRows(db);
-    const colBefore = snapshotColumns(db);
-    // 0028: table_info cannot see a CHECK, so the stored CREATE TABLE text is
-    // snapshotted alongside the column shapes and consulted for adds only.
-    const catalogBefore = snapshotCatalogSql(db);
-    let columns: string[];
-    let rows: Record<string, unknown>[];
-    try {
-      const stmt = db.prepare(sql);
-      columns = stmt.columns().map((c) => c.name);
-      // The single user-SQL call site (proposal 0029): binding here is why
-      // parameters work uniformly across reads, `--check` gates, and DML.
-      // Passed unconditionally — probed on node:sqlite, `all({})` behaves
-      // identically to `all()` for statements with and without parameters,
-      // and the unbound-reference guard already refused any statement whose
-      // named parameters this object does not cover.
-      // node:sqlite types rows as unknown[]; each row is a name->value record.
-      rows = stmt.all(ctx.params);
-    } catch (err) {
-      const message = (err as Error).message;
-      if (message.includes("UNIQUE constraint failed: docs._path")) {
-        // INSERT of a loaded path, or a rename onto one — the projection's
-        // primary key catches it before any disk check can.
+    //
+    // The whole snapshot/prepare/judge sequence is one closure so the lazy
+    // view build below can re-run it intact: views must exist before the
+    // pre-statement snapshot of the run that judges the statement, or the
+    // ordering invariant behind effect judgment would quietly bend.
+    const runOnce = async (): Promise<QueryRun> => {
+      const before = snapshotRows(db);
+      const colBefore = snapshotColumns(db);
+      // 0028: table_info cannot see a CHECK, so the stored CREATE TABLE text is
+      // snapshotted alongside the column shapes and consulted for adds only.
+      const catalogBefore = snapshotCatalogSql(db);
+      let columns: string[];
+      let rows: Record<string, unknown>[];
+      try {
+        const stmt = db.prepare(sql);
+        columns = stmt.columns().map((c) => c.name);
+        // The single user-SQL call site (proposal 0029): binding here is why
+        // parameters work uniformly across reads, `--check` gates, and DML.
+        // Passed unconditionally — probed on node:sqlite, `all({})` behaves
+        // identically to `all()` for statements with and without parameters,
+        // and the unbound-reference guard already refused any statement whose
+        // named parameters this object does not cover.
+        // node:sqlite types rows as unknown[]; each row is a name->value record.
+        rows = stmt.all(ctx.params);
+      } catch (err) {
+        const message = (err as Error).message;
+        // Lazy collection views: the first time a statement names a configured
+        // collection, its view does not exist yet and the engine reports the
+        // table as missing (case-folded — SQLite resolves table names
+        // case-insensitively). Signal the build-and-retry; on the retry
+        // `viewsBuilt` is true, so a second failure surfaces normally below.
+        const missing = /no such table: (.+)$/.exec(message)?.[1];
+        if (
+          missing !== undefined &&
+          !viewsBuilt &&
+          namesConfiguredCollection(missing, ctx.config)
+        ) {
+          throw new MissingCollectionView();
+        }
+        if (message.includes("UNIQUE constraint failed: docs._path")) {
+          // INSERT of a loaded path, or a rename onto one — the projection's
+          // primary key catches it before any disk check can.
+          throw new DocmetaError(
+            "That _path already exists in the corpus.",
+          );
+        }
+        // A write through a collection view (0027): SQLite's own refusal,
+        // completed with the remedy — writes go through the one authoritative
+        // table, scoped by the view's membership. Non-greedy up to the literal
+        // tail: a collection name may contain spaces, which \S+ would truncate
+        // into a remedy naming a view that does not exist.
+        const viewWrite = /cannot modify (.+?) because it is a view/.exec(message);
+        const viewName = viewWrite?.[1];
+        if (viewName !== undefined) {
+          throw new DocmetaError(
+            `SQL error: ${message}; a collection is read-only — write through docs: UPDATE docs … WHERE _path IN (SELECT _path FROM "${viewName.replaceAll('"', '""')}").`,
+          );
+        }
+        throw new DocmetaError(`SQL error: ${message}`);
+      }
+      let after: Map<string, Record<string, unknown>>;
+      try {
+        after = snapshotRows(db);
+      } catch {
+        // The table itself is gone. "Delete the table definition" is the
+        // accident-shaped spelling of two real statements; name them both.
         throw new DocmetaError(
-          "That _path already exists in the corpus.",
+          "DROP TABLE is refused. DELETE FROM docs WHERE … strips metadata from files; ALTER TABLE docs DROP COLUMN retires one key from the schema and every file.",
         );
       }
-      // A write through a collection view (0027): SQLite's own refusal,
-      // completed with the remedy — writes go through the one authoritative
-      // table, scoped by the view's membership. Non-greedy up to the literal
-      // tail: a collection name may contain spaces, which \S+ would truncate
-      // into a remedy naming a view that does not exist.
-      const viewWrite = /cannot modify (.+?) because it is a view/.exec(message);
-      const viewName = viewWrite?.[1];
-      if (viewName !== undefined) {
-        throw new DocmetaError(
-          `SQL error: ${message}; a collection is read-only — write through docs: UPDATE docs … WHERE _path IN (SELECT _path FROM "${viewName.replaceAll('"', '""')}").`,
-        );
-      }
-      throw new DocmetaError(`SQL error: ${message}`);
-    }
-    let after: Map<string, Record<string, unknown>>;
-    try {
-      after = snapshotRows(db);
-    } catch {
-      // The table itself is gone. "Delete the table definition" is the
-      // accident-shaped spelling of two real statements; name them both.
-      throw new DocmetaError(
-        "DROP TABLE is refused. DELETE FROM docs WHERE … strips metadata from files; ALTER TABLE docs DROP COLUMN retires one key from the schema and every file.",
+      const diff = diffProjection(before, after);
+      const schemaOps = columnDiffOps(
+        colBefore,
+        snapshotColumns(db),
+        before,
+        after,
+        catalogBefore,
+        snapshotCatalogSql(db),
       );
-    }
-    const diff = diffProjection(before, after);
-    const schemaOps = columnDiffOps(
-      colBefore,
-      snapshotColumns(db),
-      before,
-      after,
-      catalogBefore,
-      snapshotCatalogSql(db),
-    );
-    // Structural, not textual: a read always yields result columns, DML and
-    // DDL (without RETURNING) never do — so `WITH … UPDATE …` classifies
-    // correctly even when it matches zero rows. The residual: RETURNING DML
-    // that matches nothing reads as an empty result, which is what it shows.
-    const mutatingIntent = columns.length === 0;
-    const hasEffects =
-      diff.cells.length > 0 ||
-      diff.clearedRows.length > 0 ||
-      diff.createdRows.size > 0 ||
-      diff.renamedFiles.length > 0 ||
-      schemaOps.length > 0;
-    if (!hasEffects && !mutatingIntent) {
-      return { columns, rows, ...(dbInfo ? { db: dbInfo } : {}) };
-    }
+      // Structural, not textual: a read always yields result columns, DML and
+      // DDL (without RETURNING) never do — so `WITH … UPDATE …` classifies
+      // correctly even when it matches zero rows. The residual: RETURNING DML
+      // that matches nothing reads as an empty result, which is what it shows.
+      const mutatingIntent = columns.length === 0;
+      const hasEffects =
+        diff.cells.length > 0 ||
+        diff.clearedRows.length > 0 ||
+        diff.createdRows.size > 0 ||
+        diff.renamedFiles.length > 0 ||
+        schemaOps.length > 0;
+      if (!hasEffects && !mutatingIntent) {
+        return { columns, rows, ...(dbInfo ? { db: dbInfo } : {}) };
+      }
 
-    // DDL edits the schema itself (0024); its plan carries both the schema
-    // change records and — for a builtin fork — the reference repoints.
-    assertDefaultsMatchDeclaredTypes(schemaOps, diff.cells);
-    const schemaPlan =
-      schemaOps.length > 0
-        ? await planSchemaMutation(schemaOps, entries, ctx)
-        : undefined;
-    const renameHints = schemaOps.flatMap((op) =>
-      op.op === "rename" && op.renamedTo !== undefined
-        ? [{ from: op.key, to: op.renamedTo }]
-        : [],
-    );
-    // 0028: a BOOLEAN add's backfill writes real booleans to the files — the
-    // projection's 1/0 encoding is bind-layer, not file-layer.
-    const booleanAdds = new Set(
-      schemaOps.flatMap((op) =>
-        op.op === "add" && op.type === "boolean" ? [op.key] : [],
-      ),
-    );
-    const changes = [
-      ...(schemaPlan?.changes ?? []),
-      ...buildChanges(diff, entries, sentinel, ctx, renameHints, booleanAdds),
-    ];
-    if (ctx.write) await applyChanges(changes, entries, ctx, schemaPlan);
-    return { columns, rows, changes, ...(dbInfo ? { db: dbInfo } : {}) };
+      // DDL edits the schema itself (0024); its plan carries both the schema
+      // change records and — for a builtin fork — the reference repoints.
+      assertDefaultsMatchDeclaredTypes(schemaOps, diff.cells);
+      const schemaPlan =
+        schemaOps.length > 0
+          ? await planSchemaMutation(schemaOps, entries, ctx)
+          : undefined;
+      const renameHints = schemaOps.flatMap((op) =>
+        op.op === "rename" && op.renamedTo !== undefined
+          ? [{ from: op.key, to: op.renamedTo }]
+          : [],
+      );
+      // 0028: a BOOLEAN add's backfill writes real booleans to the files — the
+      // projection's 1/0 encoding is bind-layer, not file-layer.
+      const booleanAdds = new Set(
+        schemaOps.flatMap((op) =>
+          op.op === "add" && op.type === "boolean" ? [op.key] : [],
+        ),
+      );
+      const changes = [
+        ...(schemaPlan?.changes ?? []),
+        ...buildChanges(diff, entries, sentinel, ctx, renameHints, booleanAdds),
+      ];
+      if (ctx.write) await applyChanges(changes, entries, ctx, schemaPlan);
+      return { columns, rows, changes, ...(dbInfo ? { db: dbInfo } : {}) };
+    };
+
+    try {
+      return await runOnce();
+    } catch (err) {
+      if (!(err instanceof MissingCollectionView)) throw err;
+      // The statement's first prepare named a collection with no view yet:
+      // build them all, then re-run the whole sequence — snapshots included,
+      // so the pre-statement snapshot of the run that judges the statement
+      // still comes after the views exist. A write through the fresh view
+      // reaches the ordinary "cannot modify X because it is a view" remedy
+      // on this retry; any other second failure surfaces as usual.
+      buildViews();
+      return await runOnce();
+    }
   } finally {
     db.close();
   }
+}
+
+/**
+ * Internal signal for the lazy view build: the statement referenced a
+ * configured collection whose view is not created yet. Never escapes
+ * `runSql` — the catch above either retries once or is not reached.
+ */
+class MissingCollectionView extends Error {}
+
+/**
+ * Does the engine's missing-table name refer to a configured collection?
+ * Case-folded, because SQLite resolves table names case-insensitively; a
+ * `main.`/`temp.` qualifier the engine may echo for a qualified reference is
+ * tolerated the same way.
+ */
+function namesConfiguredCollection(
+  missing: string,
+  config: DocmetaConfig | null,
+): boolean {
+  const names = (config?.overrides ?? []).flatMap((o) =>
+    o.name !== undefined ? [o.name] : [],
+  );
+  const candidates = [missing, missing.replace(/^(main|temp)\./i, "")];
+  return names.some((n) =>
+    candidates.some((c) => c.toLowerCase() === n.toLowerCase()),
+  );
 }
 
 /** The one sliver of the `node:sqlite` surface the snapshots need. */
