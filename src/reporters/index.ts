@@ -141,12 +141,22 @@ export function isQueryFormat(value: string): value is QueryFormat {
  * membership test) so the CLI's dispatch can hand a narrowed format straight
  * to `render`, which takes `ReportFormat` and has no `csv` case.
  */
-export const QUERY_FINDINGS_FORMATS = ["github", "sarif", "junit"] as const;
+export const QUERY_FINDINGS_FORMATS = [
+  "github",
+  "sarif",
+  "junit",
+] as const satisfies readonly QueryFormat[];
 
 export type QueryFindingsFormat = (typeof QUERY_FINDINGS_FORMATS)[number];
 
+/**
+ * A *narrowing* guard on purpose: the CLI's query switch handles the findings
+ * formats in an early return, and this is what lets its remaining cases stay
+ * compile-time exhaustive over `pretty | json | csv` — a bare `Set.has` would
+ * leave the union unnarrowed and force the `never` guard out.
+ */
 export function isQueryFindingsFormat(
-  value: string,
+  value: QueryFormat,
 ): value is QueryFindingsFormat {
   return (QUERY_FINDINGS_FORMATS as readonly string[]).includes(value);
 }

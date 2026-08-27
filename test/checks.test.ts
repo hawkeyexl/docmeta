@@ -191,6 +191,27 @@ describe("runChecks: rows are findings", () => {
     expect(err?.line).toBeUndefined();
   });
 
+  it("omits NULL cells from the synthesized message", async () => {
+    const findings = await runChecks(
+      [
+        {
+          name: "sparse",
+          query: `SELECT _path AS path, slug, NULL AS extra FROM docs
+                  WHERE _path = 'docs/a.md'`,
+        },
+        {
+          name: "all-null",
+          query: `SELECT 'docs/b.md' AS path, NULL AS only`,
+        },
+      ],
+      entries,
+    );
+    // A NULL cell says nothing, so it never renders as a literal "null" …
+    expect(findings.get("docs/a.md")?.[0]?.message).toBe("slug=intro");
+    // … and when every remaining cell is NULL, the generic fallback stands.
+    expect(findings.get("docs/b.md")?.[0]?.message).toBe("check matched");
+  });
+
   it("lineFor returns NULL for an unknown path or an unplaceable key", async () => {
     const findings = await runChecks(
       [

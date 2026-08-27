@@ -517,9 +517,12 @@ async function runSql(
       columns = stmt.columns().map((c) => c.name);
       // The single user-SQL call site (proposal 0029): binding here is why
       // parameters work uniformly across reads, `--check` gates, and DML.
+      // Passed unconditionally — probed on node:sqlite, `all({})` behaves
+      // identically to `all()` for statements with and without parameters,
+      // and the unbound-reference guard already refused any statement whose
+      // named parameters this object does not cover.
       // node:sqlite types rows as unknown[]; each row is a name->value record.
-      rows =
-        Object.keys(ctx.params).length > 0 ? stmt.all(ctx.params) : stmt.all();
+      rows = stmt.all(ctx.params);
     } catch (err) {
       const message = (err as Error).message;
       if (message.includes("UNIQUE constraint failed: docs._path")) {
