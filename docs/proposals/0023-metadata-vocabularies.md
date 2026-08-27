@@ -181,6 +181,24 @@ a graph-layer (SHACL) check at both altitudes — JSON Schema cannot compare two
 sibling lists, and the contradicting page is pinned as *passing*, exactly as
 the overdue review is.
 
+Round 5 also asked two questions about the existing pair, and the answer to
+both was that the field already covers it — recorded here because "no change"
+is only a useful verdict if the reasoning is written down:
+
+- **A more advanced page on the same topic is a `next-steps` entry.** No
+  `advanced` or `deeper-dive` key, and no ordering among next-steps, because
+  *more advanced* is a claim about the reader rather than the page: it is
+  derived from two pages sharing `concepts` while pointing at `personas` of
+  different levels. That is principle 5 (facts live at their altitude) doing
+  the same work that cut reader `expertise`. The cost is real and admitted —
+  a docs set with no persona definitions cannot derive it.
+- **"See also" is the rendered label for `related-pages`.** The heading is
+  editorial, the key is semantic, and there is deliberately no `see-also`
+  alias: one fact reachable by two keys is the second surface this family
+  exists to prevent. `related-pages` already accepts URLs, so a style guide
+  that splits "See also" from an off-site "Learn more" is making a rendering
+  decision over one field, not needing two.
+
 **docmeta:ai-context:1.0.0-proposal.1** — `generated-by`, `provenance`, `risks`
 (recommended flags `cost-incurring · destructive · irreversible · privileged ·
 open-world · read-only · idempotent`; the first four from the

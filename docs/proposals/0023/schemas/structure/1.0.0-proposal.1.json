@@ -24,11 +24,11 @@
     },
     "next-steps": {
       "$ref": "#/$defs/stringList",
-      "description": "Where the reader goes after this page: several sensible follow-ons, unordered. Relationship, not navigation — the generator's `next`/`prev` position keys are a different fact and stay with the generator."
+      "description": "Where the reader goes after this page: several sensible follow-ons, unordered. Relationship, not navigation — the generator's `next`/`prev` position keys are a different fact and stay with the generator. **A deeper or more advanced treatment of the same topic belongs here too.** There is deliberately no separate `advanced` or `deeper-dive` field, and no ranking among these: \"more advanced\" is a claim about the reader, not about the page, and it is derived — two pages sharing `concepts` while pointing at `personas` of different levels (docmeta:audience:1.0.0-proposal.1) — which is the same reasoning that cut reader `expertise` from this family. A docs set with no persona definitions cannot derive it, and that is the deliberate day-one cost."
     },
     "related-pages": {
       "$ref": "#/$defs/stringList",
-      "description": "Pages, ids, or URLs associatively related to this one. The `-pages` suffix is deliberate: `kg.related-concepts` relates concepts, this relates pages, and each name says which."
+      "description": "Pages, ids, or URLs associatively related to this one. The `-pages` suffix is deliberate: `kg.related-concepts` relates concepts, this relates pages, and each name says which. **This is the field a site renders under a \"See also\" heading** — the key stays semantic, the label stays editorial, and there is deliberately no `see-also` alias, because one fact with two keys is the second surface this family exists to avoid. URLs are accepted, so an off-site \"Learn more\" target needs no separate field."
     }
   },
   "$defs": {
