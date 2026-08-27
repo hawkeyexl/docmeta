@@ -1,6 +1,6 @@
 # 0027 — named collections: override groups as views
 
-- **Status:** Proposed
+- **Status:** Implemented (#134)
 - **Serves:** Devin · D4 · Maya · M2
 - **Depends on:** [0021](0021-frontmatter-as-a-database.md) (this is its roadmap item P2,
   re-scoped — see Options D), [0024](0024-standard-sql-vocabulary.md) (whose "scope the
