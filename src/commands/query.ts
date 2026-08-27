@@ -1034,13 +1034,20 @@ function skipWs(text: string, from: number): number {
   return i;
 }
 
-/** Index of a `CHECK` keyword at or after `from`, outside quoted regions. */
+/**
+ * Index of a `CHECK` keyword at or after `from`, outside quoted regions and
+ * comments. The comment branch matters because SQLite stores an ADD COLUMN's
+ * definition verbatim, comments included — a CHECK spelled inside one must
+ * not satisfy the count guard or trip the one-shape refusal.
+ */
 function indexOfCheck(text: string, from: number): number {
   let i = from;
   while (i < text.length) {
     const ch = text[i];
     if (startsStringOrIdent(text, i)) {
       i = skipStringOrIdent(text, i);
+    } else if (startsComment(text, i)) {
+      i = skipComment(text, i);
     } else if (ch !== undefined && /[A-Za-z_]/.test(ch)) {
       const m = /^[A-Za-z_][A-Za-z0-9_]*/.exec(text.slice(i));
       const word = m?.[0] ?? "";
