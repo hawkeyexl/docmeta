@@ -370,6 +370,13 @@ describe("the six house vocabularies", () => {
     );
     expect(contradiction.ok).toBe(true);
 
+    // The bare-string branch of stringList, spelled out here rather than
+    // left to `applies-to` to cover by proxy.
+    const single = await checkStdin(
+      "title: T\ndescription: D\nnot-applicable-to: operator-1.4-fips",
+    );
+    expect(single.ok).toBe(true);
+
     // It still sits on the family's floor for list fields.
     const empty = await checkStdin(
       "title: T\ndescription: D\nnot-applicable-to: []",

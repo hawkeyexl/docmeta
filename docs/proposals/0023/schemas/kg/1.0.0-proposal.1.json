@@ -53,7 +53,7 @@
         },
         "not-applicable-to": {
           "$ref": "#/$defs/labelList",
-          "description": "Product/variant labels this document explicitly does NOT apply to. Disjointness from `applies-to` is checked at the graph layer (SHACL), not here."
+          "description": "Product/variant labels this document explicitly does NOT apply to. The deeper twin of the page-level `not-applicable-to` (docmeta:structure:1.0.0-proposal.1), same flat shape; when both are present this one wins and the page-level field is the harvest fallback — the same rule `applies-to` follows, so the positive and its negative behave alike at both altitudes. Disjointness from `applies-to` is checked at the graph layer (SHACL), not here."
         },
         "not-about-product-aspect": {
           "$ref": "#/$defs/productAspectList",
