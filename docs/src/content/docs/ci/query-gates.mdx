@@ -83,6 +83,25 @@ operational error ([the contract](/docmeta/reference/output-and-exit-codes/)):
       "docs/**/*.md"
 ```
 
+A gate that takes a runtime value — this release's version, the team being
+audited — should **bind** it rather than splice it into the SQL string, where
+one apostrophe in the value breaks the statement. `--param name=value` binds a
+named parameter the statement refers to as `:name` (or `$name`/`@name` — `:`
+is the shell-friendliest spelling):
+
+```bash
+npx docmeta query --check --param author=ghost \
+  "SELECT _path FROM docs WHERE author = :author" docs/
+```
+
+Values bind as strings, which is what metadata mostly is; `name:=value`
+parses the value as JSON when you deliberately mean a number or boolean. A
+parameter the SQL references but nothing binds is refused (exit 2) rather
+than silently matching nothing — an unbound parameter would otherwise read as
+a passing gate. The [bound parameters
+reference](/docmeta/reference/cli/#bound-parameters) has the full contract,
+shell-quoting pitfalls included.
+
 <Aside type="tip" title="Where do the queries live?">
 A gate is a rule your team agreed on, so keep the SQL where rules live: in
 `docmeta.config.yaml`, as a named entry in
@@ -151,6 +170,21 @@ for an edit — for the same subprocess-and-parse pipelines that consume
 ```bash
 npx docmeta query "SELECT _path, title FROM docs WHERE draft = 1" docs/ -f json
 ```
+
+`--format csv` prints the same rows as CSV for the spreadsheet hop — "which
+pages are stale, by team" straight into Sheets or `pandas.read_csv`, no `jq`
+in between. The header row is always there, so a zero-row result (the header
+alone) stays distinguishable from a step that failed and printed nothing; the
+dialect details, including the deliberate LF-not-CRLF line endings, are in
+[the reference](/docmeta/reference/cli/#csv-output):
+
+```bash
+npx docmeta query -f csv "SELECT _path, title, last_reviewed
+  FROM docs WHERE _present = 1 ORDER BY _path" docs/ > stale.csv
+```
+
+`-f csv --check` combines the two: the exit code carries the verdict while
+the rows land in an artifact a reviewer can open.
 
 `--db <path>` also writes the built table to a SQLite file, so anything that
 speaks SQLite can browse it — `sqlite3`, Datasette, DuckDB:
@@ -230,4 +264,6 @@ below.
 {/* step {"description":"A named check in config: a bare validate runs it, and -f github annotates the offending line of the offending file.","runShell":{"command":"npx docmeta validate -c test/fixtures/checks/docmeta.config.yaml -f github","exitCodes":[1],"stdio":"/::error file=docs\\/a\\.md,line=3::.*check:unique-slugs/"}} */}
 {/* step {"description":"A scoped run skips checks with one stderr notice, so a half-corpus never answers a corpus question.","runShell":{"command":"npx docmeta validate -c test/fixtures/checks/docmeta.config.yaml test/fixtures/checks/docs","exitCodes":[0],"stdio":"corpus checks skipped: run is scoped"}} */}
 {/* step {"description":"query --check -f github: the ad-hoc spelling of the same findings pipeline.","runShell":{"command":"npx docmeta query --check \"SELECT _path AS path, 'duplicate slug ' || slug AS message FROM docs WHERE slug IN (SELECT slug FROM docs GROUP BY slug HAVING count(*) > 1)\" test/fixtures/query/docs -f github","exitCodes":[1],"stdio":"/::error file=test\\/fixtures\\/query\\/docs\\/alpha\\.md::/"}} */}
+{/* step {"description":"--param binds a runtime value into the gate; the row comes back and --check exits 1.","runShell":{"command":"npx docmeta query --check --param author=ghost \"SELECT _path FROM docs WHERE author = :author\" test/fixtures/query/docs","exitCodes":[1],"stdio":"/gamma\\.md[\\s\\S]*check failed/"}} */}
+{/* step {"description":"-f csv prints result rows as CSV, header row first.","runShell":{"command":"npx docmeta query -f csv \"SELECT _path, title FROM docs WHERE _present = 1 ORDER BY _path\" test/fixtures/query/docs","exitCodes":[0],"stdio":"/_path,title\\n[\\s\\S]*alpha\\.md,Alpha/"}} */}
 {/* test end */}

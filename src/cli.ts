@@ -52,7 +52,7 @@ import {
   renderFill,
 } from "./reporters/fill.js";
 import { renderGet } from "./reporters/get.js";
-import { renderQuery } from "./reporters/query.js";
+import { renderQuery, renderQueryCsv } from "./reporters/query.js";
 import { renderInfer } from "./reporters/infer.js";
 import { shouldColor, palette } from "./reporters/color.js";
 
@@ -285,6 +285,60 @@ export function resolveQueryInputs(
       ? [sqlArg, ...pathsArg]
       : pathsArg;
   return { sql, paths };
+}
+
+/**
+ * `--param` values into `QueryOptions.params` (proposal 0029).
+ *
+ * `name=value` binds the value as a **string** — metadata is mostly strings,
+ * and a projection column has no type affinity, so a bound number would
+ * silently never equal a stored string. `name:=value` parses the value as
+ * JSON for the deliberate typed bind (numbers, booleans, arrays, null) — the
+ * httpie/jq convention. `:=` is checked before `=`, the split happens at the
+ * first separator, and everything after it is the value verbatim, so values
+ * containing `=` need no escaping.
+ */
+export function parseQueryParams(
+  raw: readonly string[],
+): Record<string, unknown> {
+  const params: Record<string, unknown> = {};
+  for (const item of raw) {
+    const typed = item.indexOf(":=");
+    const plain = item.indexOf("=");
+    const useTyped = typed !== -1 && (plain === -1 || typed < plain);
+    const at = useTyped ? typed : plain;
+    if (at <= 0) {
+      throw new DocmetaError(
+        `--param "${item}" is not name=value. Use name=value to bind a string, or name:=json for a typed value.`,
+      );
+    }
+    const name = item.slice(0, at);
+    // Exactly the token grammar `collectNamedParameters` recognizes (an
+    // optional $/:/@ prefix tolerated, as the API's key handling does).
+    // Anything else — a space, a leading digit, an empty name — could never
+    // be referenced from the SQL, so the engine would ignore the bind and
+    // the unbound-reference guard would never fire: the false-green path
+    // this flag's design closes would reopen through a typo.
+    const bare = /^[$:@]/.test(name) ? name.slice(1) : name;
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(bare)) {
+      throw new DocmetaError(
+        `--param name "${name}" cannot be bound: a SQL named parameter is letters, digits, and underscores, starting with a letter or underscore.`,
+      );
+    }
+    const value = item.slice(at + (useTyped ? 2 : 1));
+    if (!useTyped) {
+      params[name] = value;
+      continue;
+    }
+    try {
+      params[name] = JSON.parse(value) as unknown;
+    } catch {
+      throw new DocmetaError(
+        `--param ${name}:=${value} is not valid JSON. Quote a string — --param '${name}:="${value}"' — or drop the colon (--param ${name}=${value}) to bind it as a string.`,
+      );
+    }
+  }
+  return params;
 }
 
 /**
@@ -537,6 +591,8 @@ interface QueryCliOptions extends InputCliOptions {
   query?: string;
   /** `--check`: any row returned is a finding, so exit 1. */
   check?: boolean;
+  /** `--param <name=value>`, repeatable — commander's default value is `[]`. */
+  param: string[];
   /** `--db <path>`: also write the built database; SQL becomes optional. */
   db?: string;
   /** `--dry-run`: preview a mutating statement's diff; default applies. */
@@ -887,6 +943,12 @@ export function buildProgram(): Command {
       "--check",
       "treat returned rows as findings: exit 1 if the query returns any",
     )
+    .option(
+      "--param <name=value>",
+      "bind a named SQL parameter ($name/:name/@name) as a string; name:=value parses the value as JSON; repeatable",
+      collect,
+      [],
+    )
     // The findings formats (github, sarif, junit) are declared in the shared
     // `-f, --format` option below; they are legal only with --check and a
     // `path` result column — see the action's gates.
@@ -926,6 +988,8 @@ export function buildProgram(): Command {
         '  docmeta query "SELECT _path, title FROM docs WHERE draft = 1" docs/',
         '  docmeta query "SELECT t.value tag, count(*) n FROM docs, json_each(docs.tags) t GROUP BY tag" docs/',
         '  docmeta query --check "SELECT slug, count(*) n FROM docs GROUP BY slug HAVING n > 1" docs/',
+        '  docmeta query -f csv "SELECT _path, title, last_reviewed FROM docs" docs/ > stale.csv',
+        "  docmeta query --param author=\"O'Brien\" \"SELECT _path FROM docs WHERE author = \\$author\" docs/",
         '  cat page.md | docmeta query "SELECT title FROM docs" - --as markdown',
         "  docmeta query --db docs.db docs/       # export only; open with any SQLite UI",
       ].join("\n"),
@@ -948,7 +1012,7 @@ export function buildProgram(): Command {
           // them. Gated before the run so the refusal costs nothing.
           if (isQueryFindingsFormat(format) && !options.check) {
             throw new DocmetaError(
-              `--format ${format} renders findings, which only --check produces. Add --check, or use pretty or json.`,
+              `--format ${format} renders findings, which only --check produces. Add --check, or use pretty, json, or csv.`,
             );
           }
           const { sql, paths } = resolveQueryInputs(
@@ -958,6 +1022,15 @@ export function buildProgram(): Command {
             process.cwd(),
             typeof options.db === "string",
           );
+          // A `--db`-only export has no result rows to shape into CSV; its
+          // summary stays with pretty/json. Refused before the run, like the
+          // findings gate above.
+          if (format === "csv" && sql === "") {
+            throw new DocmetaError(
+              "--format csv renders result rows, and a --db export without SQL produces none. Use pretty or json for the export summary.",
+            );
+          }
+          const params = parseQueryParams(options.param);
           const exts: string[] | undefined = options.ext
             ? splitList(options.ext)
             : undefined;
@@ -972,6 +1045,7 @@ export function buildProgram(): Command {
             sql,
             db: options.db,
             dryRun,
+            ...(Object.keys(params).length > 0 ? { params } : {}),
             inputs: paths,
             as: options.as,
             exclude: options.exclude,
@@ -998,13 +1072,26 @@ export function buildProgram(): Command {
           if (run.db) {
             notice(`wrote ${run.db.path} (${run.db.files} files)`);
           }
-          // Narrowing guard: past this return, `format` is `pretty | json`,
-          // which is what keeps the switch below compile-time exhaustive.
+          // Narrowing guard: past this return, `format` is
+          // `pretty | json | csv`, which is what keeps the switch below
+          // compile-time exhaustive.
           if (isQueryFindingsFormat(format)) {
             renderQueryFindings(run, format);
             return;
           }
           switch (format) {
+            case "csv":
+              // CSV describes result rows. Changes are heterogeneous per-file
+              // diffs (eight kinds since 0024), not a table — the refusal
+              // lives here in the dispatch, where the format is known and the
+              // reporter stays presentation-only (proposal 0029).
+              if (run.changes) {
+                throw new DocmetaError(
+                  "--format csv renders result rows; this statement produced changes, which have no tabular shape. Use pretty or json for the change preview.",
+                );
+              }
+              process.stdout.write(`${renderQueryCsv(run)}\n`);
+              break;
             case "json":
               // The bare array, mirroring `get`'s bare result array: changes
               // for a metadata edit, rows for a read. The `--check` verdict

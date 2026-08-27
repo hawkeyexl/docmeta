@@ -107,17 +107,19 @@ export function isCommonFormat(value: string): value is CommonFormat {
 }
 
 /**
- * The formats `query` accepts: the common pair, plus the findings formats a
- * `--check` run may render its rows through (proposal 0026).
+ * The formats `query` accepts, one six-value list with per-value gates:
+ * `pretty | json | csv` render result rows unconditionally (csv is proposal
+ * 0029), and the findings three — `github | sarif | junit` — are legal only
+ * under `--check` (proposal 0026).
  *
- * A list of its own rather than `REPORT_FORMATS`, even though the two read
- * identically today: `validate`'s list and `query`'s grow independently —
- * proposal 0029 adds `csv` here and not there — and one shared const would
- * make every addition to either a change to both.
+ * A list of its own rather than `REPORT_FORMATS`: `validate`'s list and
+ * `query`'s grow independently — `csv` lives here and not there — and one
+ * shared const would make every addition to either a change to both.
  */
 export const QUERY_FORMATS = [
   "pretty",
   "json",
+  "csv",
   "github",
   "sarif",
   "junit",
@@ -125,7 +127,7 @@ export const QUERY_FORMATS = [
 
 export type QueryFormat = (typeof QUERY_FORMATS)[number];
 
-/** `"pretty, json, github, sarif, or junit"`, for messages and help text. */
+/** `"pretty, json, csv, github, sarif, or junit"`, for messages and help. */
 export const QUERY_FORMAT_LIST = formatList(QUERY_FORMATS);
 
 export function isQueryFormat(value: string): value is QueryFormat {
@@ -135,7 +137,9 @@ export function isQueryFormat(value: string): value is QueryFormat {
 /**
  * The `query` formats that render **findings** rather than rows — legal only
  * with `--check`, and only when the result carries the `path` column the
- * finding convention is built from.
+ * finding convention is built from. Typed as its own union (not just a set
+ * membership test) so the CLI's dispatch can hand a narrowed format straight
+ * to `render`, which takes `ReportFormat` and has no `csv` case.
  */
 export const QUERY_FINDINGS_FORMATS = [
   "github",
@@ -148,8 +152,8 @@ export type QueryFindingsFormat = (typeof QUERY_FINDINGS_FORMATS)[number];
 /**
  * A *narrowing* guard on purpose: the CLI's query switch handles the findings
  * formats in an early return, and this is what lets its remaining cases stay
- * compile-time exhaustive over `pretty | json` — a bare `Set.has` would leave
- * the union unnarrowed and force the `never` guard out.
+ * compile-time exhaustive over `pretty | json | csv` — a bare `Set.has` would
+ * leave the union unnarrowed and force the `never` guard out.
  */
 export function isQueryFindingsFormat(
   value: QueryFormat,

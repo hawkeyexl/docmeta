@@ -60,6 +60,41 @@ export function renderQuery(
 }
 
 /**
+ * CSV over result rows (proposal 0029). The dialect, chosen once:
+ *
+ * - header row always — a zero-row result is the header alone, which a script
+ *   can tell apart from an error that printed nothing;
+ * - LF line endings — a deliberate divergence from RFC 4180's CRLF, named in
+ *   the reference; quoting itself is RFC 4180 (a field containing a comma,
+ *   quote, or newline is quoted, and quotes double);
+ * - SQL `NULL` → empty field;
+ * - arrays and objects stay the JSON text the projection already holds.
+ *
+ * Rows only, by contract: changes are heterogeneous per-file diffs, not a
+ * table, and the CLI refuses them before this is called.
+ */
+export function renderQueryCsv(
+  run: Pick<QueryRun, "columns" | "rows">,
+): string {
+  const field = (value: unknown): string => {
+    if (value === null || value === undefined) return "";
+    const text =
+      typeof value === "string"
+        ? value
+        : typeof value === "number" || typeof value === "bigint"
+          ? String(value)
+          : stringifyValue(value); // a BLOB or other oddity, `get`'s way
+    return /[",\n\r]/.test(text)
+      ? `"${text.replaceAll('"', '""')}"`
+      : text;
+  };
+  return [
+    run.columns.map(field).join(","),
+    ...run.rows.map((row) => run.columns.map((c) => field(row[c])).join(",")),
+  ].join("\n");
+}
+
+/**
  * `<file>: <key>: <from> -> <to>` per changed cell, then the verdict: what
  * was written, what a preview would write, or the ✓/✗ of a `--check` drift
  * gate. `from` is `(unset)` when the file had no value for the key.

@@ -346,12 +346,13 @@ and makes no network requests.
 |---|---|---|---|
 | `--query` | `<sql>` | the `[sql]` positional | The SQL statement. When given, **every** positional is a path. |
 | `--check` | — | off | Treat returned rows as findings: exit 1 if the query returns any, 0 if it returns none. The `pretty` verdict line shows ✓/✗. |
+| `--param` | `<name=value>` | — | Bind a named SQL parameter (`$name`, `:name`, or `@name`) as a **string**; `name:=value` parses the value as JSON for a typed bind. Repeatable. See [bound parameters](#bound-parameters). |
 | `--db` | `<path>` | — | Also write the built database to this file; the SQL is then optional. The file is a regenerated artifact: an existing SQLite database at the path is overwritten, anything else is refused. See [exporting the database](#exporting-the-database). |
 | `--dry-run` | — | off | Preview a mutating statement instead of applying it: the per-file diff it would make, nothing touched. `--check` implies it — a check judges, it never mutates. See [writing back](#writing-back). |
 | `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
 | `--exclude` | `<glob>` | — | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
 | `--as` | `<format>` | — | Force an input [format](/docmeta/reference/formats/) (extractor name). Required when reading from stdin. |
-| `-f, --format` | `<pretty\|json\|github\|sarif\|junit>` | `pretty` | Output format. `github`, `sarif`, and `junit` render findings, so they are legal only with `--check` and only when the result carries a `path` column — see [rows as findings](#rows-as-findings). An unknown value, a findings format without `--check`, or a `--check` result without `path` is an error (exit 2). |
+| `-f, --format` | `<pretty\|json\|csv\|github\|sarif\|junit>` | `pretty` | Output format. `pretty`, `json`, and `csv` render result rows unconditionally ([CSV output](#csv-output) describes the dialect). `github`, `sarif`, and `junit` render findings, so they are legal only with `--check` and only when the result carries a `path` column — see [rows as findings](#rows-as-findings). An unknown value, a findings format without `--check`, or a `--check` result without `path` is an error (exit 2). |
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). When set, the file must exist or docmeta exits 2. |
 | `--no-config` | — | off | Ignore any discovered config file. `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
 | `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
@@ -361,6 +362,39 @@ and makes no network requests.
 There is no `-q/--quiet`: `get` uses it to hide files and `validate` to hide
 passes, and a query result has no analogous noise — the rows are exactly what
 was asked for.
+
+### Bound parameters
+
+A script that feeds a runtime value into a query should bind it, never splice
+it into the SQL text — one apostrophe in a spliced value breaks the statement:
+
+```sh
+docmeta query --param author="O'Brien" \
+  "SELECT _path FROM docs WHERE author = \$author" docs/
+```
+
+`--param name=value` binds the value as a **string**, and the statement refers
+to it with any of SQLite's named-parameter spellings: `$name`, `:name`, or
+`@name`. Parameters work anywhere a value goes — SELECTs, `--check` gates, and
+UPDATEs alike. The split happens at the first separator and everything after it
+is the value verbatim, so `--param msg=a=b` binds `a=b`. Anonymous `?`
+placeholders are not supported from the CLI: flag order is not a contract to
+rely on.
+
+Strings are the default because metadata is mostly strings and the `docs`
+table's columns have no type affinity — a bound *number* `2026` never equals a
+stored *string* `"2026"`. When you mean a typed value, say so with `:=`, which
+parses the value as JSON: `--param n:=5` binds the number, `--param d:=true`
+the boolean (as `1`/`0`, the projection's own encoding), `--param v:=null`
+NULL. Mind the shell when the typed value is a string that looks like a
+number: `--param 'v:="5"'` binds the **string** `5` (the outer single quotes
+protect the JSON string literal), while an unquoted `--param v:=5` binds the
+**number** — the shell eats bare double quotes.
+
+Two refusals keep a typo from becoming a silently-green gate (both exit 2,
+naming the parameter): a parameter the SQL references with nothing bound —
+unbound would bind NULL and match nothing, and a zero-row `--check` passes —
+and a `--param` the statement never references.
 
 ### Exporting the database
 
@@ -471,6 +505,30 @@ The named home for a rule your team keeps is config
 with the same convention — `query --check` with a findings format is the
 ad-hoc spelling of the same pipeline.
 
+### CSV output
+
+`-f csv` renders **result rows** as CSV, for the single-table hop into a
+spreadsheet or a pandas one-liner (`--db` remains the heavyweight export). The
+dialect, chosen once:
+
+- **Header row always.** A zero-row result is the header alone — which a
+  script can tell apart from an error that printed nothing.
+- **LF line endings** — a deliberate divergence from RFC 4180, which specifies
+  CRLF. LF is the right default for scripts and CI; a consumer that insists on
+  CRLF (Excel double-clicking a `.csv` on Windows) should re-terminate the
+  lines. Quoting itself is RFC 4180: a field containing a comma, quote, or
+  newline is wrapped in double quotes, and quotes double.
+- **SQL `NULL` is an empty field.**
+- **Arrays and objects stay JSON text** — the same encoding the `json` output
+  and the `--db` export use.
+
+`-f csv --check` is legal: a check's rows are still rows, the exit code
+carries the verdict, and the header-only output *is* the passing gate. What
+CSV refuses (exit 2, naming `pretty`/`json`): a statement that produced
+*changes* — a mutating statement's preview or application is a heterogeneous
+per-file diff, not a table — and a `--db`-only export, which has no rows to
+shape.
+
 ### Output and exit codes
 
 In `pretty` format: an aligned table (header row, then values; SQL `NULL`
@@ -479,7 +537,8 @@ line. A mutating statement renders as its diff instead:
 `<file>: <key>: <from> -> <to>` per change, then the mode's verdict (applied,
 dry-run hint, or the `--check` ✓/✗). In `json` format: the bare array —
 row objects for a read, `{ file, key, from, to, written }` change objects for
-an edit; the `--check` verdict travels in the exit code, not the envelope.
+an edit; the `--check` verdict travels in the exit code, not the envelope. In
+`csv` format: the [CSV dialect above](#csv-output), rows only.
 
 With `--db` and no SQL, the export summary (`Wrote <path> …`) is the report;
 with both, the rows own stdout and the export note goes to stderr as a
@@ -501,6 +560,8 @@ docmeta query --check "SELECT slug, count(*) n FROM docs WHERE slug IS NOT NULL 
 docmeta query --check "SELECT _path AS path, 'duplicate slug ' || slug AS message FROM docs WHERE slug IN (SELECT slug FROM docs GROUP BY slug HAVING count(*) > 1)" docs/ -f github
 docmeta query --check "SELECT d._path, d.author FROM docs d LEFT JOIN docs a ON a._path GLOB 'authors/*' AND a.slug = d.author WHERE d.author IS NOT NULL AND a._path IS NULL" docs/ authors/
 docmeta query "SELECT _path FROM docs WHERE _present = 0" docs/   # nothing to validate yet
+docmeta query -f csv "SELECT _path, title, last_reviewed FROM docs" docs/ > stale.csv
+docmeta query --param author="O'Brien" "SELECT _path FROM docs WHERE author = \$author" docs/
 cat page.md | docmeta query "SELECT title FROM docs" - --as markdown
 ```
 
