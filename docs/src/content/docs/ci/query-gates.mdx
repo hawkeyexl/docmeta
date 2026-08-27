@@ -48,7 +48,36 @@ exits `0`. That is the whole contract — the query itself is the rule, so
 anything you can phrase as "SELECT the violations" is now a CI gate.
 
 The dangling-reference classic — docs credit authors by slug, and one cited
-author has no page:
+author has no page. If your config already maps the author pages to their
+schema, give that override a
+[`name:`](/docmeta/reference/configuration/#named-collections) and the group
+becomes a **view** the rule can join directly:
+
+```yaml title="docmeta.config.yaml"
+overrides:
+  - name: authors
+    files: "authors/**"
+    schemas: [./schemas/author.json]
+```
+
+```bash
+npx docmeta query --check "SELECT d._path, d.author
+  FROM docs d
+  LEFT JOIN authors a ON a.slug = d.author
+  WHERE d.author IS NOT NULL AND a._path IS NULL"
+```
+
+```
+_path          author
+docs/guide.md  ghost
+✗ 1 row — check failed
+```
+
+`FROM authors` means "the files the author schema judges" — membership comes
+from schema resolution, not from re-spelling the glob in SQL — so moving the
+directory means updating one config line, and the rule follows. With **no
+config** to name the group, the same rule spells the author set inline as a
+path self-join over bare inputs:
 
 ```bash
 npx docmeta query --check "SELECT d._path, d.author
@@ -56,12 +85,6 @@ npx docmeta query --check "SELECT d._path, d.author
   LEFT JOIN docs a ON a.slug = d.author AND a._path LIKE '%authors%'
   WHERE d._path LIKE '%docs%' AND d.author IS NOT NULL
     AND a._path IS NULL" docs/ authors/
-```
-
-```
-_path          author
-docs/gamma.md  ghost
-✗ 1 row — check failed
 ```
 
 Duplicate slugs, same shape:
@@ -257,7 +280,8 @@ below.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"query-gates","description":"SQL over the metadata corpus: retrieval, --check gates, preview-by-default, and the refusal posture."} */}
 {/* step {"description":"A tag census: json_each reaches into array values, plain SQL aggregates.","runShell":{"command":"npx docmeta query \"SELECT t.value tag, count(*) n FROM docs, json_each(docs.tags) t GROUP BY tag ORDER BY n DESC, tag\" test/fixtures/query/docs","exitCodes":[0],"stdio":"/guide  2[\\s\\S]*3 rows/"}} */}
-{/* step {"description":"A LEFT JOIN finds the author no page has, and --check turns the row into exit 1.","runShell":{"command":"npx docmeta query --check \"SELECT d._path, d.author FROM docs d LEFT JOIN docs a ON a.slug = d.author AND a._path LIKE '%authors%' WHERE d._path LIKE '%query/docs%' AND d.author IS NOT NULL AND a._path IS NULL\" test/fixtures/query/docs test/fixtures/query/authors","exitCodes":[1],"stdio":"/ghost[\\s\\S]*check failed/"}} */}
+{/* step {"description":"With a named override, the dangling-author rule joins FROM authors — the view of the files the author schema judges — and --check turns the row into exit 1.","runShell":{"command":"npx docmeta query -c test/fixtures/collections/docmeta.config.yaml --check \"SELECT d._path, d.author FROM docs d LEFT JOIN authors a ON a.slug = d.author WHERE d.author IS NOT NULL AND a._path IS NULL\"","exitCodes":[1],"stdio":"/ghost[\\s\\S]*check failed/"}} */}
+{/* step {"description":"The no-config fallback: the same rule as a path self-join over bare inputs.","runShell":{"command":"npx docmeta query --check \"SELECT d._path, d.author FROM docs d LEFT JOIN docs a ON a.slug = d.author AND a._path LIKE '%authors%' WHERE d._path LIKE '%query/docs%' AND d.author IS NOT NULL AND a._path IS NULL\" test/fixtures/query/docs test/fixtures/query/authors","exitCodes":[1],"stdio":"/ghost[\\s\\S]*check failed/"}} */}
 {/* step {"description":"Duplicate slugs, the GROUP BY ... HAVING shape of the same gate.","runShell":{"command":"npx docmeta query --check \"SELECT slug, count(*) n FROM docs GROUP BY slug HAVING n > 1\" test/fixtures/query/docs","exitCodes":[1],"stdio":"/alpha  2[\\s\\S]*check failed/"}} */}
 {/* step {"description":"--dry-run previews a mutating statement: the exact diff, files untouched, exit 0.","runShell":{"command":"npx docmeta query --dry-run \"UPDATE docs SET reviewed = 'todo' WHERE reviewed IS NULL AND _present = 1\" test/fixtures/query/docs","exitCodes":[0],"stdio":"/reviewed: \\(unset\\) -> todo[\\s\\S]*dry run; run again without --dry-run to apply/"}} */}
 {/* step {"description":"DROP TABLE refuses by name and points at the statements that do the real jobs (exit 2).","runShell":{"command":"npx docmeta query \"DROP TABLE docs\" test/fixtures/query/docs","exitCodes":[2],"stdio":"DROP TABLE is refused"}} */}

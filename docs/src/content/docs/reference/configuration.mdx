@@ -307,11 +307,57 @@ a glob.
 |---|---|---|---|
 | `files` | `string` | yes | A glob matched against each file's path. |
 | `schemas` | `string[]` | yes | The schema set applied to matching files. |
+| `name` | `string` | no | Makes the group a named **collection**: a SQL view of that name over the `docs` projection, in both `docmeta query` and `checks:`. See [Named collections](#named-collections). |
 
 For a given file, docmeta uses the **first** override whose `files` glob matches
 (in list order); later matching overrides are ignored. See [schema
 resolution](/docmeta/reference/schema-resolution/#precedence) for where overrides sit in
 the precedence chain.
+
+#### Named collections
+
+An override carrying `name:` becomes a **view** over the `docs` table wherever
+SQL runs — [`docmeta query`](/docmeta/reference/cli/#query) and the [`checks:`](#checks)
+list alike — so a cross-file rule can say `FROM docs d LEFT JOIN authors a`
+instead of duplicating the config's glob as a SQL `GLOB` pattern:
+
+```yaml
+overrides:
+  - name: authors
+    files: "authors/**"
+    schemas: [./schemas/author.json]
+```
+
+**Membership is the resolution winner, not the glob.** A file belongs to the
+view of the override that **won its schema resolution** — so `FROM authors`
+means exactly "the files the author schema judges", views are disjoint
+(first-match-wins), and two consequences follow from [the precedence
+chain](/docmeta/reference/schema-resolution/#precedence):
+
+- A file inside `authors/**` that names its **own `$schema`** — even the
+  identical schema — resolves as a document ref, not an override, and exits
+  the view. docmeta prints a stderr notice naming the file and why.
+- Trust settings move membership: under
+  [`schemaTrust.documentRefs: none`](#schematrust) the document's `$schema` is
+  ignored, the override wins the file back, and the view grows. A per-file
+  trust *refusal* (a `$schema` URL the settings reject) demotes the file to
+  member of no view — it never turns a working `SELECT` into exit 2; `validate`
+  is where that refusal is reported as a finding.
+
+Views are **read-only**: an `UPDATE` through one refuses with the remedy —
+write through `docs`, scoped by the view
+(`UPDATE docs … WHERE _path IN (SELECT _path FROM "authors")`). They ride into
+a [`--db` export](/docmeta/reference/cli/#query) as ordinary `CREATE VIEW`
+rows, and the effect gate never sees them.
+
+Any string is a legal name — view names are quoted identifiers — except what
+`parseConfig` refuses up front: a **duplicate** name, the name **`docs`** (in
+any casing — it is the table every query reads), an **empty or blank** name, a
+name starting **`sqlite_`** (SQLite reserves the prefix), and a `name:` on an
+override with **no `schemas:`** (a schema-less override never wins resolution,
+so its view would always be empty). A config using `name:` requires a docmeta
+at or above the version that introduced it everywhere the config is read — the
+standard new-key caveat.
 
 ### Checks
 
