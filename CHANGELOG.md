@@ -1,3 +1,17 @@
+# [4.8.0](https://github.com/hawkeyexl/docmeta/compare/v4.7.0...v4.8.0) (2026-08-27)
+
+
+### Bug Fixes
+
+* **checks:** make checks SELECT-only, parameterless, and identity-honest ([58ae47d](https://github.com/hawkeyexl/docmeta/commit/58ae47d4d3f6e598a9c9c5ae5c0c5abba4b4f699))
+* **query:** close the parameter-identity and format-dispatch holes ([d7a6d7e](https://github.com/hawkeyexl/docmeta/commit/d7a6d7e28948f7ba37ff549fc1582157ea313190))
+* **query:** un-gate the format DEFAULT guard from the broad type ([fcefb23](https://github.com/hawkeyexl/docmeta/commit/fcefb23386e51d416e1385458fea0a8355a4ddac))
+
+
+### Features
+
+* **query:** bridge formats, booleans, and enums into DDL (proposal 0028) ([9b5823a](https://github.com/hawkeyexl/docmeta/commit/9b5823a891a2950f8cfb2af5d5ec9fe8126f77b4))
+
 # [4.7.0](https://github.com/hawkeyexl/docmeta/compare/v4.6.0...v4.7.0) (2026-08-27)
 
 
