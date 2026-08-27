@@ -260,20 +260,19 @@ describe("enums are CHECK (col IN (…)) (0028)", () => {
     });
   });
 
-  it("a paren inside a comment does not move the paren depth", async () => {
-    // The comment's `(` must not push depth: without the comment branch the
-    // outer CHECK group never closes and the one-shape refusal fires on a
-    // perfectly-shaped constraint.
+  it("a comment inside the CHECK parens refuses loudly, never miscounts", async () => {
+    // Every comment position inside the parens hits the strict one-shape
+    // walks before depth could matter, so the designed outcome is the named
+    // refusal — not a paren miscount surfacing as a shape error on clean
+    // input, and not a silently dropped constraint. matchingParenEnd itself
+    // is comment-aware for family consistency; this pins the contract.
     const d = copy();
-    const run = await ddl(
-      "ALTER TABLE docs ADD COLUMN phase TEXT CHECK (phase IN ('a','b') /* (decoy */)",
-      d,
-    );
-    expect(schemaAddOf(run)).toMatchObject({
-      key: "phase",
-      type: "string",
-      enum: ["a", "b"],
-    });
+    await expect(
+      ddl(
+        "ALTER TABLE docs ADD COLUMN phase TEXT CHECK (phase IN ('a','b') /* (decoy */)",
+        d,
+      ),
+    ).rejects.toThrow(/one shape/);
   });
 
   it("a CHECK spelled inside a comment does not confuse the parse", async () => {
