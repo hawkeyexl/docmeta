@@ -1063,7 +1063,11 @@ function indexOfCheck(text: string, from: number): number {
 /**
  * Index just past `(…)` starting at `open` — paren-aware, and skipping every
  * string/identifier form, brackets included: `[a)b]` is a legal identifier
- * whose `)` must not close the group early.
+ * whose `)` must not close the group early. Comments too: a paren inside a
+ * block or line comment must not move the depth. (The enum member grammar's
+ * own whitespace walks stay strict on purpose — a comment between literals
+ * refuses loudly per the one-shape contract, which is the designed outcome,
+ * not a miscount.)
  */
 function matchingParenEnd(text: string, open: number): number {
   let depth = 0;
@@ -1072,6 +1076,10 @@ function matchingParenEnd(text: string, open: number): number {
     const ch = text[i];
     if (startsStringOrIdent(text, i)) {
       i = skipStringOrIdent(text, i);
+      continue;
+    }
+    if (startsComment(text, i)) {
+      i = skipComment(text, i);
       continue;
     }
     if (ch === "(") depth++;

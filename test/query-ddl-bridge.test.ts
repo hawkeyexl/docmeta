@@ -260,6 +260,22 @@ describe("enums are CHECK (col IN (…)) (0028)", () => {
     });
   });
 
+  it("a paren inside a comment does not move the paren depth", async () => {
+    // The comment's `(` must not push depth: without the comment branch the
+    // outer CHECK group never closes and the one-shape refusal fires on a
+    // perfectly-shaped constraint.
+    const d = copy();
+    const run = await ddl(
+      "ALTER TABLE docs ADD COLUMN phase TEXT CHECK (phase IN ('a','b') /* (decoy */)",
+      d,
+    );
+    expect(schemaAddOf(run)).toMatchObject({
+      key: "phase",
+      type: "string",
+      enum: ["a", "b"],
+    });
+  });
+
   it("a CHECK spelled inside a comment does not confuse the parse", async () => {
     // SQLite stores an ADD COLUMN's definition verbatim, comments included —
     // the scan must skip the comment's decoy CHECK rather than count two
