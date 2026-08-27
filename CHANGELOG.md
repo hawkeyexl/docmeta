@@ -1,3 +1,15 @@
+# [4.7.0](https://github.com/hawkeyexl/docmeta/compare/v4.6.0...v4.7.0) (2026-08-27)
+
+
+### Bug Fixes
+
+* **query:** case-fold collection-name dedup, capture spaced view names ([7e16669](https://github.com/hawkeyexl/docmeta/commit/7e16669e85264079f81e538b79adb99dc3b4f750)), closes [write-throu#view](https://github.com/write-throu/issues/view)
+
+
+### Features
+
+* **query:** named collections — override groups as views (proposal 0027) ([0774c6e](https://github.com/hawkeyexl/docmeta/commit/0774c6ee9fd0ccea172fb71656b0e41e1043bf72)), closes [write-throu#docs](https://github.com/write-throu/issues/docs)
+
 # [4.6.0](https://github.com/hawkeyexl/docmeta/compare/v4.5.1...v4.6.0) (2026-08-27)
 
 
