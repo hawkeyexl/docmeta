@@ -128,6 +128,30 @@ the schema is stricter. `DROP COLUMN` and `RENAME COLUMN` retire and rename a
 key from the schema and every file together; run any of them with `--dry-run`
 first to see the exact plan before it applies.
 
+The constraints schema authors reach for first — `format` and `enum` — ride
+the same statement. A declared type equal to a format name the validator
+enforces writes the format, and `CHECK (col IN (…))` writes the enum:
+
+```bash
+# reviewed_on: { type: string, format: date }, required, every file backfilled
+npx docmeta query "ALTER TABLE docs
+  ADD COLUMN reviewed_on DATE NOT NULL DEFAULT '2026-08-26'" docs/
+
+# status: { type: string, enum: [draft, review, final] }
+npx docmeta query "ALTER TABLE docs
+  ADD COLUMN status TEXT CHECK (status IN ('draft','review','final'))" docs/
+```
+
+so evolving "one of these values" or "must be a date" is one reviewed
+statement rather than a hand edit plus a hand migration. (`DATETIME` and
+`TIMESTAMP` alias to `date-time`; hyphenated format names are quoted types,
+`ADD COLUMN updated "date-time"`.) The guard that keeps the ratchet honest
+extends with it: a `DEFAULT` the mapped format rejects
+(`DATE DEFAULT 'yesterday'`) refuses before anything is written, and a
+`DEFAULT` outside the enum is refused by the CHECK itself. A rename carries
+the whole hand-written property — an `enum`, `format`, or `description` you
+added by hand survives `RENAME COLUMN` intact.
+
 What "the schema" means follows your reference kind: a **file** schema you
 maintain is edited in place — your indent, git as the review surface, an
 `integrity:` pin refreshed if the config carries one — while a **built-in** is

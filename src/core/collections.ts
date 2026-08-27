@@ -32,7 +32,8 @@ export interface Collection {
 }
 
 export interface CollectionParams {
-  config: DocmetaConfig | null | undefined;
+  /** Optional so the checks' run context can be this very shape. */
+  config?: DocmetaConfig | null;
   /** `--schema` values, when the caller has them: `cli` outranks overrides. */
   cliSchemas?: string[];
   /** Directory a relative document-supplied file ref is measured from. */
@@ -46,13 +47,6 @@ export interface CollectionParams {
    * where it happens instead of discovered later.
    */
   onNotice?: (message: string) => void;
-}
-
-/** Does this config define any collection at all? */
-export function hasNamedOverrides(
-  config: DocmetaConfig | null | undefined,
-): boolean {
-  return (config?.overrides ?? []).some((o) => o.name !== undefined);
 }
 
 /**

@@ -372,8 +372,8 @@ ratchet](/docmeta/reference/cli/#baselines).
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `name` | `string` | yes | The check's identity. Must match `[a-z0-9][a-z0-9._-]*` and not end in `.json`; two checks may not share a name. |
-| `query` | `string` | yes | One SQL SELECT following the column convention below. |
+| `name` | `string` | yes | The check's identity. Must match `[a-z0-9][a-z0-9._-]*` and not end in `.json`; two checks may not share a name, and `query` is reserved (it is the rule id `query --check` files ad-hoc findings under). |
+| `query` | `string` | yes | One SQL SELECT following the column convention below. Checks are **read-only**: the projection runs under `query_only`, so a mutating statement is refused with the check named (edits belong to `docmeta query`), and `ATTACH`/`VACUUM` are refused by name. Checks bind no parameters, so a named parameter (`$x`, `:x`, `@x`) is refused too — an unbound name would bind NULL and green the gate on a typo; inline the value. |
 
 ```yaml
 checks:
@@ -416,7 +416,10 @@ A corpus rule computed over half a corpus reports wrong answers — "dangling
 author" because `authors/` was not loaded — so named checks run only when the
 resolved file set **is** the config-resolved corpus. Any CLI reshaping of the
 input set disqualifies the run: positional paths, stdin, `--as`, `--ext`,
-`--exclude`, and `--no-gitignore`. A scoped run prints one stderr notice
+`--exclude`, and `--no-gitignore`. So does `-s/--schema`, even though the
+file set is unchanged: a schema override reshapes the corpus contract — it
+outranks every override group, so all [collection](#named-collections) views
+would be empty by construction. A scoped run prints one stderr notice
 (`corpus checks skipped: run is scoped`) and validates as usual. Config-level
 `exclude:` and `respectGitignore:` do **not** disqualify — they *define* the
 corpus; the CLI flags redefine the run.

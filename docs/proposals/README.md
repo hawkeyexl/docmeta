@@ -51,7 +51,7 @@ changed as a result, and lists what it depends on.
 | [0025](0025-query-dry-run-polarity.md) | query writes by default, `--dry-run` previews | Devin · D4 / Maya · M2 | Implemented |
 | [0026](0026-corpus-checks-are-findings.md) | Corpus checks are findings: named `checks:` in config, run by `validate` | Devin · D4 / Maya · M2 | Implemented (#132) |
 | [0027](0027-named-collections.md) | Named collections: override groups as SQL views | Devin · D4 / Maya · M2 | Implemented (#134) |
-| [0028](0028-ddl-type-bridge.md) | The DDL type bridge: formats as column types, enums as CHECK IN | Sara · S1, S3 / Maya · M2, M3 | Proposed |
+| [0028](0028-ddl-type-bridge.md) | The DDL type bridge: formats as column types, enums as CHECK IN | Sara · S1, S3 / Maya · M2, M3 | Implemented (#135) |
 | [0029](0029-query-for-scripts.md) | query for scripts: CSV output and bound parameters | Devin · D3, D4 | Implemented (#133) |
 
 0014 was not in the original review. It surfaced while stress-testing 0004 and

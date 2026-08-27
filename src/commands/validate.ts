@@ -291,10 +291,33 @@ export async function runValidate(
     }),
   );
   const results: ValidationResult[] = [];
+  // Corpus checks (0026) run only when the resolved file set IS the
+  // config-resolved corpus — an invariant, not a flag list: any CLI reshaping
+  // of the input set (positional paths, stdin, --as/--ext, --exclude,
+  // --no-gitignore) disqualifies the run, because a corpus rule computed over
+  // half a corpus reports wrong answers. `-s/--schema` disqualifies too even
+  // though the file set is unchanged: a schema override reshapes the corpus
+  // *contract* — cliSchemas outranks every override, so all 0027 collection
+  // views would be empty by construction and a `FROM <collection>` check
+  // would green silently. Config `exclude:` and `respectGitignore:` do not
+  // disqualify — they *define* the corpus; the CLI flags redefine the run.
+  const scoped =
+    opts.inputs.length > 0 ||
+    // redundant with inputs.length (stdin is an input) — kept as belt-and-suspenders
+    usingStdin ||
+    opts.as !== undefined ||
+    opts.exts !== undefined ||
+    (opts.exclude !== undefined && opts.exclude.length > 0) ||
+    opts.respectGitignore !== undefined ||
+    (opts.cliSchemas?.length ?? 0) > 0;
+  const configuredChecks = config?.checks ?? [];
+  const checksWillRun =
+    configuredChecks.length > 0 && opts.checks !== false && !scoped;
   // Every successful extraction, kept for the corpus checks (0026): the
   // projection they run over is these entries, exactly as `query` holds them.
   // 0021 measured that holding a docs corpus in memory is not the cost that
-  // matters.
+  // matters — but the common no-checks path should not retain every file's
+  // extraction, so the list fills only when the checks will actually run.
   const checkEntries: CheckEntry[] = [];
 
   const processOne = async (
@@ -324,7 +347,7 @@ export async function runValidate(
       );
       return;
     }
-    checkEntries.push({ label, extracted });
+    if (checksWillRun) checkEntries.push({ label, extracted });
 
     let resolved: ResolvedSchemaSet;
     try {
@@ -400,23 +423,9 @@ export async function runValidate(
   }
 
   // Corpus checks (0026), after the per-file loop and before the baseline so
-  // their findings ride the same ratchet the schemas get. They run only when
-  // the resolved file set IS the config-resolved corpus — an invariant, not a
-  // flag list: any CLI reshaping of the input set (positional paths, stdin,
-  // --as/--ext, --exclude, --no-gitignore) disqualifies the run, because a
-  // corpus rule computed over half a corpus reports wrong answers. Config
-  // `exclude:` and `respectGitignore:` do not disqualify — they *define* the
-  // corpus; the CLI flags redefine the run.
-  const configuredChecks = config?.checks ?? [];
+  // their findings ride the same ratchet the schemas get. The disqualifying
+  // conditions live with `scoped`, computed before the loop above.
   if (configuredChecks.length > 0 && opts.checks !== false) {
-    const scoped =
-      opts.inputs.length > 0 ||
-      // redundant with inputs.length (stdin is an input) — kept as belt-and-suspenders
-      usingStdin ||
-      opts.as !== undefined ||
-      opts.exts !== undefined ||
-      (opts.exclude !== undefined && opts.exclude.length > 0) ||
-      opts.respectGitignore !== undefined;
     if (scoped) {
       opts.onNotice?.("corpus checks skipped: run is scoped");
     } else {

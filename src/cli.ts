@@ -44,6 +44,7 @@ import {
   type QueryFindingsFormat,
 } from "./reporters/index.js";
 import { rowsToFindings } from "./core/checks.js";
+import { isParamName } from "./core/projection.js";
 import type { QueryRun } from "./commands/query.js";
 import {
   FILL_FORMATS,
@@ -301,7 +302,12 @@ export function resolveQueryInputs(
 export function parseQueryParams(
   raw: readonly string[],
 ): Record<string, unknown> {
-  const params: Record<string, unknown> = {};
+  // Null prototype: `__proto__` passes the name grammar, so it must land as
+  // an ordinary own key rather than silently mutating the prototype.
+  const params: Record<string, unknown> = Object.create(null) as Record<
+    string,
+    unknown
+  >;
   for (const item of raw) {
     const typed = item.indexOf(":=");
     const plain = item.indexOf("=");
@@ -314,13 +320,14 @@ export function parseQueryParams(
     }
     const name = item.slice(0, at);
     // Exactly the token grammar `collectNamedParameters` recognizes (an
-    // optional $/:/@ prefix tolerated, as the API's key handling does).
+    // optional $/:/@ prefix tolerated, as the API's key handling does) —
+    // `isParamName` is the scan's own predicate, so the two cannot drift.
     // Anything else — a space, a leading digit, an empty name — could never
     // be referenced from the SQL, so the engine would ignore the bind and
     // the unbound-reference guard would never fire: the false-green path
     // this flag's design closes would reopen through a typo.
     const bare = /^[$:@]/.test(name) ? name.slice(1) : name;
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(bare)) {
+    if (!isParamName(bare)) {
       throw new DocmetaError(
         `--param name "${name}" cannot be bound: a SQL named parameter is letters, digits, and underscores, starting with a letter or underscore.`,
       );
@@ -1030,6 +1037,21 @@ export function buildProgram(): Command {
               "--format csv renders result rows, and a --db export without SQL produces none. Use pretty or json for the export summary.",
             );
           }
+          // The findings formats have the same no-rows problem on an
+          // export-only run — and silently printing the export summary would
+          // be a --check gate that checked nothing.
+          if (isQueryFindingsFormat(format) && sql === "") {
+            throw new DocmetaError(
+              `--format ${format} renders findings, which need a statement to produce rows — a --db export without SQL has none. Pass the SQL, or drop --check -f ${format}.`,
+            );
+          }
+          // Ditto --param: with no statement there is nothing to bind into,
+          // and silently ignoring the flag would hide a misspelled command.
+          if (options.param.length > 0 && sql === "") {
+            throw new DocmetaError(
+              "--param needs a statement to bind into; a --db export without SQL references no parameters. Pass the SQL, or drop --param.",
+            );
+          }
           const params = parseQueryParams(options.param);
           const exts: string[] | undefined = options.ext
             ? splitList(options.ext)
@@ -1039,8 +1061,12 @@ export function buildProgram(): Command {
             : undefined;
 
           // `--check` implies a dry run: a check judges and exits, it never
-          // mutates — which keeps every CI drift gate a read-only step.
-          const dryRun = Boolean(options.dryRun) || Boolean(options.check);
+          // mutates — which keeps every CI drift gate a read-only step. So
+          // does `-f csv`: csv refuses a changes-producing statement below,
+          // and that refusal must land before anything is applied, not after.
+          const dryRun =
+            Boolean(options.dryRun) || Boolean(options.check) ||
+            format === "csv";
           const run = await runQuery({
             sql,
             db: options.db,
@@ -1084,10 +1110,11 @@ export function buildProgram(): Command {
               // CSV describes result rows. Changes are heterogeneous per-file
               // diffs (eight kinds since 0024), not a table — the refusal
               // lives here in the dispatch, where the format is known and the
-              // reporter stays presentation-only (proposal 0029).
+              // reporter stays presentation-only (proposal 0029). The run was
+              // forced dry above, so the refusal is truthful: nothing landed.
               if (run.changes) {
                 throw new DocmetaError(
-                  "--format csv renders result rows; this statement produced changes, which have no tabular shape. Use pretty or json for the change preview.",
+                  "--format csv renders result rows; this statement produced changes, which have no tabular shape — nothing was applied. Use pretty or json to preview them, and run without -f csv to apply.",
                 );
               }
               process.stdout.write(`${renderQueryCsv(run)}\n`);

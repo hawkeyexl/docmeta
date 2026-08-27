@@ -1,0 +1,5 @@
+# House schema for the DDL type-bridge tests (0028).
+paths:
+  - "docs/**/*.md"
+schemas:
+  - ./schemas/house.json

@@ -19,9 +19,14 @@ export interface QueryReportOptions {
   dryRun?: boolean;
 }
 
-/** SQL NULL prints as `(null)`; everything else as `get` prints values. */
+/**
+ * SQL NULL prints as `(null)`; everything else as `get` prints values —
+ * except a bigint, which a SQL expression can hand back and which
+ * `stringifyValue`'s JSON.stringify would throw on.
+ */
 function cell(value: unknown): string {
-  return value === null ? "(null)" : stringifyValue(value);
+  if (value === null) return "(null)";
+  return typeof value === "bigint" ? String(value) : stringifyValue(value);
 }
 
 /**
@@ -73,6 +78,9 @@ export function renderQuery(
  * Rows only, by contract: changes are heterogeneous per-file diffs, not a
  * table, and the CLI refuses them before this is called.
  */
+/** A CSV field needing quoting: it contains a comma, quote, or newline. */
+const CSV_NEEDS_QUOTING = /[",\n\r]/;
+
 export function renderQueryCsv(
   run: Pick<QueryRun, "columns" | "rows">,
 ): string {
@@ -84,7 +92,7 @@ export function renderQueryCsv(
         : typeof value === "number" || typeof value === "bigint"
           ? String(value)
           : stringifyValue(value); // a BLOB or other oddity, `get`'s way
-    return /[",\n\r]/.test(text)
+    return CSV_NEEDS_QUOTING.test(text)
       ? `"${text.replaceAll('"', '""')}"`
       : text;
   };
@@ -116,7 +124,19 @@ function renderChanges(
       if (ch.op === "drop") {
         return `${c.dim(`schema ${ch.file}:`)} - ${ch.key}${fork}`;
       }
-      const detail = [ch.type, ch.required ? "required" : undefined]
+      // The whole resulting property, format and enum included, so a
+      // near-miss (`DUE-DATE` mapping to nothing) is visible as an
+      // unconstrained `+ key` before anything is written (0028).
+      const detail = [
+        ch.type,
+        ch.format !== undefined ? `format ${ch.format}` : undefined,
+        // JSON spellings, so the numeric enum [1] and the string enum ["1"]
+        // read as the distinct properties they are.
+        ch.enum !== undefined
+          ? `enum [${ch.enum.map((v) => JSON.stringify(v)).join(", ")}]`
+          : undefined,
+        ch.required ? "required" : undefined,
+      ]
         .filter(Boolean)
         .join(", ");
       return `${c.dim(`schema ${ch.file}:`)} + ${ch.key}${detail ? ` (${detail})` : ""}${fork}`;

@@ -161,8 +161,19 @@ const CHECK_KEYS = ["name", "query"] as const;
  * a fingerprint that changes with the directory you run from, the exact bug
  * `canonicalSchemaRef` exists to prevent. Enforced at parse time so the
  * failure names the config line, not a baseline mismatch three runs later.
+ *
+ * Exported for `checkSchemaRef`, which asserts the same grammar for
+ * programmatic `CheckConfig` callers that never pass through this parser.
  */
-const CHECK_NAME = /^[a-z0-9][a-z0-9._-]*$/;
+export const CHECK_NAME = /^[a-z0-9][a-z0-9._-]*$/;
+
+/**
+ * `query` is reserved: `docmeta query --check` files its ad-hoc findings as
+ * the pseudo-check `check:query`, and a configured check with that name would
+ * mint the identical rule id — two different rules sharing one baseline
+ * identity.
+ */
+const RESERVED_CHECK_NAMES = new Set(["query"]);
 
 /** The keys a `fill:` mapping may carry. */
 const FILL_KEYS = [
@@ -598,6 +609,11 @@ function parseChecks(value: unknown, source: string): CheckConfig[] {
     if (!CHECK_NAME.test(e.name) || e.name.toLowerCase().endsWith(".json")) {
       throw new DocmetaError(
         `${source}: checks[${i}].name "${e.name}" must match [a-z0-9][a-z0-9._-]* and not end in ".json" — the name is part of each finding's identity (check:<name>).`,
+      );
+    }
+    if (RESERVED_CHECK_NAMES.has(e.name)) {
+      throw new DocmetaError(
+        `${source}: checks[${i}].name "${e.name}" is reserved — \`docmeta query --check\` files its ad-hoc findings as check:${e.name}, and a configured check with the same name would share their identity. Pick another name.`,
       );
     }
     // Two checks sharing a name would share every finding's identity, so the

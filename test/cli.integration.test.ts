@@ -484,6 +484,89 @@ describe("cli query (built bin)", () => {
     }
   });
 
+  it("carries a quoted format type end to end through the built bin (0028)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-bridge-"));
+    try {
+      cpSync(resolve(root, "test", "fixtures", "ddl-bridge"), dir, {
+        recursive: true,
+      });
+      // The hyphenated name is a quoted type; the bundler layer is where 0021
+      // stress 10 taught that quoting surprises live, hence the built bin.
+      const stmt =
+        `ALTER TABLE docs ADD COLUMN updated "date-time" NOT NULL DEFAULT '2026-08-26T12:00:00Z'`;
+
+      const preview = run(
+        ["query", "--dry-run", stmt, "docs"],
+        undefined, undefined, dir,
+      );
+      expect(preview.status).toBe(0);
+      expect(preview.stdout).toContain(
+        "+ updated (string, format date-time, required)",
+      );
+
+      const applied = run(["query", stmt, "docs"], undefined, undefined, dir);
+      expect(applied.status).toBe(0);
+      const schema = JSON.parse(
+        readFileSync(join(dir, "schemas", "house.json"), "utf8"),
+      ) as { properties: Record<string, unknown> };
+      expect(schema.properties.updated).toEqual({
+        type: "string",
+        format: "date-time",
+      });
+
+      const validated = run(["validate", "docs"], undefined, undefined, dir);
+      expect(validated.status).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("-f csv with a mutating statement refuses without applying anything", () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-csv-mut-"));
+    try {
+      cpSync(resolve(root, "test", "fixtures", "ddl-bridge"), dir, {
+        recursive: true,
+      });
+      const before = readFileSync(join(dir, "docs", "one.md"), "utf8");
+      const r = run(
+        ["query", "-f", "csv", "UPDATE docs SET title = 'MUTATED'", "docs"],
+        undefined, undefined, dir,
+      );
+      expect(r.status).toBe(2);
+      expect(r.stderr).toContain("nothing was applied");
+      // The refusal must come before any write — csv can never apply.
+      expect(readFileSync(join(dir, "docs", "one.md"), "utf8")).toBe(before);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("export-only runs refuse findings formats and --param instead of ignoring them", () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-export-seams-"));
+    try {
+      cpSync(resolve(root, "test", "fixtures", "ddl-bridge"), dir, {
+        recursive: true,
+      });
+      // Silently exiting 0 here was a --check gate that checked nothing.
+      const findings = run(
+        ["query", "--check", "-f", "sarif", "--db", join(dir, "out.db"), "docs"],
+        undefined, undefined, dir,
+      );
+      expect(findings.status).toBe(2);
+      expect(findings.stderr).toMatch(/statement/);
+
+      const param = run(
+        ["query", "--param", "x=1", "--db", join(dir, "out2.db"), "docs"],
+        undefined, undefined, dir,
+      );
+      expect(param.status).toBe(2);
+      expect(param.stderr).toContain("--param");
+      expect(param.stderr).toMatch(/statement/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("--db exports without SQL, and keeps rows on stdout with it", () => {
     const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-db-"));
     try {

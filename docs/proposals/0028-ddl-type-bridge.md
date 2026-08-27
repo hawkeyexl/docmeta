@@ -1,6 +1,6 @@
 # 0028 — the DDL type bridge: formats as column types, enums as CHECK IN
 
-- **Status:** Proposed
+- **Status:** Implemented (#135)
 - **Serves:** Sara · S1, S3 · Maya · M2, M3
 - **Depends on:** [0024](0024-standard-sql-vocabulary.md) (extends its deliberately thin
   type mapping; its "enums, formats, and CHECK constraints are future work" line is this
