@@ -143,6 +143,64 @@ export function compileWithFormats(
   return buildAjv("2020").compile(schema);
 }
 
+/**
+ * A bare Ajv carrying exactly the `addFormats` registration `buildAjv`
+ * performs — the reference for what "a format docmeta enforces" means.
+ * Shared by the two helpers below; built once, lazily.
+ */
+let formatRegistry: InstanceType<AjvCtor> | undefined;
+function formatsAjv(): InstanceType<AjvCtor> {
+  if (!formatRegistry) {
+    formatRegistry = new Ajv2020({ strict: false });
+    addFormats(formatRegistry);
+  }
+  return formatRegistry;
+}
+
+/**
+ * The format names docmeta's validators enforce on strings, derived from the
+ * ajv-formats registration itself — never a hand-copied parallel list, so an
+ * ajv-formats upgrade widens this set without anyone remembering it (proposal
+ * 0028). Two exclusions, both because they do not constrain a string:
+ * number-typed formats (`int32`, `float`, …) and always-pass placeholders
+ * (`password`, `binary`, registered as `true`).
+ */
+let stringFormatsMemo: ReadonlySet<string> | undefined;
+export function stringFormatNames(): ReadonlySet<string> {
+  if (!stringFormatsMemo) {
+    const names = new Set<string>();
+    const registered: Record<string, unknown> = formatsAjv().formats;
+    for (const [name, def] of Object.entries(registered)) {
+      const enforcesStrings =
+        def instanceof RegExp ||
+        typeof def === "function" ||
+        (typeof def === "object" &&
+          def !== null &&
+          ((def as { type?: string }).type === undefined ||
+            (def as { type?: string }).type === "string"));
+      if (enforcesStrings) names.add(name);
+    }
+    stringFormatsMemo = names;
+  }
+  return stringFormatsMemo;
+}
+
+/**
+ * Does `value` satisfy the named format? Answered by compiling
+ * `{type: "string", format: name}` in the same registry — the exact machinery
+ * `validate` enforces the format with, so there is no second opinion about
+ * what a `date` is (0028's DEFAULT guard).
+ */
+const formatCheckers = new Map<string, ValidateFunction>();
+export function validatesFormat(name: string, value: string): boolean {
+  let fn = formatCheckers.get(name);
+  if (!fn) {
+    fn = formatsAjv().compile({ type: "string", format: name });
+    formatCheckers.set(name, fn);
+  }
+  return fn(value);
+}
+
 export class Validator {
   /**
    * How this validator's schemas are loaded: the disk cache location, its TTL,

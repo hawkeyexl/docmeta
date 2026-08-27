@@ -484,6 +484,43 @@ describe("cli query (built bin)", () => {
     }
   });
 
+  it("carries a quoted format type end to end through the built bin (0028)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-bridge-"));
+    try {
+      cpSync(resolve(root, "test", "fixtures", "ddl-bridge"), dir, {
+        recursive: true,
+      });
+      // The hyphenated name is a quoted type; the bundler layer is where 0021
+      // stress 10 taught that quoting surprises live, hence the built bin.
+      const stmt =
+        `ALTER TABLE docs ADD COLUMN updated "date-time" NOT NULL DEFAULT '2026-08-26T12:00:00Z'`;
+
+      const preview = run(
+        ["query", "--dry-run", stmt, "docs"],
+        undefined, undefined, dir,
+      );
+      expect(preview.status).toBe(0);
+      expect(preview.stdout).toContain(
+        "+ updated (string, format date-time, required)",
+      );
+
+      const applied = run(["query", stmt, "docs"], undefined, undefined, dir);
+      expect(applied.status).toBe(0);
+      const schema = JSON.parse(
+        readFileSync(join(dir, "schemas", "house.json"), "utf8"),
+      ) as { properties: Record<string, unknown> };
+      expect(schema.properties.updated).toEqual({
+        type: "string",
+        format: "date-time",
+      });
+
+      const validated = run(["validate", "docs"], undefined, undefined, dir);
+      expect(validated.status).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("--db exports without SQL, and keeps rows on stdout with it", () => {
     const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-db-"));
     try {

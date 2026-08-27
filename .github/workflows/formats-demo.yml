@@ -20,10 +20,11 @@
 # `WHERE _present = 0` has something to find, and none carries a `type:`,
 # because the query fixtures exercise retrieval, not any schema.
 #
-# `test/fixtures/query-ddl/` and `query-ddl-builtin/` are excluded with them.
-# Their docs validate against the fixture's *own* config (the house schema, or
-# a pinned builtin) inside the DDL tests; judged against this workflow's
-# default set they are standing alerts for files doing their job.
+# `test/fixtures/query-ddl/`, `query-ddl-builtin/`, and `ddl-bridge/` are
+# excluded with them. Their docs validate against the fixture's *own* config
+# (the house schema, or a pinned builtin) inside the DDL tests; judged against
+# this workflow's default set they are standing alerts for files doing their
+# job.
 #
 # `test/fixtures/default-schema/` is excluded for the same reason. Those
 # fixtures validate against the proposal-0023 draft vocabularies via file refs
@@ -89,6 +90,7 @@ jobs:
             --exclude "test/fixtures/query/**" \
             --exclude "test/fixtures/query-ddl/**" \
             --exclude "test/fixtures/query-ddl-builtin/**" \
+            --exclude "test/fixtures/ddl-bridge/**" \
             --exclude "test/fixtures/checks/**" \
             --exclude "test/fixtures/query-csv/**" \
             --exclude "test/fixtures/collections/**" \
@@ -123,6 +125,7 @@ jobs:
             --exclude "test/fixtures/query/**" \
             --exclude "test/fixtures/query-ddl/**" \
             --exclude "test/fixtures/query-ddl-builtin/**" \
+            --exclude "test/fixtures/ddl-bridge/**" \
             --exclude "test/fixtures/checks/**" \
             --exclude "test/fixtures/query-csv/**" \
             --exclude "test/fixtures/collections/**" \

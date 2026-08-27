@@ -67,6 +67,7 @@ import {
   createCollectionViews,
 } from "../core/collections.js";
 import type { FingerprintContext } from "../core/baseline.js";
+import { stringFormatNames, validatesFormat } from "../core/validator.js";
 import {
   classifyRef,
   isPublishedBuiltinUrl,
@@ -158,6 +159,10 @@ export type QueryChange = { file: string; written: boolean } & (
       key: string;
       renamedTo?: string;
       type?: string;
+      /** 0028: a declared type equal to a format name carries the format. */
+      format?: string;
+      /** 0028: a `CHECK (k IN (…))` on the added column carries the enum. */
+      enum?: (string | number)[];
       required?: boolean;
       forkedFrom?: string;
     }
@@ -510,6 +515,9 @@ async function runSql(
     // column snapshot (0024) is what makes DDL an effect too.
     const before = snapshotRows(db);
     const colBefore = snapshotColumns(db);
+    // 0028: table_info cannot see a CHECK, so the stored CREATE TABLE text is
+    // snapshotted alongside the column shapes and consulted for adds only.
+    const catalogBefore = snapshotCatalogSql(db);
     let columns: string[];
     let rows: Record<string, unknown>[];
     try {
@@ -555,7 +563,14 @@ async function runSql(
       );
     }
     const diff = diffProjection(before, after);
-    const schemaOps = columnDiffOps(colBefore, snapshotColumns(db), before, after);
+    const schemaOps = columnDiffOps(
+      colBefore,
+      snapshotColumns(db),
+      before,
+      after,
+      catalogBefore,
+      snapshotCatalogSql(db),
+    );
     // Structural, not textual: a read always yields result columns, DML and
     // DDL (without RETURNING) never do — so `WITH … UPDATE …` classifies
     // correctly even when it matches zero rows. The residual: RETURNING DML
@@ -583,9 +598,16 @@ async function runSql(
         ? [{ from: op.key, to: op.renamedTo }]
         : [],
     );
+    // 0028: a BOOLEAN add's backfill writes real booleans to the files — the
+    // projection's 1/0 encoding is bind-layer, not file-layer.
+    const booleanAdds = new Set(
+      schemaOps.flatMap((op) =>
+        op.op === "add" && op.type === "boolean" ? [op.key] : [],
+      ),
+    );
     const changes = [
       ...(schemaPlan?.changes ?? []),
-      ...buildChanges(diff, entries, sentinel, ctx, renameHints),
+      ...buildChanges(diff, entries, sentinel, ctx, renameHints, booleanAdds),
     ];
     if (ctx.write) await applyChanges(changes, entries, ctx, schemaPlan);
     return { columns, rows, changes, ...(dbInfo ? { db: dbInfo } : {}) };
@@ -734,19 +756,41 @@ interface SchemaOp {
   key: string;
   renamedTo?: string;
   type?: string;
+  /** 0028: the format a declared type equal to a format name carries. */
+  format?: string;
+  /** 0028: the members of a `CHECK (k IN (…))` on the added column. */
+  enum?: (string | number)[];
   required?: boolean;
+}
+
+/** The stored `CREATE TABLE docs` text — the only place a CHECK lives. */
+function snapshotCatalogSql(db: Queryable): string {
+  const rows = db
+    .prepare(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'docs'",
+    )
+    .all() as { sql: unknown }[];
+  const sql = rows[0]?.sql;
+  return typeof sql === "string" ? sql : "";
 }
 
 /**
  * DDL, read as an effect: the column set changed. A removed/added pair whose
  * per-row values are identical is a column rename; the rest are drops and
  * adds, an add carrying its declared type and NOT NULL as schema intent.
+ *
+ * The catalog text (0028) is consulted **only for adds** — `ADD COLUMN`
+ * appends the column def verbatim to docmeta-authored CREATE TABLE text, so
+ * the suffix delta is extractable without parsing the user's statement. DROP
+ * and RENAME rewrite the stored text mid-string and never consult it.
  */
 function columnDiffOps(
   before: Map<string, { type: string; notnull: number }>,
   after: Map<string, { type: string; notnull: number }>,
   rowsBefore: Map<string, Record<string, unknown>>,
   rowsAfter: Map<string, Record<string, unknown>>,
+  catalogBefore: string,
+  catalogAfter: string,
 ): SchemaOp[] {
   const removed = [...before.keys()].filter((c) => !after.has(c));
   const added = [...after.keys()].filter((c) => !before.has(c));
@@ -776,22 +820,223 @@ function columnDiffOps(
   }
   for (const key of added.filter((k) => !pairedTo.has(k))) {
     const decl = after.get(key);
+    const mapped = mapDeclaredType(decl?.type ?? "");
+    const members = enumForAddedColumn(catalogBefore, catalogAfter, key, mapped);
     ops.push({
       op: "add",
       key,
-      type: mapDeclaredType(decl?.type ?? ""),
+      ...(mapped?.type !== undefined ? { type: mapped.type } : {}),
+      ...(mapped?.format !== undefined ? { format: mapped.format } : {}),
+      ...(members !== undefined ? { enum: members } : {}),
       required: decl?.notnull === 1,
     });
   }
   return ops;
 }
 
-/** SQLite declared type → JSON Schema type, by SQLite's own affinity rules. */
-function mapDeclaredType(declared: string): string | undefined {
-  if (/INT/i.test(declared)) return "integer";
-  if (/CHAR|CLOB|TEXT/i.test(declared)) return "string";
-  if (/REAL|FLOA|DOUB|NUMERIC|DEC/i.test(declared)) return "number";
+/** What a declared column type means for the schema property it will build. */
+interface DeclaredMapping {
+  type: string;
+  format?: string;
+}
+
+/**
+ * SQLite declared type → JSON Schema mapping. 0024 stopped at SQLite's own
+ * affinity rules; 0028 puts the format match **before** them — ordering is
+ * load-bearing, or `/INT/` eats `json-POINTER` (0028 § stress test 3):
+ *
+ * 1. a type case-insensitively equal to a format name the validator enforces
+ *    (derived from the ajv-formats registration, so upgrades arrive free)
+ *    maps to `{type: "string", format: <name>}`;
+ * 2. the closed alias pair `DATETIME`/`TIMESTAMP` → `format: date-time`;
+ * 3. `BOOLEAN`/`BOOL` → `{type: "boolean"}`;
+ * 4. the affinity regexes, exactly as before.
+ */
+function mapDeclaredType(declared: string): DeclaredMapping | undefined {
+  const lower = declared.toLowerCase();
+  if (stringFormatNames().has(lower)) return { type: "string", format: lower };
+  if (lower === "datetime" || lower === "timestamp") {
+    return { type: "string", format: "date-time" };
+  }
+  if (lower === "boolean" || lower === "bool") return { type: "boolean" };
+  if (/INT/i.test(declared)) return { type: "integer" };
+  if (/CHAR|CLOB|TEXT/i.test(declared)) return { type: "string" };
+  if (/REAL|FLOA|DOUB|NUMERIC|DEC/i.test(declared)) return { type: "number" };
   return undefined;
+}
+
+/**
+ * The column definition `ADD COLUMN` appended to the stored CREATE TABLE
+ * text: the after-text is the before-text with `, <def>` inserted before the
+ * final `)` (verified against the engine — 0028 § stress test 2). Undefined
+ * when the delta is not that shape.
+ */
+function appendedColumnDef(before: string, after: string): string | undefined {
+  const cut = before.lastIndexOf(")");
+  if (cut === -1 || cut !== before.length - 1 || !after.endsWith(")")) {
+    return undefined;
+  }
+  const prefix = before.slice(0, cut);
+  if (!after.startsWith(prefix)) return undefined;
+  const appended = after.slice(prefix.length, -1);
+  const comma = /^\s*,\s*/.exec(appended);
+  return comma ? appended.slice(comma[0].length) : undefined;
+}
+
+/** Index of a `CHECK` keyword at or after `from`, outside quoted regions. */
+function indexOfCheck(text: string, from: number): number {
+  let i = from;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === "'" || ch === '"' || ch === "`") {
+      i = skipQuoted(text, i, ch);
+    } else if (ch === "[") {
+      while (i < text.length && text[i] !== "]") i++;
+      i++;
+    } else if (ch !== undefined && /[A-Za-z_]/.test(ch)) {
+      const m = /^[A-Za-z_][A-Za-z0-9_]*/.exec(text.slice(i));
+      const word = m?.[0] ?? "";
+      if (word.toUpperCase() === "CHECK") return i;
+      i += Math.max(word.length, 1);
+    } else {
+      i++;
+    }
+  }
+  return -1;
+}
+
+/** Index just past `(…)` starting at `open`, paren- and quote-aware. */
+function matchingParenEnd(text: string, open: number): number {
+  let depth = 0;
+  let i = open;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === "'" || ch === '"' || ch === "`") {
+      i = skipQuoted(text, i, ch);
+      continue;
+    }
+    if (ch === "(") depth++;
+    else if (ch === ")") {
+      depth--;
+      if (depth === 0) return i + 1;
+    }
+    i++;
+  }
+  return -1;
+}
+
+/**
+ * `enum` members for an added column, read from the catalog delta — the
+ * second recorded consultation of syntax (after ATTACH/VACUUM's
+ * refusal-by-name), scoped to stay small (0028 § stress test 2). The grammar
+ * accepted is exactly one shape: `CHECK (<the-new-column> IN (<literals>))`
+ * with the literals all strings or all numbers, agreeing with the declared
+ * type. Everything else refuses, naming the shape and the hand-edit
+ * alternative — a constraint silently dropped from the schema would be worse
+ * than either.
+ */
+function enumForAddedColumn(
+  catalogBefore: string,
+  catalogAfter: string,
+  key: string,
+  mapped: DeclaredMapping | undefined,
+): (string | number)[] | undefined {
+  // The variable annotation (not just the return position) is what lets
+  // control-flow analysis treat a `refuseShape()` call as terminating.
+  const refuseShape: () => never = () => {
+    throw new DocmetaError(
+      `The CHECK on "${key}" is not the one shape DDL maps: \`CHECK (${key} IN (…))\` with all-string or all-number literals becomes \`enum\`. Anything else — an expression, another column, AND — is a hand edit to the schema file.`,
+    );
+  };
+  const def = appendedColumnDef(catalogBefore, catalogAfter);
+  if (def === undefined) {
+    // Unreachable through ALTER ADD against docmeta-authored text today;
+    // stated anyway so an engine that rewrites the catalog differently
+    // refuses loudly instead of silently dropping a CHECK the user wrote.
+    const count = (text: string): number => {
+      let n = 0;
+      for (let i = indexOfCheck(text, 0); i !== -1; i = indexOfCheck(text, i + 5)) {
+        n++;
+      }
+      return n;
+    };
+    if (count(catalogAfter) > count(catalogBefore)) refuseShape();
+    return undefined;
+  }
+  const checkAt = indexOfCheck(def, 0);
+  if (checkAt === -1) return undefined;
+
+  const skipWs = (text: string, from: number): number => {
+    let i = from;
+    while (i < text.length && /\s/.test(text[i] ?? "")) i++;
+    return i;
+  };
+  const i = skipWs(def, checkAt + "CHECK".length);
+  if (def[i] !== "(") refuseShape();
+  const end = matchingParenEnd(def, i);
+  if (end === -1) refuseShape();
+  // A second CHECK anywhere in the def is not the supported shape.
+  if (indexOfCheck(def, end) !== -1) refuseShape();
+  const inner = def.slice(i + 1, end - 1);
+
+  // `<the-new-column> IN ( <literals> )`, and nothing else.
+  let j = skipWs(inner, 0);
+  const col = readIdentifier(inner, j);
+  if (!col || col.value.toLowerCase() !== key.toLowerCase()) refuseShape();
+  j = skipWs(inner, col.end);
+  const kw = /^[A-Za-z]+/.exec(inner.slice(j));
+  if (kw?.[0]?.toUpperCase() !== "IN") refuseShape();
+  j = skipWs(inner, j + 2);
+  if (inner[j] !== "(") refuseShape();
+  const listEnd = matchingParenEnd(inner, j);
+  if (listEnd === -1 || skipWs(inner, listEnd) !== inner.length) refuseShape();
+  const list = inner.slice(j + 1, listEnd - 1);
+
+  const members: (string | number)[] = [];
+  let sawString = false;
+  let sawNumber = false;
+  let k = skipWs(list, 0);
+  for (;;) {
+    if (list[k] === "'") {
+      const close = skipQuoted(list, k, "'");
+      if (list[close - 1] !== "'" || close <= k + 1) refuseShape();
+      members.push(list.slice(k + 1, close - 1).replaceAll("''", "'"));
+      sawString = true;
+      k = close;
+    } else {
+      const m = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?/.exec(
+        list.slice(k),
+      );
+      if (!m) refuseShape();
+      members.push(Number(m[0]));
+      sawNumber = true;
+      k += m[0].length;
+    }
+    k = skipWs(list, k);
+    if (k >= list.length) break;
+    if (list[k] !== ",") refuseShape();
+    k = skipWs(list, k + 1);
+  }
+  if (members.length === 0) refuseShape();
+  if (sawString && sawNumber) {
+    // Homogeneity is part of the grammar, not a rule invented later.
+    throw new DocmetaError(
+      `The CHECK on "${key}" mixes string and number literals; an IN list maps to \`enum\` only as all strings or all numbers.`,
+    );
+  }
+  if (mapped !== undefined) {
+    const disagree = sawString
+      ? mapped.type !== "string"
+      : mapped.type === "integer"
+        ? members.some((v) => typeof v === "number" && !Number.isInteger(v))
+        : mapped.type !== "number";
+    if (disagree) {
+      throw new DocmetaError(
+        `The CHECK on "${key}" lists ${sawString ? "string" : "number"} literals, but the declared type maps to ${mapped.type} — the members' JSON types must agree with the declared type, the same reconciliation the DEFAULT guard applies.`,
+      );
+    }
+  }
+  return members;
 }
 
 /**
@@ -805,6 +1050,10 @@ function assertDefaultsMatchDeclaredTypes(
   ops: SchemaOp[],
   cells: CellEffect[],
 ): void {
+  // JSON.stringify throws on bigint — a refusal must never crash while
+  // trying to describe the value it is refusing.
+  const show = (v: unknown): string =>
+    typeof v === "bigint" ? `${String(v)}n` : (toJsonText(v) ?? "undefined");
   for (const op of ops) {
     if (op.op !== "add" || op.type === undefined) continue;
     for (const cell of cells) {
@@ -820,10 +1069,30 @@ function assertDefaultsMatchDeclaredTypes(
             ? typeof to === "number" || typeof to === "bigint"
             : op.type === "string"
               ? typeof to === "string"
-              : true;
+              : op.type === "boolean"
+                ? // The reconciliation accepts only the SQL spellings 0, 1,
+                  // true, false — all of which the engine stores as 0/1.
+                  to === 0 || to === 1 || to === 0n || to === 1n
+                : true;
       if (!ok) {
         throw new DocmetaError(
-          `ALTER declares "${op.key}" as ${op.type}, but the DEFAULT backfills ${JSON.stringify(to)} — the corpus would fail the schema it just gained. Match the DEFAULT to the declared type.`,
+          op.type === "boolean"
+            ? `ALTER declares "${op.key}" as boolean, but the DEFAULT backfills ${show(to)} — only 0, 1, true, or false reconcile with a boolean column.`
+            : `ALTER declares "${op.key}" as ${op.type}, but the DEFAULT backfills ${show(to)} — the corpus would fail the schema it just gained. Match the DEFAULT to the declared type.`,
+        );
+      }
+      // 0028 stress 4: `DATE DEFAULT 'yesterday'` sails through the engine
+      // and through the broad-type check above; the format is validated with
+      // the same ajv-formats machinery `validate` enforces it with, before
+      // any plan exists. (Enums need no twin: SQLite itself refuses an ADD
+      // whose DEFAULT violates its own CHECK.)
+      if (
+        op.format !== undefined &&
+        typeof to === "string" &&
+        !validatesFormat(op.format, to)
+      ) {
+        throw new DocmetaError(
+          `ALTER declares "${op.key}" as format ${op.format}, but the DEFAULT backfills ${show(to)} — the corpus would fail the schema it just gained. Match the DEFAULT to the format.`,
         );
       }
     }
@@ -1254,6 +1523,8 @@ async function planSchemaMutation(
     key: op.key,
     ...(op.renamedTo !== undefined ? { renamedTo: op.renamedTo } : {}),
     ...(op.type !== undefined ? { type: op.type } : {}),
+    ...(op.format !== undefined ? { format: op.format } : {}),
+    ...(op.enum !== undefined ? { enum: op.enum } : {}),
     ...(op.required ? { required: true } : {}),
     ...(forkedFrom !== undefined ? { forkedFrom } : {}),
     written: false,
@@ -1315,7 +1586,11 @@ function mutateSchemaObject(
     : [];
   switch (op.op) {
     case "add":
-      props[op.key] = op.type !== undefined ? { type: op.type } : {};
+      props[op.key] = {
+        ...(op.type !== undefined ? { type: op.type } : {}),
+        ...(op.format !== undefined ? { format: op.format } : {}),
+        ...(op.enum !== undefined ? { enum: op.enum } : {}),
+      };
       if (op.required && !required.includes(op.key)) required.push(op.key);
       break;
     case "drop":
@@ -1498,6 +1773,8 @@ function buildChanges(
   sentinel: string,
   ctx: RunContext,
   renameHints: readonly { from: string; to: string }[] = [],
+  /** Keys a DDL add declared boolean: their backfill restores as booleans. */
+  booleanAdds: ReadonlySet<string> = new Set(),
 ): QueryChange[] {
   const effects = diff.cells;
   const originals = new Map(entries.map((e) => [e.label, e.extracted.data]));
@@ -1665,7 +1942,11 @@ function buildChanges(
       }
       continue;
     }
-    const targetType = fileTypeOf(original) ?? dominantFor(key);
+    // A boolean DDL add is authoritative for a key no file had: without the
+    // hint the backfill's 1/0 would land in the files as numbers (0028).
+    const targetType =
+      fileTypeOf(original) ??
+      (booleanAdds.has(key) ? "boolean" : dominantFor(key));
     // `from` stays `undefined` for a key the file never had — JSON output
     // omits it — which keeps "absent" distinguishable from an explicit null.
     changes.push({
