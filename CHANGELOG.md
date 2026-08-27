@@ -1,3 +1,18 @@
+# [4.6.0](https://github.com/hawkeyexl/docmeta/compare/v4.5.1...v4.6.0) (2026-08-27)
+
+
+### Bug Fixes
+
+* **checks:** omit NULL cells from the synthesized message ([577b362](https://github.com/hawkeyexl/docmeta/commit/577b362d577e29c6fde7e8991905e185a2967d2f))
+* **query:** refuse --param names outside the SQL token grammar ([ed96990](https://github.com/hawkeyexl/docmeta/commit/ed96990f68636f00eadf7b0f5aedb82c1d36bb00)), closes [false-green-throu#a-typo](https://github.com/false-green-throu/issues/a-typo)
+* **query:** restore the exhaustiveness guard in the format switch ([a69bf0f](https://github.com/hawkeyexl/docmeta/commit/a69bf0fc18d17672c19c617bbd6bb9c7e8434eb7))
+
+
+### Features
+
+* corpus checks are findings (proposal 0026) ([a9e8d83](https://github.com/hawkeyexl/docmeta/commit/a9e8d83b88af42120a285014ff0c1bf390afb804))
+* **query:** csv output and named bind parameters (proposal 0029) ([52d5c45](https://github.com/hawkeyexl/docmeta/commit/52d5c45fc5fda78120948dd5c14433a721c02ffb))
+
 ## [4.5.1](https://github.com/hawkeyexl/docmeta/compare/v4.5.0...v4.5.1) (2026-08-26)
 
 
