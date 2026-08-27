@@ -244,6 +244,22 @@ describe("enums are CHECK (col IN (…)) (0028)", () => {
     });
   });
 
+  it("a bracket identifier containing a paren parses (bracket-aware scan)", async () => {
+    // `[mo)od]` is a legal SQLite bracket identifier; the `)` inside it must
+    // not close the CHECK's paren early. This exercises matchingParenEnd's
+    // bracket-awareness through the catalog path.
+    const d = copy();
+    const run = await ddl(
+      "ALTER TABLE docs ADD COLUMN [mo)od] TEXT CHECK ([mo)od] IN ('x','y'))",
+      d,
+    );
+    expect(schemaAddOf(run)).toMatchObject({
+      key: "mo)od",
+      type: "string",
+      enum: ["x", "y"],
+    });
+  });
+
   it("a numeric IN list with INTEGER maps consistently (stress 7)", async () => {
     const d = copy();
     await ddl(

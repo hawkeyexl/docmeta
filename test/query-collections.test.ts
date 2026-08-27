@@ -277,6 +277,64 @@ describe("named collections (0027): views over override groups", () => {
     );
   });
 
+  // Catalog-observing statements never raise `no such table`, so the lazy
+  // retry cannot rescue them — they must see the views eagerly, exactly as
+  // v4.8.0's always-eager build did.
+  it("sqlite_master lists every collection view", async () => {
+    const run = await q(
+      "SELECT name FROM sqlite_master WHERE type = 'view' ORDER BY name",
+    );
+    expect(run.rows).toEqual([{ name: "authors" }, { name: "notes" }]);
+  });
+
+  it("PRAGMA table_info(collection) reports the docs columns, not silence", async () => {
+    const run = await q("PRAGMA table_info(authors)");
+    expect(run.rows.map((r) => r.name)).toContain("_path");
+    expect(run.rows.map((r) => r.name)).toContain("title");
+  });
+
+  it("CREATE VIEW onto a collection name refuses instead of shadowing", async () => {
+    await expect(
+      q("CREATE VIEW authors AS SELECT * FROM docs"),
+    ).rejects.toThrow(/already exists/);
+  });
+
+  it("DROP VIEW of a collection is the silent no-op it always was", async () => {
+    const run = await q("DROP VIEW authors");
+    expect(run.changes).toEqual([]);
+  });
+
+  it("the retry path tolerates a collection name containing a newline", async () => {
+    // The name embeds both a double quote and a newline. The SQL spells the
+    // quote doubled (`a""` + newline + `b`), so the raw statement does not
+    // contain the name as a substring and the eager pre-trigger deliberately
+    // misses — this is the one spelling that still exercises the pure
+    // build-and-retry path, where the engine's `no such table: a"\nb`
+    // message spans a line break.
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-newline-view-"));
+    tempDirs.push(dir);
+    cpSync(corpus, dir, { recursive: true });
+    writeFileSync(
+      join(dir, "docmeta.config.yaml"),
+      [
+        "paths:",
+        '  - "docs/**/*.md"',
+        '  - "authors/**/*.md"',
+        "overrides:",
+        '  - name: "a\\"\\nb"',
+        '    files: "authors/**"',
+        "    schemas: [./author.schema.json]",
+        "",
+      ].join("\n"),
+    );
+    const run = await runQuery({
+      sql: 'SELECT _path FROM "a""\nb" ORDER BY _path',
+      inputs: [],
+      cwd: dir,
+    });
+    expect(run.rows.map((r) => r._path)).toContain("authors/ada.md");
+  });
+
   it("corpus checks read the same views", async () => {
     const dir = tempCopy();
     writeFileSync(

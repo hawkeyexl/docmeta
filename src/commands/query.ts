@@ -69,6 +69,7 @@ import {
 } from "../core/projection.js";
 import {
   collectCollections,
+  collectionNames,
   createCollectionViews,
 } from "../core/collections.js";
 import type { FingerprintContext } from "../core/baseline.js";
@@ -523,6 +524,32 @@ async function runSql(
       );
     }
 
+    // Fail-safe eager build for catalog-observing statements — and any
+    // statement that plausibly names a collection. A sqlite_master /
+    // sqlite_schema read, a PRAGMA, and CREATE/DROP/ALTER never raise
+    // `no such table` for a missing view, so the lazy retry below cannot
+    // rescue them: without this they would observe a catalog with no views
+    // (empty listings, table_info silence, CREATE silently shadowing a
+    // collection name) where the always-eager build listed, answered, or
+    // refused. The substring search deliberately OVER-triggers: a collection
+    // name inside a string literal or comment costs one always-correct eager
+    // build, while under-triggering is exactly this silent-miss bug class.
+    // The retry stays as the backstop for the one spelling a raw-text search
+    // cannot see — a name whose quoted-identifier spelling doubles a quote
+    // character inside it.
+    if (!viewsBuilt) {
+      const lower = sql.toLowerCase();
+      const observesCatalog =
+        lower.includes("sqlite_master") ||
+        lower.includes("sqlite_schema") ||
+        lower.includes("pragma") ||
+        /^(create|drop|alter)\b/i.test(head) ||
+        collectionNames(ctx.config).some((n) =>
+          lower.includes(n.toLowerCase()),
+        );
+      if (observesCatalog) buildViews();
+    }
+
     // 0024: `SET k = NULL` is the removal spelling, so the literal `k: null`
     // gets a function instead — `explicit_null()` returns a per-run random
     // sentinel no real content can collide with and nothing can type.
@@ -565,7 +592,7 @@ async function runSql(
         // table as missing (case-folded — SQLite resolves table names
         // case-insensitively). Signal the build-and-retry; on the retry
         // `viewsBuilt` is true, so a second failure surfaces normally below.
-        const missing = /no such table: (.+)$/.exec(message)?.[1];
+        const missing = missingTableName(message);
         if (
           missing !== undefined &&
           !viewsBuilt &&
@@ -681,20 +708,28 @@ async function runSql(
 class MissingCollectionView extends Error {}
 
 /**
+ * The name after `no such table: ` in an engine message — sliced rather than
+ * regexed, because a collection name may legally contain a newline, which a
+ * `.`-based capture cannot span.
+ */
+function missingTableName(message: string): string | undefined {
+  const prefix = "no such table: ";
+  const at = message.indexOf(prefix);
+  return at === -1 ? undefined : message.slice(at + prefix.length);
+}
+
+/**
  * Does the engine's missing-table name refer to a configured collection?
- * Case-folded, because SQLite resolves table names case-insensitively; a
- * `main.`/`temp.` qualifier the engine may echo for a qualified reference is
- * tolerated the same way.
+ * Case-folded, because SQLite resolves table names case-insensitively (see
+ * `collectionNames` for why JS's looser fold is safe here); a `main.`/`temp.`
+ * qualifier the engine may echo for a qualified reference is tolerated too.
  */
 function namesConfiguredCollection(
   missing: string,
   config: DocmetaConfig | null,
 ): boolean {
-  const names = (config?.overrides ?? []).flatMap((o) =>
-    o.name !== undefined ? [o.name] : [],
-  );
   const candidates = [missing, missing.replace(/^(main|temp)\./i, "")];
-  return names.some((n) =>
+  return collectionNames(config).some((n) =>
     candidates.some((c) => c.toLowerCase() === n.toLowerCase()),
   );
 }
@@ -994,13 +1029,17 @@ function indexOfCheck(text: string, from: number): number {
   return -1;
 }
 
-/** Index just past `(…)` starting at `open`, paren- and quote-aware. */
+/**
+ * Index just past `(…)` starting at `open` — paren-aware, and skipping every
+ * string/identifier form, brackets included: `[a)b]` is a legal identifier
+ * whose `)` must not close the group early.
+ */
 function matchingParenEnd(text: string, open: number): number {
   let depth = 0;
   let i = open;
   while (i < text.length) {
     const ch = text[i];
-    if (ch === "'" || ch === '"' || ch === "`") {
+    if (startsStringOrIdent(text, i)) {
       i = skipStringOrIdent(text, i);
       continue;
     }
@@ -2468,7 +2507,9 @@ function skipExpression(
   const n = sql.length;
   while (i < n) {
     const ch = sql[i];
-    if (ch === "'" || ch === '"' || ch === "`") {
+    // Every string/identifier form, brackets included — a bracket identifier
+    // may contain the `,`/`(`/`)` this scan otherwise acts on.
+    if (startsStringOrIdent(sql, i)) {
       i = skipStringOrIdent(sql, i);
       continue;
     }

@@ -32,6 +32,29 @@ export interface Collection {
   members: string[];
 }
 
+/** The named `overrides[]` entries, with the glob and index membership needs. */
+function namedOverrides(
+  config: DocmetaConfig | null | undefined,
+): { name: string; files: string; index: number }[] {
+  return (config?.overrides ?? []).flatMap((o, i) =>
+    o.name !== undefined ? [{ name: o.name, files: o.files, index: i }] : [],
+  );
+}
+
+/**
+ * The configured collection names, in override order — the one list every
+ * "is this a collection?" consumer shares: the membership walk below, and
+ * `query`'s eager-build trigger and lazy-retry match. Callers that compare
+ * case-insensitively use `String.prototype.toLowerCase`, whose Unicode fold
+ * is looser than SQLite's ASCII-only fold — that mismatch can only
+ * over-trigger a harmless eager build or rebuild, never miss a real match.
+ */
+export function collectionNames(
+  config: DocmetaConfig | null | undefined,
+): string[] {
+  return namedOverrides(config).map((n) => n.name);
+}
+
 export interface CollectionParams {
   /** Optional so the checks' run context can be this very shape. */
   config?: DocmetaConfig | null;
@@ -74,10 +97,7 @@ export function collectCollections(
   entries: readonly ProjectionEntry[],
   params: CollectionParams,
 ): Collection[] {
-  const overrides = params.config?.overrides ?? [];
-  const named = overrides.flatMap((o, i) =>
-    o.name !== undefined ? [{ name: o.name, files: o.files, index: i }] : [],
-  );
+  const named = namedOverrides(params.config);
   if (named.length === 0) return [];
 
   const members = new Map<number, string[]>();
