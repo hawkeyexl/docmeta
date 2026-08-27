@@ -1,3 +1,10 @@
+## [4.8.1](https://github.com/hawkeyexl/docmeta/compare/v4.8.0...v4.8.1) (2026-08-27)
+
+
+### Bug Fixes
+
+* **deps:** clear the fast-uri advisory reaching users through ajv ([6299637](https://github.com/hawkeyexl/docmeta/commit/62996371ebe5cda6e2c30fd555e85552a8cfe54f))
+
 # [4.8.0](https://github.com/hawkeyexl/docmeta/compare/v4.7.0...v4.8.0) (2026-08-27)
 
 
