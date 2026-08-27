@@ -155,6 +155,76 @@ export function assertSingleStatement(sql: string): void {
 }
 
 /**
+ * The scanner primitives every SQL micro-lexer in the codebase is built on —
+ * statement splitting and the parameter scan below, `query`'s SET/INSERT
+ * target scans, and the 0028 catalog-CHECK parser. One implementation of
+ * "skip the region whose contents are data, not syntax", so the consumers
+ * cannot drift on what a string or a comment is.
+ */
+
+/** Does `sql[i]` open a string literal or a quoted/bracketed identifier? */
+export function startsStringOrIdent(sql: string, i: number): boolean {
+  const ch = sql[i];
+  return ch === "'" || ch === '"' || ch === "`" || ch === "[";
+}
+
+/** Does a line comment (`--`) or block comment start at `i`? */
+export function startsComment(sql: string, i: number): boolean {
+  const ch = sql[i];
+  return (
+    (ch === "-" && sql[i + 1] === "-") || (ch === "/" && sql[i + 1] === "*")
+  );
+}
+
+/**
+ * Index just past a string literal or quoted/bracketed identifier opening at
+ * `i` (`sql[i]` must satisfy `startsStringOrIdent`). The three quote forms
+ * treat a doubled quote as an escape — `'a''b'` is one literal — and an
+ * unterminated one consumes the rest of the input (returns `sql.length`).
+ * A bracket identifier scans plainly to `]`: SQLite brackets have no `]]`
+ * escape (unlike T-SQL), so no doubling branch — and an unterminated one
+ * returns `sql.length + 1`, one past the close the terminated form counts,
+ * which `readIdentifier`'s `end - 1` slicing relies on.
+ */
+export function skipStringOrIdent(sql: string, i: number): number {
+  const quote = sql[i];
+  if (quote === "[") {
+    let j = i + 1;
+    while (j < sql.length && sql[j] !== "]") j++;
+    return j + 1;
+  }
+  let j = i + 1;
+  while (j < sql.length) {
+    if (sql[j] === quote) {
+      if (sql[j + 1] === quote) {
+        j += 2;
+        continue;
+      }
+      return j + 1;
+    }
+    j++;
+  }
+  return j;
+}
+
+/**
+ * Index just past a comment opening at `i` (`sql` must satisfy
+ * `startsComment` there). A line comment ends past its newline, a block
+ * comment past its closer; either unterminated consumes the rest of the
+ * input. Consuming the line comment's newline is safe because every consumer
+ * treats a bare newline as trivia.
+ */
+export function skipComment(sql: string, i: number): number {
+  if (sql[i] === "-") {
+    let j = i + 2;
+    while (j < sql.length && sql[j] !== "\n") j++;
+    return j < sql.length ? j + 1 : j;
+  }
+  const end = sql.indexOf("*/", i + 2);
+  return end === -1 ? sql.length : end + 2;
+}
+
+/**
  * Index of the first `;` outside literals, identifiers, and comments.
  *
  * Parenthesis depth is deliberately not tracked: in valid SQLite, the only
@@ -164,33 +234,16 @@ export function assertSingleStatement(sql: string): void {
  * semicolons, never reach here: the docs projection has no triggers.)
  */
 function topLevelSemicolon(sql: string): number {
-  for (let i = 0; i < sql.length; i++) {
-    const ch = sql[i];
-    if (ch === "'" || ch === '"' || ch === "`") {
-      // A doubled quote is an escaped quote, not a close-then-open.
-      i++;
-      while (i < sql.length) {
-        if (sql[i] === ch) {
-          if (sql[i + 1] === ch) {
-            i += 2;
-            continue;
-          }
-          break;
-        }
-        i++;
-      }
-    } else if (ch === "[") {
-      // SQLite bracket identifiers have no `]]` escape (unlike T-SQL), so a
-      // plain scan to the close is exact and needs no doubling branch.
-      while (i < sql.length && sql[i] !== "]") i++;
-    } else if (ch === "-" && sql[i + 1] === "-") {
-      while (i < sql.length && sql[i] !== "\n") i++;
-    } else if (ch === "/" && sql[i + 1] === "*") {
-      i += 2;
-      while (i < sql.length && !(sql[i] === "*" && sql[i + 1] === "/")) i++;
-      i++;
-    } else if (ch === ";") {
+  let i = 0;
+  while (i < sql.length) {
+    if (startsStringOrIdent(sql, i)) {
+      i = skipStringOrIdent(sql, i);
+    } else if (startsComment(sql, i)) {
+      i = skipComment(sql, i);
+    } else if (sql[i] === ";") {
       return i;
+    } else {
+      i++;
     }
   }
   return -1;
@@ -230,37 +283,24 @@ export function collectNamedParameters(sql: string): string[] {
   const tokens: string[] = [];
   const seen = new Set<string>();
   const prefixOf = new Map<string, string>();
-  for (let i = 0; i < sql.length; i++) {
+  let i = 0;
+  while (i < sql.length) {
     const ch = sql[i];
-    if (ch === "'" || ch === '"' || ch === "`") {
-      // Same doubled-quote walk as the semicolon scan.
-      i++;
-      while (i < sql.length) {
-        if (sql[i] === ch) {
-          if (sql[i + 1] === ch) {
-            i += 2;
-            continue;
-          }
-          break;
-        }
-        i++;
-      }
-    } else if (ch === "[") {
-      while (i < sql.length && sql[i] !== "]") i++;
-    } else if (ch === "-" && sql[i + 1] === "-") {
-      while (i < sql.length && sql[i] !== "\n") i++;
-    } else if (ch === "/" && sql[i + 1] === "*") {
-      i += 2;
-      while (i < sql.length && !(sql[i] === "*" && sql[i + 1] === "/")) i++;
-      i++;
+    if (startsStringOrIdent(sql, i)) {
+      i = skipStringOrIdent(sql, i);
+    } else if (startsComment(sql, i)) {
+      i = skipComment(sql, i);
     } else if (ch === "$" || ch === ":" || ch === "@") {
       if (ch === ":" && sql[i + 1] === ":") {
         // `::` is no parameter; consume both so neither colon starts one.
-        i++;
+        i += 2;
         continue;
       }
       const m = PARAM_NAME_HEAD.exec(sql.slice(i + 1));
-      if (!m) continue;
+      if (!m) {
+        i++;
+        continue;
+      }
       const token = ch + m[0];
       const priorPrefix = prefixOf.get(m[0]);
       if (priorPrefix !== undefined && priorPrefix !== ch) {
@@ -273,7 +313,9 @@ export function collectNamedParameters(sql: string): string[] {
         seen.add(token);
         tokens.push(token);
       }
-      i += m[0].length;
+      i += 1 + m[0].length;
+    } else {
+      i++;
     }
   }
   return tokens;
@@ -289,14 +331,8 @@ export function stripLeadingTrivia(sql: string): string {
   let i = 0;
   for (;;) {
     while (i < sql.length && /\s/.test(sql[i] ?? "")) i++;
-    if (sql.startsWith("--", i)) {
-      while (i < sql.length && sql[i] !== "\n") i++;
-      continue;
-    }
-    if (sql.startsWith("/*", i)) {
-      const end = sql.indexOf("*/", i + 2);
-      if (end === -1) return "";
-      i = end + 2;
+    if (startsComment(sql, i)) {
+      i = skipComment(sql, i);
       continue;
     }
     return sql.slice(i);
@@ -305,17 +341,15 @@ export function stripLeadingTrivia(sql: string): string {
 
 /** Only whitespace, comments, and bare `;` — legal after the terminator. */
 function isTrivia(text: string): boolean {
-  for (let i = 0; i < text.length; i++) {
+  let i = 0;
+  while (i < text.length) {
     const ch = text[i];
-    if (ch === undefined || /\s/.test(ch) || ch === ";") continue;
-    if (ch === "-" && text[i + 1] === "-") {
-      while (i < text.length && text[i] !== "\n") i++;
+    if (ch === undefined || /\s/.test(ch) || ch === ";") {
+      i++;
       continue;
     }
-    if (ch === "/" && text[i + 1] === "*") {
-      i += 2;
-      while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) i++;
-      i++;
+    if (startsComment(text, i)) {
+      i = skipComment(text, i);
       continue;
     }
     return false;

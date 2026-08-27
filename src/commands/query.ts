@@ -60,6 +60,10 @@ import {
   createDocsTable,
   loadSqlite,
   registerLineFor,
+  skipComment,
+  skipStringOrIdent,
+  startsComment,
+  startsStringOrIdent,
   stripLeadingTrivia,
   type SqlValue,
 } from "../core/projection.js";
@@ -908,11 +912,8 @@ function indexOfCheck(text: string, from: number): number {
   let i = from;
   while (i < text.length) {
     const ch = text[i];
-    if (ch === "'" || ch === '"' || ch === "`") {
-      i = skipQuoted(text, i, ch);
-    } else if (ch === "[") {
-      while (i < text.length && text[i] !== "]") i++;
-      i++;
+    if (startsStringOrIdent(text, i)) {
+      i = skipStringOrIdent(text, i);
     } else if (ch !== undefined && /[A-Za-z_]/.test(ch)) {
       const m = /^[A-Za-z_][A-Za-z0-9_]*/.exec(text.slice(i));
       const word = m?.[0] ?? "";
@@ -932,7 +933,7 @@ function matchingParenEnd(text: string, open: number): number {
   while (i < text.length) {
     const ch = text[i];
     if (ch === "'" || ch === '"' || ch === "`") {
-      i = skipQuoted(text, i, ch);
+      i = skipStringOrIdent(text, i);
       continue;
     }
     if (ch === "(") depth++;
@@ -1013,7 +1014,7 @@ function enumForAddedColumn(
   let k = skipWs(list, 0);
   for (;;) {
     if (list[k] === "'") {
-      const close = skipQuoted(list, k, "'");
+      const close = skipStringOrIdent(list, k);
       if (list[close - 1] !== "'" || close <= k + 1) refuseShape();
       members.push(list.slice(k + 1, close - 1).replaceAll("''", "'"));
       sawString = true;
@@ -2308,17 +2309,10 @@ function collectSetTargets(sql: string): string[] {
     ch !== undefined && /[A-Za-z0-9_]/.test(ch);
   while (i < n) {
     const ch = sql[i];
-    if (ch === "'" || ch === '"' || ch === "`") {
-      i = skipQuoted(sql, i, ch);
-    } else if (ch === "[") {
-      while (i < n && sql[i] !== "]") i++;
-      i++;
-    } else if (ch === "-" && sql[i + 1] === "-") {
-      while (i < n && sql[i] !== "\n") i++;
-    } else if (ch === "/" && sql[i + 1] === "*") {
-      i += 2;
-      while (i < n && !(sql[i] === "*" && sql[i + 1] === "/")) i++;
-      i += 2;
+    if (startsStringOrIdent(sql, i)) {
+      i = skipStringOrIdent(sql, i);
+    } else if (startsComment(sql, i)) {
+      i = skipComment(sql, i);
     } else if (
       (ch === "s" || ch === "S") &&
       /^set$/i.test(sql.slice(i, i + 3)) &&
@@ -2373,36 +2367,21 @@ function collectInsertTargets(sql: string): string[] {
   }
 }
 
-/** Index just past a quoted region starting at `from` (doubling escapes). */
-function skipQuoted(sql: string, from: number, quote: string): number {
-  let i = from + 1;
-  while (i < sql.length) {
-    if (sql[i] === quote) {
-      if (sql[i + 1] === quote) {
-        i += 2;
-        continue;
-      }
-      return i + 1;
-    }
-    i++;
-  }
-  return i;
-}
-
 function readIdentifier(
   sql: string,
   from: number,
 ): { value: string; end: number } | undefined {
   const ch = sql[from];
   if (ch === '"' || ch === "`") {
-    const end = skipQuoted(sql, from, ch);
+    const end = skipStringOrIdent(sql, from);
     const raw = sql.slice(from + 1, end - 1);
     return { value: raw.replaceAll(ch + ch, ch), end };
   }
   if (ch === "[") {
-    let i = from + 1;
-    while (i < sql.length && sql[i] !== "]") i++;
-    return { value: sql.slice(from + 1, i), end: i + 1 };
+    // The bracket skip's unterminated-at-EOF contract (length + 1) is what
+    // makes `end - 1` the content boundary in both cases.
+    const end = skipStringOrIdent(sql, from);
+    return { value: sql.slice(from + 1, end - 1), end };
   }
   const m = /^[A-Za-z_][A-Za-z0-9_]*/.exec(sql.slice(from));
   return m ? { value: m[0], end: from + m[0].length } : undefined;
@@ -2422,7 +2401,7 @@ function skipExpression(
   while (i < n) {
     const ch = sql[i];
     if (ch === "'" || ch === '"' || ch === "`") {
-      i = skipQuoted(sql, i, ch);
+      i = skipStringOrIdent(sql, i);
       continue;
     }
     if (ch === "(") depth++;
