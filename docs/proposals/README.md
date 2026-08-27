@@ -49,6 +49,10 @@ changed as a result, and lists what it depends on.
 | [0023](0023-metadata-vocabularies.md) | The docmeta metadata vocabularies — nine ids, drafts and worked examples under [0023/](0023/), reviewed publicly at the site's Proposals page | Sara · S1 / S2 | Proposed |
 | [0024](0024-standard-sql-vocabulary.md) | Standard SQL vocabulary: DML edits the files, DDL edits the schema | Maya · M2, M3 / Sara · S1, S3 / Devin · D3 | Implemented (#125, #126) |
 | [0025](0025-query-dry-run-polarity.md) | query writes by default, `--dry-run` previews | Devin · D4 / Maya · M2 | Implemented |
+| [0026](0026-corpus-checks-are-findings.md) | Corpus checks are findings: named `checks:` in config, run by `validate` | Devin · D4 / Maya · M2 | Proposed |
+| [0027](0027-named-collections.md) | Named collections: override groups as SQL views | Devin · D4 / Maya · M2 | Proposed |
+| [0028](0028-ddl-type-bridge.md) | The DDL type bridge: formats as column types, enums as CHECK IN | Sara · S1, S3 / Maya · M2, M3 | Proposed |
+| [0029](0029-query-for-scripts.md) | query for scripts: CSV output and bound parameters | Devin · D3, D4 | Proposed |
 
 0014 was not in the original review. It surfaced while stress-testing 0004 and
 is the most severe item in the set: **docmeta currently exits `0` when it
@@ -71,7 +75,7 @@ behavior rather than describing it.
 
 ## Dependency order
 
-At a glance, so a planning pass does not have to reconstruct it from 19 headers.
+At a glance, so a planning pass does not have to reconstruct it from 29 headers.
 
 ```
 0014 ──┬─> 0006          (0006 can turn a gate into a silent no-op without 0014)
@@ -88,18 +92,34 @@ At a glance, so a planning pass does not have to reconstruct it from 19 headers.
 0015 ──> 0009            (0009 normalizes document $schema URLs; constrain first)
 0011 ──> 0012 ──> 0017   (0012 is the content gap 0011's journey walk exposes;
                           0017 supersedes it — the gap was real, the evidence wasn't)
+
+0021 ──┬─> 0026          (checks run on the query engine)
+       ├─> 0027
+       ├─> 0028
+       └─> 0029
+0001 ──> 0026            (check findings ride the baseline)
+0024 ──┬─> 0027          (its "scope the run to one override group" remedy gets a name)
+       └─> 0028          (extends 0024's deliberately thin type mapping)
 ```
 
-**Safe to start in any order, no blockers:** 0002, 0011.
+The four `Proposed` SQL items (0026–0029) are independent of each other except that
+0026 and 0029 both grow `query`'s `-f` value list — each specifies the combined
+six-value surface, and whichever is implemented second merges into the one const.
+Recommended implementation order is 0026 → 0029 → 0027 → 0028 — impact-first, with the
+two config-touching ones (0026, 0027) landed apart so the second rebases trivially.
 
-**Shipped so far:** 0001, 0003, 0004, 0005, 0006, 0008, 0014, 0015, and the
-standalone false-green guard called out in
+**Safe to start in any order, no blockers:** 0011.
+
+**Shipped so far:** everything the table above marks `Implemented` — through 0025 that
+is all but 0011 and 0023 (`Proposed`), 0016 and 0019 (`Accepted`, nothing to ship), and
+the superseded/rejected halves the Status column records — plus the standalone
+false-green guard called out in
 [0008 § Problem](0008-remote-schema-durability.md#problem). The dependency graph
-above is kept as the record of why they landed in that order.
+above is kept as the record of why the early set landed in the order it did.
 
-**Next, if you want the thread continued:** 0009. It is the only proposal with a
-live blocker that just cleared — 0015 had to constrain document-supplied URLs
-before 0009 started publishing built-ins as URLs.
+**Next, if you want the thread continued:** the 0026 → 0029 → 0027 → 0028 order above.
+(This line pointed at 0009 until 0009 shipped; the Status column, not this paragraph,
+is the ground truth for what remains.)
 
 ## Shared prerequisite
 
