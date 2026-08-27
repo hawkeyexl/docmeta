@@ -125,6 +125,34 @@ function asElementPaths(
 /** The keys one `overrides:` entry may carry. */
 const OVERRIDE_KEYS = ["files", "schemas", "elements"] as const;
 
+/**
+ * One named corpus check (proposal 0026): SQL run over the `docs` projection
+ * by `validate`, whose result rows are findings under the id `check:<name>`.
+ */
+export interface CheckConfig {
+  /** The check's name — the durable half of its findings' identity. */
+  name: string;
+  /** One SQL statement whose rows follow the finding column convention. */
+  query: string;
+}
+
+/** The keys one `checks:` entry may carry. */
+const CHECK_KEYS = ["name", "query"] as const;
+
+/**
+ * The grammar a check's name must satisfy: one built-in id *segment*.
+ *
+ * Not taste. The finding's `schema` field carries `check:<name>` and the
+ * baseline canonicalizes that field through `classifyRef` before
+ * fingerprinting — so the name must make `check:<name>` classify as a builtin
+ * id (`BUILTIN_ID`, schema-registry.ts). A name with a space, a slash, or a
+ * `.json` tail would classify as a **file path** and be resolved cwd-relative:
+ * a fingerprint that changes with the directory you run from, the exact bug
+ * `canonicalSchemaRef` exists to prevent. Enforced at parse time so the
+ * failure names the config line, not a baseline mismatch three runs later.
+ */
+const CHECK_NAME = /^[a-z0-9][a-z0-9._-]*$/;
+
 /** The keys a `fill:` mapping may carry. */
 const FILL_KEYS = [
   "provider",
@@ -147,6 +175,7 @@ const CONFIG_KEYS = [
   "exclude",
   "schemas",
   "overrides",
+  "checks",
   "baseline",
   "allowEmpty",
   "respectGitignore",
@@ -226,6 +255,11 @@ export interface DocmetaConfig {
    */
   schemas?: SchemaEntry[];
   overrides?: SchemaOverride[];
+  /**
+   * Named corpus checks `validate` runs after the per-file schemas, when the
+   * run's file set is the config-resolved corpus. See `CheckConfig`.
+   */
+  checks?: CheckConfig[];
   /**
    * Element paths to lift in addition to each format's convention. See
    * `parseElementPath` for the syntax.
@@ -419,6 +453,10 @@ export function parseConfig(text: string, source: string): DocmetaConfig {
     });
   }
 
+  if (obj.checks !== undefined) {
+    config.checks = parseChecks(obj.checks, source);
+  }
+
   if (obj.elements !== undefined) {
     config.elements = asElementPaths(obj.elements, "elements", source);
   }
@@ -464,6 +502,55 @@ export function parseConfig(text: string, source: string): DocmetaConfig {
   if (obj.fill !== undefined) config.fill = parseFill(obj.fill, source);
 
   return config;
+}
+
+/**
+ * Parse the `checks:` list with the same shape discipline `overrides:` has:
+ * array guard, per-entry mapping guard, unknown keys rejected before the field
+ * checks (so a `querry:` typo is reported as the typo it is), and a missing
+ * `name` or `query` refused by index.
+ */
+function parseChecks(value: unknown, source: string): CheckConfig[] {
+  if (!Array.isArray(value)) {
+    throw new DocmetaError(`${source}: "checks" must be a list.`);
+  }
+  const seen = new Set<string>();
+  return value.map((entry, i) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      throw new DocmetaError(
+        `${source}: checks[${i}] must be a mapping with "name" and "query".`,
+      );
+    }
+    const e = entry as Record<string, unknown>;
+    rejectUnknownKeys(e, CHECK_KEYS, `checks[${i}]`, source);
+    if (typeof e.name !== "string" || e.name === "") {
+      throw new DocmetaError(
+        `${source}: checks[${i}].name must be a non-empty string.`,
+      );
+    }
+    // The grammar is baseline identity — see CHECK_NAME. The `.json` tail is
+    // excluded separately because BUILTIN_ID excludes it: `check:slugs.json`
+    // would classify as a file path.
+    if (!CHECK_NAME.test(e.name) || e.name.toLowerCase().endsWith(".json")) {
+      throw new DocmetaError(
+        `${source}: checks[${i}].name "${e.name}" must match [a-z0-9][a-z0-9._-]* and not end in ".json" — the name is part of each finding's identity (check:<name>).`,
+      );
+    }
+    // Two checks sharing a name would share every finding's identity, so the
+    // baseline could not tell their findings apart.
+    if (seen.has(e.name)) {
+      throw new DocmetaError(
+        `${source}: checks[${i}] reuses the name "${e.name}"; check names must be unique.`,
+      );
+    }
+    seen.add(e.name);
+    if (typeof e.query !== "string" || e.query.trim() === "") {
+      throw new DocmetaError(
+        `${source}: checks[${i}].query must be a non-empty SQL statement.`,
+      );
+    }
+    return { name: e.name, query: e.query };
+  });
 }
 
 function parseSchemaCache(value: unknown, source: string): SchemaCacheConfig {

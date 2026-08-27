@@ -85,6 +85,13 @@ const attr = (name: string, value: string): string =>
 
 export interface JunitOptions {
   /**
+   * The `classname` each `<testcase>` carries: which docmeta command produced
+   * these findings. Defaults to `docmeta.validate`, the only producer before
+   * proposal 0026 made `query --check` a second one — whose findings must not
+   * ship under validate's name.
+   */
+  classname?: string;
+  /**
    * The run's path frame, used only to canonicalize a local-file schema ref in
    * `<failure type>`.
    *
@@ -120,8 +127,9 @@ export function renderJunit(
     `  <testsuite${counts}>`,
   ];
 
+  const classname = opts.classname ?? CLASS_NAME;
   for (const r of results) {
-    const open = `    <testcase${attr("name", r.file)}${attr("classname", CLASS_NAME)}`;
+    const open = `    <testcase${attr("name", r.file)}${attr("classname", classname)}`;
     if (r.errors.length === 0) {
       // Self-closing: a passing test has nothing to carry.
       lines.push(`${open}/>`);

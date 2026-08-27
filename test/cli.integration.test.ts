@@ -2480,3 +2480,106 @@ describe("schemas infer end to end", () => {
     expect(r.stderr).toContain("--min-coverage");
   });
 });
+
+describe("docmeta CLI: corpus checks (0026, built bin)", () => {
+  const checksDir = resolve(root, "test", "fixtures", "checks");
+  const queryDir = resolve(root, "test", "fixtures", "query");
+
+  const spawn = (args: string[], cwd: string) =>
+    spawnText(spawnSync("node", [bin, ...args], { cwd, encoding: "utf8" }));
+
+  it("a bare validate runs the configured checks and exits 1", () => {
+    const r = spawn(["validate"], checksDir);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("check:unique-slugs");
+    expect(r.stdout).toContain("duplicate slug");
+  });
+
+  it("--no-checks opts out for one run", () => {
+    const r = spawn(["validate", "--no-checks"], checksDir);
+    expect(r.status).toBe(0);
+    expect(r.stdout ?? "").not.toContain("check:unique-slugs");
+  });
+
+  it("a scoped run skips checks with one stderr notice", () => {
+    const r = spawn(["validate", "docs"], checksDir);
+    expect(r.status).toBe(0);
+    expect(r.stderr).toContain("corpus checks skipped: run is scoped");
+  });
+
+  it("check findings reach -f github as annotations", () => {
+    const r = spawn(["validate", "-f", "github"], checksDir);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("::error file=docs/a.md,line=3::");
+    expect(r.stdout).toContain("[check:unique-slugs]");
+  });
+
+  it("query --check -f github renders rows as annotations", () => {
+    const r = spawn(
+      [
+        "query",
+        "--check",
+        "SELECT _path AS path, 'slug' AS key, 'duplicate slug ' || slug AS message FROM docs WHERE slug IN (SELECT slug FROM docs GROUP BY slug HAVING count(*) > 1)",
+        "docs",
+        "--no-config",
+        "-f",
+        "github",
+      ],
+      queryDir,
+    );
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("::error file=docs/alpha.md::");
+    expect(r.stdout).toContain("[check:query]");
+  });
+
+  it("query -f junit ships under its own classname", () => {
+    const r = spawn(
+      [
+        "query",
+        "--check",
+        "SELECT _path AS path FROM docs WHERE slug = 'alpha'",
+        "docs",
+        "--no-config",
+        "-f",
+        "junit",
+      ],
+      queryDir,
+    );
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain('classname="docmeta.query"');
+    expect(r.stdout ?? "").not.toContain("docmeta.validate");
+  });
+
+  it("a findings format without --check is a usage error", () => {
+    const r = spawn(
+      [
+        "query",
+        "SELECT _path AS path FROM docs",
+        "docs",
+        "--no-config",
+        "-f",
+        "sarif",
+      ],
+      queryDir,
+    );
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("--check");
+  });
+
+  it("a findings format without a path column exits 2 naming the convention", () => {
+    const r = spawn(
+      [
+        "query",
+        "--check",
+        "SELECT slug FROM docs",
+        "docs",
+        "--no-config",
+        "-f",
+        "github",
+      ],
+      queryDir,
+    );
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("path");
+  });
+});

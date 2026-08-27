@@ -49,6 +49,7 @@ import {
 } from "../core/resolve-schema.js";
 import { Validator } from "../core/validator.js";
 import { schemaLoadOptions } from "../core/schema-registry.js";
+import { runChecks, type CheckEntry } from "../core/checks.js";
 
 export interface ValidateOptions {
   inputs: string[];
@@ -91,6 +92,12 @@ export interface ValidateOptions {
    * in charge, which itself defaults to off.
    */
   offline?: boolean;
+  /**
+   * `--no-checks` (false): skip the config's named corpus checks for this
+   * run. Absent leaves them on — they still only run when the resolved file
+   * set is the config-resolved corpus (proposal 0026).
+   */
+  checks?: boolean;
 }
 
 export interface ValidateRun {
@@ -284,6 +291,11 @@ export async function runValidate(
     }),
   );
   const results: ValidationResult[] = [];
+  // Every successful extraction, kept for the corpus checks (0026): the
+  // projection they run over is these entries, exactly as `query` holds them.
+  // 0021 measured that holding a docs corpus in memory is not the cost that
+  // matters.
+  const checkEntries: CheckEntry[] = [];
 
   const processOne = async (
     label: string,
@@ -312,6 +324,7 @@ export async function runValidate(
       );
       return;
     }
+    checkEntries.push({ label, extracted });
 
     let resolved: ResolvedSchemaSet;
     try {
@@ -384,6 +397,44 @@ export async function runValidate(
   for (const file of files) {
     const content = await readFile(resolve(base, file), "utf8");
     await processOne(file, content, extname(file));
+  }
+
+  // Corpus checks (0026), after the per-file loop and before the baseline so
+  // their findings ride the same ratchet the schemas get. They run only when
+  // the resolved file set IS the config-resolved corpus — an invariant, not a
+  // flag list: any CLI reshaping of the input set (positional paths, stdin,
+  // --as/--ext, --exclude, --no-gitignore) disqualifies the run, because a
+  // corpus rule computed over half a corpus reports wrong answers. Config
+  // `exclude:` and `respectGitignore:` do not disqualify — they *define* the
+  // corpus; the CLI flags redefine the run.
+  const configuredChecks = config?.checks ?? [];
+  if (configuredChecks.length > 0 && opts.checks !== false) {
+    const scoped =
+      opts.inputs.length > 0 ||
+      usingStdin ||
+      opts.as !== undefined ||
+      opts.exts !== undefined ||
+      (opts.exclude !== undefined && opts.exclude.length > 0) ||
+      opts.respectGitignore !== undefined;
+    if (scoped) {
+      opts.onNotice?.("corpus checks skipped: run is scoped");
+    } else {
+      const findings = await runChecks(configuredChecks, checkEntries);
+      const byFile = new Map(results.map((r) => [r.file, r]));
+      for (const [file, errs] of findings) {
+        // Unreachable while runChecks vets every path against the loaded set,
+        // which is a subset of `results` by construction — but a missed merge
+        // must be a loud failure, not findings silently dropped.
+        const result = byFile.get(file);
+        if (!result) {
+          throw new DocmetaError(
+            `check findings for "${file}" have no validation result to attach to.`,
+          );
+        }
+        result.errors.push(...errs);
+        result.ok = false;
+      }
+    }
   }
 
   // Fingerprints must not depend on where the command was run from, so a

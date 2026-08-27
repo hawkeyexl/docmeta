@@ -73,6 +73,27 @@ const BUILTINS = new Map<string, Record<string, unknown>>([
   ["anthropic:claude-skill:2.1", claudeSkill21],
 ]);
 
+/**
+ * Refuse a built-in id whose first segment is `check`.
+ *
+ * `check:<name>` is a corpus check's identity inside baseline fingerprints and
+ * rule ids (proposal 0026), and it deliberately matches `BUILTIN_ID` so
+ * `classifyRef` passes it through untouched. That makes the first segment a
+ * shared namespace: a real built-in published as `check:…` could collide with
+ * a check's identity while both are legal. Reserved from this side so the
+ * collision can never ship — the registry throws at load if the table gains
+ * one.
+ */
+export function assertPublishableBuiltinId(id: string): void {
+  if (id.split(":")[0] === "check") {
+    throw new Error(
+      `Built-in id "${id}" is not publishable: the "check" first segment is reserved for corpus check identities (check:<name>, proposal 0026).`,
+    );
+  }
+}
+
+for (const id of BUILTINS.keys()) assertPublishableBuiltinId(id);
+
 export function listBuiltins(): BuiltinInfo[] {
   return [...BUILTINS.entries()].map(([id, schema]) => ({
     id,
