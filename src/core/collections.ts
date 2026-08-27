@@ -21,6 +21,7 @@ import {
   FILE_SCHEMA_KEY,
   matchesFileGlob,
   resolveSchemaSetWithSource,
+  type ResolvedSchemaSet,
 } from "./resolve-schema.js";
 import { quoteIdent, type ProjectionEntry } from "./projection.js";
 
@@ -47,6 +48,16 @@ export interface CollectionParams {
    * where it happens instead of discovered later.
    */
   onNotice?: (message: string) => void;
+  /**
+   * Precomputed resolutions, label → resolved set, from a caller that already
+   * walked resolution for every entry (`validate`'s per-file loop). When
+   * present the walk below is skipped entirely and membership is read from
+   * the map, so one run resolves each file once. An entry with no map entry
+   * is a file whose resolution *failed* in the caller's walk: it is a member
+   * of no view (labeling never gates), and re-resolving it here would only
+   * re-throw or diverge from the finding the caller already filed.
+   */
+  resolved?: ReadonlyMap<string, ResolvedSchemaSet>;
 }
 
 /**
@@ -71,21 +82,30 @@ export function collectCollections(
 
   const members = new Map<number, string[]>();
   for (const entry of entries) {
-    let resolved;
-    try {
-      resolved = resolveSchemaSetWithSource({
-        filePath: entry.label,
-        fileSchema: entry.extracted.data[FILE_SCHEMA_KEY],
-        ...(params.cliSchemas ? { cliSchemas: params.cliSchemas } : {}),
-        config: params.config,
-        ...(params.fileBase !== undefined ? { fileBase: params.fileBase } : {}),
-        ...(params.trustRoot ? { trustRoot: params.trustRoot } : {}),
-      });
-    } catch {
-      // A refused or malformed `$schema` demotes to "member of no view";
-      // `validate` is where that refusal becomes a finding (0027 § stress
-      // test 3), and a query must keep working regardless.
-      continue;
+    let resolved: ResolvedSchemaSet;
+    if (params.resolved) {
+      const pre = params.resolved.get(entry.label);
+      // No entry means the caller's walk failed to resolve this file —
+      // member of no view, same as the catch below, without a re-resolution
+      // that would re-throw or diverge.
+      if (!pre) continue;
+      resolved = pre;
+    } else {
+      try {
+        resolved = resolveSchemaSetWithSource({
+          filePath: entry.label,
+          fileSchema: entry.extracted.data[FILE_SCHEMA_KEY],
+          ...(params.cliSchemas ? { cliSchemas: params.cliSchemas } : {}),
+          config: params.config,
+          ...(params.fileBase !== undefined ? { fileBase: params.fileBase } : {}),
+          ...(params.trustRoot ? { trustRoot: params.trustRoot } : {}),
+        });
+      } catch {
+        // A refused or malformed `$schema` demotes to "member of no view";
+        // `validate` is where that refusal becomes a finding (0027 § stress
+        // test 3), and a query must keep working regardless.
+        continue;
+      }
     }
     if (resolved.source === "override" && resolved.overrideIndex !== undefined) {
       const list = members.get(resolved.overrideIndex);
