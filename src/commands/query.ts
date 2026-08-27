@@ -434,6 +434,38 @@ async function prepareDbTarget(resolved: string, display: string): Promise<void>
 }
 
 /**
+ * Internal signal for the lazy view build: the statement referenced a
+ * configured collection whose view is not created yet. Never escapes
+ * `runSql` — its retry catch either rebuilds once or is not reached.
+ */
+class MissingCollectionView extends Error {}
+
+/**
+ * Wrap an engine error from the user's statement — prepare-time or
+ * execution-time — into the operational refusal the CLI reports. Two cases
+ * get a remedy: an INSERT/rename onto a loaded `_path` (the projection's
+ * primary key catches it before any disk check can), and a write through a
+ * collection view (0027) — SQLite's own refusal, completed with the
+ * write-through-docs spelling. The view-name capture is non-greedy up to the
+ * literal tail: a collection name may contain spaces, which \S+ would
+ * truncate into a remedy naming a view that does not exist.
+ */
+function refuseSqlError(err: unknown): never {
+  const message = (err as Error).message;
+  if (message.includes("UNIQUE constraint failed: docs._path")) {
+    throw new DocmetaError("That _path already exists in the corpus.");
+  }
+  const viewWrite = /cannot modify (.+?) because it is a view/.exec(message);
+  const viewName = viewWrite?.[1];
+  if (viewName !== undefined) {
+    throw new DocmetaError(
+      `SQL error: ${message}; a collection is read-only — write through docs: UPDATE docs … WHERE _path IN (SELECT _path FROM "${viewName.replaceAll('"', '""')}").`,
+    );
+  }
+  throw new DocmetaError(`SQL error: ${message}`);
+}
+
+/**
  * Build the `docs` table — in memory, or at the export target — run the
  * user's statement over it (none, when only exporting), and judge what the
  * statement *did*: reads return rows; metadata edits become per-file changes,
@@ -489,8 +521,14 @@ async function runSql(
     // reports the collection's table as missing) — with one eager exception:
     // a `--db` export must carry the views (0027 § stress test 5), empty-SQL
     // export-only runs included.
-    let viewsBuilt = false;
+    // Annotated `boolean`: assignments happen inside `buildViews`, which
+    // narrowing does not track — an inferred `false` reads every later
+    // `!viewsBuilt` as always-true.
+    let viewsBuilt: boolean = false;
     const buildViews = (): void => {
+      // Idempotent, because the eager triggers overlap: a `--db` export and
+      // the catalog pre-trigger may both ask for the same build.
+      if (viewsBuilt) return;
       createCollectionViews(
         db,
         collectCollections(entries, {
@@ -537,18 +575,14 @@ async function runSql(
     // The retry stays as the backstop for the one spelling a raw-text search
     // cannot see — a name whose quoted-identifier spelling doubles a quote
     // character inside it.
-    if (!viewsBuilt) {
-      const lower = sql.toLowerCase();
-      const observesCatalog =
-        lower.includes("sqlite_master") ||
-        lower.includes("sqlite_schema") ||
-        lower.includes("pragma") ||
-        /^(create|drop|alter)\b/i.test(head) ||
-        collectionNames(ctx.config).some((n) =>
-          lower.includes(n.toLowerCase()),
-        );
-      if (observesCatalog) buildViews();
-    }
+    const lower = sql.toLowerCase();
+    const observesCatalog =
+      lower.includes("sqlite_master") ||
+      lower.includes("sqlite_schema") ||
+      lower.includes("pragma") ||
+      /^(create|drop|alter)\b/i.test(head) ||
+      collectionNames(ctx.config).some((n) => lower.includes(n.toLowerCase()));
+    if (observesCatalog) buildViews();
 
     // 0024: `SET k = NULL` is the removal spelling, so the literal `k: null`
     // gets a function instead — `explicit_null()` returns a per-run random
@@ -562,29 +596,20 @@ async function runSql(
     // is judged by its effects, not its syntax. A read leaves no diff. The
     // column snapshot (0024) is what makes DDL an effect too.
     //
-    // The whole snapshot/prepare/judge sequence is one closure so the lazy
-    // view build below can re-run it intact: views must exist before the
-    // pre-statement snapshot of the run that judges the statement, or the
-    // ordering invariant behind effect judgment would quietly bend.
+    // One closure, so the lazy view build below can re-run it intact. The
+    // ordering invariant: prepare first — compiling is effect-free, so a
+    // lazy-view miss on the first attempt costs one compile and never a
+    // full-corpus snapshot — then the baseline snapshots, then execution:
+    // the baseline must precede the statement's effects. The snapshots
+    // themselves are all docs-scoped (`SELECT * FROM docs`,
+    // `PRAGMA table_info(docs)`, the catalog row named `docs`) and cannot
+    // see views, so a rebuild between attempts changes nothing they record.
     const runOnce = async (): Promise<QueryRun> => {
-      const before = snapshotRows(db);
-      const colBefore = snapshotColumns(db);
-      // 0028: table_info cannot see a CHECK, so the stored CREATE TABLE text is
-      // snapshotted alongside the column shapes and consulted for adds only.
-      const catalogBefore = snapshotCatalogSql(db);
+      let stmt: ReturnType<typeof db.prepare>;
       let columns: string[];
-      let rows: Record<string, unknown>[];
       try {
-        const stmt = db.prepare(sql);
+        stmt = db.prepare(sql);
         columns = stmt.columns().map((c) => c.name);
-        // The single user-SQL call site (proposal 0029): binding here is why
-        // parameters work uniformly across reads, `--check` gates, and DML.
-        // Passed unconditionally — probed on node:sqlite, `all({})` behaves
-        // identically to `all()` for statements with and without parameters,
-        // and the unbound-reference guard already refused any statement whose
-        // named parameters this object does not cover.
-        // node:sqlite types rows as unknown[]; each row is a name->value record.
-        rows = stmt.all(ctx.params);
       } catch (err) {
         const message = (err as Error).message;
         // Lazy collection views: the first time a statement names a configured
@@ -598,28 +623,32 @@ async function runSql(
           !viewsBuilt &&
           namesConfiguredCollection(missing, ctx.config)
         ) {
+          // INVARIANT: this signal may only ever be raised from this
+          // prepare-time catch. `no such table` is a compile error — probed
+          // unreachable from execution on node:sqlite — and a retry thrown
+          // after execution began would re-run `stmt.all` and double-apply
+          // whatever DML the first run already did.
           throw new MissingCollectionView();
         }
-        if (message.includes("UNIQUE constraint failed: docs._path")) {
-          // INSERT of a loaded path, or a rename onto one — the projection's
-          // primary key catches it before any disk check can.
-          throw new DocmetaError(
-            "That _path already exists in the corpus.",
-          );
-        }
-        // A write through a collection view (0027): SQLite's own refusal,
-        // completed with the remedy — writes go through the one authoritative
-        // table, scoped by the view's membership. Non-greedy up to the literal
-        // tail: a collection name may contain spaces, which \S+ would truncate
-        // into a remedy naming a view that does not exist.
-        const viewWrite = /cannot modify (.+?) because it is a view/.exec(message);
-        const viewName = viewWrite?.[1];
-        if (viewName !== undefined) {
-          throw new DocmetaError(
-            `SQL error: ${message}; a collection is read-only — write through docs: UPDATE docs … WHERE _path IN (SELECT _path FROM "${viewName.replaceAll('"', '""')}").`,
-          );
-        }
-        throw new DocmetaError(`SQL error: ${message}`);
+        refuseSqlError(err);
+      }
+      const before = snapshotRows(db);
+      const colBefore = snapshotColumns(db);
+      // 0028: table_info cannot see a CHECK, so the stored CREATE TABLE text is
+      // snapshotted alongside the column shapes and consulted for adds only.
+      const catalogBefore = snapshotCatalogSql(db);
+      let rows: Record<string, unknown>[];
+      try {
+        // The single user-SQL call site (proposal 0029): binding here is why
+        // parameters work uniformly across reads, `--check` gates, and DML.
+        // Passed unconditionally — probed on node:sqlite, `all({})` behaves
+        // identically to `all()` for statements with and without parameters,
+        // and the unbound-reference guard already refused any statement whose
+        // named parameters this object does not cover.
+        // node:sqlite types rows as unknown[]; each row is a name->value record.
+        rows = stmt.all(ctx.params);
+      } catch (err) {
+        refuseSqlError(err);
       }
       let after: Map<string, Record<string, unknown>>;
       try {
@@ -686,12 +715,14 @@ async function runSql(
       return await runOnce();
     } catch (err) {
       if (!(err instanceof MissingCollectionView)) throw err;
-      // The statement's first prepare named a collection with no view yet:
-      // build them all, then re-run the whole sequence — snapshots included,
-      // so the pre-statement snapshot of the run that judges the statement
-      // still comes after the views exist. A write through the fresh view
-      // reaches the ordinary "cannot modify X because it is a view" remedy
-      // on this retry; any other second failure surfaces as usual.
+      // The first prepare named a collection with no view yet: build them
+      // all and re-run the closure — prepare, snapshots, execution,
+      // judgment. The first attempt died compiling, so nothing ran and
+      // nothing was snapshotted; re-running the whole closure keeps one code
+      // path with the baseline still taken before the (only) execution. A
+      // write through the fresh view reaches the ordinary "cannot modify X
+      // because it is a view" remedy on this retry; any other second failure
+      // surfaces as usual.
       buildViews();
       return await runOnce();
     }
@@ -699,13 +730,6 @@ async function runSql(
     db.close();
   }
 }
-
-/**
- * Internal signal for the lazy view build: the statement referenced a
- * configured collection whose view is not created yet. Never escapes
- * `runSql` — the catch above either retries once or is not reached.
- */
-class MissingCollectionView extends Error {}
 
 /**
  * The name after `no such table: ` in an engine message — sliced rather than
@@ -2407,8 +2431,10 @@ async function applyChanges(
  * Tolerant by design: it walks strings and comments with the same rules as
  * the semicolon scan, and bails out at anything unexpected — a miss merely
  * leaves today's "no such column" error in place.
+ *
+ * Exported for the scanner parity suite, not via the API index.
  */
-function collectSetTargets(sql: string): string[] {
+export function collectSetTargets(sql: string): string[] {
   const targets: string[] = [];
   let i = 0;
   const n = sql.length;
@@ -2451,8 +2477,10 @@ function collectSetTargets(sql: string): string[] {
 /**
  * Column names an INSERT's column list carries, so a corpus-new key can be
  * introduced by creation too. Same tolerance contract as `collectSetTargets`.
+ *
+ * Exported for the scanner parity suite, not via the API index.
  */
-function collectInsertTargets(sql: string): string[] {
+export function collectInsertTargets(sql: string): string[] {
   const head = stripLeadingTrivia(sql);
   if (!/^(insert|replace)\b/i.test(head)) return [];
   const open = head.indexOf("(");
@@ -2485,8 +2513,10 @@ function readIdentifier(
     return { value: raw.replaceAll(ch + ch, ch), end };
   }
   if (ch === "[") {
-    // The bracket skip's unterminated-at-EOF contract (length + 1) is what
-    // makes `end - 1` the content boundary in both cases.
+    // The bracket skip's unterminated-at-EOF return (length + 1) is what
+    // keeps `end - 1` the content boundary HERE. The quote path above has no
+    // such contract: unterminated, the skip returns length, and `end - 1`
+    // drops the final character — long-standing behavior, unchanged.
     const end = skipStringOrIdent(sql, from);
     return { value: sql.slice(from + 1, end - 1), end };
   }

@@ -11,6 +11,10 @@ import {
   collectNamedParameters,
   stripLeadingTrivia,
 } from "../src/core/projection.js";
+import {
+  collectInsertTargets,
+  collectSetTargets,
+} from "../src/commands/query.js";
 
 describe("SQL scanners: unterminated string literal at EOF", () => {
   const sql = "SELECT 'abc; $x";
@@ -104,5 +108,59 @@ describe("SQL scanners: a bracket identifier containing a quote", () => {
   it("an unterminated bracket at EOF consumes the rest of the input", () => {
     expect(() => { assertSingleStatement("SELECT [a'; $x"); }).not.toThrow();
     expect(collectNamedParameters("SELECT [a'; $x")).toEqual([]);
+  });
+});
+
+describe("collectSetTargets: SET-clause names under the adversarial inputs", () => {
+  it("an unterminated string in the expression still yields the target", () => {
+    expect(collectSetTargets("UPDATE docs SET a = 'x")).toEqual(["a"]);
+  });
+
+  it("a comment containing a quote does not derail the scan", () => {
+    expect(
+      collectSetTargets("UPDATE docs /* don't */ SET a = 1, b = 2"),
+    ).toEqual(["a", "b"]);
+  });
+
+  it("a quoted string containing `;`, `,` and `$name` is one expression", () => {
+    expect(
+      collectSetTargets(
+        "UPDATE docs SET a = 'x; $b, y', c = 2 WHERE _path = 'p'",
+      ),
+    ).toEqual(["a", "c"]);
+  });
+
+  it("a bracket identifier containing a quote is one target name", () => {
+    expect(
+      collectSetTargets("UPDATE docs SET [we'ird] = 1 WHERE x = 1"),
+    ).toEqual(["we'ird"]);
+  });
+
+  it("`set` inside a longer word is not the keyword", () => {
+    expect(collectSetTargets("SELECT reset, offset FROM docs")).toEqual([]);
+  });
+});
+
+describe("collectInsertTargets: column-list names under the adversarial inputs", () => {
+  it("a leading comment containing a quote still reads the list", () => {
+    expect(
+      collectInsertTargets(
+        "/* don't */ INSERT INTO docs (title, [we'ird], \"a\"\"b\") VALUES (1, 2, 3)",
+      ),
+    ).toEqual(["title", "we'ird", 'a"b']);
+  });
+
+  it("a quoted value containing `;` and `$name` is not a column", () => {
+    expect(collectInsertTargets("INSERT INTO docs (a) VALUES ('; $x')")).toEqual(
+      ["a"],
+    );
+  });
+
+  it("an unterminated list at EOF keeps what it saw", () => {
+    expect(collectInsertTargets("INSERT INTO docs (a")).toEqual(["a"]);
+  });
+
+  it("a non-INSERT statement yields nothing", () => {
+    expect(collectInsertTargets("UPDATE docs SET a = 1")).toEqual([]);
   });
 });
