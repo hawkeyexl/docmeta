@@ -173,6 +173,41 @@ describe("named collections (0027): views over override groups", () => {
     );
   });
 
+  // A collection name may contain spaces; the remedy must carry the whole
+  // name, not the first word (a \S+ capture truncated "my authors" to "my").
+  it("the remedy carries a view name containing spaces intact", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-spaced-view-"));
+    tempDirs.push(dir);
+    cpSync(corpus, dir, { recursive: true });
+    writeFileSync(
+      join(dir, "docmeta.config.yaml"),
+      [
+        "paths:",
+        '  - "docs/**/*.md"',
+        '  - "authors/**/*.md"',
+        "overrides:",
+        '  - name: "my authors"',
+        '    files: "authors/**"',
+        "    schemas: [./author.schema.json]",
+        "",
+      ].join("\n"),
+    );
+    let message = "";
+    try {
+      await runQuery({
+        sql: 'UPDATE "my authors" SET title = \'X\'',
+        inputs: [],
+        cwd: dir,
+      });
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toContain("cannot modify my authors because it is a view");
+    expect(message).toContain(
+      'UPDATE docs … WHERE _path IN (SELECT _path FROM "my authors")',
+    );
+  });
+
   it("the 0024 split-set refusal names the groups it found", async () => {
     const dir = mkdtempSync(join(tmpdir(), "docmeta-ddl-split-"));
     tempDirs.push(dir);

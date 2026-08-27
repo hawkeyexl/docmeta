@@ -303,6 +303,7 @@ export async function runValidate(
   // disqualify — they *define* the corpus; the CLI flags redefine the run.
   const scoped =
     opts.inputs.length > 0 ||
+    // redundant with inputs.length (stdin is an input) — kept as belt-and-suspenders
     usingStdin ||
     opts.as !== undefined ||
     opts.exts !== undefined ||

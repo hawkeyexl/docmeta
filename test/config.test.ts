@@ -886,4 +886,27 @@ describe("named overrides (0027)", () => {
       /never win schema resolution/,
     );
   });
+
+  // SQLite's object namespace is case-insensitive, so "Authors" and "authors"
+  // are one view name to the engine — the duplicate guard folds case exactly
+  // as the docs/sqlite_ refusals above it do.
+  it("refuses duplicate names, case-insensitively", () => {
+    const two = (a: string, b: string) =>
+      [
+        "overrides:",
+        `  - name: ${a}`,
+        '    files: "authors/**"',
+        "    schemas: [google:okf:0.1]",
+        `  - name: ${b}`,
+        '    files: "docs/**"',
+        "    schemas: [google:okf:0.1]",
+        "",
+      ].join("\n");
+    expect(() => parseConfig(two("authors", "authors"), "docmeta.config.yaml")).toThrow(
+      /reuses the name/,
+    );
+    expect(() => parseConfig(two("Authors", "authors"), "docmeta.config.yaml")).toThrow(
+      /reuses the name/,
+    );
+  });
 });

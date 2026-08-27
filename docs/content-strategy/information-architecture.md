@@ -73,7 +73,7 @@ Home — "What do you want to do?" router + 30-second proof
 | Exit codes & PR annotations contract | D1 | ★ | 0/1/2 semantics, `--format github` annotation output. |
 | Govern a shared schema across repos | D2 | | Vendoring (`schemas vendor`, integrity pins), and the URL form with its tradeoff: remote `$schema`, 10 s timeout, caching, versioning. |
 | Consume results programmatically | D3 | | `--format json`, `get` command, TypeScript API. |
-| Gate on rules that span files | D4 | | `docmeta query`: the one-row-per-file table, joins as `--check` CI gates (dangling refs, duplicate slugs), `-f json` and the `--db` export, preview-by-default writes named but not manualed. Doc-detective steps run the real gates over `test/fixtures/query/`. Source of truth: `src/commands/query.ts`, drift-checked via the CLI reference. |
+| Gate on rules that span files | D4 | | `docmeta query`: the one-row-per-file table, joins as `--check` CI gates (dangling refs, duplicate slugs), `-f json` and the `--db` export, apply-by-default writes (`--dry-run` previews, `--check` never mutates) named but not manualed. Doc-detective steps run the real gates over `test/fixtures/query/`. Source of truth: `src/commands/query.ts`, drift-checked via the CLI reference. |
 
 ### Define & evolve schemas (Sara)
 

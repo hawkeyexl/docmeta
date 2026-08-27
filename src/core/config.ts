@@ -508,13 +508,15 @@ export function parseConfig(text: string, source: string): DocmetaConfig {
         }
         // Two overrides sharing a name would be one CREATE VIEW clobbering
         // another — and first-match-wins already means only one could hold
-        // the files both claim.
-        if (seenNames.has(e.name)) {
+        // the files both claim. Case-folded, like the docs/sqlite_ guards:
+        // SQLite's object namespace is case-insensitive, so "Authors" and
+        // "authors" are one view name to the engine.
+        if (seenNames.has(e.name.toLowerCase())) {
           throw new DocmetaError(
             `${source}: overrides[${i}] reuses the name "${e.name}"; collection names must be unique.`,
           );
         }
-        seenNames.add(e.name);
+        seenNames.add(e.name.toLowerCase());
         name = e.name;
       }
       return {
