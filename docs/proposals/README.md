@@ -49,6 +49,10 @@ changed as a result, and lists what it depends on.
 | [0023](0023-metadata-vocabularies.md) | The docmeta metadata vocabularies — nine ids, drafts and worked examples under [0023/](0023/), reviewed publicly at the site's Proposals page | Sara · S1 / S2 | Proposed |
 | [0024](0024-standard-sql-vocabulary.md) | Standard SQL vocabulary: DML edits the files, DDL edits the schema | Maya · M2, M3 / Sara · S1, S3 / Devin · D3 | Implemented (#125, #126) |
 | [0025](0025-query-dry-run-polarity.md) | query writes by default, `--dry-run` previews | Devin · D4 / Maya · M2 | Implemented |
+| [0026](0026-corpus-checks-are-findings.md) | Corpus checks are findings: named `checks:` in config, run by `validate` | Devin · D4 / Maya · M2 | Proposed |
+| [0027](0027-named-collections.md) | Named collections: override groups as SQL views | Devin · D4 / Maya · M2 | Proposed |
+| [0028](0028-ddl-type-bridge.md) | The DDL type bridge: formats as column types, enums as CHECK IN | Sara · S1, S3 / Maya · M2, M3 | Proposed |
+| [0029](0029-query-for-scripts.md) | query for scripts: CSV output and bound parameters | Devin · D3, D4 | Proposed |
 
 0014 was not in the original review. It surfaced while stress-testing 0004 and
 is the most severe item in the set: **docmeta currently exits `0` when it
@@ -88,7 +92,18 @@ At a glance, so a planning pass does not have to reconstruct it from 19 headers.
 0015 ──> 0009            (0009 normalizes document $schema URLs; constrain first)
 0011 ──> 0012 ──> 0017   (0012 is the content gap 0011's journey walk exposes;
                           0017 supersedes it — the gap was real, the evidence wasn't)
+
+0021 ──┬─> 0026          (checks run on the query engine; 0001 ─> 0026 as well —
+       ├─> 0027           check findings ride the baseline)
+       ├─> 0028
+       └─> 0029
+0024 ──┬─> 0027          (its "scope the run to one override group" remedy gets a name)
+       └─> 0028          (extends 0024's deliberately thin type mapping)
 ```
+
+The four `Proposed` SQL items (0026–0029) are otherwise independent of each other;
+recommended implementation order is 0026 → 0029 → 0027 → 0028 — impact-first, with the
+two config-touching ones (0026, 0027) landed apart so the second rebases trivially.
 
 **Safe to start in any order, no blockers:** 0002, 0011.
 
