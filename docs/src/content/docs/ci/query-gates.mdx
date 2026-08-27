@@ -84,11 +84,63 @@ operational error ([the contract](/docmeta/reference/output-and-exit-codes/)):
 ```
 
 <Aside type="tip" title="Where do the queries live?">
-A gate is a rule your team agreed on, so keep the SQL where rules live: in the
-workflow file, or in a small script the workflow calls. Each query gets a name
-(`dangling-authors`, `duplicate-slugs`), each name is one CI step, and a red
-check tells the contributor which rule they broke.
+A gate is a rule your team agreed on, so keep the SQL where rules live: in
+`docmeta.config.yaml`, as a named entry in
+[`checks:`](/docmeta/reference/configuration/#checks) — the next section
+migrates this exact workflow step there. A one-off question or a rule you are
+still drafting is fine inline in the workflow.
 </Aside>
+
+## Name the gate in config
+
+A workflow-file gate works, but the rule lives in the wrong place: every other
+rule this repo enforces is named in `docmeta.config.yaml`, and a raw `query`
+step reports a result table — no line, no `::error` annotation on the PR, no
+ramp for existing violations. Moving the SQL into a named
+[`checks:`](/docmeta/reference/configuration/#checks) entry fixes all three at
+once. The workflow step above becomes config:
+
+```yaml title="docmeta.config.yaml"
+paths:
+  - "docs/**/*.md"
+checks:
+  - name: unique-slugs
+    query: >-
+      SELECT _path AS path, 'slug' AS key,
+             'duplicate slug "' || slug || '"' AS message,
+             lineFor(_path, 'slug') AS line
+      FROM docs WHERE slug IN
+        (SELECT slug FROM docs GROUP BY slug HAVING count(*) > 1)
+```
+
+and the CI step becomes the one you already have — a bare `npx docmeta
+validate` runs the checks after the per-file schemas, so one command and one
+exit code cover both. Each row a check returns is now an ordinary finding:
+`path` names the file, `key` the field, `lineFor(path, key)` the source line,
+so `-f github` annotates the offending line of the offending file, and SARIF
+and JUnit consumers see it like any schema violation. The [column
+convention](/docmeta/reference/configuration/#the-column-convention) is the
+whole contract.
+
+Two behaviors to know about, both there to keep the answers honest:
+
+- **A scoped run skips checks.** `docmeta validate docs/intro.md` (or any run
+  reshaped by positional paths, stdin, `--as`, `--ext`, `--exclude`, or
+  `--no-gitignore`) computes over less than the corpus, and a duplicate-slug
+  rule over half a corpus answers wrongly — so checks run only on the
+  config-resolved corpus, with a stderr notice when skipped. `--no-checks`
+  opts out explicitly.
+- **Findings baseline.** Because check findings ride the same pipeline, the
+  [baseline ratchet](/docmeta/reference/cli/#baselines) covers them: turn a
+  new check on, `--write-baseline` the existing debt, and the gate goes red
+  only on *new* violations — the same adoption ramp a stricter schema gets,
+  which is what lets a corpus rule turn on before the backlog is fixed.
+
+The ad-hoc spelling stays available: `query --check` now takes
+`-f github|sarif|junit` too ([rows as
+findings](/docmeta/reference/cli/#rows-as-findings)), for a rule you are
+still drafting or a one-off audit — same column convention, findings named
+`check:query`.
 
 ## Feed the same table to your tooling
 
@@ -175,4 +227,7 @@ below.
 {/* step {"description":"Duplicate slugs, the GROUP BY ... HAVING shape of the same gate.","runShell":{"command":"npx docmeta query --check \"SELECT slug, count(*) n FROM docs GROUP BY slug HAVING n > 1\" test/fixtures/query/docs","exitCodes":[1],"stdio":"/alpha  2[\\s\\S]*check failed/"}} */}
 {/* step {"description":"--dry-run previews a mutating statement: the exact diff, files untouched, exit 0.","runShell":{"command":"npx docmeta query --dry-run \"UPDATE docs SET reviewed = 'todo' WHERE reviewed IS NULL AND _present = 1\" test/fixtures/query/docs","exitCodes":[0],"stdio":"/reviewed: \\(unset\\) -> todo[\\s\\S]*dry run; run again without --dry-run to apply/"}} */}
 {/* step {"description":"DROP TABLE refuses by name and points at the statements that do the real jobs (exit 2).","runShell":{"command":"npx docmeta query \"DROP TABLE docs\" test/fixtures/query/docs","exitCodes":[2],"stdio":"DROP TABLE is refused"}} */}
+{/* step {"description":"A named check in config: a bare validate runs it, and -f github annotates the offending line of the offending file.","runShell":{"command":"npx docmeta validate -c test/fixtures/checks/docmeta.config.yaml -f github","exitCodes":[1],"stdio":"/::error file=docs\\/a\\.md,line=3::.*check:unique-slugs/"}} */}
+{/* step {"description":"A scoped run skips checks with one stderr notice, so a half-corpus never answers a corpus question.","runShell":{"command":"npx docmeta validate -c test/fixtures/checks/docmeta.config.yaml test/fixtures/checks/docs","exitCodes":[0],"stdio":"corpus checks skipped: run is scoped"}} */}
+{/* step {"description":"query --check -f github: the ad-hoc spelling of the same findings pipeline.","runShell":{"command":"npx docmeta query --check \"SELECT _path AS path, 'duplicate slug ' || slug AS message FROM docs WHERE slug IN (SELECT slug FROM docs GROUP BY slug HAVING count(*) > 1)\" test/fixtures/query/docs -f github","exitCodes":[1],"stdio":"/::error file=test\\/fixtures\\/query\\/docs\\/alpha\\.md::/"}} */}
 {/* test end */}

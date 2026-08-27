@@ -69,6 +69,7 @@ docmeta [paths...] [options]
 | `--baseline` | `[path]` | config `baseline:`, else `.docmeta-baseline.json` | Compare findings against a recorded [baseline](#baselines) and fail only on new ones. The value is optional, and omitting it means *this project's* baseline: the configured `baseline:` path when there is one, resolved against the config file, otherwise `.docmeta-baseline.json`. Config `baseline:` turns this on for every run. A named file that does not exist is an error (exit 2). |
 | `--write-baseline` | `[path]` | config `baseline:`, else `.docmeta-baseline.json` | Record this run's findings as the baseline, then exit 0. The value is optional. Wins over `--baseline`. Findings from `-` (stdin) are the one exception: they cannot be recorded, so they still fail the run. |
 | `--no-baseline` | — | off | Ignore a baseline supplied by config `baseline:` for this run. `--baseline` and `--no-baseline` set the same option, so the one written later on the command line wins. |
+| `--no-checks` | — | off | Skip the [corpus checks](/docmeta/reference/configuration/#checks) supplied by config `checks:` for this run. Checks already run only when the resolved file set is the config-resolved corpus — a run scoped by positional paths, stdin, `--as`, `--ext`, `--exclude`, or `--no-gitignore` skips them with a stderr notice; this flag opts out explicitly. |
 
 <Aside type="note">
 Repeatable flags (`-s/--schema`, `--exclude`) accumulate; pass the flag once per
@@ -350,7 +351,7 @@ and makes no network requests.
 | `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
 | `--exclude` | `<glob>` | — | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
 | `--as` | `<format>` | — | Force an input [format](/docmeta/reference/formats/) (extractor name). Required when reading from stdin. |
-| `-f, --format` | `<pretty\|json>` | `pretty` | Output format. An unknown value is an error (exit 2). |
+| `-f, --format` | `<pretty\|json\|github\|sarif\|junit>` | `pretty` | Output format. `github`, `sarif`, and `junit` render findings, so they are legal only with `--check` and only when the result carries a `path` column — see [rows as findings](#rows-as-findings). An unknown value, a findings format without `--check`, or a `--check` result without `path` is an error (exit 2). |
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). When set, the file must exist or docmeta exits 2. |
 | `--no-config` | — | off | Ignore any discovered config file. `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
 | `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
@@ -453,6 +454,23 @@ docmeta query "ALTER TABLE docs
 # schema now requires `reviewed`, every file carries it, validate stays green
 ```
 
+### Rows as findings
+
+With `--check` and `-f github|sarif|junit`, result rows render as findings —
+one `::error` annotation, SARIF result, or JUnit `<failure>` per row — through
+the same [column convention](/docmeta/reference/configuration/#the-column-convention)
+named `checks:` use: the SELECT must carry a `path` column (the file each
+finding attaches to), and may carry `line`, `key`, and `message`; any other
+column is folded into the message as `col=value` pairs. Findings carry the
+rule id `check:query/check`, and JUnit testcases ship under the classname
+`docmeta.query` rather than `docmeta.validate`. A findings format without
+`--check`, or a result without `path`, is an error (exit 2).
+
+The named home for a rule your team keeps is config
+[`checks:`](/docmeta/reference/configuration/#checks), which `validate` runs
+with the same convention — `query --check` with a findings format is the
+ad-hoc spelling of the same pipeline.
+
 ### Output and exit codes
 
 In `pretty` format: an aligned table (header row, then values; SQL `NULL`
@@ -480,6 +498,7 @@ statement is a usage error, not a finding.
 docmeta query "SELECT _path, title FROM docs WHERE draft = 1" docs/
 docmeta query "SELECT t.value tag, count(*) n FROM docs, json_each(docs.tags) t GROUP BY tag ORDER BY n DESC" docs/
 docmeta query --check "SELECT slug, count(*) n FROM docs WHERE slug IS NOT NULL GROUP BY slug HAVING n > 1" docs/
+docmeta query --check "SELECT _path AS path, 'duplicate slug ' || slug AS message FROM docs WHERE slug IN (SELECT slug FROM docs GROUP BY slug HAVING count(*) > 1)" docs/ -f github
 docmeta query --check "SELECT d._path, d.author FROM docs d LEFT JOIN docs a ON a._path GLOB 'authors/*' AND a.slug = d.author WHERE d.author IS NOT NULL AND a._path IS NULL" docs/ authors/
 docmeta query "SELECT _path FROM docs WHERE _present = 0" docs/   # nothing to validate yet
 cat page.md | docmeta query "SELECT title FROM docs" - --as markdown
