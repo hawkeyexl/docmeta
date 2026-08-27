@@ -1,6 +1,6 @@
 # 0026 — corpus checks are findings
 
-- **Status:** Proposed
+- **Status:** Implemented (#132)
 - **Serves:** Devin · D4 · Maya · M2
 - **Depends on:** [0021](0021-frontmatter-as-a-database.md) (the engine and the `--check`
   gate; this is its roadmap item P3), [0001](0001-validation-baseline.md) (the baseline

@@ -19,6 +19,7 @@ the command line.
 | `exclude` | `string[]` | none | Globs to exclude from directory and glob walks. Merged with `--exclude` and the [default ignores](/docmeta/reference/cli/#default-ignores). |
 | `schemas` | `(string \| {ref, source?, integrity?})[]` | none | Default [schema set](/docmeta/reference/schema-resolution/) applied to every file that no higher-precedence rule matches. See [Schemas](#schemas). |
 | `overrides` | `Override[]` | none | Per-glob schema overrides. The first matching entry wins. See [Overrides](#overrides). |
+| `checks` | `Check[]` | none | Named cross-file rules — SQL over the corpus's metadata table — that `validate` runs after the per-file schemas, with rows reported as findings. See [Checks](#checks). |
 | `baseline` | `string` | none | Path to a [validation baseline](/docmeta/reference/cli/#baselines). Setting it turns on `--baseline` for every run; `--no-baseline` suppresses it for one. A bare `--write-baseline` records into this same file. |
 | `allowEmpty` | `boolean` | `false` | Treat an input set that resolves to zero files as success instead of an error (exit 2). Equivalent to `--allow-empty`. See [empty input sets](/docmeta/reference/cli/#empty-input-sets). |
 | `respectGitignore` | `boolean` | `true` | Skip files `.gitignore` covers when expanding directories and globs. `--no-gitignore` overrides it for one run. See [`.gitignore`](/docmeta/reference/cli/#gitignore). |
@@ -43,8 +44,8 @@ genuinely expected — a repo in a shared CI template that may have no docs yet.
 
 Any key outside the table above is an operational error (exit 2), naming the
 key it did not recognize and listing the ones it accepts. The same rule applies
-inside every nested mapping: `schemas[]` entries, `schemaCache`, `schemaTrust`,
-and `fill`.
+inside every nested mapping: `schemas[]` entries, `checks[]` entries,
+`schemaCache`, `schemaTrust`, and `fill`.
 
 This is what makes a typo visible. A dropped `schemaTust:` leaves a repository
 that reads as guarded and is not; a dropped `intergrity:` leaves a schema that
@@ -312,6 +313,71 @@ For a given file, docmeta uses the **first** override whose `files` glob matches
 resolution](/docmeta/reference/schema-resolution/#precedence) for where overrides sit in
 the precedence chain.
 
+### Checks
+
+`checks` is a list of named cross-file rules. Each is one SQL statement run
+over the same `docs` projection [`docmeta
+query`](/docmeta/reference/cli/#query) builds — one row per file, one column
+per top-level metadata key — and every row the statement returns is reported
+as a **finding**, exactly as a schema violation is: it renders in every
+[output format](/docmeta/reference/output-and-exit-codes/), counts toward
+exit 1, and rides the [baseline
+ratchet](/docmeta/reference/cli/#baselines).
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | `string` | yes | The check's identity. Must match `[a-z0-9][a-z0-9._-]*` and not end in `.json`; two checks may not share a name. |
+| `query` | `string` | yes | One SQL SELECT following the column convention below. |
+
+```yaml
+checks:
+  - name: unique-slugs
+    query: >-
+      SELECT _path AS path, 'slug' AS key,
+             'duplicate slug "' || slug || '"' AS message,
+             lineFor(_path, 'slug') AS line
+      FROM docs WHERE slug IN
+        (SELECT slug FROM docs GROUP BY slug HAVING count(*) > 1)
+```
+
+Findings carry the schema ref `check:<name>` and the keyword `check`, so the
+rule id everywhere — SARIF, JUnit, the baseline — is `check:<name>/check`.
+That is why the name grammar is enforced at parse time rather than hoped for:
+the name is fingerprint identity, and a name that classified as a file path
+would produce fingerprints that change with the working directory.
+
+#### The column convention
+
+A check's SELECT says where each violation lives by naming its columns:
+
+| Column | | Meaning |
+|---|---|---|
+| `path` | required | The file the finding attaches to — must be a file the run loaded. A row naming any other path is an error (exit 2) with the check named, as is a check whose SQL does not prepare. |
+| `line` | optional | 1-based source line. `lineFor(path, key)` — a SQL function registered for the run — computes it from the extractor's own position data; it returns `NULL` for an unknown path or a key the extractor cannot place. |
+| `key` | optional | The metadata field at fault. Becomes the finding's instance path (`/<key>`) — and with it part of the finding's baseline identity. |
+| `message` | optional | The prose. When absent it is synthesized as `col=value` pairs from any remaining columns. |
+
+An aggregate rule reports by emitting one row per offending file — in the
+example above, the aggregate lives in the subquery and the outer SELECT fans
+it back out to files. A check that can fire more than once per file should
+make the occurrences distinct through `key`: the baseline dedupes fingerprints
+as a set, so two findings in one file that differ only in `message` collapse
+to one recorded entry and any number of future duplicates stay forgiven.
+
+#### When checks run
+
+A corpus rule computed over half a corpus reports wrong answers — "dangling
+author" because `authors/` was not loaded — so named checks run only when the
+resolved file set **is** the config-resolved corpus. Any CLI reshaping of the
+input set disqualifies the run: positional paths, stdin, `--as`, `--ext`,
+`--exclude`, and `--no-gitignore`. A scoped run prints one stderr notice
+(`corpus checks skipped: run is scoped`) and validates as usual. Config-level
+`exclude:` and `respectGitignore:` do **not** disqualify — they *define* the
+corpus; the CLI flags redefine the run.
+[`--no-checks`](/docmeta/reference/cli/#validate) opts out explicitly for one
+run, mirroring `--no-baseline`. Checks resolve no schemas and make no network
+requests, so `--offline` does not affect them.
+
 ## Example
 
 ```yaml
@@ -330,6 +396,12 @@ overrides:
   - files: "docs/guides/**"
     schemas:
       - ./schemas/guide.schema.json
+checks:
+  - name: unique-slugs
+    query: >-
+      SELECT _path AS path, 'slug' AS key, slug AS message
+      FROM docs WHERE slug IN
+        (SELECT slug FROM docs GROUP BY slug HAVING count(*) > 1)
 ```
 
 ## Discovery

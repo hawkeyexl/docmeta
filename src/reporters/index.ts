@@ -12,7 +12,7 @@ import type { FingerprintContext } from "../core/baseline.js";
 import { palette } from "./color.js";
 import { fieldLabel } from "./rule-id.js";
 import { renderSarif, type SarifOptions } from "./sarif.js";
-import { renderJunit } from "./junit.js";
+import { renderJunit, type JunitOptions } from "./junit.js";
 import {
   escapeWorkflowCommandMessage,
   escapeWorkflowCommandProperty,
@@ -21,6 +21,7 @@ import {
 export { renderSarif, SARIF_NO_GIT_ROOT } from "./sarif.js";
 export type { SarifOptions } from "./sarif.js";
 export { renderJunit, xmlEscape } from "./junit.js";
+export type { JunitOptions } from "./junit.js";
 export {
   escapeWorkflowCommandMessage,
   escapeWorkflowCommandProperty,
@@ -106,6 +107,57 @@ export function isCommonFormat(value: string): value is CommonFormat {
 }
 
 /**
+ * The formats `query` accepts: the common pair, plus the findings formats a
+ * `--check` run may render its rows through (proposal 0026).
+ *
+ * A list of its own rather than `REPORT_FORMATS`, even though the two read
+ * identically today: `validate`'s list and `query`'s grow independently —
+ * proposal 0029 adds `csv` here and not there — and one shared const would
+ * make every addition to either a change to both.
+ */
+export const QUERY_FORMATS = [
+  "pretty",
+  "json",
+  "github",
+  "sarif",
+  "junit",
+] as const;
+
+export type QueryFormat = (typeof QUERY_FORMATS)[number];
+
+/** `"pretty, json, github, sarif, or junit"`, for messages and help text. */
+export const QUERY_FORMAT_LIST = formatList(QUERY_FORMATS);
+
+export function isQueryFormat(value: string): value is QueryFormat {
+  return (QUERY_FORMATS as readonly string[]).includes(value);
+}
+
+/**
+ * The `query` formats that render **findings** rather than rows — legal only
+ * with `--check`, and only when the result carries the `path` column the
+ * finding convention is built from.
+ */
+export const QUERY_FINDINGS_FORMATS = [
+  "github",
+  "sarif",
+  "junit",
+] as const satisfies readonly QueryFormat[];
+
+export type QueryFindingsFormat = (typeof QUERY_FINDINGS_FORMATS)[number];
+
+/**
+ * A *narrowing* guard on purpose: the CLI's query switch handles the findings
+ * formats in an early return, and this is what lets its remaining cases stay
+ * compile-time exhaustive over `pretty | json` — a bare `Set.has` would leave
+ * the union unnarrowed and force the `never` guard out.
+ */
+export function isQueryFindingsFormat(
+  value: QueryFormat,
+): value is QueryFindingsFormat {
+  return (QUERY_FINDINGS_FORMATS as readonly string[]).includes(value);
+}
+
+/**
  * Formats something other than a person reads.
  *
  * These own stdout completely: a diagnostic printed alongside them (which
@@ -132,7 +184,7 @@ export const isMachineFormat = (format: ReportFormat): boolean =>
 export const OMITTED_WHEN_CLEAN: ReadonlySet<ReportFormat> =
   new Set<ReportFormat>(["github"]);
 
-export interface ReportOptions extends SarifOptions {
+export interface ReportOptions extends SarifOptions, JunitOptions {
   color?: boolean;
   /** In pretty output, omit passing files. */
   quiet?: boolean;

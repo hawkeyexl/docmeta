@@ -31,6 +31,14 @@
 # *those* drafts; judged against this workflow's default set they are standing
 # alerts for files doing their job.
 #
+# `test/fixtures/checks/` is excluded with them. Its docs validate against the
+# fixture's *own* permissive config inside the corpus-check tests (0026) —
+# their job is to carry a duplicate slug, not a `type:`; judged against this
+# workflow's default set they are standing alerts for files doing their job.
+# `test/fixtures/query-csv/` and `test/fixtures/collections/` are excluded
+# ahead of the fixtures 0029 and 0027 add for the same reason — a glob that
+# matches nothing is harmless.
+#
 # It runs over `test/fixtures/`, which already holds deliberately-invalid
 # documents (missing-type.md, bad-timestamp.md, dd/malformed-yaml.md, …). Those
 # are committed, reproducible, and already the material the docs' worked
@@ -81,6 +89,9 @@ jobs:
             --exclude "test/fixtures/query/**" \
             --exclude "test/fixtures/query-ddl/**" \
             --exclude "test/fixtures/query-ddl-builtin/**" \
+            --exclude "test/fixtures/checks/**" \
+            --exclude "test/fixtures/query-csv/**" \
+            --exclude "test/fixtures/collections/**" \
             --allow-empty -f sarif > docmeta.sarif
           echo "results=$(jq '.runs[0].results | length' docmeta.sarif)" >> "$GITHUB_OUTPUT"
 
@@ -112,6 +123,9 @@ jobs:
             --exclude "test/fixtures/query/**" \
             --exclude "test/fixtures/query-ddl/**" \
             --exclude "test/fixtures/query-ddl-builtin/**" \
+            --exclude "test/fixtures/checks/**" \
+            --exclude "test/fixtures/query-csv/**" \
+            --exclude "test/fixtures/collections/**" \
             --allow-empty -f junit > docmeta-junit.xml
 
       # GitHub renders no JUnit natively. A third-party reporter action would be

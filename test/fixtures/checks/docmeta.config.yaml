@@ -1,0 +1,12 @@
+paths:
+  - "docs/**/*.md"
+schemas:
+  - ./permissive.schema.json
+checks:
+  - name: unique-slugs
+    query: >-
+      SELECT _path AS path, 'slug' AS key,
+             'duplicate slug "' || slug || '"' AS message,
+             lineFor(_path, 'slug') AS line
+      FROM docs
+      WHERE slug IN (SELECT slug FROM docs GROUP BY slug HAVING count(*) > 1)

@@ -31,6 +31,7 @@ export {
 } from "./core/resolve-schema.js";
 export { loadConfig, parseConfig, resolveRunConfig } from "./core/config.js";
 export type {
+  CheckConfig,
   ConfigNotice,
   DocmetaConfig,
   DocumentRefTrust,
@@ -66,8 +67,10 @@ export {
 export type { ReadOptions, SchemaCacheEntry } from "./core/schema-cache.js";
 export {
   COMMON_FORMATS,
+  QUERY_FORMATS,
   REPORT_FORMATS,
   isCommonFormat,
+  isQueryFormat,
   isReportFormat,
   render,
   renderJunit,
@@ -75,6 +78,8 @@ export {
 } from "./reporters/index.js";
 export type {
   CommonFormat,
+  JunitOptions,
+  QueryFormat,
   ReportFormat,
   ReportOptions,
   SarifOptions,

@@ -10,7 +10,11 @@ import { fileURLToPath } from "node:url";
 import { Command, CommanderError, Option } from "commander";
 import picomatch from "picomatch";
 import pkg from "../package.json" with { type: "json" };
-import { DocmetaError } from "./types.js";
+import {
+  DocmetaError,
+  type RunSummary,
+  type ValidationResult,
+} from "./types.js";
 import { runValidate } from "./commands/validate.js";
 import { runGet } from "./commands/get.js";
 import { runQuery } from "./commands/query.js";
@@ -26,14 +30,21 @@ import {
   COMMON_FORMATS,
   COMMON_FORMAT_LIST,
   OMITTED_WHEN_CLEAN,
+  QUERY_FORMATS,
+  QUERY_FORMAT_LIST,
   REPORT_FORMATS,
   REPORT_FORMAT_LIST,
   isCommonFormat,
   isMachineFormat,
+  isQueryFindingsFormat,
+  isQueryFormat,
   isReportFormat,
   render,
   type CommonFormat,
+  type QueryFindingsFormat,
 } from "./reporters/index.js";
+import { rowsToFindings } from "./core/checks.js";
+import type { QueryRun } from "./commands/query.js";
 import {
   FILL_FORMATS,
   FILL_FORMAT_LIST,
@@ -276,6 +287,51 @@ export function resolveQueryInputs(
   return { sql, paths };
 }
 
+/**
+ * Render a `query --check` run through a findings format (proposal 0026).
+ *
+ * The row→finding mapping is the same module `validate`'s named checks use;
+ * here the check has no configured name, so its findings carry `check:query`.
+ * The `RunSummary` `render()` takes is synthesized from the mapped results —
+ * every file present has findings, so passed is zero by construction — and
+ * JUnit ships under its own classname rather than validate's.
+ *
+ * Exit semantics stay `--check`'s own: rows mean findings mean exit 1.
+ */
+function renderQueryFindings(run: QueryRun, format: QueryFindingsFormat): void {
+  if (run.changes) {
+    throw new DocmetaError(
+      `--format ${format} renders result rows with a \`path\` column; this statement produced pending changes, not rows. Use pretty or json for the change preview.`,
+    );
+  }
+  const results: ValidationResult[] = [...rowsToFindings(
+    "query",
+    run.columns,
+    run.rows,
+  )].map(([file, errors]) => ({
+    file,
+    format: "query",
+    ok: false,
+    schemas: [],
+    errors,
+  }));
+  const summary: RunSummary = {
+    files: results.length,
+    passed: 0,
+    failed: results.length,
+    errors: results.reduce((n, r) => n + r.errors.length, 0),
+  };
+  const text = render(format, results, summary, {
+    frame: run.frame,
+    classname: "docmeta.query",
+    onNotice: notice,
+  });
+  if (text.length > 0 || !OMITTED_WHEN_CLEAN.has(format)) {
+    process.stdout.write(`${text}\n`);
+  }
+  process.exitCode = run.rows.length > 0 ? 1 : 0;
+}
+
 const COMMAND_NAMES = ["validate", "get", "query", "fill", "schemas"];
 
 /** Levenshtein distance. Only used to offer a "did you mean" hint. */
@@ -458,6 +514,12 @@ interface ValidateCliOptions extends RunCliOptions {
   baseline?: string | boolean;
   /** `--write-baseline [path]`; `true` for the bare flag. See `baseline`. */
   writeBaseline?: string | boolean;
+  /**
+   * `--no-checks`. Commander supplies `true` when the flag is absent — its
+   * default, not a choice — so only the explicit `false` travels to the core,
+   * the same shape as `gitignore`.
+   */
+  checks: boolean;
 }
 
 interface GetCliOptions extends RunCliOptions {
@@ -605,6 +667,10 @@ export function buildProgram(): Command {
       ),
     )
     .option("--no-baseline", "ignore a baseline configured by `baseline:`")
+    .option(
+      "--no-checks",
+      "skip the corpus checks configured by `checks:` for this run",
+    )
     .addHelpText(
       "after",
       [
@@ -664,6 +730,9 @@ export function buildProgram(): Command {
             // file, `false` suppresses a configured one for this run.
             baseline: options.baseline,
             writeBaseline: options.writeBaseline,
+            // Like `gitignore`: only the explicit `--no-checks` travels, so
+            // absence stays "run them when the corpus rule allows".
+            checks: options.checks ? undefined : false,
           });
 
           const color = resolveColor(command.parent ?? command);
@@ -818,6 +887,9 @@ export function buildProgram(): Command {
       "--check",
       "treat returned rows as findings: exit 1 if the query returns any",
     )
+    // The findings formats (github, sarif, junit) are declared in the shared
+    // `-f, --format` option below; they are legal only with --check and a
+    // `path` result column — see the action's gates.
     .option(
       "--db <path>",
       "also write the built database to this file; SQL is then optional",
@@ -831,7 +903,7 @@ export function buildProgram(): Command {
     .option("--as <format>", "force an input format (e.g. markdown, mdx)")
     .option(
       "-f, --format <format>",
-      `output: ${COMMON_FORMATS.join(" | ")}`,
+      `output: ${QUERY_FORMATS.join(" | ")} (github, sarif, junit need --check)`,
       "pretty",
     )
     .option("-c, --config <path>", "path to a docmeta config file")
@@ -866,7 +938,19 @@ export function buildProgram(): Command {
         command: Command,
       ) => {
         try {
-          const format = assertCommonFormat(options.format);
+          const format = options.format;
+          if (!isQueryFormat(format)) {
+            throw new DocmetaError(
+              `Unknown --format "${format}". Use ${QUERY_FORMAT_LIST}.`,
+            );
+          }
+          // The findings formats render findings, and only `--check` produces
+          // them. Gated before the run so the refusal costs nothing.
+          if (isQueryFindingsFormat(format) && !options.check) {
+            throw new DocmetaError(
+              `--format ${format} renders findings, which only --check produces. Add --check, or use pretty or json.`,
+            );
+          }
           const { sql, paths } = resolveQueryInputs(
             sqlArg,
             pathsArg,
@@ -914,6 +998,12 @@ export function buildProgram(): Command {
           if (run.db) {
             notice(`wrote ${run.db.path} (${run.db.files} files)`);
           }
+          // Narrowing guard: past this return, `format` is `pretty | json`,
+          // which is what keeps the switch below compile-time exhaustive.
+          if (isQueryFindingsFormat(format)) {
+            renderQueryFindings(run, format);
+            return;
+          }
           switch (format) {
             case "json":
               // The bare array, mirroring `get`'s bare result array: changes
@@ -933,9 +1023,13 @@ export function buildProgram(): Command {
               break;
             }
             default: {
+              // Exhaustive: the findings formats returned above and narrowed
+              // the union, so adding a value to QUERY_FORMATS without a case
+              // here (or a findings-format branch) is a compile error. The
+              // throw is the runtime half, as in `render`.
               const unreachable: never = format;
               throw new DocmetaError(
-                `Unknown --format ${JSON.stringify(unreachable)}. Use ${COMMON_FORMAT_LIST}.`,
+                `Unknown --format ${JSON.stringify(unreachable)}. Use ${QUERY_FORMAT_LIST}.`,
               );
             }
           }
