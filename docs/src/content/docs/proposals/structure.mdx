@@ -1,5 +1,5 @@
 ---
-title: "docmeta:structure:1.0"
+title: "docmeta:structure:1.0.0-proposal.1"
 description: "The proposed structure vocabulary — what a page connects to: products, concepts, and other pages."
 sidebar:
   order: 5
@@ -9,7 +9,7 @@ sidebar:
 :::caution[Proposed — not shipped]
 Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-vocabularies/),
 open for community review. Draft schema:
-[`docs/proposals/0023/schemas/structure/1.0.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/structure/1.0.json).
+[`docs/proposals/0023/schemas/structure/1.0.0-proposal.1.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/structure/1.0.0-proposal.1.json).
 :::
 
 **The question it answers: what does this page connect to?**
@@ -22,10 +22,11 @@ ordering, no parent, no nav title here.
 | Field | Type | Notes |
 |---|---|---|
 | `applies-to` | string or list | Flat product/variant/version labels: `operator-1.4`, `kubernetes` |
+| `not-applicable-to` | string or list | The carve-out `applies-to` alone cannot state: `operator-1.4` yes, `operator-1.4-fips` no |
 | `concepts` | string or list | Controlled glossary terms — curated, where core's `keywords` is free words |
 | `prerequisites` | string or list | Pages, ids, or capabilities the reader needs first |
-| `next-steps` | string or list | Sensible follow-ons, unordered — several of them, not the generator's single `next` |
-| `related-pages` | string or list | Associatively related pages, ids, or URLs |
+| `next-steps` | string or list | Sensible follow-ons, unordered — several of them, not the generator's single `next`. **A more advanced page on the same topic goes here** |
+| `related-pages` | string or list | Associatively related pages, ids, or URLs. **This is what a site renders as "See also"** |
 
 Every field accepts one string or a non-empty, duplicate-free list.
 
@@ -36,6 +37,7 @@ Every field accepts one string or a non-empty, duplicate-free list.
 title: Install the operator on Kubernetes
 description: Deploy the operator with Helm and verify the rollout.
 applies-to: [operator-1.4, kubernetes]
+not-applicable-to: [operator-1.4-fips]
 concepts: [Operator, Helm chart]
 prerequisites: [create-api-token]
 next-steps: [verify-rollout, configure-alerts]
@@ -50,12 +52,41 @@ related-pages: [operator-architecture]
   because a collision at least fails loudly. `next-steps` is several
   unordered suggestions; the generator's `next`/`prev` position keys are a
   different fact and stay with the generator.
+- **"A more advanced page" is a `next-steps` entry, not a missing field.**
+  Asked in review whether the family needs a way to point at a deeper
+  treatment of the same topic, the answer is that it already has one. There
+  is deliberately no `advanced` or `deeper-dive` key and no ordering among
+  next-steps, because *more advanced* is a claim about the **reader**, not
+  about the page. It is derived: two pages sharing `concepts` while pointing
+  at [`personas`](/docmeta/proposals/audience/) of different levels. That is
+  the same reasoning that cut reader `expertise` from this family — level
+  belongs to the persona definitions a page points at. The honest cost: a
+  docs set with no persona definitions yet cannot derive it, which is the
+  same day-one trade the audience vocabulary already makes.
+- **"See also" is a label for `related-pages`, not a second field.** The
+  rendered heading most docs sites use is editorial; the key underneath it
+  stays semantic. There is deliberately no `see-also` alias — one fact
+  reachable by two keys is exactly the second surface this family exists to
+  prevent, and an alias is permanent. If your style guide splits "See also"
+  (same product) from "Learn more" (off-site), note that `related-pages`
+  already accepts URLs, so that split is a rendering decision over one
+  field rather than a reason for two.
 - **`applies-to` is flat, and that was a fight.** Named dimensions
   (`product:` vs `deployment:` vs `generation:`) were designed and then
   simplified away; an org that needs axes prefixes labels
   (`deploy:kubernetes`) or overlays its own schema. This is a headline
   open question for the review.
-- **Two fields are harvest fallbacks of deeper twins.** `applies-to` and
+- **The negative exists at both altitudes.** `not-applicable-to` was added
+  in review round 5, for parallelism: `applies-to` had a page-level twin
+  and its negative did not, so the only way to say "not the FIPS build"
+  was to open a `kg` block for one field. Disjointness between the pair is
+  a graph-layer (SHACL) check here exactly as it is one level down — JSON
+  Schema cannot compare two sibling lists, so a page naming the same label
+  on both sides *passes*, and the contradiction surfaces at graph build.
+  That deliberate gap is pinned as a passing case, the way the overdue
+  review is.
+- **Three fields are harvest fallbacks of deeper twins.** `applies-to`,
+  `not-applicable-to` and
   `concepts` share names and shapes with their counterparts inside the
   [kg vocabulary](/docmeta/proposals/kg/)'s block. The rule is *deeper
   wins*: when the kg block speaks to a fact, its declaration wins; when it

@@ -29,6 +29,7 @@ intent: Deploy the operator on a running cluster
 visibility: public
 
 applies-to: [operator-1.3, operator-1.4, kubernetes]
+not-applicable-to: [operator-1.4-fips]
 concepts: [Operator, Helm chart, namespace]
 
 lifecycle: published
