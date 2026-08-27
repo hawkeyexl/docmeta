@@ -12,7 +12,7 @@
  * baseline ratchet) works unchanged.
  */
 import { DocmetaError, type FieldError } from "../types.js";
-import type { CheckConfig } from "./config.js";
+import type { CheckConfig, DocmetaConfig, SchemaTrustRoot } from "./config.js";
 import {
   assertSingleStatement,
   corpusDataColumns,
@@ -21,6 +21,7 @@ import {
   registerLineFor,
   type ProjectionEntry,
 } from "./projection.js";
+import { collectCollections, createCollectionViews } from "./collections.js";
 
 /** One loaded file a check may attach findings to. */
 export type CheckEntry = ProjectionEntry;
@@ -116,9 +117,29 @@ function synthesizeMessage(
  * convention, aborts the run with the check named: a broken rule is an
  * operational error, never a finding or a silent skip.
  */
+/**
+ * The run context a check projection may need beyond the entries themselves:
+ * the config whose named overrides become collection views (proposal 0027),
+ * and the resolution inputs membership is decided with — the same ones
+ * `validate` resolves each file's schema set with, so `FROM authors` in a
+ * check means exactly "the files the author schema judged".
+ */
+export interface CheckRunContext {
+  config?: DocmetaConfig | null;
+  /** `--schema` values: with them set, no override wins and views are empty. */
+  cliSchemas?: string[];
+  /** Directory a relative document-supplied file ref is measured from. */
+  fileBase?: string;
+  /** The repository boundary a document-supplied local path may not escape. */
+  trustRoot?: SchemaTrustRoot;
+  /** Diagnostics for the user; the CLI writes these to stderr. */
+  onNotice?: (message: string) => void;
+}
+
 export async function runChecks(
   checks: readonly CheckConfig[],
   entries: readonly CheckEntry[],
+  ctx: CheckRunContext = {},
 ): Promise<Map<string, FieldError[]>> {
   const merged = new Map<string, FieldError[]>();
   if (checks.length === 0) return merged;
@@ -128,6 +149,16 @@ export async function runChecks(
   try {
     createDocsTable(db, entries, corpusDataColumns(entries));
     registerLineFor(db, entries);
+    createCollectionViews(
+      db,
+      collectCollections(entries, {
+        config: ctx.config,
+        ...(ctx.cliSchemas ? { cliSchemas: ctx.cliSchemas } : {}),
+        ...(ctx.fileBase !== undefined ? { fileBase: ctx.fileBase } : {}),
+        ...(ctx.trustRoot ? { trustRoot: ctx.trustRoot } : {}),
+        ...(ctx.onNotice ? { onNotice: ctx.onNotice } : {}),
+      }),
+    );
     const loaded = new Set(entries.map((e) => e.label));
 
     for (const check of checks) {

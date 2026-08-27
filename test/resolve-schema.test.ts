@@ -4,6 +4,7 @@ import {
   collectSchemaPins,
   rebaseConfigSchemaRefs,
   resolveSchemaSet,
+  resolveSchemaSetWithSource,
   DEFAULT_SCHEMAS,
 } from "../src/core/resolve-schema.js";
 import { publishedBuiltins } from "../src/core/schema-registry.js";
@@ -559,5 +560,33 @@ describe("schemaTrust · a published built-in URL (0009)", () => {
         config: { ...trust("none"), schemas: ["x:y:1"] },
       }),
     ).toEqual(["x:y:1"]);
+  });
+});
+
+describe("resolveSchemaSetWithSource: the winning override's identity (0027)", () => {
+  const config = {
+    schemas: ["x:y:1"],
+    overrides: [
+      { files: "notes/**", schemas: ["a:b:1"] },
+      { files: "articles/**", schemas: ["doc-detective:1.0"] },
+    ],
+  };
+
+  it("carries the index of the override that won", () => {
+    const resolved = resolveSchemaSetWithSource({
+      filePath: "articles/a.md",
+      config,
+    });
+    expect(resolved.source).toBe("override");
+    expect(resolved.overrideIndex).toBe(1);
+  });
+
+  it("carries no index when another level won", () => {
+    const resolved = resolveSchemaSetWithSource({
+      filePath: "books/b.md",
+      config,
+    });
+    expect(resolved.source).toBe("config");
+    expect(resolved.overrideIndex).toBeUndefined();
   });
 });

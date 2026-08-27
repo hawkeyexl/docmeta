@@ -794,3 +794,96 @@ describe("the repository's own docmeta.config.yaml", () => {
     ).toEqual([...DEFAULT_SCHEMAS]);
   });
 });
+
+describe("named overrides (0027)", () => {
+  const withName = (name: string): string =>
+    [
+      "overrides:",
+      `  - name: ${JSON.stringify(name)}`,
+      '    files: "authors/**"',
+      "    schemas: [google:okf:0.1]",
+      "",
+    ].join("\n");
+
+  it("accepts an optional name on an override", () => {
+    const cfg = parseConfig(withName("authors"), "docmeta.config.yaml");
+    expect(cfg.overrides?.[0]?.name).toBe("authors");
+  });
+
+  it("accepts any other string: names are quoted identifiers", () => {
+    const cfg = parseConfig(withName("API docs & guides"), "docmeta.config.yaml");
+    expect(cfg.overrides?.[0]?.name).toBe("API docs & guides");
+  });
+
+  it("leaves name unset when the key is absent", () => {
+    const cfg = parseConfig(
+      'overrides:\n  - files: "a/**"\n    schemas: [google:okf:0.1]\n',
+      "docmeta.config.yaml",
+    );
+    expect(cfg.overrides?.[0]?.name).toBeUndefined();
+  });
+
+  it("refuses a duplicate name", () => {
+    const text = [
+      "overrides:",
+      "  - name: authors",
+      '    files: "authors/**"',
+      "    schemas: [google:okf:0.1]",
+      "  - name: authors",
+      '    files: "people/**"',
+      "    schemas: [google:okf:0.1]",
+      "",
+    ].join("\n");
+    expect(() => parseConfig(text, "docmeta.config.yaml")).toThrow(
+      /overrides\[1\].*"authors"/,
+    );
+  });
+
+  it("refuses the name docs, in any casing", () => {
+    expect(() => parseConfig(withName("docs"), "docmeta.config.yaml")).toThrow(
+      /docs/,
+    );
+    expect(() => parseConfig(withName("Docs"), "docmeta.config.yaml")).toThrow(
+      /docs table/i,
+    );
+  });
+
+  it("refuses an empty or blank name", () => {
+    expect(() => parseConfig(withName(""), "docmeta.config.yaml")).toThrow(
+      /overrides\[0\].name/,
+    );
+    expect(() => parseConfig(withName("   "), "docmeta.config.yaml")).toThrow(
+      /overrides\[0\].name/,
+    );
+  });
+
+  it("refuses a non-string name", () => {
+    const text =
+      'overrides:\n  - name: 3\n    files: "a/**"\n    schemas: [google:okf:0.1]\n';
+    expect(() => parseConfig(text, "docmeta.config.yaml")).toThrow(
+      /overrides\[0\].name/,
+    );
+  });
+
+  it("refuses a name starting sqlite_, in any casing", () => {
+    expect(() =>
+      parseConfig(withName("sqlite_authors"), "docmeta.config.yaml"),
+    ).toThrow(/sqlite_/);
+    expect(() =>
+      parseConfig(withName("SQLite_authors"), "docmeta.config.yaml"),
+    ).toThrow(/sqlite_/);
+  });
+
+  it("refuses a name on an override with no schemas", () => {
+    const text = [
+      "overrides:",
+      "  - name: authors",
+      '    files: "authors/**"',
+      "    elements: [article/title]",
+      "",
+    ].join("\n");
+    expect(() => parseConfig(text, "docmeta.config.yaml")).toThrow(
+      /never win schema resolution/,
+    );
+  });
+});
