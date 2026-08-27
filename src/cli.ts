@@ -313,6 +313,18 @@ export function parseQueryParams(
       );
     }
     const name = item.slice(0, at);
+    // Exactly the token grammar `collectNamedParameters` recognizes (an
+    // optional $/:/@ prefix tolerated, as the API's key handling does).
+    // Anything else — a space, a leading digit, an empty name — could never
+    // be referenced from the SQL, so the engine would ignore the bind and
+    // the unbound-reference guard would never fire: the false-green path
+    // this flag's design closes would reopen through a typo.
+    const bare = /^[$:@]/.test(name) ? name.slice(1) : name;
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(bare)) {
+      throw new DocmetaError(
+        `--param name "${name}" cannot be bound: a SQL named parameter is letters, digits, and underscores, starting with a letter or underscore.`,
+      );
+    }
     const value = item.slice(at + (useTyped ? 2 : 1));
     if (!useTyped) {
       params[name] = value;

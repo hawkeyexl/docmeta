@@ -936,6 +936,20 @@ describe("parseQueryParams", () => {
     expect(() => parseQueryParams(["=v"])).toThrow(DocmetaError);
   });
 
+  it("refuses a name outside the SQL token grammar, so a typo cannot bind silently", () => {
+    // A name the SQL could never reference is a bind the engine ignores —
+    // and the unbound-reference guard would never fire for it.
+    expect(() => parseQueryParams(["my param=val"])).toThrow(DocmetaError);
+    expect(() => parseQueryParams([" =val"])).toThrow(DocmetaError);
+    expect(() => parseQueryParams(["1st=val"])).toThrow(DocmetaError);
+  });
+
+  it("tolerates a $/:/@ prefix on the name, as the API's key handling does", () => {
+    expect(parseQueryParams(["$v=x"])).toEqual({ $v: "x" });
+    expect(parseQueryParams([":v=x"])).toEqual({ ":v": "x" });
+    expect(parseQueryParams(["@v=x"])).toEqual({ "@v": "x" });
+  });
+
   it("refuses invalid JSON after :=, pointing at the string spelling", () => {
     expect(() => parseQueryParams(["v:=high"])).toThrow(/v=/);
   });
