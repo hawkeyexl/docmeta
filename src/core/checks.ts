@@ -12,16 +12,23 @@
  * baseline ratchet) works unchanged.
  */
 import { DocmetaError, type FieldError } from "../types.js";
-import type { CheckConfig, DocmetaConfig, SchemaTrustRoot } from "./config.js";
+import { CHECK_NAME, type CheckConfig } from "./config.js";
+import { escapePointerSegment } from "../extractors/pointer.js";
 import {
   assertSingleStatement,
+  collectNamedParameters,
   corpusDataColumns,
   createDocsTable,
   loadSqlite,
   registerLineFor,
+  stripLeadingTrivia,
   type ProjectionEntry,
 } from "./projection.js";
-import { collectCollections, createCollectionViews } from "./collections.js";
+import {
+  collectCollections,
+  createCollectionViews,
+  type CollectionParams,
+} from "./collections.js";
 
 /** One loaded file a check may attach findings to. */
 export type CheckEntry = ProjectionEntry;
@@ -29,8 +36,20 @@ export type CheckEntry = ProjectionEntry;
 /** The `keyword` every check finding carries: no Ajv keyword produced it. */
 export const CHECK_KEYWORD = "check";
 
-/** The `schema` ref a check's findings carry — and their baseline identity. */
+/**
+ * The `schema` ref a check's findings carry — and their baseline identity.
+ *
+ * The grammar is asserted here as well as in the config parser: a
+ * programmatic `CheckConfig` never passes through `parseChecks`, and a
+ * path-shaped name (`../evil`, `slugs.json`) would classify as a file ref and
+ * fingerprint cwd-relative — the identity bug `CHECK_NAME` exists to prevent.
+ */
 export function checkSchemaRef(name: string): string {
+  if (!CHECK_NAME.test(name) || name.toLowerCase().endsWith(".json")) {
+    throw new DocmetaError(
+      `check name "${name}" must match [a-z0-9][a-z0-9._-]* and not end in ".json" — the name is part of each finding's identity (check:<name>).`,
+    );
+  }
   return `check:${name}`;
 }
 
@@ -77,7 +96,9 @@ export function rowsToFindings(
     const err: FieldError = {
       schema: checkSchemaRef(name),
       keyword: CHECK_KEYWORD,
-      instancePath: key === undefined ? "" : `/${key}`,
+      // RFC 6901 escaping, or a key containing `/` or `~` would build a
+      // pointer that parses as a different (nested) location.
+      instancePath: key === undefined ? "" : `/${escapePointerSegment(key)}`,
       message,
       ...(line === undefined ? {} : { line }),
     };
@@ -137,19 +158,11 @@ function synthesizeMessage(
  * the config whose named overrides become collection views (proposal 0027),
  * and the resolution inputs membership is decided with — the same ones
  * `validate` resolves each file's schema set with, so `FROM authors` in a
- * check means exactly "the files the author schema judged".
+ * check means exactly "the files the author schema judged". The shape IS
+ * `CollectionParams`: it is handed to `collectCollections` verbatim, and an
+ * alias is what keeps the two from drifting apart field by field.
  */
-export interface CheckRunContext {
-  config?: DocmetaConfig | null;
-  /** `--schema` values: with them set, no override wins and views are empty. */
-  cliSchemas?: string[];
-  /** Directory a relative document-supplied file ref is measured from. */
-  fileBase?: string;
-  /** The repository boundary a document-supplied local path may not escape. */
-  trustRoot?: SchemaTrustRoot;
-  /** Diagnostics for the user; the CLI writes these to stderr. */
-  onNotice?: (message: string) => void;
-}
+export type CheckRunContext = CollectionParams;
 
 export async function runChecks(
   checks: readonly CheckConfig[],
@@ -164,19 +177,45 @@ export async function runChecks(
   try {
     createDocsTable(db, entries, corpusDataColumns(entries));
     registerLineFor(db, entries);
-    createCollectionViews(
-      db,
-      collectCollections(entries, {
-        config: ctx.config,
-        ...(ctx.cliSchemas ? { cliSchemas: ctx.cliSchemas } : {}),
-        ...(ctx.fileBase !== undefined ? { fileBase: ctx.fileBase } : {}),
-        ...(ctx.trustRoot ? { trustRoot: ctx.trustRoot } : {}),
-        ...(ctx.onNotice ? { onNotice: ctx.onNotice } : {}),
-      }),
-    );
+    createCollectionViews(db, collectCollections(entries, ctx));
+    // Checks are SELECT-only by design — 0021's original discipline, which
+    // 0022 lifted for `query` because writes became query's *feature*, judged
+    // by its effect gate. Checks have no such gate: without this, an UPDATE
+    // in one check mutates the shared projection every later check computes
+    // over, and a DELETE/DROP is misdiagnosed downstream. Set after the
+    // table and views are built, before any check's SQL runs.
+    db.exec("PRAGMA query_only = 1");
     const loaded = new Set(entries.map((e) => e.label));
 
     for (const check of checks) {
+      // ATTACH and VACUUM write files of their own, which `query_only`
+      // does not fully prevent (ATTACH creates the attached file; VACUUM
+      // INTO creates its target before the engine refuses) — the same two
+      // statements `query` refuses by name.
+      const head = stripLeadingTrivia(check.query);
+      if (/^(attach|vacuum)\b/i.test(head)) {
+        throw new DocmetaError(
+          `check "${check.name}": ${head.split(/\s/, 1)[0]?.toUpperCase() ?? "that statement"} is refused: it can write outside the docs table.`,
+        );
+      }
+      // Checks bind nothing, so any named parameter would silently bind
+      // NULL, match nothing, and green the gate forever — the false-green
+      // shape the query-side guard refuses with a bind; here the remedy is
+      // to inline the value.
+      let tokens: string[];
+      try {
+        tokens = collectNamedParameters(check.query);
+      } catch (err) {
+        // The scan's own refusal (one name under two prefixes), check named.
+        throw new DocmetaError(
+          `check "${check.name}": ${(err as Error).message}`,
+        );
+      }
+      if (tokens.length > 0) {
+        throw new DocmetaError(
+          `check "${check.name}": the SQL references ${tokens.join(", ")}, but checks bind no parameters — an unbound name binds NULL and matches nothing, so the gate would pass on a typo. Inline the value in the SQL.`,
+        );
+      }
       let columns: string[];
       let rows: Record<string, unknown>[];
       try {
@@ -185,8 +224,11 @@ export async function runChecks(
         columns = stmt.columns().map((c) => c.name);
         rows = stmt.all();
       } catch (err) {
+        const message = (err as Error).message;
         throw new DocmetaError(
-          `check "${check.name}": ${(err as Error).message}`,
+          message.includes("attempt to write a readonly database")
+            ? `check "${check.name}": ${message} — checks are read-only by design; a check is a SELECT over the projection. Edit the corpus with \`docmeta query\` instead.`
+            : `check "${check.name}": ${message}`,
         );
       }
       for (const [path, errs] of rowsToFindings(

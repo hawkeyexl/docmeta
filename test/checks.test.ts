@@ -9,7 +9,12 @@ import {
   classifyRef,
   listBuiltins,
 } from "../src/core/schema-registry.js";
-import { runChecks, type CheckEntry } from "../src/core/checks.js";
+import {
+  checkSchemaRef,
+  rowsToFindings,
+  runChecks,
+  type CheckEntry,
+} from "../src/core/checks.js";
 import { runValidate } from "../src/commands/validate.js";
 import { runQuery } from "../src/commands/query.js";
 import { DocmetaError, type ExtractedMetadata } from "../src/types.js";
@@ -249,6 +254,99 @@ describe("runChecks: rows are findings", () => {
   });
 });
 
+describe("checks are SELECT-only", () => {
+  const two = [entry("a.md", { title: "A" }), entry("b.md", { title: "B" })];
+
+  it("refuses a mutating check before any later check sees a changed corpus", async () => {
+    // Pre-guard this greened: the UPDATE mutated the shared projection and
+    // the second check then computed over the altered corpus.
+    const err = await runChecks(
+      [
+        {
+          name: "sneaky",
+          query:
+            "UPDATE docs SET title = NULL RETURNING _path AS path, 'm' AS message",
+        },
+        {
+          name: "after",
+          query: "SELECT _path AS path FROM docs WHERE title IS NULL",
+        },
+      ],
+      two,
+    ).catch((e: unknown) => e as Error);
+    expect(err).toBeInstanceOf(DocmetaError);
+    expect((err as Error).message).toMatch(/sneaky/);
+    expect((err as Error).message).toMatch(/read-?only/i);
+  });
+
+  it("refuses DELETE FROM docs with the accurate cause, not a column complaint", async () => {
+    const err = await runChecks(
+      [{ name: "strip", query: "DELETE FROM docs" }],
+      two,
+    ).catch((e: unknown) => e as Error);
+    expect(err).toBeInstanceOf(DocmetaError);
+    expect((err as Error).message).toMatch(/strip/);
+    expect((err as Error).message).toMatch(/read-?only/i);
+    expect((err as Error).message).not.toMatch(/path.*column/i);
+  });
+
+  it("refuses ATTACH and VACUUM by name — they write files of their own", async () => {
+    for (const query of ["ATTACH 'x.db' AS ext", "VACUUM INTO 'x.db'"]) {
+      await expect(
+        runChecks([{ name: "escapee", query }], two),
+      ).rejects.toThrow(/escapee.*is refused/s);
+    }
+  });
+
+  it("refuses a named parameter: checks bind nothing, so a typo greens forever", async () => {
+    await expect(
+      runChecks(
+        [
+          {
+            name: "cutoff",
+            query: "SELECT _path AS path FROM docs WHERE title = $cutoff",
+          },
+        ],
+        two,
+      ),
+    ).rejects.toThrow(/\$cutoff/);
+  });
+});
+
+describe("finding identity hardening", () => {
+  it("escapes / and ~ in a key when building the instancePath", () => {
+    const findings = rowsToFindings(
+      "k",
+      ["path", "key"],
+      [
+        { path: "a.md", key: "a/b" },
+        { path: "a.md", key: "a~b" },
+      ],
+      new Set(["a.md"]),
+    );
+    expect(findings.get("a.md")?.map((e) => e.instancePath)).toEqual([
+      "/a~1b",
+      "/a~0b",
+    ]);
+  });
+
+  it("checkSchemaRef enforces the name grammar for programmatic callers", () => {
+    expect(checkSchemaRef("unique-slugs")).toBe("check:unique-slugs");
+    for (const bad of ["../evil", "Has Space", "slugs.json", ""]) {
+      expect(() => checkSchemaRef(bad)).toThrow(DocmetaError);
+    }
+  });
+
+  it('rejects the reserved check name "query" at parse time', () => {
+    expect(() =>
+      parseConfig(
+        'checks:\n  - name: query\n    query: "SELECT 1"',
+        "docmeta.config.yaml",
+      ),
+    ).toThrow(/reserved/);
+  });
+});
+
 describe("validate runs configured checks", () => {
   it("reports check findings and counts them in the summary", async () => {
     const { results, summary } = await runValidate({ inputs: [], cwd: corpus });
@@ -277,6 +375,23 @@ describe("validate runs configured checks", () => {
     expect(
       notices.filter((n) => n.includes("corpus checks skipped")),
     ).toHaveLength(1);
+  });
+
+  it("-s/--schema also disqualifies: the override empties every collection view", async () => {
+    // The file set is unchanged, but cliSchemas outranks every override, so
+    // all 0027 collection views would be empty by construction — a
+    // `FROM <collection>` check would green silently.
+    const notices: string[] = [];
+    const { summary } = await runValidate({
+      inputs: [],
+      cwd: corpus,
+      cliSchemas: ["./permissive.schema.json"],
+      onNotice: (m) => notices.push(m),
+    });
+    expect(summary.failed).toBe(0);
+    expect(
+      notices.some((n) => n.includes("corpus checks skipped")),
+    ).toBe(true);
   });
 
   it("--exclude and --no-gitignore also disqualify the run", async () => {
