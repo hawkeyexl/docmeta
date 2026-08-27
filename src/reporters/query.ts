@@ -19,9 +19,14 @@ export interface QueryReportOptions {
   dryRun?: boolean;
 }
 
-/** SQL NULL prints as `(null)`; everything else as `get` prints values. */
+/**
+ * SQL NULL prints as `(null)`; everything else as `get` prints values —
+ * except a bigint, which a SQL expression can hand back and which
+ * `stringifyValue`'s JSON.stringify would throw on.
+ */
 function cell(value: unknown): string {
-  return value === null ? "(null)" : stringifyValue(value);
+  if (value === null) return "(null)";
+  return typeof value === "bigint" ? String(value) : stringifyValue(value);
 }
 
 /**
@@ -73,6 +78,9 @@ export function renderQuery(
  * Rows only, by contract: changes are heterogeneous per-file diffs, not a
  * table, and the CLI refuses them before this is called.
  */
+/** A CSV field needing quoting: it contains a comma, quote, or newline. */
+const CSV_NEEDS_QUOTING = /[",\n\r]/;
+
 export function renderQueryCsv(
   run: Pick<QueryRun, "columns" | "rows">,
 ): string {
@@ -84,7 +92,7 @@ export function renderQueryCsv(
         : typeof value === "number" || typeof value === "bigint"
           ? String(value)
           : stringifyValue(value); // a BLOB or other oddity, `get`'s way
-    return /[",\n\r]/.test(text)
+    return CSV_NEEDS_QUOTING.test(text)
       ? `"${text.replaceAll('"', '""')}"`
       : text;
   };

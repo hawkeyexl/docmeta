@@ -691,6 +691,14 @@ describe("renderQuery", () => {
     );
   });
 
+  it("prints a bigint cell instead of throwing", () => {
+    // A SQL expression can hand back a bigint; JSON.stringify throws on it,
+    // so the pretty cell needs the same guard its csv/message siblings have.
+    expect(
+      renderQuery({ columns: ["n"], rows: [{ n: 9007199254740993n }] }),
+    ).toContain("9007199254740993");
+  });
+
   it("renders changes as a diff with the mode's verdict line", () => {
     const changes = [
       { file: "docs/beta.md", key: "draft", from: true, to: false, written: false },
@@ -906,6 +914,12 @@ describe("collectNamedParameters", () => {
   it("ignores a bare prefix with no identifier after it", () => {
     expect(collectNamedParameters("SELECT a $ 1, b : 2 FROM docs")).toEqual([]);
   });
+
+  it("refuses one bare name under two prefixes instead of a cryptic engine error", () => {
+    expect(() =>
+      collectNamedParameters("SELECT * FROM docs WHERE a = $p AND b = :p"),
+    ).toThrow(/\$p.*:p/s);
+  });
 });
 
 describe("parseQueryParams", () => {
@@ -952,6 +966,42 @@ describe("parseQueryParams", () => {
 
   it("refuses invalid JSON after :=, pointing at the string spelling", () => {
     expect(() => parseQueryParams(["v:=high"])).toThrow(/v=/);
+  });
+
+  it("binds __proto__ as an ordinary own key, never the prototype", () => {
+    const params = parseQueryParams(['__proto__:="x"']);
+    expect(Object.hasOwn(params, "__proto__")).toBe(true);
+    expect(Object.getOwnPropertyDescriptor(params, "__proto__")?.value).toBe(
+      "x",
+    );
+    // And nothing leaked onto Object.prototype.
+    expect(({} as Record<string, unknown>).x).toBeUndefined();
+  });
+});
+
+describe("parameter identity hardening", () => {
+  it("an inherited-key lookalike ($toString) is unbound, not silently NULL", async () => {
+    // `"toString" in {}` is true, so the membership test must be own-key:
+    // an unbound $toString binding NULL and matching nothing is the exact
+    // false-green the guard exists to refuse.
+    await expect(
+      q("SELECT _path FROM docs WHERE title = $toString"),
+    ).rejects.toThrow(/\$toString/);
+  });
+
+  it("a bound __proto__ parameter matches a stored value", async () => {
+    const run = await q("SELECT _path FROM docs WHERE title = $__proto__", {
+      params: parseQueryParams(['__proto__:="Alpha"']),
+    });
+    expect(run.rows).toEqual([{ _path: "docs/alpha.md" }]);
+  });
+
+  it("one bare name under two prefixes refuses clearly through runQuery", async () => {
+    await expect(
+      q("SELECT _path FROM docs WHERE title = $p AND title = :p", {
+        params: { p: "Alpha" },
+      }),
+    ).rejects.toThrow(/\$p.*:p/s);
   });
 });
 

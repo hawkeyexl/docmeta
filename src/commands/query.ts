@@ -60,6 +60,7 @@ import {
   createDocsTable,
   loadSqlite,
   registerLineFor,
+  stripLeadingTrivia,
   type SqlValue,
 } from "../core/projection.js";
 import {
@@ -213,8 +214,11 @@ export async function runQuery(opts: QueryOptions): Promise<QueryRun> {
   // passing CI gate. Refused here, before any file is read.
   const boundParams = bindParams(opts.params);
   if (sql !== "") {
+    // Own keys only: `"toString" in {}` is true, so an `in` test would read
+    // $toString (or $constructor, $__proto__) as bound and let it bind NULL —
+    // the exact false green this guard refuses.
     const unbound = collectNamedParameters(sql).filter(
-      (token) => !(token.slice(1) in boundParams),
+      (token) => !Object.hasOwn(boundParams, token.slice(1)),
     );
     if (unbound.length > 0) {
       const list = unbound.join(", ");
@@ -356,7 +360,12 @@ interface QueryEntry {
 function bindParams(
   params: Record<string, unknown> | undefined,
 ): Record<string, SqlValue> {
-  const out: Record<string, SqlValue> = {};
+  // Null prototype, so a `__proto__` key is an ordinary own entry (it passes
+  // the name grammar) instead of a prototype mutation the engine never sees.
+  const out: Record<string, SqlValue> = Object.create(null) as Record<
+    string,
+    SqlValue
+  >;
   for (const [key, value] of Object.entries(params ?? {})) {
     const name = key.startsWith("$") || key.startsWith(":") || key.startsWith("@")
       ? key.slice(1)
@@ -2051,25 +2060,6 @@ function validateNewPath(p: string, base: string): void {
   // "escapes the corpus" would be a baffling description of that.
   if (abs === resolve(base)) refuse("it points at the corpus root, not a file");
   if (!abs.startsWith(resolve(base) + sep)) refuse("it escapes the corpus");
-}
-
-/** The statement with leading whitespace and comments removed. */
-function stripLeadingTrivia(sql: string): string {
-  let i = 0;
-  for (;;) {
-    while (i < sql.length && /\s/.test(sql[i] ?? "")) i++;
-    if (sql.startsWith("--", i)) {
-      while (i < sql.length && sql[i] !== "\n") i++;
-      continue;
-    }
-    if (sql.startsWith("/*", i)) {
-      const end = sql.indexOf("*/", i + 2);
-      if (end === -1) return "";
-      i = end + 2;
-      continue;
-    }
-    return sql.slice(i);
-  }
 }
 
 /**

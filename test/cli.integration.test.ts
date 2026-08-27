@@ -521,6 +521,52 @@ describe("cli query (built bin)", () => {
     }
   });
 
+  it("-f csv with a mutating statement refuses without applying anything", () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-csv-mut-"));
+    try {
+      cpSync(resolve(root, "test", "fixtures", "ddl-bridge"), dir, {
+        recursive: true,
+      });
+      const before = readFileSync(join(dir, "docs", "one.md"), "utf8");
+      const r = run(
+        ["query", "-f", "csv", "UPDATE docs SET title = 'MUTATED'", "docs"],
+        undefined, undefined, dir,
+      );
+      expect(r.status).toBe(2);
+      expect(r.stderr).toContain("nothing was applied");
+      // The refusal must come before any write — csv can never apply.
+      expect(readFileSync(join(dir, "docs", "one.md"), "utf8")).toBe(before);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("export-only runs refuse findings formats and --param instead of ignoring them", () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-export-seams-"));
+    try {
+      cpSync(resolve(root, "test", "fixtures", "ddl-bridge"), dir, {
+        recursive: true,
+      });
+      // Silently exiting 0 here was a --check gate that checked nothing.
+      const findings = run(
+        ["query", "--check", "-f", "sarif", "--db", join(dir, "out.db"), "docs"],
+        undefined, undefined, dir,
+      );
+      expect(findings.status).toBe(2);
+      expect(findings.stderr).toMatch(/statement/);
+
+      const param = run(
+        ["query", "--param", "x=1", "--db", join(dir, "out2.db"), "docs"],
+        undefined, undefined, dir,
+      );
+      expect(param.status).toBe(2);
+      expect(param.stderr).toContain("--param");
+      expect(param.stderr).toMatch(/statement/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("--db exports without SQL, and keeps rows on stdout with it", () => {
     const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-db-"));
     try {

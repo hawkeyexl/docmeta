@@ -197,6 +197,16 @@ function topLevelSemicolon(sql: string): number {
 }
 
 /**
+ * The one grammar for a named parameter's bare name. The scan below matches
+ * it as a prefix; `isParamName` answers for a whole string — exported so the
+ * CLI's `--param` validation cannot drift from what the scan recognizes.
+ */
+const PARAM_NAME_HEAD = /^[A-Za-z_][A-Za-z0-9_]*/;
+export function isParamName(name: string): boolean {
+  return PARAM_NAME_HEAD.exec(name)?.[0] === name;
+}
+
+/**
  * Named-parameter tokens (`$name`, `:name`, `@name`) the statement references
  * outside string literals, quoted identifiers, and comments — the same skip
  * rules as `topLevelSemicolon`, for the same reason: text inside a literal is
@@ -207,6 +217,10 @@ function topLevelSemicolon(sql: string): number {
  * immediately by an identifier (`[A-Za-z_][A-Za-z0-9_]*`), so a bare `$`, a
  * spaced `:`, and a doubled `::` are all operators-or-noise, never parameters.
  *
+ * One bare name under two prefixes (`$p` and `:p` in one statement) refuses
+ * here: the engine rejects it anyway, but as a generic "conflicting names"
+ * SQL error with neither spelling named.
+ *
  * Why this exists: the engine throws on an *extra* bound parameter, but a
  * parameter the SQL references with nothing bound silently binds NULL — which
  * matches nothing, and a zero-row `--check` is a passing CI gate. The caller
@@ -215,6 +229,7 @@ function topLevelSemicolon(sql: string): number {
 export function collectNamedParameters(sql: string): string[] {
   const tokens: string[] = [];
   const seen = new Set<string>();
+  const prefixOf = new Map<string, string>();
   for (let i = 0; i < sql.length; i++) {
     const ch = sql[i];
     if (ch === "'" || ch === '"' || ch === "`") {
@@ -244,9 +259,16 @@ export function collectNamedParameters(sql: string): string[] {
         i++;
         continue;
       }
-      const m = /^[A-Za-z_][A-Za-z0-9_]*/.exec(sql.slice(i + 1));
+      const m = PARAM_NAME_HEAD.exec(sql.slice(i + 1));
       if (!m) continue;
       const token = ch + m[0];
+      const priorPrefix = prefixOf.get(m[0]);
+      if (priorPrefix !== undefined && priorPrefix !== ch) {
+        throw new DocmetaError(
+          `The statement references both ${priorPrefix}${m[0]} and ${token} — one name under two prefixes, which the engine rejects as conflicting. Use one spelling throughout.`,
+        );
+      }
+      prefixOf.set(m[0], ch);
       if (!seen.has(token)) {
         seen.add(token);
         tokens.push(token);
@@ -255,6 +277,30 @@ export function collectNamedParameters(sql: string): string[] {
     }
   }
   return tokens;
+}
+
+/**
+ * The statement with leading whitespace and comments removed — the first real
+ * token, for the callers that refuse a statement by name (`query`'s
+ * ATTACH/VACUUM gate, and the checks' twin of it). Lived in query.ts until
+ * the checks needed the identical scan.
+ */
+export function stripLeadingTrivia(sql: string): string {
+  let i = 0;
+  for (;;) {
+    while (i < sql.length && /\s/.test(sql[i] ?? "")) i++;
+    if (sql.startsWith("--", i)) {
+      while (i < sql.length && sql[i] !== "\n") i++;
+      continue;
+    }
+    if (sql.startsWith("/*", i)) {
+      const end = sql.indexOf("*/", i + 2);
+      if (end === -1) return "";
+      i = end + 2;
+      continue;
+    }
+    return sql.slice(i);
+  }
 }
 
 /** Only whitespace, comments, and bare `;` — legal after the terminator. */
