@@ -692,6 +692,52 @@ describe("cli query csv and params (0029, built bin)", () => {
   });
 });
 
+describe("cli query named collections (0027, built bin)", () => {
+  let dir = "";
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "docmeta-cli-collections-"));
+    // A private copy, run from inside it so the fixture's own config (with
+    // its named overrides) governs the run through discovery, the way a real
+    // repo's would.
+    cpSync(resolve(root, "test", "fixtures", "collections"), dir, {
+      recursive: true,
+    });
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("reads FROM a named collection instead of a GLOB self-join", () => {
+    const r = run(
+      [
+        "query",
+        "SELECT d._path, d.author FROM docs d LEFT JOIN authors a ON a.slug = d.author WHERE d.author IS NOT NULL AND a._path IS NULL",
+        "-f",
+        "json",
+      ],
+      undefined,
+      undefined,
+      dir,
+    );
+    expect(r.status).toBe(0);
+    expect(JSON.parse(r.stdout)).toEqual([
+      { _path: "docs/guide.md", author: "ghost" },
+    ]);
+  });
+
+  it("refuses a write through a view with the write-through-docs remedy", () => {
+    const r = run(
+      ["query", "UPDATE authors SET title = 'X'"],
+      undefined,
+      undefined,
+      dir,
+    );
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("cannot modify authors because it is a view");
+    expect(r.stderr).toContain('SELECT _path FROM "authors"');
+  });
+});
+
 // Exit 0 means "every file passed". With no files there is no verdict, so
 // reporting success turns a broken glob or a moved directory into a
 // permanently green gate that checks nothing.

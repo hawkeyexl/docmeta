@@ -62,6 +62,10 @@ import {
   registerLineFor,
   type SqlValue,
 } from "../core/projection.js";
+import {
+  collectCollections,
+  createCollectionViews,
+} from "../core/collections.js";
 import type { FingerprintContext } from "../core/baseline.js";
 import {
   classifyRef,
@@ -458,6 +462,20 @@ async function runSql(
     : undefined;
   try {
     createDocsTable(db, entries, dataColumns);
+    // Named collections (0027): one view per named override, of the files it
+    // won resolution for. `collectCollections` walks resolution only when the
+    // config names a collection at all, so a config without `name:` builds a
+    // byte-identical SQL surface to today. Before the export-only return, so
+    // a `--db` file carries the views (0027 § stress test 5).
+    createCollectionViews(
+      db,
+      collectCollections(entries, {
+        config: ctx.config,
+        fileBase: ctx.cwd,
+        trustRoot: ctx.trustRoot,
+        ...(ctx.onNotice ? { onNotice: ctx.onNotice } : {}),
+      }),
+    );
     if (sql === "") {
       return { columns: [], rows: [], ...(dbInfo ? { db: dbInfo } : {}) };
     }
@@ -512,6 +530,18 @@ async function runSql(
         // primary key catches it before any disk check can.
         throw new DocmetaError(
           "That _path already exists in the corpus.",
+        );
+      }
+      // A write through a collection view (0027): SQLite's own refusal,
+      // completed with the remedy — writes go through the one authoritative
+      // table, scoped by the view's membership. Non-greedy up to the literal
+      // tail: a collection name may contain spaces, which \S+ would truncate
+      // into a remedy naming a view that does not exist.
+      const viewWrite = /cannot modify (.+?) because it is a view/.exec(message);
+      const viewName = viewWrite?.[1];
+      if (viewName !== undefined) {
+        throw new DocmetaError(
+          `SQL error: ${message}; a collection is read-only — write through docs: UPDATE docs … WHERE _path IN (SELECT _path FROM "${viewName.replaceAll('"', '""')}").`,
         );
       }
       throw new DocmetaError(`SQL error: ${message}`);
@@ -998,6 +1028,8 @@ async function planSchemaMutation(
   // schema outside the repository, least of all as a write target.
   let refs: string[] | undefined;
   const sources = new Set<string>();
+  const groupIndexes = new Set<number>();
+  let splitLabel: string | undefined;
   for (const e of entries) {
     let resolved;
     try {
@@ -1015,18 +1047,42 @@ async function planSchemaMutation(
       throw new DocmetaError(`"${e.label}": ${(err as Error).message}`);
     }
     sources.add(resolved.source);
+    if (resolved.overrideIndex !== undefined) {
+      groupIndexes.add(resolved.overrideIndex);
+    }
     if (refs === undefined) {
       refs = resolved.schemas;
     } else if (
       // Order-insensitive, like seqResolvesToRunSet below: a document that
       // lists the same refs in another order names the same contract.
+      splitLabel === undefined &&
       JSON.stringify([...refs].sort()) !==
-      JSON.stringify([...resolved.schemas].sort())
+        JSON.stringify([...resolved.schemas].sort())
     ) {
-      throw new DocmetaError(
-        `DDL needs the corpus to resolve to one schema set, and this run's is split ("${e.label}" resolves differently). Scope the run to one override group.`,
-      );
+      // The walk finishes before refusing, so the refusal can name every
+      // override group the run spans, not only the first two it met.
+      splitLabel = e.label;
     }
+  }
+  if (splitLabel !== undefined) {
+    // With named override groups (0027) the remedy is finally spellable:
+    // list each group by name with its glob, so "one group's files" is a
+    // copy-pastable next step rather than a concept.
+    const overrides = ctx.config?.overrides ?? [];
+    const named = [...groupIndexes]
+      .sort((a, b) => a - b)
+      .flatMap((i) => {
+        const o = overrides[i];
+        return o?.name !== undefined ? [`${o.name} (${o.files})`] : [];
+      });
+    const last = named[named.length - 1];
+    const remedy =
+      named.length >= 2 && last !== undefined
+        ? `The run spans ${[named.slice(0, -1).join(", "), last].join(" and ")}; re-run over one group's files.`
+        : "Scope the run to one override group.";
+    throw new DocmetaError(
+      `DDL needs the corpus to resolve to one schema set, and this run's is split ("${splitLabel}" resolves differently). ${remedy}`,
+    );
   }
   if (!refs || sources.has("default")) {
     throw new DocmetaError(

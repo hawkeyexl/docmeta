@@ -17,6 +17,17 @@ export interface SchemaOverride {
   files: string;
   schemas: string[];
   /**
+   * Optional collection name (proposal 0027): the override group becomes a
+   * SQL view of that name over the `docs` projection, holding exactly the
+   * files this override won schema resolution for. Any string is legal —
+   * view names are quoted identifiers — except the refusals `parseConfig`
+   * makes: a duplicate, `docs` (the table every query already reads), a
+   * blank name, and a name starting `sqlite_` (SQLite reserves the prefix).
+   * A `name:` also requires `schemas:`, because a schema-less override never
+   * wins resolution and its view would be empty by construction.
+   */
+  name?: string;
+  /**
    * Extra element paths for files matching `files`. Unlike `schemas`, which the
    * first matching override *replaces* because a schema set is a complete
    * statement, these accumulate: every matching override contributes, on top of
@@ -123,7 +134,7 @@ function asElementPaths(
 }
 
 /** The keys one `overrides:` entry may carry. */
-const OVERRIDE_KEYS = ["files", "schemas", "elements"] as const;
+const OVERRIDE_KEYS = ["name", "files", "schemas", "elements"] as const;
 
 /**
  * One named corpus check (proposal 0026): SQL run over the `docs` projection
@@ -416,6 +427,7 @@ export function parseConfig(text: string, source: string): DocmetaConfig {
     if (!Array.isArray(obj.overrides)) {
       throw new DocmetaError(`${source}: "overrides" must be a list.`);
     }
+    const seenNames = new Set<string>();
     config.overrides = obj.overrides.map((entry, i) => {
       if (typeof entry !== "object" || entry === null) {
         throw new DocmetaError(`${source}: overrides[${i}] must be a mapping.`);
@@ -449,7 +461,59 @@ export function parseConfig(text: string, source: string): DocmetaConfig {
           `${source}: overrides[${i}] sets neither "schemas" nor "elements", so it has no effect.`,
         );
       }
-      return { files: e.files, schemas, ...(elements ? { elements } : {}) };
+      // `name:` refusals (proposal 0027), all at parse time so a name that
+      // could never become a working view fails where the user can see the
+      // config line, not as a SQL error three reads later.
+      let name: string | undefined;
+      if (e.name !== undefined) {
+        if (typeof e.name !== "string" || e.name.trim() === "") {
+          throw new DocmetaError(
+            `${source}: overrides[${i}].name must be a non-empty string — it becomes the collection's view name.`,
+          );
+        }
+        // SQLite object names are case-insensitive, so any casing of "docs"
+        // collides with the projection table itself.
+        if (e.name.toLowerCase() === "docs") {
+          throw new DocmetaError(
+            `${source}: overrides[${i}].name "${e.name}" collides with the docs table every query reads. Pick another name.`,
+          );
+        }
+        // SQLite reserves the prefix (case-insensitively) for internal
+        // objects and refuses such a CREATE VIEW outright, quoting
+        // notwithstanding.
+        if (e.name.toLowerCase().startsWith("sqlite_")) {
+          throw new DocmetaError(
+            `${source}: overrides[${i}].name "${e.name}" starts with "sqlite_", which SQLite reserves for its own objects. Pick another name.`,
+          );
+        }
+        // A schema-less override never wins schema resolution (the resolver
+        // skips it), so its view would be empty by construction — the same
+        // reads-as-configured-and-is-not silence the no-effect refusal above
+        // exists to end.
+        if (schemas.length === 0) {
+          throw new DocmetaError(
+            `${source}: overrides[${i}] names a collection ("${e.name}") but sets no "schemas", so it can never win schema resolution and its view would always be empty. Add "schemas", or drop the name.`,
+          );
+        }
+        // Two overrides sharing a name would be one CREATE VIEW clobbering
+        // another — and first-match-wins already means only one could hold
+        // the files both claim. Case-folded, like the docs/sqlite_ guards:
+        // SQLite's object namespace is case-insensitive, so "Authors" and
+        // "authors" are one view name to the engine.
+        if (seenNames.has(e.name.toLowerCase())) {
+          throw new DocmetaError(
+            `${source}: overrides[${i}] reuses the name "${e.name}"; collection names must be unique.`,
+          );
+        }
+        seenNames.add(e.name.toLowerCase());
+        name = e.name;
+      }
+      return {
+        files: e.files,
+        schemas,
+        ...(elements ? { elements } : {}),
+        ...(name !== undefined ? { name } : {}),
+      };
     });
   }
 

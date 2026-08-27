@@ -182,6 +182,19 @@ export interface ResolveParams {
 }
 
 const matcherCache = new Map<string, (p: string) => boolean>();
+
+/**
+ * Does this file path match an override's `files:` glob, by the resolver's own
+ * rules (picomatch, dot files included, `\` normalized to `/`)?
+ *
+ * Exported for the collections layer (proposal 0027), which needs to say *why*
+ * a glob-matching file is absent from a view — membership itself never goes
+ * through raw glob matching, only through the resolution winner below.
+ */
+export function matchesFileGlob(glob: string, filePath: string): boolean {
+  return matches(glob, filePath);
+}
+
 function matches(glob: string, filePath: string): boolean {
   let m = matcherCache.get(glob);
   if (!m) {
@@ -330,6 +343,13 @@ export type SchemaSetSource =
 export interface ResolvedSchemaSet {
   schemas: string[];
   source: SchemaSetSource;
+  /**
+   * Which `overrides[]` entry won, when `source` is `"override"` — the
+   * additive identity proposal 0027 needs: a file belongs to the collection
+   * of the override that won its resolution, and "an override won" without
+   * *which* cannot answer that. Absent for every other source.
+   */
+  overrideIndex?: number;
 }
 
 /**
@@ -372,9 +392,9 @@ export function resolveSchemaSetWithSource(
   }
 
   if (config?.overrides) {
-    for (const ov of config.overrides) {
+    for (const [i, ov] of config.overrides.entries()) {
       if (matches(ov.files, filePath) && ov.schemas.length > 0) {
-        return { schemas: dedupe(ov.schemas), source: "override" };
+        return { schemas: dedupe(ov.schemas), source: "override", overrideIndex: i };
       }
     }
   }

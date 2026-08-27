@@ -420,7 +420,16 @@ export async function runValidate(
     if (scoped) {
       opts.onNotice?.("corpus checks skipped: run is scoped");
     } else {
-      const findings = await runChecks(configuredChecks, checkEntries);
+      const findings = await runChecks(configuredChecks, checkEntries, {
+        // The same resolution inputs the per-file loop used, so a check's
+        // collection views (0027) hold exactly the files each override group
+        // was validated as.
+        config,
+        ...(opts.cliSchemas ? { cliSchemas: opts.cliSchemas } : {}),
+        fileBase: cwd,
+        trustRoot,
+        ...(opts.onNotice ? { onNotice: opts.onNotice } : {}),
+      });
       const byFile = new Map(results.map((r) => [r.file, r]));
       for (const [file, errs] of findings) {
         // Unreachable while runChecks vets every path against the loaded set,
