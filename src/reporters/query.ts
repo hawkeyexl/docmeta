@@ -130,8 +130,10 @@ function renderChanges(
       const detail = [
         ch.type,
         ch.format !== undefined ? `format ${ch.format}` : undefined,
+        // JSON spellings, so the numeric enum [1] and the string enum ["1"]
+        // read as the distinct properties they are.
         ch.enum !== undefined
-          ? `enum [${ch.enum.map((v) => String(v)).join(", ")}]`
+          ? `enum [${ch.enum.map((v) => JSON.stringify(v)).join(", ")}]`
           : undefined,
         ch.required ? "required" : undefined,
       ]

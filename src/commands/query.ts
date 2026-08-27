@@ -639,7 +639,8 @@ function snapshotRows(db: Queryable): Map<string, Record<string, unknown>> {
   return new Map(rows.map((r) => [String(r._path), r]));
 }
 
-interface CellEffect {
+/** Exported with `assertDefaultsMatchDeclaredTypes`, not via the API index. */
+export interface CellEffect {
   file: string;
   key: string;
   /** SQL-space value the statement left behind. */
@@ -760,7 +761,8 @@ function snapshotColumns(
   return new Map(rows.map((r) => [r.name, { type: r.type, notnull: r.notnull }]));
 }
 
-interface SchemaOp {
+/** Exported with `assertDefaultsMatchDeclaredTypes`, not via the API index. */
+export interface SchemaOp {
   op: "add" | "drop" | "rename";
   key: string;
   renamedTo?: string;
@@ -892,6 +894,13 @@ function appendedColumnDef(before: string, after: string): string | undefined {
   return comma ? appended.slice(comma[0].length) : undefined;
 }
 
+/** Index of the first non-whitespace character of `text` at or after `from`. */
+function skipWs(text: string, from: number): number {
+  let i = from;
+  while (i < text.length && /\s/.test(text[i] ?? "")) i++;
+  return i;
+}
+
 /** Index of a `CHECK` keyword at or after `from`, outside quoted regions. */
 function indexOfCheck(text: string, from: number): number {
   let i = from;
@@ -975,11 +984,6 @@ function enumForAddedColumn(
   const checkAt = indexOfCheck(def, 0);
   if (checkAt === -1) return undefined;
 
-  const skipWs = (text: string, from: number): number => {
-    let i = from;
-    while (i < text.length && /\s/.test(text[i] ?? "")) i++;
-    return i;
-  };
   const i = skipWs(def, checkAt + "CHECK".length);
   if (def[i] !== "(") refuseShape();
   const end = matchingParenEnd(def, i);
@@ -1054,8 +1058,12 @@ function enumForAddedColumn(
  * (`INTEGER … DEFAULT 'high'` stores TEXT). Left unchecked, that writes a
  * schema requiring a type every backfilled file immediately violates — the
  * exact inverse of the ratchet staying green. Refused before any plan exists.
+ *
+ * Exported for the guard's own tests: `mapDeclaredType` always pairs a
+ * format with a type today, but `SchemaOp` declares them independent, and
+ * the format check below must hold for a format-only op too.
  */
-function assertDefaultsMatchDeclaredTypes(
+export function assertDefaultsMatchDeclaredTypes(
   ops: SchemaOp[],
   cells: CellEffect[],
 ): void {
@@ -1064,7 +1072,10 @@ function assertDefaultsMatchDeclaredTypes(
   const show = (v: unknown): string =>
     typeof v === "bigint" ? `${String(v)}n` : (toJsonText(v) ?? "undefined");
   for (const op of ops) {
-    if (op.op !== "add" || op.type === undefined) continue;
+    // Adds only — and NOT gated on a declared type: an op with no mapped
+    // type has nothing for the `ok` chain below to refuse (it falls through
+    // to true), while the format check must still run.
+    if (op.op !== "add") continue;
     for (const cell of cells) {
       if (cell.key !== op.key || cell.to === null || cell.to === undefined) {
         continue;
@@ -1087,7 +1098,9 @@ function assertDefaultsMatchDeclaredTypes(
         throw new DocmetaError(
           op.type === "boolean"
             ? `ALTER declares "${op.key}" as boolean, but the DEFAULT backfills ${show(to)} — only 0, 1, true, or false reconcile with a boolean column.`
-            : `ALTER declares "${op.key}" as ${op.type}, but the DEFAULT backfills ${show(to)} — the corpus would fail the schema it just gained. Match the DEFAULT to the declared type.`,
+            : // `!ok` is unreachable with no declared type (the chain falls
+              // through to true), so the fallback text never actually prints.
+              `ALTER declares "${op.key}" as ${op.type ?? "its declared type"}, but the DEFAULT backfills ${show(to)} — the corpus would fail the schema it just gained. Match the DEFAULT to the declared type.`,
         );
       }
       // 0028 stress 4: `DATE DEFAULT 'yesterday'` sails through the engine

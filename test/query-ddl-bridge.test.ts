@@ -7,7 +7,11 @@ import { cpSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runQuery, type QueryChange } from "../src/commands/query.js";
+import {
+  assertDefaultsMatchDeclaredTypes,
+  runQuery,
+  type QueryChange,
+} from "../src/commands/query.js";
 import { runValidate } from "../src/commands/validate.js";
 import { renderQuery } from "../src/reporters/query.js";
 import { loadSqlite } from "../src/core/projection.js";
@@ -192,6 +196,30 @@ describe("formats ride declared column types (0028)", () => {
     await expect(
       ddl("ALTER TABLE docs ADD COLUMN flagged BOOL DEFAULT 'yes'", d, true),
     ).rejects.toThrow(/boolean/);
+    // The reconciliation accepts the SQL keywords, not their text spellings:
+    // DEFAULT 'true' stores the string 'true', which is not a boolean.
+    await expect(
+      ddl("ALTER TABLE docs ADD COLUMN flagged BOOL DEFAULT 'true'", d, true),
+    ).rejects.toThrow(/boolean/);
+  });
+
+  it("the format DEFAULT guard does not depend on a broad type riding along", () => {
+    // mapDeclaredType always pairs format with type today, but SchemaOp
+    // declares them independent — a format-only add op must still refuse a
+    // DEFAULT the format rejects, not slip past a type-gated guard.
+    expect(() => {
+      assertDefaultsMatchDeclaredTypes(
+        [{ op: "add", key: "published", format: "date" }],
+        [{ file: "docs/one.md", key: "published", to: "yesterday" }],
+      );
+    }).toThrow(/format date/);
+    // And the well-formed value still passes.
+    expect(() => {
+      assertDefaultsMatchDeclaredTypes(
+        [{ op: "add", key: "published", format: "date" }],
+        [{ file: "docs/one.md", key: "published", to: "2026-08-26" }],
+      );
+    }).not.toThrow();
   });
 });
 
@@ -334,6 +362,15 @@ describe("the preview names the resulting property (0028)", () => {
         enum: [1, 2, 3],
         written: false,
       },
+      {
+        file: "schemas/house.json",
+        schema: true,
+        op: "add",
+        key: "severity",
+        type: "string",
+        enum: ["low", "high"],
+        written: false,
+      },
     ] as QueryChange[];
     const text = renderQuery(
       { columns: [], rows: [], changes },
@@ -341,5 +378,7 @@ describe("the preview names the resulting property (0028)", () => {
     );
     expect(text).toContain("+ reviewed_on (string, format date, required)");
     expect(text).toContain("+ priority (integer, enum [1, 2, 3])");
+    // Members render as the schema spells them: "1" and 1 must not collide.
+    expect(text).toContain('+ severity (string, enum ["low", "high"])');
   });
 });
