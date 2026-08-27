@@ -2545,9 +2545,15 @@ function skipExpression(
   while (i < n) {
     const ch = sql[i];
     // Every string/identifier form, brackets included — a bracket identifier
-    // may contain the `,`/`(`/`)` this scan otherwise acts on.
+    // may contain the `,`/`(`/`)` this scan otherwise acts on. Comments too:
+    // `SET k = /* a, b */ 1` must not read the comment's comma as a
+    // target separator.
     if (startsStringOrIdent(sql, i)) {
       i = skipStringOrIdent(sql, i);
+      continue;
+    }
+    if (startsComment(sql, i)) {
+      i = skipComment(sql, i);
       continue;
     }
     if (ch === "(") depth++;

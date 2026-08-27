@@ -139,6 +139,15 @@ describe("collectSetTargets: SET-clause names under the adversarial inputs", () 
   it("`set` inside a longer word is not the keyword", () => {
     expect(collectSetTargets("SELECT reset, offset FROM docs")).toEqual([]);
   });
+
+  it("a comma inside a comment in the expression is not a separator", () => {
+    expect(
+      collectSetTargets("UPDATE docs SET a = /* x, y */ 1, b = 2"),
+    ).toEqual(["a", "b"]);
+    expect(
+      collectSetTargets("UPDATE docs SET a = 1 -- t, u\n, b = 2"),
+    ).toEqual(["a", "b"]);
+  });
 });
 
 describe("collectInsertTargets: column-list names under the adversarial inputs", () => {
