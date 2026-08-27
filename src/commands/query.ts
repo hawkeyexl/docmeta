@@ -534,8 +534,10 @@ async function runSql(
       }
       // A write through a collection view (0027): SQLite's own refusal,
       // completed with the remedy — writes go through the one authoritative
-      // table, scoped by the view's membership.
-      const viewWrite = /cannot modify (\S+) because it is a view/.exec(message);
+      // table, scoped by the view's membership. Non-greedy up to the literal
+      // tail: a collection name may contain spaces, which \S+ would truncate
+      // into a remedy naming a view that does not exist.
+      const viewWrite = /cannot modify (.+?) because it is a view/.exec(message);
       const viewName = viewWrite?.[1];
       if (viewName !== undefined) {
         throw new DocmetaError(
