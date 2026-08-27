@@ -1,6 +1,6 @@
 # 0029 — query for scripts: CSV out, bound parameters in
 
-- **Status:** Proposed
+- **Status:** Implemented (#133)
 - **Serves:** Devin · D3, D4
 - **Depends on:** [0021](0021-frontmatter-as-a-database.md) (whose roadmap records
   `-f csv` as a fast-follow; the `--db` half of that line already shipped)
