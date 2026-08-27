@@ -411,6 +411,7 @@ export async function runValidate(
   if (configuredChecks.length > 0 && opts.checks !== false) {
     const scoped =
       opts.inputs.length > 0 ||
+      // redundant with inputs.length (stdin is an input) — kept as belt-and-suspenders
       usingStdin ||
       opts.as !== undefined ||
       opts.exts !== undefined ||
