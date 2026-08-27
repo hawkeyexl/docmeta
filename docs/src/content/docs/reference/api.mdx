@@ -44,7 +44,7 @@ exit code is the caller's.
 | `GetOptions` (type) | Input to `runGet`: the same input model plus the `fields` to read. |
 | `GetFileResult` (type) | One `runGet` result: the file, whether metadata was `present`, and the resolved `values`. |
 | `runQuery` | Run one SQL statement over an in-memory table built from every input's metadata. Backs `docmeta query`. Returns every row — the `--check` verdict is the CLI's exit code, not the result's. |
-| `QueryOptions` (type) | Input to `runQuery`: the same input model plus the `sql` to run and an optional `db` export path (which makes `sql` optional). |
+| `QueryOptions` (type) | Input to `runQuery`: the same input model plus the `sql` to run, optional named-parameter `params` (values encoded like stored cells: booleans as `1`/`0`, arrays and objects as JSON text), and an optional `db` export path (which makes `sql` optional). |
 | `QueryRun` (type) | What `runQuery` resolves to: result `columns` (present even for zero rows), `rows`, a mutating statement's `changes`, the `frame` describing where the run stood (what SARIF and JUnit rendering need), and — when `db` was written — its path and size. |
 | `QueryChange` (type) | One thing a mutating statement changed, as a union of kinds: a cell set (`key`/`from`/`to`), a key deletion (`deleted`), a key rename (`renamedFrom`), a stripped block (`cleared`), a created file (`created`), a file move (`renamed`), a schema edit (`schema`, with the op, type/required intent, and any `forkedFrom`), or a DDL side effect on the governing config (`config`: a fork's `schemas:` repoint, a refreshed `integrity:` pin) — plus whether it was `written` or previewed. |
 | `runFill` | Propose and write missing metadata with an inference provider. Backs `docmeta fill`. |
@@ -167,7 +167,7 @@ caller can never mistake a filtered run for an empty one.
 | `ReportOptions` (type) | Options passed to `render`: color, and everything `SarifOptions` and `JunitOptions` carry. |
 | `SarifOptions` (type) | SARIF-specific options, notably the `frame` used to build repository-relative URIs. |
 | `JunitOptions` (type) | JUnit-specific options: the `frame`, and the `classname` each testcase carries — `docmeta.validate` by default; `query --check` findings ship as `docmeta.query`. |
-| `QUERY_FORMATS` | The formats `query` accepts: `pretty`, `json`, plus the findings formats `github`, `sarif`, `junit` (legal only with `--check`). |
+| `QUERY_FORMATS` | The formats `query` accepts: `pretty`, `json`, `csv`, plus the findings formats `github`, `sarif`, `junit` (legal only with `--check`). |
 | `QueryFormat` (type) | The union of those names. |
 | `isQueryFormat` | Type guard for a user-supplied query format string. |
 | `COMMON_FORMATS` | The two formats every command supports: `pretty` and `json`. |
@@ -176,6 +176,7 @@ caller can never mistake a filtered run for an empty one.
 | `renderGet` | The reporter behind `docmeta get`. |
 | `GetReportOptions` (type) | `color` and `quiet` for `renderGet`. |
 | `renderQuery` | The reporter behind `docmeta query`: the aligned table, the row count, and the `--check` verdict line. |
+| `renderQueryCsv` | The `-f csv` fork of the query reporter: result rows as CSV — header always, LF endings, RFC 4180 quoting, SQL `NULL` as an empty field. |
 | `QueryReportOptions` (type) | `color` and `check` for `renderQuery`. |
 | `stringifyValue` | How a single field value is spelled: `(unset)` when missing, JSON for anything that is not a string. |
 | `renderFill` | The reporter behind `docmeta fill`, across the fill formats. |
