@@ -11,8 +11,9 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runQuery, type QueryOptions } from "../src/commands/query.js";
-import { renderQuery } from "../src/reporters/query.js";
-import { resolveQueryInputs } from "../src/cli.js";
+import { renderQuery, renderQueryCsv } from "../src/reporters/query.js";
+import { parseQueryParams, resolveQueryInputs } from "../src/cli.js";
+import { collectNamedParameters } from "../src/core/projection.js";
 import { DocmetaError } from "../src/types.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -798,5 +799,244 @@ describe("resolveQueryInputs", () => {
     expect(
       resolveQueryInputs("SELECT 1", ["docs"], undefined, corpus, true),
     ).toEqual({ sql: "SELECT 1", paths: ["docs"] });
+  });
+});
+
+describe("runQuery params (0029)", () => {
+  it("binds a named parameter under all three prefixes", async () => {
+    for (const token of ["$author", ":author", "@author"]) {
+      const run = await q(
+        `SELECT _path FROM docs WHERE author = ${token} ORDER BY _path`,
+        { params: { author: "ada" } },
+      );
+      expect(run.rows).toEqual([{ _path: "docs/alpha.md" }]);
+    }
+  });
+
+  it("binds booleans as 1/0, matching the projection's own encoding", async () => {
+    const run = await q("SELECT _path FROM docs WHERE draft = $d", {
+      params: { d: true },
+    });
+    expect(run.rows).toEqual([{ _path: "docs/beta.md" }]);
+  });
+
+  it("a string param matches a stored YAML string; a number does not", async () => {
+    // Proposal 0029 § stress test 2: columns have no type affinity, so the
+    // bound number 2026 never equals the stored string "2026".
+    const opts = {
+      inputs: ["-"],
+      stdinContent: '---\ntitle: "2026"\n---\nBody.\n',
+      as: "markdown",
+    };
+    const hit = await q("SELECT _path FROM docs WHERE title = $t", {
+      ...opts,
+      params: { t: "2026" },
+    });
+    expect(hit.rows).toEqual([{ _path: "<stdin>" }]);
+    const miss = await q("SELECT _path FROM docs WHERE title = $t", {
+      ...opts,
+      params: { t: 2026 },
+    });
+    expect(miss.rows).toEqual([]);
+  });
+
+  it("refuses a referenced-but-unbound parameter, naming it", async () => {
+    // The false-green guard: unbound binds NULL, matches nothing, and a
+    // zero-row --check would pass. Refused before any file is read.
+    await expect(
+      q("SELECT _path FROM docs WHERE draft = $d"),
+    ).rejects.toThrow(/\$d/);
+    await expect(
+      q("SELECT _path FROM docs WHERE draft = $d"),
+    ).rejects.toBeInstanceOf(DocmetaError);
+  });
+
+  it("refuses an extra bound parameter, naming it", async () => {
+    await expect(
+      q("SELECT _path FROM docs WHERE author = $author", {
+        params: { author: "ada", extra: 1 },
+      }),
+    ).rejects.toThrow(/extra/);
+  });
+
+  it("does not read $ or : inside string literals as parameters", async () => {
+    const run = await q(
+      "SELECT _path FROM docs WHERE title = 'costs $5 : @once'",
+    );
+    expect(run.rows).toEqual([]);
+  });
+
+  it("binds parameters in DML the same way", async () => {
+    const run = await q("UPDATE docs SET draft = $v WHERE _path = $p", {
+      params: { v: true, p: "docs/alpha.md" },
+      dryRun: true,
+    });
+    expect(run.changes).toEqual([
+      {
+        file: "docs/alpha.md",
+        key: "draft",
+        from: false,
+        to: true,
+        written: false,
+      },
+    ]);
+  });
+});
+
+describe("collectNamedParameters", () => {
+  it("finds $, :, and @ tokens outside literals", () => {
+    expect(
+      collectNamedParameters("SELECT $a, :b, @c FROM docs WHERE x = $a"),
+    ).toEqual(["$a", ":b", "@c"]);
+  });
+
+  it("skips string literals, quoted identifiers, and comments", () => {
+    expect(
+      collectNamedParameters(
+        "SELECT '$nope', \"$nor\", `$this` -- $comment\n /* :block */ FROM docs",
+      ),
+    ).toEqual([]);
+  });
+
+  it("does not misread a doubled colon as a parameter", () => {
+    expect(collectNamedParameters("SELECT a :: b FROM docs")).toEqual([]);
+    expect(collectNamedParameters("SELECT a::b FROM docs")).toEqual([]);
+  });
+
+  it("ignores a bare prefix with no identifier after it", () => {
+    expect(collectNamedParameters("SELECT a $ 1, b : 2 FROM docs")).toEqual([]);
+  });
+});
+
+describe("parseQueryParams", () => {
+  it("binds the value as a string, splitting on the first =", () => {
+    expect(parseQueryParams(["msg=a=b"])).toEqual({ msg: "a=b" });
+  });
+
+  it(":= parses the value as JSON, and wins when it comes first", () => {
+    expect(parseQueryParams(["v:=5"])).toEqual({ v: 5 });
+    expect(parseQueryParams(["v:=true"])).toEqual({ v: true });
+    expect(parseQueryParams(["v:=null"])).toEqual({ v: null });
+    expect(parseQueryParams(["v:=[1,2]"])).toEqual({ v: [1, 2] });
+  });
+
+  it('the quoted spelling binds the string: v:="5" is "5", v:=5 the number', () => {
+    // Proposal 0029 § stress test 3: the program receives the argv verbatim —
+    // `--param 'v:="5"'` arrives with its inner quotes, unquoted v:=5 without.
+    expect(parseQueryParams(['v:="5"'])).toEqual({ v: "5" });
+    expect(parseQueryParams(["v:=5"])).toEqual({ v: 5 });
+  });
+
+  it("an = before the := makes it a plain string split", () => {
+    expect(parseQueryParams(["a=b:=c"])).toEqual({ a: "b:=c" });
+  });
+
+  it("refuses a param with no separator or no name", () => {
+    expect(() => parseQueryParams(["nope"])).toThrow(DocmetaError);
+    expect(() => parseQueryParams(["=v"])).toThrow(DocmetaError);
+  });
+
+  it("refuses invalid JSON after :=, pointing at the string spelling", () => {
+    expect(() => parseQueryParams(["v:=high"])).toThrow(/v=/);
+  });
+});
+
+/**
+ * A strict RFC 4180 reader, so the CSV tests parse the emitted bytes back
+ * instead of string-matching the escaping (proposal 0029 § stress test 5).
+ * Accepts LF line endings (docmeta's documented divergence) as well as CRLF.
+ */
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let i = 0;
+  let quoted = false;
+  const endField = (): void => {
+    row.push(field);
+    field = "";
+  };
+  const endRow = (): void => {
+    endField();
+    rows.push(row);
+    row = [];
+  };
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === undefined) break; // unreachable; satisfies indexed-access
+    if (quoted) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i += 2;
+          continue;
+        }
+        quoted = false;
+        i++;
+        continue;
+      }
+      field += ch;
+      i++;
+      continue;
+    }
+    if (ch === '"' && field === "") {
+      quoted = true;
+      i++;
+    } else if (ch === ",") {
+      endField();
+      i++;
+    } else if (ch === "\n") {
+      endRow();
+      i++;
+    } else if (ch === "\r" && text[i + 1] === "\n") {
+      endRow();
+      i += 2;
+    } else {
+      field += ch;
+      i++;
+    }
+  }
+  if (field !== "" || row.length > 0) endRow();
+  return rows;
+}
+
+describe("renderQueryCsv (0029)", () => {
+  it("always emits the header; a zero-row result is the header alone", () => {
+    expect(renderQueryCsv({ columns: ["_path", "title"], rows: [] })).toBe(
+      "_path,title",
+    );
+  });
+
+  it("prints SQL NULL as an empty field and uses LF endings", () => {
+    const text = renderQueryCsv({
+      columns: ["a", "b"],
+      rows: [{ a: "x", b: null }],
+    });
+    expect(text).toBe("a,b\nx,");
+    expect(text).not.toContain("\r");
+  });
+
+  it("round-trips commas, quotes, and newlines through an RFC 4180 reader", async () => {
+    const run = await runQuery({
+      sql: "SELECT title, owner FROM docs ORDER BY _path",
+      inputs: ["."],
+      cwd: resolve(here, "fixtures", "query-csv"),
+      noConfig: true,
+    });
+    const text = renderQueryCsv(run);
+    expect(parseCsv(text)).toEqual([
+      ["title", "owner"],
+      ["Stale, but shipping", "docs"],
+      ["Line one\nLine two", ""],
+      ['She said "ship it"', "ci"],
+    ]);
+  });
+
+  it("keeps arrays and objects as the JSON text the projection holds", () => {
+    const text = renderQueryCsv({
+      columns: ["tags"],
+      rows: [{ tags: '["guide","intro"]' }],
+    });
+    expect(parseCsv(text)).toEqual([["tags"], ['["guide","intro"]']]);
   });
 });

@@ -196,6 +196,67 @@ function topLevelSemicolon(sql: string): number {
   return -1;
 }
 
+/**
+ * Named-parameter tokens (`$name`, `:name`, `@name`) the statement references
+ * outside string literals, quoted identifiers, and comments — the same skip
+ * rules as `topLevelSemicolon`, for the same reason: text inside a literal is
+ * data, not syntax (proposal 0029).
+ *
+ * The tokens are returned as written, prefix included, first occurrence only.
+ * The grammar is deliberately narrow: a prefix character must be followed
+ * immediately by an identifier (`[A-Za-z_][A-Za-z0-9_]*`), so a bare `$`, a
+ * spaced `:`, and a doubled `::` are all operators-or-noise, never parameters.
+ *
+ * Why this exists: the engine throws on an *extra* bound parameter, but a
+ * parameter the SQL references with nothing bound silently binds NULL — which
+ * matches nothing, and a zero-row `--check` is a passing CI gate. The caller
+ * uses this list to refuse that false green before the statement runs.
+ */
+export function collectNamedParameters(sql: string): string[] {
+  const tokens: string[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i];
+    if (ch === "'" || ch === '"' || ch === "`") {
+      // Same doubled-quote walk as the semicolon scan.
+      i++;
+      while (i < sql.length) {
+        if (sql[i] === ch) {
+          if (sql[i + 1] === ch) {
+            i += 2;
+            continue;
+          }
+          break;
+        }
+        i++;
+      }
+    } else if (ch === "[") {
+      while (i < sql.length && sql[i] !== "]") i++;
+    } else if (ch === "-" && sql[i + 1] === "-") {
+      while (i < sql.length && sql[i] !== "\n") i++;
+    } else if (ch === "/" && sql[i + 1] === "*") {
+      i += 2;
+      while (i < sql.length && !(sql[i] === "*" && sql[i + 1] === "/")) i++;
+      i++;
+    } else if (ch === "$" || ch === ":" || ch === "@") {
+      if (ch === ":" && sql[i + 1] === ":") {
+        // `::` is no parameter; consume both so neither colon starts one.
+        i++;
+        continue;
+      }
+      const m = /^[A-Za-z_][A-Za-z0-9_]*/.exec(sql.slice(i + 1));
+      if (!m) continue;
+      const token = ch + m[0];
+      if (!seen.has(token)) {
+        seen.add(token);
+        tokens.push(token);
+      }
+      i += m[0].length;
+    }
+  }
+  return tokens;
+}
+
 /** Only whitespace, comments, and bare `;` — legal after the terminator. */
 function isTrivia(text: string): boolean {
   for (let i = 0; i < text.length; i++) {

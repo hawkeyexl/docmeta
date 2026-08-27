@@ -55,10 +55,12 @@ import {
   SYSTEM_COLUMNS,
   assertSingleStatement,
   bindValue,
+  collectNamedParameters,
   corpusDataColumns,
   createDocsTable,
   loadSqlite,
   registerLineFor,
+  type SqlValue,
 } from "../core/projection.js";
 import type { FingerprintContext } from "../core/baseline.js";
 import {
@@ -118,6 +120,16 @@ export interface QueryOptions {
    * preview-by-default surface this revises).
    */
   dryRun?: boolean;
+  /**
+   * Values for the statement's named parameters (`$name`, `:name`, `@name`),
+   * keyed by bare name (a `$`/`:`/`@` prefix on a key is tolerated). Each
+   * value passes through the same `bindValue` the projection loader uses —
+   * booleans become 1/0, arrays and objects JSON text — so a bound parameter
+   * compares against a stored cell under exactly the encoding the cell got
+   * (proposal 0029). A parameter the SQL references with no entry here
+   * refuses: unbound would silently bind NULL and match nothing.
+   */
+  params?: Record<string, unknown>;
 }
 
 /**
@@ -185,6 +197,25 @@ export async function runQuery(opts: QueryOptions): Promise<QueryRun> {
     throw new DocmetaError("Specify SQL to run.");
   }
   if (sql !== "") assertSingleStatement(sql);
+
+  // The false-green guard (proposal 0029): the engine throws on an extra
+  // bound parameter, but a referenced parameter with nothing bound silently
+  // binds NULL and matches nothing — a zero-row `--check` from a typo is a
+  // passing CI gate. Refused here, before any file is read.
+  const boundParams = bindParams(opts.params);
+  if (sql !== "") {
+    const unbound = collectNamedParameters(sql).filter(
+      (token) => !(token.slice(1) in boundParams),
+    );
+    if (unbound.length > 0) {
+      const list = unbound.join(", ");
+      throw new DocmetaError(
+        `The statement references ${list} with nothing bound — an unbound parameter binds NULL and matches nothing. Bind ${
+          unbound.length === 1 ? "it" : "each"
+        } with --param ${unbound[0]?.slice(1) ?? "name"}=<value> (or \`params\` in the API).`,
+      );
+    }
+  }
 
   // Explicit CLI inputs win, else config `paths:`; `base` is whichever of the
   // two directories those inputs were written relative to.
@@ -285,6 +316,7 @@ export async function runQuery(opts: QueryOptions): Promise<QueryRun> {
       : { resolved: resolve(cwd, opts.db), display: opts.db };
   const run = await runSql(sql, entries, {
     target: db,
+    params: boundParams,
     write: !opts.dryRun,
     base,
     config,
@@ -307,8 +339,28 @@ interface QueryEntry {
   extractor: MetadataExtractor;
 }
 
+/**
+ * `QueryOptions.params`, normalized for the engine: bare-name keys (a
+ * `$`/`:`/`@` prefix is tolerated, since `node:sqlite` binds either spelling)
+ * and SQL-space values via the projection's own `bindValue`.
+ */
+function bindParams(
+  params: Record<string, unknown> | undefined,
+): Record<string, SqlValue> {
+  const out: Record<string, SqlValue> = {};
+  for (const [key, value] of Object.entries(params ?? {})) {
+    const name = key.startsWith("$") || key.startsWith(":") || key.startsWith("@")
+      ? key.slice(1)
+      : key;
+    out[name] = bindValue(value);
+  }
+  return out;
+}
+
 interface RunContext {
   target?: { resolved: string; display: string };
+  /** Named-parameter binds, bare-name keys, already through `bindValue`. */
+  params: Record<string, SqlValue>;
   write: boolean;
   /** Directory file labels resolve against (see `resolveRunConfig`). */
   base: string;
@@ -445,8 +497,11 @@ async function runSql(
     try {
       const stmt = db.prepare(sql);
       columns = stmt.columns().map((c) => c.name);
+      // The single user-SQL call site (proposal 0029): binding here is why
+      // parameters work uniformly across reads, `--check` gates, and DML.
       // node:sqlite types rows as unknown[]; each row is a name->value record.
-      rows = stmt.all();
+      rows =
+        Object.keys(ctx.params).length > 0 ? stmt.all(ctx.params) : stmt.all();
     } catch (err) {
       const message = (err as Error).message;
       if (message.includes("UNIQUE constraint failed: docs._path")) {

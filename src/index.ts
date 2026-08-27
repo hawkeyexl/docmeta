@@ -99,7 +99,7 @@ export type { FillReportFormat, FillReportOptions } from "./reporters/fill.js";
 // and deriving it a second time is how two spellings of one rule start.
 export { renderGet, stringifyValue } from "./reporters/get.js";
 export type { GetReportOptions } from "./reporters/get.js";
-export { renderQuery } from "./reporters/query.js";
+export { renderQuery, renderQueryCsv } from "./reporters/query.js";
 export type { QueryReportOptions } from "./reporters/query.js";
 export {
   extractFrontmatter,

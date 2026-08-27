@@ -514,6 +514,184 @@ describe("cli query (built bin)", () => {
   });
 });
 
+describe("cli query csv and params (0029, built bin)", () => {
+  const corpus = "test/fixtures/query/docs";
+
+  it("-f csv renders result rows with a header and LF endings", () => {
+    const r = run([
+      "query",
+      "SELECT _path, title FROM docs WHERE _present = 1 ORDER BY _path",
+      corpus,
+      "-f",
+      "csv",
+    ]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toBe(
+      "_path,title\n" +
+        "test/fixtures/query/docs/alpha.md,Alpha\n" +
+        "test/fixtures/query/docs/beta.md,Beta\n" +
+        "test/fixtures/query/docs/gamma.md,Gamma\n",
+    );
+    expect(r.stdout).not.toContain("\r");
+  });
+
+  it("a zero-row csv is the header alone (the passing gate's shape)", () => {
+    const r = run([
+      "query",
+      "SELECT _path, title FROM docs WHERE 1 = 0",
+      corpus,
+      "-f",
+      "csv",
+    ]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toBe("_path,title\n");
+  });
+
+  it("-f csv --check is legal; the exit code carries the verdict", () => {
+    const failing = run([
+      "query",
+      "--check",
+      "SELECT slug, count(*) n FROM docs WHERE slug IS NOT NULL GROUP BY slug HAVING n > 1",
+      corpus,
+      "-f",
+      "csv",
+    ]);
+    expect(failing.status).toBe(1);
+    expect(failing.stdout).toBe("slug,n\nalpha,2\n");
+
+    const passing = run([
+      "query",
+      "--check",
+      "SELECT slug, count(*) n FROM docs GROUP BY slug HAVING n > 2",
+      corpus,
+      "-f",
+      "csv",
+    ]);
+    expect(passing.status).toBe(0);
+    expect(passing.stdout).toBe("slug,n\n");
+  });
+
+  it("-f csv refuses a statement that produced changes, naming pretty/json", () => {
+    const r = run([
+      "query",
+      "--dry-run",
+      "UPDATE docs SET draft = 1 WHERE draft = 0",
+      corpus,
+      "-f",
+      "csv",
+    ]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("pretty");
+    expect(r.stderr).toContain("json");
+  });
+
+  it("-f csv refuses a --db-only export: there are no rows to shape", () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-csv-db-"));
+    try {
+      const r = run([
+        "query",
+        "--db",
+        join(dir, "docs.db"),
+        corpus,
+        "-f",
+        "csv",
+      ]);
+      expect(r.status).toBe(2);
+      expect(r.stderr).toContain("pretty");
+      expect(r.stderr).toContain("json");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("--param binds a string; the value splits on the first =", () => {
+    const r = run([
+      "query",
+      "--param",
+      "author=ada",
+      "SELECT _path FROM docs WHERE author = $author",
+      corpus,
+      "-f",
+      "json",
+    ]);
+    expect(r.status).toBe(0);
+    expect(JSON.parse(r.stdout)).toEqual([
+      { _path: "test/fixtures/query/docs/alpha.md" },
+    ]);
+
+    const split = run([
+      "query",
+      "--param",
+      "msg=a=b",
+      "SELECT $msg AS m FROM docs LIMIT 1",
+      corpus,
+      "-f",
+      "json",
+    ]);
+    expect(split.status).toBe(0);
+    expect(JSON.parse(split.stdout)).toEqual([{ m: "a=b" }]);
+  });
+
+  it(':= binds typed JSON: v:="5" arrives text, v:=5 arrives a number', () => {
+    // No shell here — execFileSync passes argv verbatim, which is what a
+    // single-quoted `--param 'v:="5"'` delivers on both platforms. A typed
+    // number lands as SQLite REAL — the same encoding the projection loader
+    // gives a YAML integer, so bound-vs-stored comparisons stay symmetric.
+    const text = run([
+      "query",
+      "--param",
+      'v:="5"',
+      "SELECT typeof($v) AS t FROM docs LIMIT 1",
+      corpus,
+      "-f",
+      "json",
+    ]);
+    expect(text.status).toBe(0);
+    expect(JSON.parse(text.stdout)).toEqual([{ t: "text" }]);
+
+    const num = run([
+      "query",
+      "--param",
+      "v:=5",
+      "SELECT typeof($v) AS t FROM docs LIMIT 1",
+      corpus,
+      "-f",
+      "json",
+    ]);
+    expect(num.status).toBe(0);
+    expect(JSON.parse(num.stdout)).toEqual([{ t: "real" }]);
+  });
+
+  it("exits 2 on a referenced parameter nothing binds, naming it", () => {
+    const r = run([
+      "query",
+      "--check",
+      "SELECT _path FROM docs WHERE draft = $d",
+      corpus,
+    ]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("$d");
+  });
+
+  it("exits 2 on an extra --param the statement never references", () => {
+    const r = run([
+      "query",
+      "--param",
+      "extra=1",
+      "SELECT _path FROM docs",
+      corpus,
+    ]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("extra");
+  });
+
+  it("names the six-value list when --format is wrong", () => {
+    const r = run(["query", "SELECT 1 AS n", corpus, "-f", "toml"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("pretty, json, csv, github, sarif, or junit");
+  });
+});
+
 // Exit 0 means "every file passed". With no files there is no verdict, so
 // reporting success turns a broken glob or a moved directory into a
 // permanently green gate that checks nothing.
