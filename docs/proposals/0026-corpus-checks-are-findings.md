@@ -84,15 +84,21 @@ to files.
 
 A new module (`src/core/checks.ts`) maps each row to a `FieldError`: `schema` =
 `check:<name>`, `keyword` = `"check"`, `instancePath` = `/<key>` when given, `line` and
-`message` from the row. That one mapping buys every downstream surface with **no reporter
-changes**: pretty prints `(line N)`, `github` emits `file=`/`line=` params, SARIF takes
-`line` into `region.startLine`, JUnit and JSON serialize what is there. The rule id
-renders as `check:<name>/check` through the existing `ruleIdFor`.
+`message` from the row. On the `validate` path that one mapping buys every downstream
+surface with **no reporter changes**: pretty prints `(line N)`, `github` emits
+`file=`/`line=` params, SARIF takes `line` into `region.startLine`, JUnit and JSON
+serialize what is there. (The `query` path is not free — it needs the three additions
+stress test 6 names.) The rule id renders as `check:<name>/check` through the existing
+`ruleIdFor` — the trailing `/check` is not a typo but `ruleIdFor`'s standard
+`schema/keyword` composition: the keyword is `"check"` because no Ajv keyword produced
+the finding.
 
 ### `lineFor(path, key)`
 
-Registered as a SQL function on the run's database, exactly as `explicit_null()` is
-(`db.function`, deterministic). The machinery exists end to end: every extractor already
+Registered as a SQL function on the run's database through the same `db.function`
+mechanism that already registers `explicit_null()`, adding `deterministic: true` — which
+`explicit_null()` itself does not set (probe-verified that the option works; the
+precedent is the mechanism, not the flags). The machinery exists end to end: every extractor already
 must map a metadata key to its source line (`ExtractedMetadata.lineFor`, resolved by
 `positionForFactory` — bare key → `/key`, nearest-ancestor fallback), and the command
 already holds every file's extraction in its `entries` array. The function is a map
@@ -105,7 +111,7 @@ findings merge into the per-file results, so:
 
 - `summary.failed` counts them and drives exit 1 with no exit-code changes;
 - the baseline sees them **automatically**. That is the adoption story this proposal
-  exists for: turn a check on, `--update-baseline` the existing debt, ratchet down —
+  exists for: turn a check on, `--write-baseline` the existing debt, ratchet down —
   the same ramp schemas get.
 
 `validate` will keep the per-file extractions for the run (as `query` already does)
@@ -114,7 +120,10 @@ memory is not the cost that matters.
 
 `query --check` keeps working exactly as shipped, and gains the findings formats:
 `-f github|sarif|junit` become legal on `query`, accepted **only with `--check`** and only
-when the result carries the `path` column — otherwise exit 2 naming the convention. Three
+when the result carries the `path` column — otherwise exit 2 naming the convention.
+(0029 grows the same per-command format list with `csv`; the combined six-value surface
+and its gates are recorded there, and whichever proposal is implemented second merges
+into the one list.) Three
 mechanical additions make that honest rather than free (stress test 6): `QueryRun` grows
 the optional path-normalization `frame` SARIF/JUnit need, the CLI synthesizes the
 `RunSummary` that `render()` takes, and the JUnit reporter's hardcoded
@@ -123,9 +132,12 @@ the optional path-normalization `frame` SARIF/JUnit need, the CLI synthesizes th
 ### Scoped runs skip checks
 
 A corpus rule computed over half a corpus reports wrong answers — "dangling author"
-because `authors/` was not loaded. Named checks therefore run only when the run's file
-set is the config's own: no positional paths, no stdin, no `--ext`, no `--exclude`
-(CLI excludes narrow the walk, so they disqualify too — stress test 3). A scoped run
+because `authors/` was not loaded. Named checks therefore run only when the resolved
+file set **is** the config-resolved corpus. That is the rule — an invariant, not a flag
+list: any CLI reshaping of the input set disqualifies the run, which today means
+positional paths, stdin, `--ext`, `--exclude`, and `--no-gitignore` (excludes narrow the
+walk, `--no-gitignore` widens it — stress test 3; a future file-set flag disqualifies by
+failing the invariant, not by being remembered onto a list). A scoped run
 prints one stderr notice — `corpus checks skipped: run is scoped` — and `--no-checks`
 opts out explicitly, mirroring `--no-baseline`.
 
@@ -157,7 +169,10 @@ field through `classifyRef` before fingerprinting. `check:unique-slugs` matches
 resolved cwd-relative — a fingerprint that changes with the directory you run from, which
 is the exact bug `canonicalSchemaRef` exists to prevent. Hence the parse-time name
 grammar, and an implementation test pinning
-`classifyRef("check:" + name).kind === "builtin"` for every accepted name.
+`classifyRef("check:" + name).kind === "builtin"` for every accepted name. The namespace
+is reserved from the other side too: the built-in registry refuses to ever publish a real
+builtin id whose first segment is `check`, with a test — otherwise a future schema id
+could collide with check identity inside baseline fingerprints while both are legal.
 
 **2. The baseline is a set, not a counter — `key` is what keeps a ratchet ratcheting.**
 `buildBaseline` dedupes fingerprints through a `Set` and `applyBaseline` forgives every
@@ -172,9 +187,13 @@ is a good idea.
 **3. "Unscoped" must mean more than "no positional paths."** First design said checks run
 when inputs came from config `paths:`. Review caught the hole: `validate --exclude
 'drafts/**'` still takes the config-paths branch while narrowing the walk — and a
-duplicate-slug check over a filtered corpus answers wrongly. The rule shipped is: no
-positional paths, no stdin, no `--ext`, no `--exclude`. Config-level `exclude:` does not
-disqualify — it *defines* the corpus; the CLI flags redefine the run.
+duplicate-slug check over a filtered corpus answers wrongly. A second review pass caught
+the same hole in the other direction: `--no-gitignore` *widens* the walk past the corpus,
+so a check could fire on a gitignored draft and enter the baseline. The rule shipped is
+therefore the invariant itself — the resolved file set equals the config-resolved
+corpus — with positional paths, stdin, `--ext`, `--exclude`, and `--no-gitignore` as
+today's disqualifiers. Config-level `exclude:` and `respectGitignore:` do not disqualify —
+they *define* the corpus; the CLI flags redefine the run.
 
 **4. A row whose `path` is outside the run is exit 2, not a synthetic finding.** Fabricating
 a `ValidationResult` for a file the run never validated would corrupt the summary ("N
@@ -195,10 +214,13 @@ does not carry — constructible from query's existing `RunContext` (`cwd`, `bas
 `classname` is hardcoded `docmeta.validate`; query findings must not ship under
 validate's name. All three are additive.
 
-**7. stdin rows stay findable and stay un-baselined.** A `path` of `<stdin>` is legal when
-stdin is an input (it is a loaded row); the baseline already refuses to record stdin
-results, so such findings always fire. Consistent with how schema findings treat stdin
-today, and recorded so nobody "fixes" it into the baseline.
+**7. stdin never meets a check's baseline — by construction on both entry points.** On
+`validate`, a stdin input disqualifies the run from named checks entirely (the scoping
+rule above), so a baselined `<stdin>` check finding cannot arise there. On `query
+--check`, `<stdin>` is a loaded row and a legal `path` for a finding — and no baseline
+exists on that path, so such findings always fire. Recorded so nobody writes the
+unreachable test (a stdin check finding surviving `validate`'s baseline) or "fixes" the
+scoping rule to make it reachable.
 
 **8. Checks resolve no schemas, so `--offline` keeps meaning nothing here.** The
 `check:<name>` ref is only ever string-compared — `classifyRef` for identity, `ruleIdFor`

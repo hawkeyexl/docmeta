@@ -42,18 +42,27 @@ ALTER TABLE docs ADD COLUMN status TEXT CHECK (status IN ('draft','review','fina
 SQLite accepts any word as a column type and reports it back verbatim through
 `PRAGMA table_info` — quoted names dequoted (verified: `DATE` → `DATE`, `"date-time"` →
 `date-time`, `URI` → `URI`). So the mapping rule is: a declared type that
-case-insensitively equals a JSON Schema format name — `date`, `date-time`, `time`,
-`duration`, `email`, `idn-email`, `uri`, `uri-reference`, `uuid`, `hostname`, `ipv4`,
-`ipv6`, `regex`, `json-pointer` — maps to `{ type: "string", format: <name> }`.
-Hyphenated names are written as quoted types: `ADD COLUMN updated "date-time"`.
+case-insensitively equals a format name **the run's validator enforces** maps to
+`{ type: "string", format: <name> }`. The name set is derived from the ajv-formats
+registration docmeta already ships — today `date`, `date-time`, `time`, `duration`,
+`email`, `idn-email`, `uri`, `uri-reference`, `uuid`, `hostname`, `ipv4`, `ipv6`,
+`regex`, `json-pointer`, and the rest of that draft-2020 set — not hand-copied into a
+parallel list, so `uri-template` and whatever an ajv-formats upgrade adds arrive without
+anyone remembering them. Hyphenated names are written as quoted types:
+`ADD COLUMN updated "date-time"`.
 
-Two deliberate edges:
+Three deliberate edges:
 
 - **A closed alias pair**: `DATETIME` and `TIMESTAMP` → `format: date-time`. They are what
-  SQLite users habitually type, and both would otherwise map to nothing. The list is
+  SQLite users habitually type, and both would otherwise map to nothing. The alias list is
   closed at two; everything else is strict equality, and the preview always prints the
   property the schema will gain, so a near-miss (`ADD COLUMN due DUE-DATE`) is visible as
   "unconstrained" before anything is written.
+- **`BOOLEAN`/`BOOL` join the plain-type mapping** as `{ type: "boolean" }` — the same
+  two-clause rationale as the aliases (habitually typed; currently maps to nothing), and
+  boolean metadata (`draft:`) is the flagship frontmatter case. The DEFAULT
+  reconciliation accepts only `0`/`1`/`true`/`false`, and the backfill writes real
+  booleans to the files (the projection's `1`/`0` encoding is bind-layer, not file-layer).
 - **Ordering is load-bearing** (stress test 3): the format match runs **before** the
   existing affinity regexes, or `/INT/` eats `json-POINTER`.
 
@@ -69,8 +78,11 @@ character).
 
 So the run snapshots the catalog text alongside the column snapshot, and consults it
 **only when the effect diff shows a column add**. The appended suffix is then parsed
-against a deliberately tiny grammar: `CHECK (<the-new-column> IN (<string-or-number
-literals>))`, yielding `enum: [...]` merged with the declared type's mapping. Any other
+against a deliberately tiny grammar: `CHECK (<the-new-column> IN (<literals>))`, where
+the literals are **all strings or all numbers** and agree with the declared type,
+yielding `enum: [...]` merged with the declared type's mapping. A mixed-type list
+(`IN ('draft', 1)`) refuses, naming the two supported shapes — homogeneity is part of
+the grammar, not a rule the implementation invents later. Any other
 CHECK — expressions, other columns, `AND` — refuses, naming the supported shape and the
 hand-edit alternative. DROP and RENAME rewrite the stored text mid-string and never
 consult it.
@@ -88,16 +100,21 @@ fails the schema it just gained. Two findings against this design, one free and 
   engine and through today's guard, which compares broad types only — and would backfill
   every file with a non-date while writing `format: date` into a schema ajv-formats
   enforces. `assertDefaultsMatchDeclaredTypes` therefore validates the backfill value
-  against the mapped format before any plan exists.
+  against the mapped format before any plan exists — with the same ajv-formats machinery
+  `validate` already uses, so no new dependency and no second opinion about what a
+  `date` is.
 
 ### The read side stays untyped — closing 0021's dangling line
 
 0021 deferred "schema-informed column types" for reads as "a refinement, not a
-prerequisite." This proposal closes that line as **rejected**, for the same reasons 0027
-rejects typed views: it would put schema resolution inside every read, against query's
-schemaless/offline design rule, and new column affinity silently changes what existing
-comparisons match. Declared types exist in this proposal only inside a DDL statement the
-user is writing — where they are instructions, not inference.
+prerequisite." This proposal closes that line as **rejected** — the same verdict 0027
+records for typed views, extended here to the base table, and for 0027's actual reasons:
+the cost is *loading* schemas (with their trust and network machinery) inside every read,
+against query's schemaless/offline design rule, and new column affinity silently changes
+what existing comparisons match. (Resolution alone is cheaper — 0027's membership walk
+does it — but typing needs the loaded schema bodies, which is the line neither proposal
+crosses.) Declared types exist in this proposal only inside a DDL statement the user is
+writing — where they are instructions, not inference.
 
 ## Options
 
@@ -138,7 +155,10 @@ appended def (verified) — a suffix delta, extractable without parsing the user
 statement. DROP and RENAME rewrite the stored text mid-string, which is why they never
 consult it: widening the consult beyond adds is where this exception would grow into the
 SQL parser 0022 refused. The grammar accepted from the suffix is one shape; everything
-else refuses.
+else refuses. The tally counts places a statement's *meaning* is read from its text —
+ATTACH/VACUUM refusal-by-name, then this. The quote-aware tokenizers (single-statement
+enforcement since 0021, the parameter scan 0029 adds) split and scan without
+interpreting a statement, and are not exceptions to the rule.
 
 **3. Affinity regexes eat format names — ordering found in design.** The existing mapper
 matches `/INT/i` before anything else, and `json-POINTER` contains `INT`: affinity-first

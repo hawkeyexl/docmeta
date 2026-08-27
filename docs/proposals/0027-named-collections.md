@@ -53,11 +53,15 @@ WHERE d.author IS NOT NULL AND a._path IS NULL
 ### The config key
 
 `name:` becomes an optional override key. Refused at parse time: a duplicate name, the
-name `docs`, the empty string, and a `name:` on an entry with no `schemas:` — such an
-entry never wins schema resolution (the resolver skips schema-less overrides), so its
-view would be empty by construction; refusing follows the config's existing "this entry
-reads as configured and is not" idiom. Any other string is legal: view names are quoted
-identifiers, the same rule 0021 stress 5 set for metadata-key columns.
+name `docs`, a name that is empty or blank after trimming (a whitespace-only name would
+otherwise become a legal quoted view `" "`), a name starting `sqlite_` (SQLite reserves
+the prefix for internal objects and refuses such a `CREATE VIEW` outright, quoting
+notwithstanding — refusing at parse time keeps that failure out of every later read), and
+a `name:` on an entry with no `schemas:` — such an entry never wins schema resolution
+(the resolver skips schema-less overrides), so its view would be empty by construction;
+refusing follows the config's existing "this entry reads as configured and is not" idiom.
+Any other string is legal: view names are quoted identifiers, the same rule 0021 stress 5
+set for metadata-key columns.
 
 ### Membership: the group a file is validated as
 
@@ -76,6 +80,18 @@ CREATE VIEW "authors" AS SELECT * FROM docs WHERE _path IN ('authors/ada.md', �
 — never by translating the config glob into SQL. The config's glob engine (picomatch:
 `**`, braces, negation) and SQLite's `GLOB` are different languages; membership is
 decided once, in the code that already decides it, and the view records the verdict.
+
+### What the 0024 refusal gains
+
+The split-set DDL refusal can finally say something actionable. Today it ends "Scope the
+run to one override group" with no way to name one; with named overrides it lists the
+groups it found — `the run spans authors (authors/**) and docs (docs/**); re-run over one
+group's files` — turning the remedy from a concept into a copy-pastable next step. That
+message change is this proposal's whole delivery on the 0024 gap: scoping itself stays
+what it is today (run over that group's paths). A `--collection <name>` input flag that
+scopes a run by name is the natural follow-up, recorded here rather than designed here —
+it is an input-surface change that 0005's parity rules say every command would then need
+to answer for.
 
 ### Labeling, never a gate
 

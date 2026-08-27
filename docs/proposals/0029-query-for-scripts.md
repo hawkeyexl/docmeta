@@ -6,6 +6,8 @@
   `-f csv` as a fast-follow; the `--db` half of that line already shipped)
 - **Relates to:** [0005](0005-command-parity.md) / [0016](0016-flag-ownership.md) (format
   lists are per-command surface — `fill` set the precedent with its own list),
+  [0026](0026-corpus-checks-are-findings.md) (grows the same `QUERY_FORMATS` list with
+  the `--check`-gated findings formats — the combined surface is specified below),
   [0025](0025-query-dry-run-polarity.md) (nothing here changes the write polarity)
 - **Touches (planned):** `src/commands/query.ts`, `src/reporters/query.ts`, `src/cli.ts`,
   `src/index.ts`, `reference/cli.mdx`, `test/{query,cli.integration}.test.ts`
@@ -43,25 +45,36 @@ docmeta query --param author="O'Brien" \
 
 ### `-f csv`, result rows only
 
-`query` gets its own format list — `pretty | json | csv` — as a new `QUERY_FORMATS`
-const, following `FILL_FORMATS`' precedent that a format list belongs to the command
-whose output it describes. `COMMON_FORMATS` stays two; `get` and `schemas` are untouched
-(query first because its result is the one that is already a table; `get` growing csv is
-a natural follow-up when someone wants it, not a tagalong here).
+`query` gets its own format list as a new `QUERY_FORMATS` const, following
+`FILL_FORMATS`' precedent that a format list belongs to the command whose output it
+describes. This proposal contributes `csv`; sibling proposal
+[0026](0026-corpus-checks-are-findings.md) contributes the findings formats
+(`github | sarif | junit`, legal only under `--check` with a `path` column). The full
+surface once both land is **one six-value list with per-value gates, stated once**:
+`pretty | json | csv` unconditional, the findings three `--check`-gated — whichever
+proposal is implemented second merges into that one const and its error text rather than
+forking a branch in the CLI dispatch. `-f csv --check` is legal: a check's rows are
+still rows, the exit code carries the verdict, and the zero-row header-only output *is*
+the passing gate. `COMMON_FORMATS` stays two; `get` and `schemas` are untouched (query
+first because its result is the one that is already a table; `get` growing csv is a
+natural follow-up when someone wants it, not a tagalong here).
 
 The dialect, chosen once and documented:
 
 - header row always — a zero-row result is the header alone, which is the answer a
   script can distinguish from an error;
-- LF line endings, RFC 4180 quoting (a field is quoted when it contains a comma, quote,
-  or newline; quotes double);
+- LF line endings — a deliberate divergence from RFC 4180, which specifies CRLF; LF is
+  the right default for scripts and CI, the divergence is named in the reference so a
+  consumer that insists on CRLF (Excel double-clicking a `.csv` on Windows) knows to
+  re-terminate — with RFC 4180 quoting (a field is quoted when it contains a comma,
+  quote, or newline; quotes double);
 - SQL `NULL` → empty field;
 - arrays and objects stay the JSON text the projection already holds — the same encoding
   `json` output and the `--db` export use.
 
 `-f csv` describes **result rows**. A run that produced *changes* — a mutating
 statement's preview or application — refuses with exit 2 naming `pretty`/`json`:
-changes are heterogeneous per-file diffs (seven kinds since 0024), not a table. The
+changes are heterogeneous per-file diffs (eight kinds since 0024), not a table. The
 refusal lives in the CLI's format dispatch, where the format is known and the existing
 error path already means exit 2; the reporter stays presentation-only, per its own
 module contract. The `--db`-export-only run (no SQL) prints its summary as today under
@@ -101,7 +114,7 @@ exit 2, naming it.
 
 ## Options
 
-**A. CSV renders changes too.** Rejected: seven change kinds share no column set, so the
+**A. CSV renders changes too.** Rejected: eight change kinds share no column set, so the
 CSV would be a union of mostly-empty columns — a shape nobody can load without reading
 docmeta's source. `json` already carries changes structurally.
 
@@ -133,9 +146,13 @@ so docmeta adds only the missing half.
 number that does not. The footgun from Options B, nailed down as behavior.
 
 **3. Splitting on the first separator, `:=` checked before `=`.** `--param msg=a=b`
-binds `a=b`; `--param v:="5"` binds the string `"5"` → JSON-parsed to the string `5`…
-which is the worked example for the reference: `:=` takes JSON, so a JSON string literal
-is how you spell "a string that looks like a number, typed deliberately."
+binds `a=b`. The typed-string spelling needs its shell quoting stated exactly, because
+review caught the trap: written bare, `--param v:="5"` has its double quotes eaten by the
+shell — the program receives `v:=5` and binds the **number**, the precise inversion this
+mechanism exists to prevent. The reference therefore teaches `--param 'v:="5"'` (outer
+single quotes protecting the JSON string literal), which binds the string `5` — how you
+spell "a string that looks like a number, typed deliberately" — and the pinning test
+asserts both spellings: quoted binds the string, unquoted binds the number.
 
 **4. A zero-row CSV is the header alone.** Distinguishable from empty output (an
 operational failure printed nothing to stdout) and cheap for a script to test. Pinned in
@@ -148,7 +165,7 @@ proving it.
 
 **6. The reference and the format-list string move in the same PR.** The CLI reference
 is machine-compared against the real commander surface (`npm run docs:check-cli`), and
-the shared helper that renders "pretty or json" renders three-item lists with commas —
+the shared helper that renders "pretty or json" renders longer lists with commas —
 both named here so the implementation PR treats them as expected fallout, not surprises.
 
 ## Not breaking

@@ -75,7 +75,7 @@ behavior rather than describing it.
 
 ## Dependency order
 
-At a glance, so a planning pass does not have to reconstruct it from 19 headers.
+At a glance, so a planning pass does not have to reconstruct it from 29 headers.
 
 ```
 0014 ──┬─> 0006          (0006 can turn a gate into a silent no-op without 0014)
@@ -93,28 +93,33 @@ At a glance, so a planning pass does not have to reconstruct it from 19 headers.
 0011 ──> 0012 ──> 0017   (0012 is the content gap 0011's journey walk exposes;
                           0017 supersedes it — the gap was real, the evidence wasn't)
 
-0021 ──┬─> 0026          (checks run on the query engine; 0001 ─> 0026 as well —
-       ├─> 0027           check findings ride the baseline)
+0021 ──┬─> 0026          (checks run on the query engine)
+       ├─> 0027
        ├─> 0028
        └─> 0029
+0001 ──> 0026            (check findings ride the baseline)
 0024 ──┬─> 0027          (its "scope the run to one override group" remedy gets a name)
        └─> 0028          (extends 0024's deliberately thin type mapping)
 ```
 
-The four `Proposed` SQL items (0026–0029) are otherwise independent of each other;
-recommended implementation order is 0026 → 0029 → 0027 → 0028 — impact-first, with the
+The four `Proposed` SQL items (0026–0029) are independent of each other except that
+0026 and 0029 both grow `query`'s `-f` value list — each specifies the combined
+six-value surface, and whichever is implemented second merges into the one const.
+Recommended implementation order is 0026 → 0029 → 0027 → 0028 — impact-first, with the
 two config-touching ones (0026, 0027) landed apart so the second rebases trivially.
 
-**Safe to start in any order, no blockers:** 0002, 0011.
+**Safe to start in any order, no blockers:** 0011.
 
-**Shipped so far:** 0001, 0003, 0004, 0005, 0006, 0008, 0014, 0015, and the
-standalone false-green guard called out in
+**Shipped so far:** everything the table above marks `Implemented` — through 0025 that
+is all but 0011 and 0023 (`Proposed`), 0016 and 0019 (`Accepted`, nothing to ship), and
+the superseded/rejected halves the Status column records — plus the standalone
+false-green guard called out in
 [0008 § Problem](0008-remote-schema-durability.md#problem). The dependency graph
-above is kept as the record of why they landed in that order.
+above is kept as the record of why the early set landed in the order it did.
 
-**Next, if you want the thread continued:** 0009. It is the only proposal with a
-live blocker that just cleared — 0015 had to constrain document-supplied URLs
-before 0009 started publishing built-ins as URLs.
+**Next, if you want the thread continued:** the 0026 → 0029 → 0027 → 0028 order above.
+(This line pointed at 0009 until 0009 shipped; the Status column, not this paragraph,
+is the ground truth for what remains.)
 
 ## Shared prerequisite
 
