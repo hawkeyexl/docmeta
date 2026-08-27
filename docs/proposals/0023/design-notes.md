@@ -46,37 +46,39 @@ and put the full menu on bare `fill` — accepted as the teaching surface.
    story is three layers: `type` (what the page is) · `action` (what the
    reader is doing) · `intent` (the specific job).
 
-## The six house vocabularies — 32 fields, split by intent
+## The six house vocabularies — 33 fields, split by intent
 
 Designed as one large schema, then split by owner directive into six
 intent-scoped ids (superseding the earlier `docmeta:frontmatter:1.0` id
-ruling — the split is why): `docmeta:core:1.0` (required pair),
-`docmeta:stewardship:1.0`, `docmeta:audience:1.0`,
-`docmeta:lifecycle:1.0`, `docmeta:structure:1.0` (honoring the recorded
-naming decision recorded in the exploration brief for the relational schema), `docmeta:ai-context:1.0`.
+ruling — the split is why): `docmeta:core:1.0.0-proposal.1` (required pair),
+`docmeta:stewardship:1.0.0-proposal.1`, `docmeta:audience:1.0.0-proposal.1`,
+`docmeta:lifecycle:1.0.0-proposal.1`, `docmeta:structure:1.0.0-proposal.1` (honoring the recorded
+naming decision recorded in the exploration brief for the relational schema), `docmeta:ai-context:1.0.0-proposal.1`.
 Disjoint by construction (0 collisions, pinned) — stacking all six behaves
 exactly like the monolith, and every error is attributed to one intent.
 Verified: `npx vitest run test/default-schema.test.ts` — green via file
 refs into the drafts (default-set membership skipped until registration).
 Field homes:
 
-- **Core (docmeta:core:1.0):** title*, description* — and every string core
+- **Core (docmeta:core:1.0.0-proposal.1):** title*, description* — and every string core
   claims is non-empty, with type/language single-valued even against DCMI
   (the recorded exception family)
   plus id, type, keywords, authors, language
-- **Stewardship (docmeta:stewardship:1.0):** owner, stakeholders,
+- **Stewardship (docmeta:stewardship:1.0.0-proposal.1):** owner, stakeholders,
   reviewed-by, last-reviewed, review-interval, verified-against,
   source-of-truth
-- **Audience & intent (docmeta:audience:1.0):** audiences, personas,
+- **Audience & intent (docmeta:audience:1.0.0-proposal.1):** audiences, personas,
   journeys, intent, visibility
   (enum: draft → restricted → confidential → internal → public)
-- **Lifecycle (docmeta:lifecycle:1.0):** lifecycle (enum:
+- **Lifecycle (docmeta:lifecycle:1.0.0-proposal.1):** lifecycle (enum:
   draft|published|deprecated|archived; deprecated ⇒ replaced-by or
   remove-by), replaced-by, supersedes, remove-by
-- **Structure (docmeta:structure:1.0):** applies-to, concepts,
+- **Structure (docmeta:structure:1.0.0-proposal.1):** applies-to,
+  not-applicable-to (added in review round 5, for parallelism — the
+  positive had a page-level twin and its negative did not), concepts,
   prerequisites, next-steps, related-pages (renamed in step with kg's
   related-concepts — each says what it points at)
-- **AI context (docmeta:ai-context:1.0):** generated-by, provenance (the
+- **AI context (docmeta:ai-context:1.0.0-proposal.1):** generated-by, provenance (the
   kg.provenance pattern generalized; entries retire under human review),
   risks (open enum: cost-incurring, destructive, irreversible, privileged,
   open-world, read-only, idempotent — first four from the
@@ -96,7 +98,7 @@ get a direct look; the `lifecycle` enum's org-ladder cost; `risks` naming now th
 `idempotent`) sit in a field called risks; the `stakeholders` name against
 the exploration brief's project-level cut (one honest paragraph required).
 
-## docmeta:evals:1.0 — revised from docevals frontmatter-0.1
+## docmeta:evals:1.0.0-proposal.1 — revised from docevals frontmatter-0.1
 
 Claims four keys: `evals` (one assertion string, or a list of entries),
 `eval-suite`, `eval-skip`, and `eval-provenance` (the generalized
@@ -121,7 +123,7 @@ translates a tool's per-finding severities (meaningful on `tool:*` only).
 - Renamed: `name`→`id`, `llm`→`ai`, `successExitCodes`→`success-exit-codes`,
   `timeoutMs`→`timeout-ms`, `generated.assertionHash`→`generated-assertion-hash`
 - Removed: the object form (`suite`/`skip` hoisted to `eval-suite`/`eval-skip`);
-  `generatedBy` (the top-level `generated-by` in docmeta:ai-context:1.0 owns AI
+  `generatedBy` (the top-level `generated-by` in docmeta:ai-context:1.0.0-proposal.1 owns AI
   provenance; the self-preference-bias check reads it there)
 - Added: `severity-map` (their documented-but-schema-rejected field),
   `provider`, the single-string shorthand, the human⇒assertion rule
@@ -150,7 +152,7 @@ differentiation). Negatives pin: 0.1 object form fails, `llm` spelling
 fails, `generated` wrapper fails, misspelled entry fields fail, ai/human
 without assertion fail, `eval-skip` as string fails.
 
-## docmeta:kg:1.0 — revised from dockg frontmatter-0.8
+## docmeta:kg:1.0.0-proposal.1 — revised from dockg frontmatter-0.8
 
 One closed `kg` envelope (kept deliberately: a closed typo-catching block
 coexisting with an open page), nothing required, files without `kg` pass.
@@ -202,7 +204,7 @@ wins. dockg-side ledger: superseding ADR over "never a docmeta built-in";
 deriver reads kebab keys + the fallback rule + the type derivation;
 single-string normalization.
 
-## docmeta:artifact-evals:1.0 — revised from moose-tracevals artifact-evals-0.2
+## docmeta:artifact-evals:1.0.0-proposal.1 — revised from moose-tracevals artifact-evals-0.2
 
 Eval declarations for instruction artifacts (skills, agents,
 project-rules). The page-side trio appears verbatim one level down —
@@ -286,7 +288,7 @@ lint multiple different kinds of documents in a single run" (today
 
 ## Family walk status — COMPLETE
 
-- **docevals** → docmeta:evals:1.0 · **dockg** → docmeta:kg:1.0 ·
+- **docevals** → docmeta:evals:1.0.0-proposal.1 · **dockg** → docmeta:kg:1.0.0-proposal.1 ·
   **moose-tracevals** → docmeta:artifact-evals:1.0. All drafts live under
   `docs/proposals/0023/schemas/` (outside the frozen registry), verified
   by the `ladders/*.cjs` runs and the green spec suite. Proposal 0023 and

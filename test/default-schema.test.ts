@@ -25,8 +25,8 @@
  *    docmeta house schemas, so a page stacking all six gets every error
  *    attributed to exactly one intent.
  *
- * 3. **Companion namespaces are not claimed.** `evals` (docmeta:evals:1.0),
- *    `kg` (docmeta:kg:1.0) and `metadata` (docmeta:artifact-evals:1.0) are
+ * 3. **Companion namespaces are not claimed.** `evals` (docmeta:evals:1.0.0-proposal.1),
+ *    `kg` (docmeta:kg:1.0.0-proposal.1) and `metadata` (docmeta:artifact-evals:1.0.0-proposal.1) are
  *    common vocabularies validated by their own schemas and implemented by
  *    their own tools; claiming them here — even loosely — would put them on
  *    `docmeta fill`'s menu, and each has its own fill loop.
@@ -41,19 +41,28 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
 
 const DRAFTS = "./docs/proposals/0023/schemas";
-const CORE = `${DRAFTS}/core/1.0.json`;
+/**
+ * The drafts carry a semver **prerelease** version, not build metadata: the
+ * hyphen is what makes `1.0.0-proposal.1` sort *below* the `1.0.0` these
+ * register as, and what keeps a `docmeta:core:1` range from ever resolving to
+ * a draft. Spelled `+proposal.1` it would compare equal to the release, which
+ * is the opposite of what a review draft wants. One constant so the next
+ * revision is a one-line bump.
+ */
+const V = "1.0.0-proposal.1";
+const CORE = `${DRAFTS}/core/${V}.json`;
 const HOUSE = [
   CORE,
-  `${DRAFTS}/stewardship/1.0.json`,
-  `${DRAFTS}/audience/1.0.json`,
-  `${DRAFTS}/lifecycle/1.0.json`,
-  `${DRAFTS}/structure/1.0.json`,
-  `${DRAFTS}/ai-context/1.0.json`,
+  `${DRAFTS}/stewardship/${V}.json`,
+  `${DRAFTS}/audience/${V}.json`,
+  `${DRAFTS}/lifecycle/${V}.json`,
+  `${DRAFTS}/structure/${V}.json`,
+  `${DRAFTS}/ai-context/${V}.json`,
 ];
 const SIBLINGS = [
-  `${DRAFTS}/evals/1.0.json`,
-  `${DRAFTS}/kg/1.0.json`,
-  `${DRAFTS}/artifact-evals/1.0.json`,
+  `${DRAFTS}/evals/${V}.json`,
+  `${DRAFTS}/kg/${V}.json`,
+  `${DRAFTS}/artifact-evals/${V}.json`,
 ];
 
 /** The fields each house schema claims, pinned so growth is deliberate. */
@@ -82,6 +91,7 @@ const FIELDS: Record<string, string[]> = {
     "applies-to",
     "concepts",
     "next-steps",
+    "not-applicable-to",
     "prerequisites",
     "related-pages",
   ],
@@ -145,7 +155,7 @@ describe("the six house vocabularies", () => {
         seen.set(key, ref);
       }
     }
-    expect(seen.size).toBe(32);
+    expect(seen.size).toBe(33);
   });
 
   it("spells every field in lowercase kebab-case", async () => {
@@ -188,7 +198,7 @@ describe("the six house vocabularies", () => {
   it("rejects a lifecycle outside the four-stage ladder, attributed to lifecycle", async () => {
     const r = await check("bad-lifecycle.md");
     expect(r.ok).toBe(false);
-    expect(r.errors[0]?.schema).toBe(`${DRAFTS}/lifecycle/1.0.json`);
+    expect(r.errors[0]?.schema).toBe(`${DRAFTS}/lifecycle/${V}.json`);
     expect(r.errors[0]?.instancePath).toBe("/lifecycle");
   });
 
@@ -216,7 +226,7 @@ describe("the six house vocabularies", () => {
   it("rejects a prose review date, attributed to stewardship", async () => {
     const r = await check("bad-last-reviewed.md");
     expect(r.ok).toBe(false);
-    expect(r.errors[0]?.schema).toBe(`${DRAFTS}/stewardship/1.0.json`);
+    expect(r.errors[0]?.schema).toBe(`${DRAFTS}/stewardship/${V}.json`);
     expect(r.errors[0]?.instancePath).toBe("/last-reviewed");
   });
 
@@ -341,6 +351,31 @@ describe("the six house vocabularies", () => {
     );
     expect(asObject.ok).toBe(false);
     expect(asObject.errors[0]?.instancePath).toBe("/applies-to");
+  });
+
+  it("carves an exception out of applies-to, and leaves disjointness to the graph", async () => {
+    // The page-level twin of `kg.not-applicable-to`, added so the negative
+    // exists at both altitudes rather than only the deeper one.
+    const carveOut = await checkStdin(
+      "title: T\ndescription: D\napplies-to: [operator-1.4]\nnot-applicable-to: [operator-1.4-fips]",
+    );
+    expect(carveOut.errors).toEqual([]);
+    expect(carveOut.ok).toBe(true);
+
+    // Pinned as PASSING, like the overdue review: JSON Schema cannot compare
+    // two sibling lists, so a page claiming both sides of the same label is a
+    // SHACL finding at graph-build time, never a validation error here.
+    const contradiction = await checkStdin(
+      "title: T\ndescription: D\napplies-to: [operator-1.4]\nnot-applicable-to: [operator-1.4]",
+    );
+    expect(contradiction.ok).toBe(true);
+
+    // It still sits on the family's floor for list fields.
+    const empty = await checkStdin(
+      "title: T\ndescription: D\nnot-applicable-to: []",
+    );
+    expect(empty.ok).toBe(false);
+    expect(empty.errors[0]?.instancePath).toBe("/not-applicable-to");
   });
 
   it("rejects empty and duplicated lists — a list that says nothing is not a declaration", async () => {
@@ -478,17 +513,17 @@ describe("the composability law on claimed keys", () => {
  * expectations inside are written against that future state on purpose.
  */
 describe.skip("the default set (flips on registration)", () => {
-  const CORE_ID = "docmeta:core:1.0";
+  const CORE_ID = "docmeta:core:1.0.0-proposal.1";
   const FAMILY_IDS = [
     CORE_ID,
-    "docmeta:stewardship:1.0",
-    "docmeta:audience:1.0",
-    "docmeta:lifecycle:1.0",
-    "docmeta:structure:1.0",
-    "docmeta:ai-context:1.0",
-    "docmeta:evals:1.0",
-    "docmeta:kg:1.0",
-    "docmeta:artifact-evals:1.0",
+    "docmeta:stewardship:1.0.0-proposal.1",
+    "docmeta:audience:1.0.0-proposal.1",
+    "docmeta:lifecycle:1.0.0-proposal.1",
+    "docmeta:structure:1.0.0-proposal.1",
+    "docmeta:ai-context:1.0.0-proposal.1",
+    "docmeta:evals:1.0.0-proposal.1",
+    "docmeta:kg:1.0.0-proposal.1",
+    "docmeta:artifact-evals:1.0.0-proposal.1",
   ];
 
   it("appends the whole family after the two existing members", async () => {

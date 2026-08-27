@@ -1,4 +1,4 @@
-// Validate the docmeta:evals:1.0 example ladder against the draft schema,
+// Validate the docmeta:evals:1.0.0-proposal.1 example ladder against the draft schema,
 // without registering anything. Run from the worktree root.
 const fs = require("fs");
 const { createRequire } = require("module");
@@ -7,8 +7,11 @@ let Ajv = req("ajv/dist/2020.js");
 Ajv = Ajv.default ?? Ajv;
 const { parse } = req("yaml");
 
+// The drafts' semver prerelease, spelled once per ladder so a bump is a
+// one-line edit here rather than a literal buried mid-expression.
+const V = "1.0.0-proposal.1";
 const schema = JSON.parse(
-  fs.readFileSync("docs/proposals/0023/schemas/evals/1.0.json", "utf8"),
+  fs.readFileSync(`docs/proposals/0023/schemas/evals/${V}.json`, "utf8"),
 );
 const ajv = new Ajv({ allErrors: true, allowUnionTypes: true });
 const validate = ajv.compile(schema);

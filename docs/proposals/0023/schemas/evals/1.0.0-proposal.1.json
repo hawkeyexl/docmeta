@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "docmeta:evals:1.0",
-  "title": "docmeta eval declarations (1.0)",
-  "description": "Page-level eval declarations: named, testable assertions about a page, each graded by code, an AI judge (a model or an agent), or a human. A docmeta common vocabulary: any grader, judge, or CI tool can implement it, and other schemas may compose on top of it. It adopts the house conventions — kebab-case keys, flat page-level facts — and claims four keys: `evals` (one assertion or the list), `eval-suite`, `eval-skip`, and `eval-provenance`. There is no settings container: settings are page-level facts, and generation attribution lives at the page's top-level `generated-by` (docmeta:ai-context:1.0). Because the page root is open, consumers should reserve the `eval-` prefix and reject unrecognized `eval-*` keys, giving the root the loud-typo property a closed container would have.",
+  "$id": "docmeta:evals:1.0.0-proposal.1",
+  "title": "docmeta eval declarations (1.0.0-proposal.1)",
+  "description": "Page-level eval declarations: named, testable assertions about a page, each graded by code, an AI judge (a model or an agent), or a human. A docmeta common vocabulary: any grader, judge, or CI tool can implement it, and other schemas may compose on top of it. It adopts the house conventions — kebab-case keys, flat page-level facts — and claims four keys: `evals` (one assertion or the list), `eval-suite`, `eval-skip`, and `eval-provenance`. There is no settings container: settings are page-level facts, and generation attribution lives at the page's top-level `generated-by` (docmeta:ai-context:1.0.0-proposal.1). Because the page root is open, consumers should reserve the `eval-` prefix and reject unrecognized `eval-*` keys, giving the root the loud-typo property a closed container would have.",
   "type": "object",
   "additionalProperties": true,
   "properties": {

@@ -14,6 +14,11 @@ let Ajv = req("ajv/dist/2020.js");
 Ajv = Ajv.default ?? Ajv;
 
 const PROPOSED_ROOT = "docs/proposals/0023/schemas";
+// The drafts' semver prerelease, spelled once. Both the file name and the `$id`
+// carry it, and a mismatch between the two compiles fine and then looks up
+// nothing — which is how a stale copy here reads as "validate is not a
+// function" rather than as a failed probe.
+const V = "1.0.0-proposal.1";
 const PROPOSED_DIRS = [
   "core", "stewardship", "audience", "lifecycle", "structure", "ai-context",
   "evals", "kg", "artifact-evals",
@@ -35,7 +40,7 @@ function loadDir(root) {
 }
 
 const proposed = PROPOSED_DIRS.map((name) => JSON.parse(
-  fs.readFileSync(`${PROPOSED_ROOT}/${name}/1.0.json`, "utf8"),
+  fs.readFileSync(`${PROPOSED_ROOT}/${name}/${V}.json`, "utf8"),
 ));
 // The drafts live outside src/schemas, so everything there is a real
 // registered built-in — no hand-maintained skip set to drift.
@@ -119,8 +124,14 @@ const probes = [
 
 console.log("\n=== law probes (other claimants' extreme legal values vs the proposed owner) ===");
 for (const [name, doc, ownerShort, expectReject] of probes) {
-  const id = `docmeta:${ownerShort}:1.0`;
+  const id = `docmeta:${ownerShort}:${V}`;
   const validate = compiled.get(id);
+  if (!validate) {
+    // A probe naming an id nothing compiled to is a broken probe, not a pass.
+    console.log(`!!! UNRESOLVED  ${name} — no compiled schema for ${id}`);
+    findings++;
+    continue;
+  }
   const ok = validate(doc);
   const rejected = !ok;
   const asExpected = rejected === expectReject;

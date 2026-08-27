@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "docmeta:core:1.0",
-  "title": "docmeta core page vocabulary (1.0)",
+  "$id": "docmeta:core:1.0.0-proposal.1",
+  "title": "docmeta core page vocabulary (1.0.0-proposal.1)",
   "description": "What the page is: the descriptive floor of the docmeta house vocabulary, and the only part of the default set that requires anything. Requires `title` and `description`, and holds every string it claims non-empty — an empty value is the habit a default exists to prevent, and an empty `type` reaches the tooling that switches on it (the kg type derivation, template selection) as a falsy key instead of a loud failure. Empty strings that other claimants permit are override cases, and so are Dublin Core's repeated-element arrays for type and language — the same recorded exception family as the required pair: core is deliberately stricter than the loosest claimant wherever looseness would teach a bad habit. Every other key here is a deliberately loose claim on a name other schemas share, made only where the fact is about the content and never where it is about the rendering, which stays with the generator. One shape rule across the whole family: a single-valued fact is a plain string; a list-valued fact is a string or a list.",
   "type": "object",
   "required": [
@@ -39,7 +39,7 @@
         "type": "string",
         "minLength": 1
       },
-      "description": "Search keywords. A list of strings, or a single comma-separated string — the AsciiDoc form Antora reads. Deliberately distinct from two neighbors: `tags` (the browsable site taxonomy) is left entirely to your generator's schema, and `concepts` (docmeta:structure:1.0) holds controlled glossary terms rather than free words.",
+      "description": "Search keywords. A list of strings, or a single comma-separated string — the AsciiDoc form Antora reads. Deliberately distinct from two neighbors: `tags` (the browsable site taxonomy) is left entirely to your generator's schema, and `concepts` (docmeta:structure:1.0.0-proposal.1) holds controlled glossary terms rather than free words.",
       "minLength": 1
     },
     "authors": {
@@ -48,7 +48,7 @@
         "object",
         "array"
       ],
-      "description": "Who wrote the page: a name, a list of names, or the structured person objects MyST and Docusaurus define. Attribution, not stewardship — the party answerable for the page is `owner` (docmeta:stewardship:1.0). List members are names or person objects — every documented MyST and Docusaurus form — never bare numbers or nulls. Never empty in any form: minLength, minItems and minProperties each bind to their own type and are ignored for the others.",
+      "description": "Who wrote the page: a name, a list of names, or the structured person objects MyST and Docusaurus define. Attribution, not stewardship — the party answerable for the page is `owner` (docmeta:stewardship:1.0.0-proposal.1). List members are names or person objects — every documented MyST and Docusaurus form — never bare numbers or nulls. Never empty in any form: minLength, minItems and minProperties each bind to their own type and are ignored for the others.",
       "items": {
         "type": [
           "string",
