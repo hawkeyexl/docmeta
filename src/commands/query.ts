@@ -79,6 +79,7 @@ import {
   isPublishedBuiltinUrl,
   loadSchema,
   publishedBuiltins,
+  type SchemaPin,
 } from "../core/schema-registry.js";
 import { parseDocument, isMap, isSeq, isScalar } from "yaml";
 
@@ -141,6 +142,17 @@ export interface QueryOptions {
    * refuses: unbound would silently bind NULL and match nothing.
    */
   params?: Record<string, unknown>;
+  /**
+   * `-s/--schema`, repeatable: the schema set the run's DDL evolves — CLI
+   * precedence for the DDL planner *only* (proposal 0030). The per-file
+   * resolution walk is skipped and the deduped refs are the set; every guard
+   * inside the set (single local file for ADD, sole declarer for
+   * DROP/RENAME, builtin fork, URL refusal, the trust boundary) runs
+   * unchanged. Collection views keep following the config's resolution. A
+   * run whose statement produces no DDL effect refuses before anything is
+   * applied — a flag that would silently mean nothing must refuse.
+   */
+  schemas?: string[];
 }
 
 /**
@@ -210,6 +222,23 @@ export async function runQuery(opts: QueryOptions): Promise<QueryRun> {
   const sql = opts.sql.trim();
   if (sql === "" && opts.db === undefined) {
     throw new DocmetaError("Specify SQL to run.");
+  }
+  if (sql === "") {
+    // Export-only run. Options that speak to a statement would be silently
+    // ignored past this point (runSql returns before either is consulted),
+    // and an ignored option is the false green 0029's rule exists to
+    // refuse. Guarded here in the core, not only in the CLI gates, so a
+    // library caller gets the same refusal the flags get.
+    if (opts.schemas !== undefined && opts.schemas.length > 0) {
+      throw new DocmetaError(
+        "`schemas` names the schema set DDL evolves, and an export-only run (no SQL) runs no statement. Pass the SQL, or drop `schemas`.",
+      );
+    }
+    if (opts.params !== undefined && Object.keys(opts.params).length > 0) {
+      throw new DocmetaError(
+        "`params` binds named parameters in a statement, and an export-only run (no SQL) references none. Pass the SQL, or drop `params`.",
+      );
+    }
   }
   if (sql !== "") assertSingleStatement(sql);
 
@@ -335,6 +364,9 @@ export async function runQuery(opts: QueryOptions): Promise<QueryRun> {
   const run = await runSql(sql, entries, {
     target: db,
     params: boundParams,
+    ...(opts.schemas !== undefined && opts.schemas.length > 0
+      ? { cliSchemas: opts.schemas }
+      : {}),
     write: !opts.dryRun,
     base,
     config,
@@ -384,6 +416,12 @@ interface RunContext {
   target?: { resolved: string; display: string };
   /** Named-parameter binds, bare-name keys, already through `bindValue`. */
   params: Record<string, SqlValue>;
+  /**
+   * `-s` refs: the DDL planner's set, in place of the per-file walk (0030).
+   * INVARIANT: set only when non-empty — `runQuery` threads it only then —
+   * so `!== undefined` is the one guard every consumer uses.
+   */
+  cliSchemas?: string[];
   write: boolean;
   /** Directory file labels resolve against (see `resolveRunConfig`). */
   base: string;
@@ -669,6 +707,26 @@ async function runSql(
         catalogBefore,
         snapshotCatalogSql(db),
       );
+      // 0030: -s speaks only to the DDL planner, and DDL is judged by its
+      // effects — so "no schema-evolving effects" is knowable only here,
+      // after execution. The placement is load-bearing: the refusal must
+      // land on the plan side of the all-or-nothing line, BEFORE
+      // buildChanges and applyChanges, so a DML statement under -s never
+      // writes files and then errors (the applies-then-refuses trap the
+      // -f csv review found). Two truths in the wording: "no
+      // schema-evolving effects" rather than "no DDL" (a CREATE INDEX into
+      // a --db export is DDL the planner deliberately ignores), and the
+      // --db residue named when it exists — the export target was written
+      // before the statement ran and holds whatever the statement did.
+      if (ctx.cliSchemas !== undefined && schemaOps.length === 0) {
+        throw new DocmetaError(
+          `-s names the schema set DDL evolves; this statement produced no schema-evolving effects (ALTER TABLE docs …), so the flag would silently mean nothing.${
+            target
+              ? " No file or schema writes were applied; the --db export was still written and reflects the statement."
+              : " Nothing was applied."
+          } Drop -s, or evolve the schema with ALTER TABLE docs.`,
+        );
+      }
       // Structural, not textual: a read always yields result columns, DML and
       // DDL (without RETURNING) never do — so `WITH … UPDATE …` classifies
       // correctly even when it matches zero rows. The residual: RETURNING DML
@@ -1360,6 +1418,38 @@ function assertSchemaWriteWithin(ctx: RunContext, abs: string): void {
 }
 
 /**
+ * Canonical identity of a local schema path: absolute, case-folded on win32 —
+ * where `./Schemas/House.json` and `schemas/house.json` name one file — and
+ * case-preserved on POSIX, where two casings really are two files.
+ */
+function foldPath(p: string): string {
+  const abs = resolve(p);
+  return process.platform === "win32" ? abs.toLowerCase() : abs;
+}
+
+/**
+ * The config's file-ref pins keyed by canonical path rather than ref text.
+ * `collectSchemaPins` keys carry the config's (possibly rebased) spelling; a
+ * `-s` ref typed even slightly differently — `schemas/x.json` for
+ * `./schemas/x.json` — must still find its pin, or pre-edit verification
+ * silently skips and the un-refreshed pin refuses every later run.
+ *
+ * `ctx.cwd` is the right base for these keys: `resolveRunConfig` passes every
+ * loaded config through `rebaseConfigSchemaRefs`, which rewrites file refs to
+ * ABSOLUTE paths whenever configDir differs from cwd (where `resolve` is the
+ * identity) and leaves them cwd-relative-correct when the two coincide —
+ * pinned by the configDir ≠ cwd test in query-ddl.test.ts.
+ */
+function filePinsByPath(ctx: RunContext): Map<string, SchemaPin> {
+  const byPath = new Map<string, SchemaPin>();
+  for (const [ref, pin] of collectSchemaPins(ctx.config)) {
+    if (classifyRef(ref).kind !== "file") continue;
+    byPath.set(foldPath(resolve(ctx.cwd, ref)), pin);
+  }
+  return byPath;
+}
+
+/**
  * Load every schema in the set, through the same conventions the rest of the
  * pipeline reads them with: refs resolve from the run's cwd (the
  * `LoadSchemaOptions.fileBase` contract), text is BOM-stripped before parsing
@@ -1372,8 +1462,15 @@ async function loadSetMembers(
   refs: readonly string[],
   ctx: RunContext,
 ): Promise<SetMember[]> {
-  const pins = collectSchemaPins(ctx.config);
+  const pins = filePinsByPath(ctx);
   const members: SetMember[] = [];
+  // Identity-level dedupe on top of the resolver's textual one: two -s
+  // spellings of one file (`./x.json` vs `x.json`, case variants on win32)
+  // must load one member, or ADD refuses naming one file twice and DROP
+  // hands out an unfollowable "evolve them separately". Builtins dedupe by
+  // id for the same reason — the raw id and its published URL are one schema.
+  const seenFiles = new Set<string>();
+  const seenBuiltins = new Set<string>();
   for (const ref of refs) {
     const { kind } = classifyRef(ref);
     if (kind === "url" && !isPublishedBuiltinUrl(ref)) {
@@ -1386,6 +1483,8 @@ async function loadSetMembers(
         kind === "url"
           ? (publishedBuiltins().find((b) => b.url === ref)?.id ?? ref)
           : ref;
+      if (seenBuiltins.has(builtinId)) continue;
+      seenBuiltins.add(builtinId);
       members.push({
         ref,
         kind: "builtin",
@@ -1395,6 +1494,9 @@ async function loadSetMembers(
       continue;
     }
     const abs = resolve(ctx.cwd, ref);
+    const canon = foldPath(abs);
+    if (seenFiles.has(canon)) continue;
+    seenFiles.add(canon);
     let text: string;
     try {
       text = await readFile(abs, "utf8");
@@ -1403,7 +1505,7 @@ async function loadSetMembers(
         `Schema file not found: "${ref}" (looked at ${abs}).`,
       );
     }
-    const pin = pins.get(ref);
+    const pin = pins.get(canon);
     if (pin?.integrity !== undefined) {
       if (integrityOf(Buffer.from(text, "utf8")) !== pin.integrity) {
         throw new DocmetaError(
@@ -1456,50 +1558,79 @@ async function planSchemaMutation(
     );
   }
   if (entries.length === 0) {
+    // Two rationales for one refusal: without -s the set comes from the
+    // corpus, so no corpus means no set; with -s the set is known, but the
+    // backfill and the corpus-satisfies-the-evolved-set reconciliation
+    // still run over the loaded files (review of #139, finding 9).
     throw new DocmetaError(
-      "DDL needs at least one loaded file: the schema it edits is the one the corpus resolves, and this run matched no files.",
+      ctx.cliSchemas !== undefined
+        ? "DDL needs at least one loaded file: the statement's backfill and the check that the corpus satisfies the evolved set both run over the loaded files, and this run matched none."
+        : "DDL needs at least one loaded file: the schema it edits is the one the corpus resolves, and this run matched no files.",
     );
   }
 
   // One schema set for the whole run, or nothing mutates. Resolution runs
   // with the same trust boundary as validate — a document may not name a
   // schema outside the repository, least of all as a write target.
+  //
+  // 0030: -s replaces the walk outright — the deduped CLI refs ARE the set
+  // (source "cli"), unanimous by construction, so neither the split refusal
+  // nor the default-set refusal below can arise. Everything after the set is
+  // chosen — member loading, trust, every ownership guard — is one shared
+  // path: -s picks the contract, never what the contract says.
   let refs: string[] | undefined;
   const sources = new Set<string>();
   const groupIndexes = new Set<number>();
   let splitLabel: string | undefined;
-  for (const e of entries) {
-    let resolved;
-    try {
-      resolved = resolveSchemaSetWithSource({
-        filePath: e.label,
-        fileSchema: e.extracted.data[FILE_SCHEMA_KEY],
-        config: ctx.config,
-        fileBase: ctx.cwd,
-        trustRoot: ctx.trustRoot,
-        onNotice: ctx.onNotice,
-      });
-    } catch (err) {
-      // `coerceFileSchema` throws a plain Error; either way the file that
-      // carried the bad `$schema` is the one fact the user needs.
-      throw new DocmetaError(`"${e.label}": ${(err as Error).message}`);
-    }
-    sources.add(resolved.source);
-    if (resolved.overrideIndex !== undefined) {
-      groupIndexes.add(resolved.overrideIndex);
-    }
-    if (refs === undefined) {
-      refs = resolved.schemas;
-    } else if (
-      // Order-insensitive, like seqResolvesToRunSet below: a document that
-      // lists the same refs in another order names the same contract.
-      splitLabel === undefined &&
-      JSON.stringify([...refs].sort()) !==
-        JSON.stringify([...resolved.schemas].sort())
-    ) {
-      // The walk finishes before refusing, so the refusal can name every
-      // override group the run spans, not only the first two it met.
-      splitLabel = e.label;
+  if (ctx.cliSchemas !== undefined) {
+    // One implementation of CLI-ref handling across commands: the resolver's
+    // own cli branch (textual dedupe, source "cli"), called exactly once for
+    // the run — never per file; the counter seam in resolution-walk.test.ts
+    // pins that. `filePath` feeds only override matching, which the cli
+    // branch never reaches. The path-canonical dedupe file members also need
+    // lives in `loadSetMembers`, where refs are resolved anyway — the
+    // resolver's dedupe stays textual by design for validate.
+    refs = resolveSchemaSetWithSource({
+      filePath: "",
+      cliSchemas: ctx.cliSchemas,
+      config: ctx.config,
+      fileBase: ctx.cwd,
+      trustRoot: ctx.trustRoot,
+    }).schemas;
+  } else {
+    for (const e of entries) {
+      let resolved;
+      try {
+        resolved = resolveSchemaSetWithSource({
+          filePath: e.label,
+          fileSchema: e.extracted.data[FILE_SCHEMA_KEY],
+          config: ctx.config,
+          fileBase: ctx.cwd,
+          trustRoot: ctx.trustRoot,
+          onNotice: ctx.onNotice,
+        });
+      } catch (err) {
+        // `coerceFileSchema` throws a plain Error; either way the file that
+        // carried the bad `$schema` is the one fact the user needs.
+        throw new DocmetaError(`"${e.label}": ${(err as Error).message}`);
+      }
+      sources.add(resolved.source);
+      if (resolved.overrideIndex !== undefined) {
+        groupIndexes.add(resolved.overrideIndex);
+      }
+      if (refs === undefined) {
+        refs = resolved.schemas;
+      } else if (
+        // Order-insensitive, like seqResolvesToRunSet below: a document that
+        // lists the same refs in another order names the same contract.
+        splitLabel === undefined &&
+        JSON.stringify([...refs].sort()) !==
+          JSON.stringify([...resolved.schemas].sort())
+      ) {
+        // The walk finishes before refusing, so the refusal can name every
+        // override group the run spans, not only the first two it met.
+        splitLabel = e.label;
+      }
     }
   }
   if (splitLabel !== undefined) {
@@ -1514,10 +1645,12 @@ async function planSchemaMutation(
         return o?.name !== undefined ? [`${o.name} (${o.files})`] : [];
       });
     const last = named[named.length - 1];
+    // 0030: -s makes the set unanimous by construction, so it is the third
+    // remedy — the direct one — in both spellings of this refusal.
     const remedy =
       named.length >= 2 && last !== undefined
-        ? `The run spans ${[named.slice(0, -1).join(", "), last].join(" and ")}; re-run over one group's files.`
-        : "Scope the run to one override group.";
+        ? `The run spans ${[named.slice(0, -1).join(", "), last].join(" and ")}; re-run over one group's files, or pass -s <schema> to name the contract directly.`
+        : "Scope the run to one override group, or pass -s <schema> to name the contract directly.";
     throw new DocmetaError(
       `DDL needs the corpus to resolve to one schema set, and this run's is split ("${splitLabel}" resolves differently). ${remedy}`,
     );
@@ -1542,7 +1675,16 @@ async function planSchemaMutation(
   if (op.op === "add") {
     if (fileMembers.length > 1) {
       throw new DocmetaError(
-        `The resolved set names ${String(fileMembers.length)} local schema files (${fileMembers.map((m) => m.ref).join(", ")}) — DDL cannot tell which one to evolve. Scope the run to an override group that names one, or set the files' \`$schema\` to the schema to evolve.`,
+        `The resolved set names ${String(fileMembers.length)} local schema files (${fileMembers.map((m) => m.ref).join(", ")}) — DDL cannot tell which one to evolve. Scope the run to an override group that names one, set the files' \`$schema\` to the schema to evolve, or pass -s <schema> to name it directly.`,
+      );
+    }
+    // The same ambiguity rule as several local files: with no local file
+    // and several builtins, "the one to fork" would be decided by flag or
+    // list order — a silent pick where every sibling refusal names its
+    // reasons (review of #139, finding 6).
+    if (fileMembers.length === 0 && builtinMembers.length > 1) {
+      throw new DocmetaError(
+        `The resolved set names ${String(builtinMembers.length)} built-ins (${builtinMembers.map((m) => m.builtinId).join(", ")}) and no local schema file — DDL cannot tell which one to fork. Name one with -s, or evolve a local schema.`,
       );
     }
     const chosen = fileMembers[0] ?? builtinMembers[0];
@@ -1638,18 +1780,37 @@ async function planSchemaMutation(
     );
     baseObject = { ...target.schema, $id: `${target.builtinId}+local` };
     styleReference = "\n";
+    // Repoints match refs that NAME THE BUILTIN — the raw id or its
+    // published URL — not the spelling the run's set happened to use. A
+    // cli-named set has no reason to agree textually with the config or
+    // the files, and the exact-string match orphaned every fork whose
+    // corpus spelled the builtin differently (review of #139, finding 1).
+    const forkOf = target.builtinId;
+    const builtinIdOf = (r: string): string | undefined => {
+      const { kind } = classifyRef(r);
+      if (kind === "builtin") return r;
+      if (kind === "url" && isPublishedBuiltinUrl(r)) {
+        return publishedBuiltins().find((b) => b.url === r)?.id;
+      }
+      return undefined;
+    };
+    const namesFork = (r: unknown): boolean =>
+      typeof r === "string" && builtinIdOf(r) === forkOf;
     if (ctx.configPath !== undefined && ctx.configDir !== undefined) {
       const rel = posixRelative(ctx.configDir, schemaAbs);
       configEdit.repoint = {
         oldRef: target.ref,
         newRef: rel.startsWith(".") ? rel : `./${rel}`,
+        // The resolved-set path keeps its whole-set gate; a cli-named set
+        // can never satisfy it, so it matches by builtin identity instead.
+        ...(ctx.cliSchemas !== undefined ? { matchRef: namesFork } : {}),
       };
     }
     const docRel = posixRelative(ctx.cwd, schemaAbs);
     const newRefForDocs = docRel.startsWith(".") ? docRel : `./${docRel}`;
     for (const e of entries) {
       const fileSchema = e.extracted.data[FILE_SCHEMA_KEY];
-      if (fileSchema === target.ref) {
+      if (namesFork(fileSchema)) {
         changes.push({
           file: e.label,
           key: FILE_SCHEMA_KEY,
@@ -1663,21 +1824,21 @@ async function planSchemaMutation(
         const list = fileSchema.filter(
           (r): r is string => typeof r === "string",
         );
-        if (
-          list.length === fileSchema.length &&
-          list.includes(target.ref)
-        ) {
+        if (list.length === fileSchema.length && list.some(namesFork)) {
           changes.push({
             file: e.label,
             key: FILE_SCHEMA_KEY,
             from: fileSchema,
-            to: list.map((r) => (r === target.ref ? newRefForDocs : r)),
+            to: list.map((r) => (namesFork(r) ? newRefForDocs : r)),
             written: false,
           });
         }
       }
     }
   }
+  // Doc-side repoints planned so far — the fork block is the only writer of
+  // `changes` up to here, so this is the count the orphan check below needs.
+  const docRepoints = changes.length;
 
   // BOM-strip before sniffing: the regex anchors at the string head, and a
   // BOM'd file would silently fall back to two-space and be reformatted.
@@ -1707,21 +1868,25 @@ async function planSchemaMutation(
   });
 
   // An in-place edit of a pinned schema carries its pin along: the pin is a
-  // promise about the bytes, and the bytes just changed on purpose.
+  // promise about the bytes, and the bytes just changed on purpose. Looked
+  // up by canonical path, like the verification in `loadSetMembers` — the
+  // -s spelling must never decide whether a pin is found.
   if (target.kind === "file") {
-    const pin = collectSchemaPins(ctx.config).get(target.ref);
+    const pin = filePinsByPath(ctx).get(foldPath(target.abs));
     if (pin?.integrity !== undefined) {
       configEdit.integrity = {
-        ref: target.ref,
+        path: target.abs,
         value: integrityOf(Buffer.from(content, "utf8")),
       };
     }
   }
 
+  let configRepointed = false;
   if (configEdit.repoint || configEdit.integrity) {
     const edited = await planConfigEdit(ctx, configEdit, refs);
     changes.push(...edited.changes);
     if (edited.write) writes.push(edited.write);
+    configRepointed = edited.repointed;
     if (
       configEdit.repoint &&
       !edited.repointed &&
@@ -1731,6 +1896,24 @@ async function planSchemaMutation(
         `The run resolved ${configEdit.repoint.oldRef} through the config, but no \`schemas:\` entry in it matches — refusing to fork with a reference that cannot be repointed.`,
       );
     }
+  }
+  // A cli-named fork that nothing would resolve afterwards is an orphan:
+  // the statement reports success while validate keeps resolving the
+  // un-evolved builtin. Refused with nothing written — the mirror of the
+  // config-source no-repoint refusal above (review of #139, finding 1).
+  if (
+    ctx.cliSchemas !== undefined &&
+    forkedFrom !== undefined &&
+    !configRepointed &&
+    docRepoints === 0
+  ) {
+    throw new DocmetaError(
+      `The fork of ${forkedFrom} would be orphaned: nothing in this corpus resolves it — no config \`schemas:\` entry and no loaded file's \`$schema\` names the builtin, so nothing would validate against "${displayPath(ctx, schemaAbs)}" after the run. No schema or file writes were applied${
+        ctx.target === undefined
+          ? ""
+          : "; the --db export was still written and reflects the statement"
+      }. Add the schema to the config (or the files' \`$schema\`) first, then evolve it.`,
+    );
   }
 
   return { changes, writes, schemaLast: op.op === "add" };
@@ -1789,10 +1972,23 @@ function mutateSchemaObject(
 }
 
 interface ConfigEditRequest {
-  /** A builtin fork: point the entry that named the builtin at the fork. */
-  repoint?: { oldRef: string; newRef: string };
-  /** An in-place edit of a pinned schema: the pin over the new bytes. */
-  integrity?: { ref: string; value: string };
+  /**
+   * A builtin fork: point the entry that named the builtin at the fork.
+   * With `matchRef` (a cli-named fork), every entry the predicate accepts is
+   * repointed wherever it appears; without it, only entries spelled exactly
+   * `oldRef` inside a sequence that resolves to the run's whole set are.
+   */
+  repoint?: {
+    oldRef: string;
+    newRef: string;
+    matchRef?: (raw: string) => boolean;
+  };
+  /**
+   * An in-place edit of a pinned schema: the pin over the new bytes. `path`
+   * is the schema's absolute path — entries match by resolved path, so the
+   * config's spelling and the run's never have to agree textually.
+   */
+  integrity?: { path: string; value: string };
 }
 
 /**
@@ -1848,14 +2044,25 @@ async function planConfigEdit(
   };
 
   const repoint = (node: unknown): number => {
-    if (!edit.repoint || !isSeq(node) || !seqResolvesToRunSet(node)) return 0;
+    if (!edit.repoint || !isSeq(node)) return 0;
+    const spec = edit.repoint;
+    // `matchRef` (a cli-named fork) matches entries by builtin identity in
+    // every sequence: an entry naming the forked builtin is this statement's
+    // business wherever it lives. The whole-set gate stays for the
+    // resolved-set path, where rewriting another group's sequence would
+    // change validation for files the statement never loaded.
+    if (spec.matchRef === undefined && !seqResolvesToRunSet(node)) return 0;
+    const wants = (raw: string): boolean =>
+      spec.matchRef ? spec.matchRef(raw) : raw === spec.oldRef;
     let n = 0;
     for (const item of node.items) {
-      if (isScalar(item) && item.value === edit.repoint.oldRef) {
-        item.value = edit.repoint.newRef;
+      const raw = rawRefOf(item);
+      if (raw === undefined || !wants(raw)) continue;
+      if (isScalar(item)) {
+        item.value = spec.newRef;
         n += 1;
-      } else if (isMap(item) && item.get("ref") === edit.repoint.oldRef) {
-        item.set("ref", edit.repoint.newRef);
+      } else if (isMap(item)) {
+        item.set("ref", spec.newRef);
         n += 1;
       }
     }
@@ -1875,12 +2082,15 @@ async function planConfigEdit(
   let pinned = false;
   if (edit.integrity && isSeq(topSeq)) {
     // Pins live on top-level mapping entries only — that is where
-    // `collectSchemaPins` reads them from. Both spellings rebased, as above.
-    const wantRef = rebaseRaw(edit.integrity.ref);
+    // `collectSchemaPins` reads them from. Matching is by resolved path (a
+    // raw config ref is config-relative), so no spelling has to agree.
+    const wantPath = foldPath(edit.integrity.path);
     for (const item of topSeq.items) {
       if (!isMap(item)) continue;
       const raw = rawRefOf(item);
-      if (raw === undefined || rebaseRaw(raw) !== wantRef) continue;
+      if (raw === undefined || classifyRef(raw).kind !== "file") continue;
+      const abs = isAbsolute(raw) ? raw : resolve(configDir, raw);
+      if (foldPath(abs) !== wantPath) continue;
       pinFrom = item.get("integrity");
       item.set("integrity", edit.integrity.value);
       pinned = true;

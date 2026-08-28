@@ -484,6 +484,72 @@ describe("cli query (built bin)", () => {
     }
   });
 
+  it("-s names the DDL target set end to end (0030)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-sflag-"));
+    try {
+      cpSync(resolve(root, "test", "fixtures", "query-schema-flag"), dir, {
+        recursive: true,
+      });
+
+      // Without -s the two-schema set is ambiguous; the refusal names the flag.
+      const ambiguous = run(
+        ["query", "ALTER TABLE docs ADD COLUMN reviewed TEXT", "docs"],
+        undefined, undefined, dir,
+      );
+      expect(ambiguous.status).toBe(2);
+      expect(ambiguous.stderr).toContain("pass -s");
+
+      const applied = run(
+        [
+          "query",
+          "-s",
+          "./schemas/house.json",
+          "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+          "docs",
+        ],
+        undefined, undefined, dir,
+      );
+      expect(applied.status).toBe(0);
+      expect(
+        readFileSync(join(dir, "schemas", "house.json"), "utf8"),
+      ).toContain('"reviewed"');
+
+      // -s on a statement that runs no DDL refuses — and refuses BEFORE
+      // anything is applied: the DML must not land and then error.
+      const before = readFileSync(join(dir, "docs", "one.md"), "utf8");
+      const dml = run(
+        [
+          "query",
+          "-s",
+          "./schemas/house.json",
+          "UPDATE docs SET title = 'MUTATED'",
+          "docs",
+        ],
+        undefined, undefined, dir,
+      );
+      expect(dml.status).toBe(2);
+      expect(dml.stderr).toContain("produced no schema-evolving effects");
+      expect(readFileSync(join(dir, "docs", "one.md"), "utf8")).toBe(before);
+
+      // Export-only runs refuse -s beside --param's gate: no statement, no DDL.
+      const exportOnly = run(
+        [
+          "query",
+          "-s",
+          "./schemas/house.json",
+          "--db",
+          join(dir, "out.db"),
+          "docs",
+        ],
+        undefined, undefined, dir,
+      );
+      expect(exportOnly.status).toBe(2);
+      expect(exportOnly.stderr).toContain("no statement to evolve");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("carries a quoted format type end to end through the built bin (0028)", () => {
     const dir = mkdtempSync(join(tmpdir(), "docmeta-cli-bridge-"));
     try {

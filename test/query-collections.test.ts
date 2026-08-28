@@ -244,6 +244,9 @@ describe("named collections (0027): views over override groups", () => {
     expect(message).toContain("authors (authors/**)");
     expect(message).toContain("guides (docs/**)");
     expect(message).toContain("re-run over one group's files");
+    // 0030: -s makes the set unanimous by construction, so the named-groups
+    // spelling of the split refusal names it as the third remedy too.
+    expect(message).toContain("pass -s");
   });
 
   it("a plain SELECT never walks resolution: no views, no exclusion notice", async () => {

@@ -126,7 +126,9 @@ adds `reviewed` to `properties` and `required` **and** backfills every file in
 the same write — the corpus is compliant with the stricter schema the moment
 the schema is stricter. `DROP COLUMN` and `RENAME COLUMN` retire and rename a
 key from the schema and every file together; run any of them with `--dry-run`
-first to see the exact plan before it applies.
+first to see the exact plan before it applies. When the corpus resolves more
+than one schema and the statement cannot tell which to evolve, `-s <schema>`
+names the contract directly — same guards, your choice of target.
 
 The constraints schema authors reach for first — `format` and `enum` — ride
 the same statement. A declared type equal to a format name the validator

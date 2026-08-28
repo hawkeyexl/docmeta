@@ -167,6 +167,416 @@ describe("runQuery DDL — the schema is the table (0024)", () => {
   });
 });
 
+describe("runQuery DDL — -s names the contract (0030)", () => {
+  const ddlS = (
+    sql: string,
+    cwd: string,
+    schemas: string[],
+    apply = false,
+  ) => runQuery({ sql, inputs: ["docs"], cwd, dryRun: !apply, schemas });
+
+  it("refuses -s on a statement that runs no DDL, naming the flag's meaning", async () => {
+    const d = copy("query-schema-flag");
+    // "produced no schema-evolving effects", not "ran no DDL": CREATE INDEX
+    // into a --db export IS DDL, just none the planner maps to a schema
+    // (review finding 4b).
+    await expect(
+      ddlS("SELECT _path FROM docs", d, ["./schemas/house.json"]),
+    ).rejects.toThrow(
+      /-s names the schema set DDL evolves.*produced no schema-evolving effects.*Nothing was applied/,
+    );
+  });
+
+  it("tells the truth about the --db residue in the -s refusal", async () => {
+    // With --db the export target is created before the statement runs, so
+    // "nothing was applied" would be a lie — the refusal names what
+    // persists (review finding 4a).
+    const d = copy("query-schema-flag");
+    const dbPath = join(d, "out.db");
+    await expect(
+      runQuery({
+        sql: "SELECT _path FROM docs",
+        inputs: ["docs"],
+        cwd: d,
+        db: dbPath,
+        schemas: ["./schemas/house.json"],
+      }),
+    ).rejects.toThrow(/--db export was still written/);
+    expect(existsSync(dbPath)).toBe(true);
+  });
+
+  it("the core refuses schemas and params on an export-only run — the API seam", async () => {
+    // The CLI gates catch the flag spellings, but a library caller passing
+    // `schemas` (or `params`) with no SQL hit runSql's empty-SQL early
+    // return and was silently ignored (review finding 5).
+    const d = copy("query-schema-flag");
+    await expect(
+      runQuery({
+        sql: "",
+        inputs: ["docs"],
+        cwd: d,
+        db: join(d, "a.db"),
+        schemas: ["./schemas/house.json"],
+      }),
+    ).rejects.toThrow(/runs no statement/);
+    await expect(
+      runQuery({
+        sql: "",
+        inputs: ["docs"],
+        cwd: d,
+        db: join(d, "b.db"),
+        params: { x: 1 },
+      }),
+    ).rejects.toThrow(/references none/);
+  });
+
+  it("states the true zero-files rationale under -s", async () => {
+    // The resolved-set wording ("the schema it edits is the one the corpus
+    // resolves") is stale when -s named the set (review finding 9).
+    const d = copy("query-schema-flag");
+    await expect(
+      runQuery({
+        sql: "ALTER TABLE docs ADD COLUMN x TEXT",
+        inputs: ["nope/**/*.md"],
+        cwd: d,
+        allowEmpty: true,
+        schemas: ["./schemas/house.json"],
+      }),
+    ).rejects.toThrow(/backfill.*matched none/);
+  });
+
+  it("refuses -s on DML before anything applies — the files stay untouched", async () => {
+    const d = copy("query-schema-flag");
+    const before = readFileSync(join(d, "docs", "one.md"), "utf8");
+    await expect(
+      ddlS(
+        "UPDATE docs SET title = 'MUTATED'",
+        d,
+        ["./schemas/house.json"],
+        true,
+      ),
+    ).rejects.toThrow(/produced no schema-evolving effects/);
+    // The half that matters: the refusal fired on the plan side of the
+    // all-or-nothing line, not after the UPDATE landed (0030 § stress 1).
+    expect(readFileSync(join(d, "docs", "one.md"), "utf8")).toBe(before);
+  });
+
+  it("ADD refuses on a two-schema set without -s, and evolves exactly the named one with it", async () => {
+    const d = copy("query-schema-flag");
+    await expect(
+      ddl("ALTER TABLE docs ADD COLUMN reviewed TEXT", d, true),
+    ).rejects.toThrow(/pass -s/);
+
+    const extraBefore = readFileSync(join(d, "schemas", "extra.json"), "utf8");
+    await ddlS(
+      "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+      d,
+      ["./schemas/house.json"],
+      true,
+    );
+    const house = houseOf(d);
+    expect((house.properties as Record<string, unknown>).reviewed).toEqual({
+      type: "string",
+    });
+    expect(readFileSync(join(d, "schemas", "extra.json"), "utf8")).toBe(
+      extraBefore,
+    );
+  });
+
+  it("keeps every in-set guard: DROP with shared declarers still refuses (stress 14)", async () => {
+    const d = copy("query-schema-flag");
+    writeFileSync(
+      join(d, "schemas", "strict.json"),
+      '{\n  "required": ["title"]\n}\n',
+    );
+    await expect(
+      ddlS(
+        "ALTER TABLE docs DROP COLUMN title",
+        d,
+        ["./schemas/house.json", "./schemas/strict.json"],
+        true,
+      ),
+    ).rejects.toThrow(/constrained by 2 schemas/);
+  });
+
+  it("refuses to fork a builtin nothing in the corpus would resolve — no orphans", async () => {
+    // Nothing here — no config entry, no in-file $schema — names the
+    // builtin, so after the run nothing would validate against the fork:
+    // validate keeps resolving the un-evolved contract while the statement
+    // reports success. Refused instead (review of #139, finding 1; this
+    // revises the fork-with-config-untouched behavior first pinned here).
+    const d = copy("query-schema-flag");
+    await expect(
+      runQuery({
+        sql: "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+        inputs: ["docs"],
+        cwd: d,
+        schemas: ["google:okf:0.1"],
+      }),
+    ).rejects.toThrow(/orphan/);
+    expect(existsSync(join(d, "schemas", "okf-0.1.local.json"))).toBe(false);
+  });
+
+  it("the orphan refusal names the --db residue when a target exists", async () => {
+    // The export is the working database, written before the plan refuses —
+    // the message must own the residue exactly as the no-schema-evolving
+    // refusal does, and still promise no schema or file writes.
+    const d = copy("query-schema-flag");
+    const out = join(d, "export.db");
+    let message = "";
+    try {
+      await runQuery({
+        sql: "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+        inputs: ["docs"],
+        cwd: d,
+        schemas: ["google:okf:0.1"],
+        db: out,
+      });
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toMatch(/orphan/);
+    expect(message).toContain("the --db export was still written");
+    expect(existsSync(out)).toBe(true);
+    expect(existsSync(join(d, "schemas", "okf-0.1.local.json"))).toBe(false);
+  });
+
+  it("repoints the config entry naming a cli-forked builtin, raw-id spelling", async () => {
+    // THE bricking repro: config carries [house.json, google:okf:0.1],
+    // -s names the builtin alone. The fork must repoint the entry that
+    // names the builtin — whole-set equality can never hold here, since the
+    // -s set is by definition not the config's set.
+    const d = copy("query-schema-flag");
+    writeFileSync(
+      join(d, "docmeta.config.yaml"),
+      'paths:\n  - "docs/**/*.md"\nschemas:\n  - ./schemas/house.json\n  - google:okf:0.1\n',
+    );
+    writeFileSync(
+      join(d, "docs", "one.md"),
+      "---\ntitle: One\ntype: concept\n---\n\nBody one.\n",
+    );
+    writeFileSync(
+      join(d, "docs", "two.md"),
+      "---\ntitle: Two\ntype: concept\n---\n\nBody two.\n",
+    );
+    const run = await runQuery({
+      sql: "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+      inputs: ["docs"],
+      cwd: d,
+      schemas: ["google:okf:0.1"],
+    });
+    expect(
+      run.changes?.some(
+        (c) => "schema" in c && c.forkedFrom === "google:okf:0.1",
+      ),
+    ).toBe(true);
+    const cfg = readFileSync(join(d, "docmeta.config.yaml"), "utf8");
+    expect(cfg).toContain("./schemas/okf-0.1.local.json");
+    expect(cfg).not.toContain("google:okf:0.1");
+    expect(cfg).toContain("./schemas/house.json");
+    // The evolved contract is the one validate now resolves.
+    const v = await runValidate({ inputs: ["docs"], cwd: d });
+    expect(v.summary.failed).toBe(0);
+  });
+
+  it("repoints a config entry spelling the builtin as its published URL", async () => {
+    const okf = publishedBuiltins().find((b) => b.id === "google:okf:0.1");
+    expect(okf).toBeDefined();
+    if (!okf) return;
+    const d = copy("query-schema-flag");
+    writeFileSync(
+      join(d, "docmeta.config.yaml"),
+      `paths:\n  - "docs/**/*.md"\nschemas:\n  - ./schemas/house.json\n  - ${okf.url}\n`,
+    );
+    await runQuery({
+      sql: "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+      inputs: ["docs"],
+      cwd: d,
+      schemas: ["google:okf:0.1"],
+    });
+    const cfg = readFileSync(join(d, "docmeta.config.yaml"), "utf8");
+    expect(cfg).toContain("./schemas/okf-0.1.local.json");
+    expect(cfg).not.toContain(okf.url);
+  });
+
+  it("an in-file $schema naming the builtin is repointed and averts the orphan refusal", async () => {
+    const d = copy("query-schema-flag");
+    writeFileSync(
+      join(d, "docs", "two.md"),
+      "---\n$schema: google:okf:0.1\ntitle: Two\ntype: concept\n---\n\nBody two.\n",
+    );
+    await runQuery({
+      sql: "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+      inputs: ["docs"],
+      cwd: d,
+      schemas: ["google:okf:0.1"],
+    });
+    expect(existsSync(join(d, "schemas", "okf-0.1.local.json"))).toBe(true);
+    expect(readFileSync(join(d, "docs", "two.md"), "utf8")).toContain(
+      "./schemas/okf-0.1.local.json",
+    );
+  });
+
+  it("dedupes -s file refs by resolved path, not spelling", async () => {
+    // `./schemas/house.json` and `schemas/house.json` name one file; loading
+    // it as two members made ADD refuse naming one file twice and DROP hand
+    // out the unfollowable "evolve them separately" (review finding 3).
+    const d = copy("query-ddl");
+    await ddlS(
+      "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+      d,
+      ["./schemas/house.json", "schemas/house.json"],
+      true,
+    );
+    expect((houseOf(d).properties as Record<string, unknown>).reviewed).toEqual(
+      { type: "string" },
+    );
+  });
+
+  it("finds and refreshes an integrity pin whatever the -s spelling", async () => {
+    // The pin map keys carry the config's spelling; a -s ref typed without
+    // the ./ must still hit it, or the stale pin bricks the NEXT run
+    // (review finding 2).
+    const d = copy("query-ddl");
+    const pin = integrityOf(readFileSync(join(d, "schemas", "house.json")));
+    writeFileSync(
+      join(d, "docmeta.config.yaml"),
+      `paths:\n  - "docs/**/*.md"\nschemas:\n  - ref: ./schemas/house.json\n    integrity: ${pin}\n`,
+    );
+    const run = await ddlS(
+      "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+      d,
+      ["schemas/house.json"],
+      true,
+    );
+    expect(
+      run.changes?.some((c) => "config" in c && c.key === "integrity"),
+    ).toBe(true);
+    const cfg = readFileSync(join(d, "docmeta.config.yaml"), "utf8");
+    expect(cfg).not.toContain(pin);
+    expect(cfg).toContain(
+      integrityOf(readFileSync(join(d, "schemas", "house.json"))),
+    );
+    const v = await runValidate({ inputs: ["docs"], cwd: d });
+    expect(v.summary.failed).toBe(0);
+  });
+
+  it("ADD refuses when the set names several builtins and no local file, in either order", async () => {
+    // fileMembers[0] ?? builtinMembers[0] silently picked by flag order
+    // (review finding 6) — the ambiguity refusal must mirror the
+    // several-local-files one instead.
+    const d = copy("query-schema-flag");
+    for (const order of [
+      ["google:okf:0.1", "passo-uno:seven-action:1.0"],
+      ["passo-uno:seven-action:1.0", "google:okf:0.1"],
+    ]) {
+      await expect(
+        runQuery({
+          sql: "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+          inputs: ["docs"],
+          cwd: d,
+          dryRun: true,
+          schemas: order,
+        }),
+      ).rejects.toThrow(/2 built-ins .*which one to fork/);
+    }
+  });
+
+  it("verifies and refreshes a pin when the config lives below the run's cwd", async () => {
+    // Settles a review question about filePinsByPath's resolution base:
+    // resolveRunConfig rebases config file-refs to ABSOLUTE paths whenever
+    // configDir differs from cwd (rebaseConfigSchemaRefs), and leaves them
+    // cwd-relative-correct when the two coincide — so resolving pin keys
+    // from ctx.cwd is right in both arrangements. Pinned here with
+    // configDir ≠ cwd through the real resolveRunConfig path (-c into a
+    // subdirectory, positional inputs from the parent).
+    const root = mkdtempSync(join(tmpdir(), "docmeta-ddl-"));
+    temps.push(root);
+    const sub = join(root, "sub");
+    cpSync(resolve(here, "fixtures", "query-ddl"), sub, { recursive: true });
+    const pin = integrityOf(readFileSync(join(sub, "schemas", "house.json")));
+    writeFileSync(
+      join(sub, "docmeta.config.yaml"),
+      `paths:\n  - "docs/**/*.md"\nschemas:\n  - ref: ./schemas/house.json\n    integrity: ${pin}\n`,
+    );
+    const run = await runQuery({
+      sql: "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+      inputs: ["sub/docs"],
+      cwd: root,
+      configPath: join(sub, "docmeta.config.yaml"),
+      schemas: ["sub/schemas/house.json"],
+    });
+    expect(
+      run.changes?.some((c) => "config" in c && c.key === "integrity"),
+    ).toBe(true);
+    const cfg = readFileSync(join(sub, "docmeta.config.yaml"), "utf8");
+    expect(cfg).not.toContain(pin);
+    expect(cfg).toContain(
+      integrityOf(readFileSync(join(sub, "schemas", "house.json"))),
+    );
+    const v = await runValidate({
+      inputs: ["sub/docs"],
+      cwd: root,
+      configPath: join(sub, "docmeta.config.yaml"),
+    });
+    expect(v.summary.failed).toBe(0);
+
+    // The verification half of the same lookup: bytes that moved since
+    // vendoring must refuse, in the same configDir ≠ cwd arrangement.
+    const tampered = join(root, "tampered");
+    cpSync(resolve(here, "fixtures", "query-ddl"), tampered, {
+      recursive: true,
+    });
+    const stalePin = integrityOf(
+      readFileSync(join(tampered, "schemas", "house.json")),
+    );
+    writeFileSync(
+      join(tampered, "docmeta.config.yaml"),
+      `paths:\n  - "docs/**/*.md"\nschemas:\n  - ref: ./schemas/house.json\n    integrity: ${stalePin}\n`,
+    );
+    appendFileSync(join(tampered, "schemas", "house.json"), "\n");
+    await expect(
+      runQuery({
+        sql: "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+        inputs: ["tampered/docs"],
+        cwd: root,
+        configPath: join(tampered, "docmeta.config.yaml"),
+        schemas: ["tampered/schemas/house.json"],
+      }),
+    ).rejects.toThrow(/recorded integrity/);
+  });
+
+  it("a URL ref via -s refuses with the vendor-first remedy", async () => {
+    const d = copy("query-schema-flag");
+    await expect(
+      ddlS("ALTER TABLE docs ADD COLUMN x TEXT", d, [
+        "https://example.com/x.json",
+      ]),
+    ).rejects.toThrow(/vendor it first/i);
+  });
+
+  it("a split corpus proceeds under -s, and the refusal without it names the remedy", async () => {
+    const split = copy("query-ddl");
+    appendFileSync(
+      join(split, "docmeta.config.yaml"),
+      'overrides:\n  - files: "docs/two.md"\n    schemas:\n      - google:okf:0.1\n',
+    );
+    await expect(
+      ddl("ALTER TABLE docs ADD COLUMN x TEXT", split),
+    ).rejects.toThrow(/pass -s/);
+
+    await ddlS(
+      "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+      split,
+      ["./schemas/house.json"],
+      true,
+    );
+    expect(
+      (houseOf(split).properties as Record<string, unknown>).reviewed,
+    ).toEqual({ type: "string" });
+  });
+});
+
 describe("runQuery DDL — targeting, containment, and the config edit", () => {
   it("refuses a document $schema outside the repository as a write target", async () => {
     const root = mkdtempSync(join(tmpdir(), "docmeta-ddl-"));
@@ -348,7 +758,7 @@ describe("runQuery DDL — targeting, containment, and the config edit", () => {
     ).rejects.toThrow(/declares "stray"/);
   });
 
-  it("names both schemas when ADD cannot pick one, without phantom flags", async () => {
+  it("names both schemas when ADD cannot pick one, and the -s remedy", async () => {
     const d = copy("query-ddl");
     writeFileSync(join(d, "schemas", "extra.json"), "{\n  \"type\": \"object\"\n}\n");
     writeFileSync(
@@ -362,7 +772,9 @@ describe("runQuery DDL — targeting, containment, and the config edit", () => {
     const message = (err as Error).message;
     expect(message).toContain("house.json");
     expect(message).toContain("extra.json");
-    expect(message).not.toContain("--schema");
+    // Until 0030 this pinned the absence of a phantom --schema flag; the
+    // flag exists now, so the refusal must name it as the direct remedy.
+    expect(message).toContain("pass -s");
   });
 
   it("treats a reordered $schema list as the same set, not a split", async () => {

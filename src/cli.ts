@@ -596,6 +596,8 @@ interface GetCliOptions extends RunCliOptions {
 interface QueryCliOptions extends InputCliOptions {
   /** `--query <sql>`; when present, every positional is a path. */
   query?: string;
+  /** `-s, --schema <ref>`, repeatable — commander's default value is `[]`. */
+  schema: string[];
   /** `--check`: any row returned is a finding, so exit 1. */
   check?: boolean;
   /** `--param <name=value>`, repeatable — commander's default value is `[]`. */
@@ -947,6 +949,12 @@ export function buildProgram(): Command {
       "SQL to run against the `docs` table; every positional is then a path",
     )
     .option(
+      "-s, --schema <ref>",
+      "schema set a DDL statement evolves; repeatable; replaces the per-file resolution for the DDL planner only",
+      collect,
+      [],
+    )
+    .option(
       "--check",
       "treat returned rows as findings: exit 1 if the query returns any",
     )
@@ -1052,6 +1060,15 @@ export function buildProgram(): Command {
               "--param needs a statement to bind into; a --db export without SQL references no parameters. Pass the SQL, or drop --param.",
             );
           }
+          // And -s (0030): it names the schema set DDL evolves, and with no
+          // SQL nothing can evolve it — the same flag-means-nothing seam,
+          // refused at the same gate. Worded without naming --db: the gate
+          // guards every empty-SQL arrival, not just the export spelling.
+          if (options.schema.length > 0 && sql === "") {
+            throw new DocmetaError(
+              "-s names the schema set DDL evolves; without SQL there is no statement to evolve it. Pass the SQL, or drop -s.",
+            );
+          }
           const params = parseQueryParams(options.param);
           const exts: string[] | undefined = options.ext
             ? splitList(options.ext)
@@ -1072,6 +1089,7 @@ export function buildProgram(): Command {
             db: options.db,
             dryRun,
             ...(Object.keys(params).length > 0 ? { params } : {}),
+            ...(options.schema.length > 0 ? { schemas: options.schema } : {}),
             inputs: paths,
             as: options.as,
             exclude: options.exclude,
