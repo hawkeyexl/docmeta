@@ -54,6 +54,7 @@ changed as a result, and lists what it depends on.
 | [0028](0028-ddl-type-bridge.md) | The DDL type bridge: formats as column types, enums as CHECK IN | Sara · S1, S3 / Maya · M2, M3 | Implemented (#135) |
 | [0029](0029-query-for-scripts.md) | query for scripts: CSV output and bound parameters | Devin · D3, D4 | Implemented (#133) |
 | [0030](0030-query-schema-flag.md) | `-s/--schema` on `query`: naming the contract DDL evolves | Sara · S1, S3 / Maya · M2, M3 | Implemented (#139) |
+| [0031](0031-input-formats-notebooks-and-markdoc.md) | The input-format gap: Jupyter notebooks and Markdoc in, standalone data files out | Maya · M1, M4 / Sara · S1, S2 | Proposed |
 
 0014 was not in the original review. It surfaced while stress-testing 0004 and
 is the most severe item in the set: **docmeta currently exits `0` when it
@@ -114,6 +115,11 @@ At a glance, so a planning pass does not have to reconstruct it from 29 headers.
 0024 ──┬─> 0027          (its "scope the run to one override group" remedy gets a name)
        ├─> 0028          (extends 0024's deliberately thin type mapping)
        └─> 0030          (the `--schema <ref>` its design text sketched, shipped as query's -s)
+
+0020 ──┬─> 0031          (parent-is-the-namespace, and both channels validated, applied
+       │                  to the next structured format)
+0018 ──┤                 (write where you read — load-bearing once a format has two channels)
+0014 ──┘                 (why an unreadable corpus errors instead of passing green)
 ```
 
 The four `Proposed` SQL items (0026–0029) are independent of each other except that
@@ -122,9 +128,11 @@ six-value surface, and whichever is implemented second merges into the one const
 Recommended implementation order is 0026 → 0029 → 0027 → 0028 — impact-first, with the
 two config-touching ones (0026, 0027) landed apart so the second rebases trivially.
 
-**Safe to start in any order, no blockers:** none left. 0011 was the last item in
-this bucket and has shipped; 0023 is the only other `Proposed` entry, and it waits
-on public review rather than on an implementation slot.
+**Safe to start in any order, no blockers:** 0031 (its dependencies are all
+shipped; the arrows above record which rules it inherits, not what it waits on).
+0011 held this slot until it shipped, and 0023, the only other `Proposed` entry,
+is not in this bucket — it waits on public review rather than on an
+implementation slot.
 
 **Shipped so far:** everything the table above marks `Implemented` — through 0025 that
 is all but 0023 (`Proposed`), 0016 and 0019 (`Accepted`, nothing to ship), and
