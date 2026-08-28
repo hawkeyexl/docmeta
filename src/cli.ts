@@ -641,6 +641,11 @@ interface InferCliOptions extends InputCliOptions {
   out?: string;
   /** `--min-coverage <pct>`; commander's default value is `0`. */
   minCoverage: number;
+  allowEmpty?: boolean;
+  /** `--no-gitignore`; commander's `true` default, see `gitignoreFlag`. */
+  gitignore: boolean;
+  /** `--offline`; a no-op here by construction, see `InferOptions.offline`. */
+  offline?: boolean;
 }
 
 interface VendorCliOptions {
@@ -1416,6 +1421,12 @@ export function buildProgram(): Command {
     )
     .option("-c, --config <path>", "path to a docmeta config file")
     .option("--no-config", "ignore any discovered config file")
+    .option("--allow-empty", "treat zero matched files as success")
+    .option("--no-gitignore", "scan files .gitignore covers")
+    .option(
+      "--offline",
+      "never fetch a remote schema; resolve URL refs from the schema cache",
+    )
     .addHelpText(
       "after",
       [
@@ -1452,6 +1463,15 @@ export function buildProgram(): Command {
           stdinContent,
           out: options.out,
           minCoverage: options.minCoverage,
+          // Same shape as the other four input-taking commands: only an
+          // explicit `--allow-empty` / `--no-gitignore` travels, so config
+          // `allowEmpty:` and `respectGitignore:` still decide otherwise.
+          allowEmpty: options.allowEmpty ? true : undefined,
+          respectGitignore: gitignoreFlag(options.gitignore),
+          // Accepted and ignored — `infer` never fetches. `undefined` rather
+          // than `false` all the same, so this stays the same shape as the
+          // other four if it ever does gain a meaning.
+          offline: options.offline ? true : undefined,
           onNotice: notice,
         });
 

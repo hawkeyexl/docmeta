@@ -455,6 +455,25 @@ export interface InferOptions {
   out?: string;
   /** `--min-coverage`: hide keys below this percentage. 0–100, default 0. */
   minCoverage?: number;
+  /** Permit an input set that resolves to zero files (see `assertNonEmpty`). */
+  allowEmpty?: boolean;
+  /**
+   * `--no-gitignore` (false). Absent leaves config `respectGitignore:` in
+   * charge, which itself defaults to on.
+   */
+  respectGitignore?: boolean;
+  /**
+   * `--offline`, accepted for surface parity with the other input-taking
+   * commands.
+   *
+   * It has **no effect here**, and — as on `get` — that is a property of the
+   * command rather than an omission: `infer` counts keys that are already
+   * structured, resolves no schema and loads no provider, so there is no fetch
+   * for it to suppress. 0010 stress test 2 asserts that unconditionally.
+   * Accepting the flag keeps one flag set across the commands, so a script can
+   * pass `--offline` uniformly without knowing which subcommand needs it.
+   */
+  offline?: boolean;
   /** Diagnostics for the user; the CLI writes these to stderr. */
   onNotice?: (message: string) => void;
   /** Called once when a config governs the run, so the CLI can report it. */
@@ -759,7 +778,7 @@ export async function runInferSchema(
 
   const exts = opts.exts ?? (forced ? forced.extensions : undefined);
   const fileInputs = inputs.filter((i) => i !== STDIN_TOKEN);
-  const allowEmpty = config?.allowEmpty;
+  const allowEmpty = opts.allowEmpty ?? config?.allowEmpty;
   const exclude = [...(config?.exclude ?? []), ...(opts.exclude ?? [])];
   const { files, gitignoreSkipped } = await resolveTargetSet({
     inputs: fileInputs,
@@ -768,6 +787,7 @@ export async function runInferSchema(
     cwd: base,
     allowEmpty,
     ...gitignoreOptions({
+      flag: opts.respectGitignore,
       configured: config?.respectGitignore,
       onNotice: opts.onNotice,
     }),
