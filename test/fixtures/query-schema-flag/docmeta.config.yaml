@@ -1,0 +1,6 @@
+# Two local schemas in one set — the ADD ambiguity -s exists to resolve.
+paths:
+  - "docs/**/*.md"
+schemas:
+  - ./schemas/house.json
+  - ./schemas/extra.json

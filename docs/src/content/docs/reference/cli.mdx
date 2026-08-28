@@ -337,14 +337,17 @@ Statements are judged by their **effects** on this disposable projection:
 reads return rows; metadata-column changes become a per-file diff; an added
 row is a file created, a removed row a front matter block stripped, and a
 `_path` move a file rename. Files are never *deleted* through SQL, and the
-other system columns are read-only. Like `get`, `query` resolves no schema
-and makes no network requests.
+other system columns are read-only. Like `get`, `query` resolves no schema on
+reads and DML, and makes no network requests. DDL is the one exception: an
+`ALTER` resolves the schema set it evolves — from disk and the bundled
+built-ins only, or from `-s` when given — see [writing back](#writing-back).
 
 ### Options
 
 | Option | Argument | Default | Description |
 |---|---|---|---|
 | `--query` | `<sql>` | the `[sql]` positional | The SQL statement. When given, **every** positional is a path. |
+| `-s, --schema` | `<ref>` | resolved per file | The schema set a DDL statement evolves; repeatable. CLI precedence for the **DDL planner only**: the per-file resolution walk is skipped and the deduped refs are the set, with every DDL guard unchanged inside it. Collection views and plain reads are untouched. A statement that runs no DDL under `-s` is an error (exit 2), refused before anything is applied. See [writing back](#writing-back). |
 | `--check` | — | off | Treat returned rows as findings: exit 1 if the query returns any, 0 if it returns none. The `pretty` verdict line shows ✓/✗. |
 | `--param` | `<name=value>` | — | Bind a named SQL parameter (`$name`, `:name`, or `@name`) as a **string**; `name:=value` parses the value as JSON for a typed bind. Repeatable. See [bound parameters](#bound-parameters). |
 | `--db` | `<path>` | — | Also write the built database to this file; the SQL is then optional. The file is a regenerated artifact: an existing SQLite database at the path is overwritten, anything else is refused. See [exporting the database](#exporting-the-database). |
@@ -357,7 +360,7 @@ and makes no network requests.
 | `--no-config` | — | off | Ignore any discovered config file. `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
 | `--allow-empty` | — | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
 | `--no-gitignore` | — | on | Load files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
-| `--offline` | — | off | Accepted for parity with the other commands. It has no effect here: `query` never loads a schema, so it makes no network requests to suppress. |
+| `--offline` | — | off | Accepted for parity with the other commands. It has no effect here: reads and DML load no schema, and DDL resolves its set from disk and the bundled built-ins only (a URL ref refuses with "vendor it first" before anything could fetch), so there is no network request to suppress. |
 
 There is no `-q/--quiet`: `get` uses it to hide files and `validate` to hide
 passes, and a query result has no analogous noise — the rows are exactly what
@@ -467,7 +470,8 @@ formats whose writer can build a block (markdown, MDX).
 
 **DDL edits the schema itself.** An `ALTER` statement resolves the run's
 schema set (which must be a single set — a corpus split by overrides refuses;
-scope the run to one group) with the same trust boundary as `validate`: a
+scope the run to one group, or name the set with `-s`) with the same trust
+boundary as `validate`: a
 document's `$schema` cannot point the edit outside the repository. It then
 evolves the one schema that owns the key: a **hand-maintained local schema
 file is edited in place** — `properties` and `required` only, your indent,
@@ -490,6 +494,27 @@ docmeta query "ALTER TABLE docs
   ADD COLUMN reviewed TEXT NOT NULL DEFAULT 'pending'" docs/
 # schema now requires `reviewed`, every file carries it, validate stays green
 ```
+
+**`-s/--schema` names the contract directly** (proposal 0030). When the
+resolved set is ambiguous — several local schemas in one set, a corpus split
+by overrides — or when you simply know which contract you are evolving, say
+so:
+
+```sh
+docmeta query -s ./schemas/house.json "ALTER TABLE docs
+  ADD COLUMN reviewed TEXT NOT NULL DEFAULT 'pending'" docs/
+```
+
+The flag is CLI precedence for the DDL planner **only**: the per-file
+resolution walk is skipped and the deduped `-s` refs are the set, unanimous
+by construction. Every guard above still runs within it — ADD still needs a
+single local-file member and still refuses onto an already-declared property,
+DROP and RENAME still need a sole declarer, a builtin still forks, a URL
+still refuses with "vendor it first", and the trust boundary still holds.
+Unlike `validate`'s `-s`, it does not reshape the corpus: collection views
+and plain reads keep following the config's resolution — which is why a
+statement that runs no DDL under `-s` refuses (exit 2) rather than letting
+the flag silently mean nothing, and refuses **before** anything is applied.
 
 **Declared types carry formats; a CHECK carries an enum** (proposal 0028).
 The format-name set is derived from what the validator itself enforces —

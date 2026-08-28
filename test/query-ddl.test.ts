@@ -167,6 +167,130 @@ describe("runQuery DDL — the schema is the table (0024)", () => {
   });
 });
 
+describe("runQuery DDL — -s names the contract (0030)", () => {
+  const ddlS = (
+    sql: string,
+    cwd: string,
+    schemas: string[],
+    apply = false,
+  ) => runQuery({ sql, inputs: ["docs"], cwd, dryRun: !apply, schemas });
+
+  it("refuses -s on a statement that runs no DDL, naming the flag's meaning", async () => {
+    const d = copy("query-schema-flag");
+    await expect(
+      ddlS("SELECT _path FROM docs", d, ["./schemas/house.json"]),
+    ).rejects.toThrow(/-s names the schema set DDL evolves.*ran no DDL/);
+  });
+
+  it("refuses -s on DML before anything applies — the files stay untouched", async () => {
+    const d = copy("query-schema-flag");
+    const before = readFileSync(join(d, "docs", "one.md"), "utf8");
+    await expect(
+      ddlS(
+        "UPDATE docs SET title = 'MUTATED'",
+        d,
+        ["./schemas/house.json"],
+        true,
+      ),
+    ).rejects.toThrow(/ran no DDL/);
+    // The half that matters: the refusal fired on the plan side of the
+    // all-or-nothing line, not after the UPDATE landed (0030 § stress 1).
+    expect(readFileSync(join(d, "docs", "one.md"), "utf8")).toBe(before);
+  });
+
+  it("ADD refuses on a two-schema set without -s, and evolves exactly the named one with it", async () => {
+    const d = copy("query-schema-flag");
+    await expect(
+      ddl("ALTER TABLE docs ADD COLUMN reviewed TEXT", d, true),
+    ).rejects.toThrow(/pass -s/);
+
+    const extraBefore = readFileSync(join(d, "schemas", "extra.json"), "utf8");
+    await ddlS(
+      "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+      d,
+      ["./schemas/house.json"],
+      true,
+    );
+    const house = houseOf(d);
+    expect((house.properties as Record<string, unknown>).reviewed).toEqual({
+      type: "string",
+    });
+    expect(readFileSync(join(d, "schemas", "extra.json"), "utf8")).toBe(
+      extraBefore,
+    );
+  });
+
+  it("keeps every in-set guard: DROP with shared declarers still refuses (stress 14)", async () => {
+    const d = copy("query-schema-flag");
+    writeFileSync(
+      join(d, "schemas", "strict.json"),
+      '{\n  "required": ["title"]\n}\n',
+    );
+    await expect(
+      ddlS(
+        "ALTER TABLE docs DROP COLUMN title",
+        d,
+        ["./schemas/house.json", "./schemas/strict.json"],
+        true,
+      ),
+    ).rejects.toThrow(/constrained by 2 schemas/);
+  });
+
+  it("a builtin named by -s forks through the same machinery", async () => {
+    // The config resolves to the two local schemas; only -s puts the builtin
+    // in play — so the fork proves the CLI set drove the planner, and the
+    // config (whose entries never named the builtin) is correctly left alone
+    // rather than refused for an impossible repoint.
+    const d = copy("query-schema-flag");
+    const cfgBefore = readFileSync(join(d, "docmeta.config.yaml"), "utf8");
+    const run = await runQuery({
+      sql: "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+      inputs: ["docs"],
+      cwd: d,
+      schemas: ["google:okf:0.1"],
+    });
+    expect(
+      run.changes?.some(
+        (c) => "schema" in c && c.forkedFrom === "google:okf:0.1",
+      ),
+    ).toBe(true);
+    expect(existsSync(join(d, "schemas", "okf-0.1.local.json"))).toBe(true);
+    expect(readFileSync(join(d, "docmeta.config.yaml"), "utf8")).toBe(
+      cfgBefore,
+    );
+  });
+
+  it("a URL ref via -s refuses with the vendor-first remedy", async () => {
+    const d = copy("query-schema-flag");
+    await expect(
+      ddlS("ALTER TABLE docs ADD COLUMN x TEXT", d, [
+        "https://example.com/x.json",
+      ]),
+    ).rejects.toThrow(/vendor it first/i);
+  });
+
+  it("a split corpus proceeds under -s, and the refusal without it names the remedy", async () => {
+    const split = copy("query-ddl");
+    appendFileSync(
+      join(split, "docmeta.config.yaml"),
+      'overrides:\n  - files: "docs/two.md"\n    schemas:\n      - google:okf:0.1\n',
+    );
+    await expect(
+      ddl("ALTER TABLE docs ADD COLUMN x TEXT", split),
+    ).rejects.toThrow(/pass -s/);
+
+    await ddlS(
+      "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+      split,
+      ["./schemas/house.json"],
+      true,
+    );
+    expect(
+      (houseOf(split).properties as Record<string, unknown>).reviewed,
+    ).toEqual({ type: "string" });
+  });
+});
+
 describe("runQuery DDL — targeting, containment, and the config edit", () => {
   it("refuses a document $schema outside the repository as a write target", async () => {
     const root = mkdtempSync(join(tmpdir(), "docmeta-ddl-"));
@@ -348,7 +472,7 @@ describe("runQuery DDL — targeting, containment, and the config edit", () => {
     ).rejects.toThrow(/declares "stray"/);
   });
 
-  it("names both schemas when ADD cannot pick one, without phantom flags", async () => {
+  it("names both schemas when ADD cannot pick one, and the -s remedy", async () => {
     const d = copy("query-ddl");
     writeFileSync(join(d, "schemas", "extra.json"), "{\n  \"type\": \"object\"\n}\n");
     writeFileSync(
@@ -362,7 +486,9 @@ describe("runQuery DDL — targeting, containment, and the config edit", () => {
     const message = (err as Error).message;
     expect(message).toContain("house.json");
     expect(message).toContain("extra.json");
-    expect(message).not.toContain("--schema");
+    // Until 0030 this pinned the absence of a phantom --schema flag; the
+    // flag exists now, so the refusal must name it as the direct remedy.
+    expect(message).toContain("pass -s");
   });
 
   it("treats a reordered $schema list as the same set, not a split", async () => {

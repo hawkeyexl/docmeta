@@ -141,6 +141,17 @@ export interface QueryOptions {
    * refuses: unbound would silently bind NULL and match nothing.
    */
   params?: Record<string, unknown>;
+  /**
+   * `-s/--schema`, repeatable: the schema set the run's DDL evolves — CLI
+   * precedence for the DDL planner *only* (proposal 0030). The per-file
+   * resolution walk is skipped and the deduped refs are the set; every guard
+   * inside the set (single local file for ADD, sole declarer for
+   * DROP/RENAME, builtin fork, URL refusal, the trust boundary) runs
+   * unchanged. Collection views keep following the config's resolution. A
+   * run whose statement produces no DDL effect refuses before anything is
+   * applied — a flag that would silently mean nothing must refuse.
+   */
+  schemas?: string[];
 }
 
 /**
@@ -335,6 +346,9 @@ export async function runQuery(opts: QueryOptions): Promise<QueryRun> {
   const run = await runSql(sql, entries, {
     target: db,
     params: boundParams,
+    ...(opts.schemas !== undefined && opts.schemas.length > 0
+      ? { cliSchemas: opts.schemas }
+      : {}),
     write: !opts.dryRun,
     base,
     config,
@@ -384,6 +398,8 @@ interface RunContext {
   target?: { resolved: string; display: string };
   /** Named-parameter binds, bare-name keys, already through `bindValue`. */
   params: Record<string, SqlValue>;
+  /** `-s` refs: the DDL planner's set, in place of the per-file walk (0030). */
+  cliSchemas?: string[];
   write: boolean;
   /** Directory file labels resolve against (see `resolveRunConfig`). */
   base: string;
@@ -669,6 +685,17 @@ async function runSql(
         catalogBefore,
         snapshotCatalogSql(db),
       );
+      // 0030: -s speaks only to the DDL planner, and DDL is judged by its
+      // effects — so "no DDL happened" is knowable only here, after
+      // execution. The placement is load-bearing: the refusal must land on
+      // the plan side of the all-or-nothing line, BEFORE buildChanges and
+      // applyChanges, so a DML statement under -s never writes files and
+      // then errors (the applies-then-refuses trap the -f csv review found).
+      if (ctx.cliSchemas !== undefined && schemaOps.length === 0) {
+        throw new DocmetaError(
+          "-s names the schema set DDL evolves; this statement ran no DDL, so the flag would silently mean nothing — nothing was applied. Drop -s, or evolve the schema with ALTER TABLE.",
+        );
+      }
       // Structural, not textual: a read always yields result columns, DML and
       // DDL (without RETURNING) never do — so `WITH … UPDATE …` classifies
       // correctly even when it matches zero rows. The residual: RETURNING DML
@@ -1464,42 +1491,53 @@ async function planSchemaMutation(
   // One schema set for the whole run, or nothing mutates. Resolution runs
   // with the same trust boundary as validate — a document may not name a
   // schema outside the repository, least of all as a write target.
+  //
+  // 0030: -s replaces the walk outright — the deduped CLI refs ARE the set
+  // (source "cli"), unanimous by construction, so neither the split refusal
+  // nor the default-set refusal below can arise. Everything after the set is
+  // chosen — member loading, trust, every ownership guard — is one shared
+  // path: -s picks the contract, never what the contract says.
   let refs: string[] | undefined;
   const sources = new Set<string>();
   const groupIndexes = new Set<number>();
   let splitLabel: string | undefined;
-  for (const e of entries) {
-    let resolved;
-    try {
-      resolved = resolveSchemaSetWithSource({
-        filePath: e.label,
-        fileSchema: e.extracted.data[FILE_SCHEMA_KEY],
-        config: ctx.config,
-        fileBase: ctx.cwd,
-        trustRoot: ctx.trustRoot,
-        onNotice: ctx.onNotice,
-      });
-    } catch (err) {
-      // `coerceFileSchema` throws a plain Error; either way the file that
-      // carried the bad `$schema` is the one fact the user needs.
-      throw new DocmetaError(`"${e.label}": ${(err as Error).message}`);
-    }
-    sources.add(resolved.source);
-    if (resolved.overrideIndex !== undefined) {
-      groupIndexes.add(resolved.overrideIndex);
-    }
-    if (refs === undefined) {
-      refs = resolved.schemas;
-    } else if (
-      // Order-insensitive, like seqResolvesToRunSet below: a document that
-      // lists the same refs in another order names the same contract.
-      splitLabel === undefined &&
-      JSON.stringify([...refs].sort()) !==
-        JSON.stringify([...resolved.schemas].sort())
-    ) {
-      // The walk finishes before refusing, so the refusal can name every
-      // override group the run spans, not only the first two it met.
-      splitLabel = e.label;
+  if (ctx.cliSchemas !== undefined && ctx.cliSchemas.length > 0) {
+    refs = [...new Set(ctx.cliSchemas)];
+    sources.add("cli");
+  } else {
+    for (const e of entries) {
+      let resolved;
+      try {
+        resolved = resolveSchemaSetWithSource({
+          filePath: e.label,
+          fileSchema: e.extracted.data[FILE_SCHEMA_KEY],
+          config: ctx.config,
+          fileBase: ctx.cwd,
+          trustRoot: ctx.trustRoot,
+          onNotice: ctx.onNotice,
+        });
+      } catch (err) {
+        // `coerceFileSchema` throws a plain Error; either way the file that
+        // carried the bad `$schema` is the one fact the user needs.
+        throw new DocmetaError(`"${e.label}": ${(err as Error).message}`);
+      }
+      sources.add(resolved.source);
+      if (resolved.overrideIndex !== undefined) {
+        groupIndexes.add(resolved.overrideIndex);
+      }
+      if (refs === undefined) {
+        refs = resolved.schemas;
+      } else if (
+        // Order-insensitive, like seqResolvesToRunSet below: a document that
+        // lists the same refs in another order names the same contract.
+        splitLabel === undefined &&
+        JSON.stringify([...refs].sort()) !==
+          JSON.stringify([...resolved.schemas].sort())
+      ) {
+        // The walk finishes before refusing, so the refusal can name every
+        // override group the run spans, not only the first two it met.
+        splitLabel = e.label;
+      }
     }
   }
   if (splitLabel !== undefined) {
@@ -1514,10 +1552,12 @@ async function planSchemaMutation(
         return o?.name !== undefined ? [`${o.name} (${o.files})`] : [];
       });
     const last = named[named.length - 1];
+    // 0030: -s makes the set unanimous by construction, so it is the third
+    // remedy — the direct one — in both spellings of this refusal.
     const remedy =
       named.length >= 2 && last !== undefined
-        ? `The run spans ${[named.slice(0, -1).join(", "), last].join(" and ")}; re-run over one group's files.`
-        : "Scope the run to one override group.";
+        ? `The run spans ${[named.slice(0, -1).join(", "), last].join(" and ")}; re-run over one group's files, or pass -s <schema> to name the contract directly.`
+        : "Scope the run to one override group, or pass -s <schema> to name the contract directly.";
     throw new DocmetaError(
       `DDL needs the corpus to resolve to one schema set, and this run's is split ("${splitLabel}" resolves differently). ${remedy}`,
     );
@@ -1542,7 +1582,7 @@ async function planSchemaMutation(
   if (op.op === "add") {
     if (fileMembers.length > 1) {
       throw new DocmetaError(
-        `The resolved set names ${String(fileMembers.length)} local schema files (${fileMembers.map((m) => m.ref).join(", ")}) — DDL cannot tell which one to evolve. Scope the run to an override group that names one, or set the files' \`$schema\` to the schema to evolve.`,
+        `The resolved set names ${String(fileMembers.length)} local schema files (${fileMembers.map((m) => m.ref).join(", ")}) — DDL cannot tell which one to evolve. Scope the run to an override group that names one, set the files' \`$schema\` to the schema to evolve, or pass -s <schema> to name it directly.`,
       );
     }
     const chosen = fileMembers[0] ?? builtinMembers[0];
