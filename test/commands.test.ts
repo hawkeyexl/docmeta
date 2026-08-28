@@ -1627,6 +1627,101 @@ describe("runInferSchema coverage report (0010)", () => {
   });
 });
 
+/**
+ * `infer` takes the same `[paths...]` as `validate`, `get`, `query` and `fill`,
+ * so it needs their two escape hatches for the same reasons: 0014 makes an
+ * empty scan an operational error, and `.gitignore` filtering is the one filter
+ * nobody wrote on the command line.
+ */
+describe("schemas infer: --allow-empty and --no-gitignore (command parity)", () => {
+  const nomatch = "test/fixtures/*.nomatch";
+  const PARITY = join(here, "fixtures", "infer-parity");
+
+  /** The committed pair, laid out as a repo whose `build/` is gitignored. */
+  async function parityRepo(config?: string): Promise<string> {
+    const [tracked, generated] = await Promise.all([
+      readFile(join(PARITY, "tracked.md"), "utf8"),
+      readFile(join(PARITY, "generated.md"), "utf8"),
+    ]);
+    return makeTempRepo({
+      files: {
+        ".gitignore": "build/\n",
+        "docs/tracked.md": tracked,
+        "build/generated.md": generated,
+        ...(config ? { "docmeta.config.yaml": config } : {}),
+      },
+    });
+  }
+
+  let repo: string | undefined;
+  afterEach(() => {
+    removeTempRepo(repo);
+    repo = undefined;
+  });
+
+  it("errors when the input set resolves to zero files", async () => {
+    const err = await failure(
+      runInferSchema({ inputs: [nomatch], cwd: root, noConfig: true }),
+    );
+    expect(err).toBeInstanceOf(DocmetaError);
+    expect(err.message).toMatch(/--allow-empty/);
+  });
+
+  it("allowEmpty reports an empty scan instead of erroring", async () => {
+    const r = await runInferSchema({
+      inputs: [nomatch],
+      cwd: root,
+      noConfig: true,
+      allowEmpty: true,
+    });
+    expect(r.filesScanned).toBe(0);
+    expect(r.keys).toEqual([]);
+    expect(r.draft.properties).toEqual({});
+  });
+
+  it("config allowEmpty: true governs when the option is absent", async () => {
+    repo = await parityRepo("allowEmpty: true\n");
+    const r = await runInferSchema({ inputs: ["*.nomatch"], cwd: repo });
+    expect(r.filesScanned).toBe(0);
+  });
+
+  it("skips a gitignored file by default, and says how many", async () => {
+    repo = await parityRepo();
+    const r = await runInferSchema({
+      inputs: ["**/*.md"],
+      cwd: repo,
+      noConfig: true,
+    });
+    expect(r.filesScanned).toBe(1);
+    expect(r.gitignoreSkipped).toBe(1);
+    expect(r.keys.map((k) => k.key)).not.toContain("generatedBy");
+  });
+
+  it("respectGitignore: false scans them again", async () => {
+    repo = await parityRepo();
+    const r = await runInferSchema({
+      inputs: ["**/*.md"],
+      cwd: repo,
+      noConfig: true,
+      respectGitignore: false,
+    });
+    expect(r.filesScanned).toBe(2);
+    expect(r.gitignoreSkipped).toBe(0);
+    // The ignored file's own key is the proof it was actually scanned.
+    expect(r.keys.map((k) => k.key)).toContain("generatedBy");
+  });
+
+  it("the option overrides config respectGitignore: true", async () => {
+    repo = await parityRepo("respectGitignore: true\n");
+    const r = await runInferSchema({
+      inputs: ["**/*.md"],
+      cwd: repo,
+      respectGitignore: false,
+    });
+    expect(r.filesScanned).toBe(2);
+  });
+});
+
 describe("the inferred draft never requires anything (0010 stress test 1)", () => {
   it("emits no `required` even where every key is at 100% coverage", async () => {
     const dir = await makeDocset({
@@ -1956,6 +2051,36 @@ describe("schemas infer is offline by design (0010 stress test 2)", () => {
     try {
       const r = await runInferSchema({ inputs: ["."], cwd: dir, noConfig: true });
       expect(r.filesScanned).toBe(1);
+      expect(attempted).toEqual([]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * `offline` is part of the surface for the same reason it is on `get` and
+   * `query`: one flag set across the commands. Asserted as "the report is
+   * byte-identical either way" rather than "it was accepted", so a future
+   * implementation that quietly gave it behavior here would fail.
+   */
+  it("accepts `offline` and changes nothing — there is no request to suppress", async () => {
+    const dir = await makeDocset({
+      "a.md": doc({ type: "guide", title: "A" }),
+      "b.md": doc({ type: "reference" }),
+    });
+    try {
+      const plain = await runInferSchema({
+        inputs: ["."],
+        cwd: dir,
+        noConfig: true,
+      });
+      const offline = await runInferSchema({
+        inputs: ["."],
+        cwd: dir,
+        noConfig: true,
+        offline: true,
+      });
+      expect(offline).toEqual(plain);
       expect(attempted).toEqual([]);
     } finally {
       await rm(dir, { recursive: true, force: true });

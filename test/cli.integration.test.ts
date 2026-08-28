@@ -1959,6 +1959,20 @@ describe("docmeta CLI: --offline and the cross-run schema cache (built bin)", ()
     expect(r.stdout).toContain("--offline");
   });
 
+  /**
+   * Accepted and ignored, exactly as on `get` and `query`. `infer` resolves no
+   * schema, so there is no fetch to suppress — but a script that passes
+   * `--offline` to every docmeta invocation should not have to know that.
+   */
+  it("--offline is accepted by schemas infer, and changes nothing", () => {
+    const args = ["schemas", "infer", "test/fixtures/infer", "--no-config", "-f", "json"];
+    const withFlag = run([...args, "--offline"]);
+    expect(withFlag.status).toBe(0);
+    const without = run(args);
+    expect(without.status).toBe(0);
+    expect(withFlag.stdout).toBe(without.stdout);
+  });
+
   it("--offline fails on an uncached URL, naming it, without a request", () => {
     repo = makeTempRepo({ files: { "doc.md": DOC } });
     // A closed loopback port: reaching the network at all would produce the
@@ -2851,6 +2865,75 @@ describe("schemas infer end to end", () => {
     const r = run(["schemas", "infer", fixtures, "--min-coverage", "150"]);
     expect(r.status).toBe(2);
     expect(r.stderr).toContain("--min-coverage");
+  });
+
+  // The two escape hatches every other input-taking command already carries.
+  // `infer` reads the same `[paths...]`, so an empty scan and a gitignored
+  // docset have to mean the same thing here as they do on `validate`.
+  describe("--allow-empty and --no-gitignore", () => {
+    const parity = resolve(root, "test", "fixtures", "infer-parity");
+    let repo: string | undefined;
+
+    const parityRepo = (): string =>
+      makeTempRepo({
+        files: {
+          ".gitignore": "build/\n",
+          "docs/tracked.md": readFileSync(join(parity, "tracked.md"), "utf8"),
+          "build/generated.md": readFileSync(
+            join(parity, "generated.md"),
+            "utf8",
+          ),
+        },
+      });
+
+    afterEach(() => {
+      removeTempRepo(repo);
+      repo = undefined;
+    });
+
+    it("refuses an empty scan and names the flag that permits it", () => {
+      const r = run(["schemas", "infer", "test/fixtures/*.nomatch", "--no-config"]);
+      expect(r.status).toBe(2);
+      expect(r.stderr).toContain("--allow-empty");
+    });
+
+    it("--allow-empty returns to 0 on an unmatched glob", () => {
+      const r = run([
+        "schemas",
+        "infer",
+        "test/fixtures/*.nomatch",
+        "--no-config",
+        "--allow-empty",
+      ]);
+      expect(r.status).toBe(0);
+      expect(r.stdout).toContain("0 files scanned");
+    });
+
+    it("skips a gitignored file", () => {
+      repo = parityRepo();
+      const r = run(
+        ["schemas", "infer", "**/*.md", "--no-config"],
+        undefined,
+        undefined,
+        repo,
+      );
+      expect(r.status).toBe(0);
+      expect(r.stdout).toContain("1 file scanned");
+      expect(r.stdout).not.toContain("generatedBy");
+    });
+
+    it("--no-gitignore scans it again", () => {
+      repo = parityRepo();
+      const r = run(
+        ["schemas", "infer", "**/*.md", "--no-config", "--no-gitignore"],
+        undefined,
+        undefined,
+        repo,
+      );
+      expect(r.status).toBe(0);
+      expect(r.stdout).toContain("2 files scanned");
+      expect(r.stdout).toContain("generatedBy");
+    });
   });
 });
 
