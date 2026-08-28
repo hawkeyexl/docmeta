@@ -79,6 +79,7 @@ import {
   isPublishedBuiltinUrl,
   loadSchema,
   publishedBuiltins,
+  type SchemaPin,
 } from "../core/schema-registry.js";
 import { parseDocument, isMap, isSeq, isScalar } from "yaml";
 
@@ -1391,6 +1392,32 @@ function assertSchemaWriteWithin(ctx: RunContext, abs: string): void {
 }
 
 /**
+ * Canonical identity of a local schema path: absolute, case-folded on win32 —
+ * where `./Schemas/House.json` and `schemas/house.json` name one file — and
+ * case-preserved on POSIX, where two casings really are two files.
+ */
+function foldPath(p: string): string {
+  const abs = resolve(p);
+  return process.platform === "win32" ? abs.toLowerCase() : abs;
+}
+
+/**
+ * The config's file-ref pins keyed by canonical path rather than ref text.
+ * `collectSchemaPins` keys carry the config's (possibly rebased) spelling; a
+ * `-s` ref typed even slightly differently — `schemas/x.json` for
+ * `./schemas/x.json` — must still find its pin, or pre-edit verification
+ * silently skips and the un-refreshed pin refuses every later run.
+ */
+function filePinsByPath(ctx: RunContext): Map<string, SchemaPin> {
+  const byPath = new Map<string, SchemaPin>();
+  for (const [ref, pin] of collectSchemaPins(ctx.config)) {
+    if (classifyRef(ref).kind !== "file") continue;
+    byPath.set(foldPath(resolve(ctx.cwd, ref)), pin);
+  }
+  return byPath;
+}
+
+/**
  * Load every schema in the set, through the same conventions the rest of the
  * pipeline reads them with: refs resolve from the run's cwd (the
  * `LoadSchemaOptions.fileBase` contract), text is BOM-stripped before parsing
@@ -1403,8 +1430,15 @@ async function loadSetMembers(
   refs: readonly string[],
   ctx: RunContext,
 ): Promise<SetMember[]> {
-  const pins = collectSchemaPins(ctx.config);
+  const pins = filePinsByPath(ctx);
   const members: SetMember[] = [];
+  // Identity-level dedupe on top of the resolver's textual one: two -s
+  // spellings of one file (`./x.json` vs `x.json`, case variants on win32)
+  // must load one member, or ADD refuses naming one file twice and DROP
+  // hands out an unfollowable "evolve them separately". Builtins dedupe by
+  // id for the same reason — the raw id and its published URL are one schema.
+  const seenFiles = new Set<string>();
+  const seenBuiltins = new Set<string>();
   for (const ref of refs) {
     const { kind } = classifyRef(ref);
     if (kind === "url" && !isPublishedBuiltinUrl(ref)) {
@@ -1417,6 +1451,8 @@ async function loadSetMembers(
         kind === "url"
           ? (publishedBuiltins().find((b) => b.url === ref)?.id ?? ref)
           : ref;
+      if (seenBuiltins.has(builtinId)) continue;
+      seenBuiltins.add(builtinId);
       members.push({
         ref,
         kind: "builtin",
@@ -1426,6 +1462,9 @@ async function loadSetMembers(
       continue;
     }
     const abs = resolve(ctx.cwd, ref);
+    const canon = foldPath(abs);
+    if (seenFiles.has(canon)) continue;
+    seenFiles.add(canon);
     let text: string;
     try {
       text = await readFile(abs, "utf8");
@@ -1434,7 +1473,7 @@ async function loadSetMembers(
         `Schema file not found: "${ref}" (looked at ${abs}).`,
       );
     }
-    const pin = pins.get(ref);
+    const pin = pins.get(canon);
     if (pin?.integrity !== undefined) {
       if (integrityOf(Buffer.from(text, "utf8")) !== pin.integrity) {
         throw new DocmetaError(
@@ -1763,12 +1802,14 @@ async function planSchemaMutation(
   });
 
   // An in-place edit of a pinned schema carries its pin along: the pin is a
-  // promise about the bytes, and the bytes just changed on purpose.
+  // promise about the bytes, and the bytes just changed on purpose. Looked
+  // up by canonical path, like the verification in `loadSetMembers` — the
+  // -s spelling must never decide whether a pin is found.
   if (target.kind === "file") {
-    const pin = collectSchemaPins(ctx.config).get(target.ref);
+    const pin = filePinsByPath(ctx).get(foldPath(target.abs));
     if (pin?.integrity !== undefined) {
       configEdit.integrity = {
-        ref: target.ref,
+        path: target.abs,
         value: integrityOf(Buffer.from(content, "utf8")),
       };
     }
@@ -1847,8 +1888,12 @@ function mutateSchemaObject(
 interface ConfigEditRequest {
   /** A builtin fork: point the entry that named the builtin at the fork. */
   repoint?: { oldRef: string; newRef: string };
-  /** An in-place edit of a pinned schema: the pin over the new bytes. */
-  integrity?: { ref: string; value: string };
+  /**
+   * An in-place edit of a pinned schema: the pin over the new bytes. `path`
+   * is the schema's absolute path — entries match by resolved path, so the
+   * config's spelling and the run's never have to agree textually.
+   */
+  integrity?: { path: string; value: string };
 }
 
 /**
@@ -1931,12 +1976,15 @@ async function planConfigEdit(
   let pinned = false;
   if (edit.integrity && isSeq(topSeq)) {
     // Pins live on top-level mapping entries only — that is where
-    // `collectSchemaPins` reads them from. Both spellings rebased, as above.
-    const wantRef = rebaseRaw(edit.integrity.ref);
+    // `collectSchemaPins` reads them from. Matching is by resolved path (a
+    // raw config ref is config-relative), so no spelling has to agree.
+    const wantPath = foldPath(edit.integrity.path);
     for (const item of topSeq.items) {
       if (!isMap(item)) continue;
       const raw = rawRefOf(item);
-      if (raw === undefined || rebaseRaw(raw) !== wantRef) continue;
+      if (raw === undefined || classifyRef(raw).kind !== "file") continue;
+      const abs = isAbsolute(raw) ? raw : resolve(configDir, raw);
+      if (foldPath(abs) !== wantPath) continue;
       pinFrom = item.get("integrity");
       item.set("integrity", edit.integrity.value);
       pinned = true;

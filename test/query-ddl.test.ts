@@ -260,6 +260,50 @@ describe("runQuery DDL — -s names the contract (0030)", () => {
     );
   });
 
+  it("dedupes -s file refs by resolved path, not spelling", async () => {
+    // `./schemas/house.json` and `schemas/house.json` name one file; loading
+    // it as two members made ADD refuse naming one file twice and DROP hand
+    // out the unfollowable "evolve them separately" (review finding 3).
+    const d = copy("query-ddl");
+    await ddlS(
+      "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+      d,
+      ["./schemas/house.json", "schemas/house.json"],
+      true,
+    );
+    expect((houseOf(d).properties as Record<string, unknown>).reviewed).toEqual(
+      { type: "string" },
+    );
+  });
+
+  it("finds and refreshes an integrity pin whatever the -s spelling", async () => {
+    // The pin map keys carry the config's spelling; a -s ref typed without
+    // the ./ must still hit it, or the stale pin bricks the NEXT run
+    // (review finding 2).
+    const d = copy("query-ddl");
+    const pin = integrityOf(readFileSync(join(d, "schemas", "house.json")));
+    writeFileSync(
+      join(d, "docmeta.config.yaml"),
+      `paths:\n  - "docs/**/*.md"\nschemas:\n  - ref: ./schemas/house.json\n    integrity: ${pin}\n`,
+    );
+    const run = await ddlS(
+      "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+      d,
+      ["schemas/house.json"],
+      true,
+    );
+    expect(
+      run.changes?.some((c) => "config" in c && c.key === "integrity"),
+    ).toBe(true);
+    const cfg = readFileSync(join(d, "docmeta.config.yaml"), "utf8");
+    expect(cfg).not.toContain(pin);
+    expect(cfg).toContain(
+      integrityOf(readFileSync(join(d, "schemas", "house.json"))),
+    );
+    const v = await runValidate({ inputs: ["docs"], cwd: d });
+    expect(v.summary.failed).toBe(0);
+  });
+
   it("a URL ref via -s refuses with the vendor-first remedy", async () => {
     const d = copy("query-schema-flag");
     await expect(
