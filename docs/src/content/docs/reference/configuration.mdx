@@ -305,7 +305,7 @@ a glob.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `files` | `string` | yes | A glob matched against each file's path. |
+| `files` | `string` \| `string[]` | yes | A glob, or a list of globs, matched against each file's path. |
 | `schemas` | `string[]` | yes | The schema set applied to matching files. |
 | `name` | `string` | no | Makes the group a named **collection**: a SQL view of that name over the `docs` projection, in both `docmeta query` and `checks:`. See [Named collections](#named-collections). |
 
@@ -313,6 +313,25 @@ For a given file, docmeta uses the **first** override whose `files` glob matches
 (in list order); later matching overrides are ignored. See [schema
 resolution](/docmeta/reference/schema-resolution/#precedence) for where overrides sit in
 the precedence chain.
+
+#### Grouping several globs
+
+`files` accepts a list, and a file matches when **any** glob in it does. Use it
+when one schema set governs path shapes that no single pattern reaches — brace
+expansion needs a common stem, and these have none:
+
+```yaml
+overrides:
+  - files:
+      - ".claude/skills/*/SKILL.md"
+      - ".claude/agents/*.md"
+    schemas: [agentskills:skill:1.0]
+```
+
+A list counts as **one** override for first-match-wins, so the whole group has a
+single position in the precedence order, and — with `name:` — becomes a single
+collection. An empty list is refused: it would match nothing and read as
+configured.
 
 #### Named collections
 

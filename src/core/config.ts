@@ -14,7 +14,18 @@ import { INTEGRITY_SHAPE, isIntegrity } from "./integrity.js";
 import { parseElementPath } from "../extractors/element-key.js";
 
 export interface SchemaOverride {
-  files: string;
+  /**
+   * The glob, or globs, this override governs. A file matches when **any** of
+   * them matches, so a list groups path shapes that brace expansion cannot
+   * express as one pattern: a per-skill `SKILL.md` one directory down and a
+   * flat `.claude/agents` file share a schema set but have no common stem.
+   *
+   * Kept as written rather than normalized to a list, because a programmatic
+   * caller may hand `runValidate` a config object it built itself, and that
+   * caller's bare string must keep working. Read it through `overrideGlobs`
+   * rather than directly — that is the one place the two shapes collapse.
+   */
+  files: string | string[];
   schemas: string[];
   /**
    * Optional collection name (proposal 0027): the override group becomes a
@@ -333,6 +344,51 @@ function asStringList(value: unknown, field: string, source: string): string[] {
 }
 
 /**
+ * Parse `overrides[].files`, which accepts a single glob or a list of them.
+ *
+ * Deliberately not `asStringList`: that helper rejects a bare string, and the
+ * single form is what every existing config and every doc example is written
+ * in. The shape is preserved rather than normalized — see `SchemaOverride.files`
+ * for why — so this validates and returns, it does not convert.
+ *
+ * The refusals are the ones a silently-matching-nothing rule would otherwise
+ * cause: an empty list, and a blank glob in either shape. Both read as
+ * configured and are not, which is the same false green the neighbouring
+ * "sets neither schemas nor elements" check exists to end.
+ */
+function asFileGlobs(
+  value: unknown,
+  where: string,
+  source: string,
+): string | string[] {
+  if (typeof value === "string") {
+    if (value.trim() === "") {
+      throw new DocmetaError(`${source}: ${where} must be a non-empty glob string.`);
+    }
+    return value;
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      throw new DocmetaError(
+        `${source}: ${where} is an empty list, so it matches nothing and the override has no effect.`,
+      );
+    }
+    // Indexed, because "one of these six globs is blank" is not actionable.
+    value.forEach((glob, j) => {
+      if (typeof glob !== "string" || glob.trim() === "") {
+        throw new DocmetaError(
+          `${source}: ${where}[${j}] must be a non-empty glob string.`,
+        );
+      }
+    });
+    return value as string[];
+  }
+  throw new DocmetaError(
+    `${source}: ${where} must be a glob string or a list of glob strings.`,
+  );
+}
+
+/**
  * Parse the top-level `schemas:` list, which accepts both forms.
  *
  * Separate from `asStringList` on purpose. That helper also validates `paths`,
@@ -451,11 +507,7 @@ export function parseConfig(text: string, source: string): DocmetaConfig {
       // schemas" must be a list of strings`, blaming the key that is missing
       // rather than the one that is wrong.
       rejectUnknownKeys(e, OVERRIDE_KEYS, `overrides[${i}]`, source);
-      if (typeof e.files !== "string") {
-        throw new DocmetaError(
-          `${source}: overrides[${i}].files must be a string glob.`,
-        );
-      }
+      const files = asFileGlobs(e.files, `overrides[${i}].files`, source);
       const schemas =
         e.schemas === undefined
           ? []
@@ -520,7 +572,7 @@ export function parseConfig(text: string, source: string): DocmetaConfig {
         name = e.name;
       }
       return {
-        files: e.files,
+        files,
         schemas,
         ...(elements ? { elements } : {}),
         ...(name !== undefined ? { name } : {}),

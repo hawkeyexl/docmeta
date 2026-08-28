@@ -590,3 +590,44 @@ describe("resolveSchemaSetWithSource: the winning override's identity (0027)", (
     expect(resolved.overrideIndex).toBeUndefined();
   });
 });
+
+describe("an override may carry a list of globs", () => {
+  const config = {
+    schemas: ["google:okf:0.1"],
+    overrides: [
+      {
+        files: [".claude/skills/*/SKILL.md", ".claude/agents/*.md"],
+        schemas: ["agentskills:skill:1.0"],
+      },
+    ],
+  };
+
+  it("wins for a file matching the first glob", () => {
+    expect(
+      resolveSchemaSet({ filePath: ".claude/skills/demo/SKILL.md", config }),
+    ).toEqual(["agentskills:skill:1.0"]);
+  });
+
+  // The case a single string cannot express without brace gymnastics: two
+  // unrelated directory shapes sharing one schema set.
+  it("wins for a file matching a later glob", () => {
+    expect(
+      resolveSchemaSet({ filePath: ".claude/agents/reviewer.md", config }),
+    ).toEqual(["agentskills:skill:1.0"]);
+  });
+
+  it("falls through for a file matching none of them", () => {
+    expect(resolveSchemaSet({ filePath: "docs/guide.md", config })).toEqual([
+      "google:okf:0.1",
+    ]);
+  });
+
+  it("reports the winning override's index, as the single form does", () => {
+    const got = resolveSchemaSetWithSource({
+      filePath: ".claude/agents/reviewer.md",
+      config,
+    });
+    expect(got.source).toBe("override");
+    expect(got.overrideIndex).toBe(0);
+  });
+});

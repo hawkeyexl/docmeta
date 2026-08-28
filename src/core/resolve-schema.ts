@@ -184,22 +184,49 @@ export interface ResolveParams {
 const matcherCache = new Map<string, (p: string) => boolean>();
 
 /**
- * Does this file path match an override's `files:` glob, by the resolver's own
- * rules (picomatch, dot files included, `\` normalized to `/`)?
+ * An override's `files:` as a list, whatever shape it was written in.
+ *
+ * The single place the string and list forms collapse. Exported because the
+ * two places that *display* a group's globs — the collections exclusion notice
+ * and `query`'s split-corpus remedy — need the same list, and a second
+ * spelling of "is it an array?" scattered across them is how the two forms
+ * start disagreeing.
+ */
+export function overrideGlobs(
+  files: string | readonly string[],
+): readonly string[] {
+  return typeof files === "string" ? [files] : files;
+}
+
+/**
+ * Does this file path match an override's `files:` glob — or, for the list
+ * form, any of them — by the resolver's own rules (picomatch, dot files
+ * included, `\` normalized to `/`)?
  *
  * Exported for the collections layer (proposal 0027), which needs to say *why*
  * a glob-matching file is absent from a view — membership itself never goes
  * through raw glob matching, only through the resolution winner below.
  */
-export function matchesFileGlob(glob: string, filePath: string): boolean {
+export function matchesFileGlob(
+  glob: string | readonly string[],
+  filePath: string,
+): boolean {
   return matches(glob, filePath);
 }
 
-function matches(glob: string, filePath: string): boolean {
-  let m = matcherCache.get(glob);
+function matches(glob: string | readonly string[], filePath: string): boolean {
+  // picomatch takes a pattern array natively, so the list form needs no loop
+  // here — but the cache does need a *string* key. Keyed on the array itself
+  // this Map would compare by identity: a hit only for the very same object,
+  // and an entry retained for every config ever parsed. JSON.stringify is the
+  // key because it separates the two shapes on its own — a lone "a/**" and
+  // ["a/**"] serialize differently — with no separator char to collide with
+  // one inside a glob.
+  const key = JSON.stringify(glob);
+  let m = matcherCache.get(key);
   if (!m) {
-    m = picomatch(glob, { dot: true });
-    matcherCache.set(glob, m);
+    m = picomatch(glob as string | string[], { dot: true });
+    matcherCache.set(key, m);
   }
   // Normalize Windows separators so globs written with `/` still match.
   return m(filePath.replace(/\\/g, "/"));

@@ -60,6 +60,37 @@ Here, `api/deprecated/v1.md` matches the first override and is validated against
 Globs match against POSIX-style paths (forward slashes), so write `api/**/*.md` even on Windows. docmeta normalizes path separators before matching.
 </Aside>
 
+## Group several globs under one schema set
+
+Sometimes one contract governs areas that no single glob reaches. `files` accepts a list, and a file matches when **any** glob in it does:
+
+```yaml title="docmeta.config.yaml"
+overrides:
+  - files:
+      - ".claude/skills/*/SKILL.md"
+      - ".claude/agents/*.md"
+    schemas:
+      - agentskills:skill:1.0
+```
+
+Reach for the list when the paths have no common stem — a per-skill `SKILL.md` one directory down and a flat file in `.claude/agents/` cannot be written as one brace expansion. When they *do* share a stem, either spelling works: `docs/{api,guides}/**/*.md` and the two-entry list are equivalent.
+
+<Aside type="caution" title="Dot directories must be named to be found">
+An override decides *how* a file is judged, never *whether* it is looked at. Input discovery skips dot directories: `docmeta validate .` walks past `.claude/` entirely, so the config above would match nothing at all unless the path is named as an input.
+
+Name it in `paths:` — or pass it on the command line — and the files are found:
+
+```yaml title="docmeta.config.yaml"
+paths:
+  - .claude
+  - docs
+```
+
+The override globs themselves match dotfiles fine; it is only the walk that skips them. This bites hardest in exactly the case above, where every target is under a dot directory.
+</Aside>
+
+A grouped entry is still **one** override. It takes a single position in the first-match-wins order above, and if you give it a `name:` it becomes one [collection](/docmeta/reference/configuration/#named-collections), not one per glob.
+
 ## Validate one file against multiple schemas
 
 A `schemas` list, whether the default set or an override, applies as a **set**: the file must satisfy every schema in the list. List more than one to compose rules.
