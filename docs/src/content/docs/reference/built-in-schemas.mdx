@@ -5,7 +5,7 @@ description: Every schema shipped with docmeta in one table, showing what each c
 
 import { Aside, Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-docmeta bundles twenty-one schemas. You reference any of them by id, with no file
+docmeta bundles twenty-two schemas. You reference any of them by id, with no file
 to write, no URL to host, and no network call at validation time. This page is
 the registry: what each one constrains, whether it requires anything, and which
 are applied when you pass no flags at all.
@@ -38,13 +38,14 @@ installed.
 | `x:cards:1.0` | 23 `twitter:*` card tags | `twitter:card` | No | [`x-cards/1.0.json`](/docmeta/schemas/x-cards/1.0.json) | [Metadata vocabularies](/docmeta/reference/metadata-vocabularies/) |
 | `agentskills:skill:1.0` | the 6 Agent Skills `SKILL.md` fields | `name`, `description` | No | [`agent-skills/1.0.json`](/docmeta/schemas/agent-skills/1.0.json) | [Agent Skills schemas](/docmeta/reference/agent-skills-schemas/) |
 | `anthropic:claude-skill:2.1` | 20 Claude Code `SKILL.md` fields | nothing | No | [`claude-skill/2.1.json`](/docmeta/schemas/claude-skill/2.1.json) | [Agent Skills schemas](/docmeta/reference/agent-skills-schemas/) |
+| `anthropic:claude-subagent:2.1` | 18 Claude Code agent definition fields | `name`, `description` | No | [`claude-subagent/2.1.json`](/docmeta/schemas/claude-subagent/2.1.json) | [Claude Code subagent schema](/docmeta/reference/claude-subagent-schema/) |
 
-All twenty-one use [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects)
+All twenty-two use [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects)
 and are [built-in
 references](/docmeta/reference/schema-resolution/#reference-kinds), so a typo in
 an id is reported as an unknown built-in rather than a missing file.
 
-Twenty of them allow additional properties. `agentskills:skill:1.0` is the one
+Twenty-one of them allow additional properties. `agentskills:skill:1.0` is the one
 exception, and not out of strictness: the tooling that packages a skill for
 distribution *hard-errors* on a key outside the standard's six rather than
 ignoring it, so a schema that tolerated unknown keys would pass exactly the file
@@ -172,17 +173,21 @@ on cannot fail a page that was already building. `astro:starlight:0.41` and
 *error* without a page title — a page failing that check was already broken, and
 docmeta is only telling you sooner.
 
-The two `SKILL.md` schemas are platform schemas of a different sort: the
-platform is the agent runtime rather than a site generator.
+The three agent schemas are platform schemas of a different sort: the platform
+is the agent runtime rather than a site generator.
 `anthropic:claude-skill:2.1` requires nothing, because Claude Code marks every
-field optional; `agentskills:skill:1.0` requires `name` and `description`,
-because the open standard does and the packaging tools refuse a skill without
-them. See [Agent Skills
-schemas](/docmeta/reference/agent-skills-schemas/).
+`SKILL.md` field optional; `agentskills:skill:1.0` requires `name` and
+`description`, because the open standard does and the packaging tools refuse a
+skill without them. `anthropic:claude-subagent:2.1` requires the same two for a
+third reason — Claude Code will not load an agent definition that is missing
+either. See [Agent Skills
+schemas](/docmeta/reference/agent-skills-schemas/) and [Claude Code subagent
+schema](/docmeta/reference/claude-subagent-schema/).
 
 Full field tables are on the [Platform
 schemas](/docmeta/reference/platform-schemas/), [Agent Skills
-schemas](/docmeta/reference/agent-skills-schemas/) and [Docusaurus
+schemas](/docmeta/reference/agent-skills-schemas/), [Claude Code subagent
+schema](/docmeta/reference/claude-subagent-schema/) and [Docusaurus
 schemas](/docmeta/reference/docusaurus-schemas/) pages.
 
 **Vocabulary schemas** are a third kind. They describe a document to something
@@ -227,7 +232,7 @@ compose](/docmeta/reference/taxonomy-schemas/#which-ones-compose).
 
 ## What runs when you pass no flags
 
-Only two of the twenty-one are in the default set:
+Only two of the twenty-two are in the default set:
 
 ```text
 google:okf:0.1 + passo-uno:seven-action:1.0
