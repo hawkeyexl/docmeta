@@ -236,13 +236,42 @@ describe("runQuery DDL — -s names the contract (0030)", () => {
     ).rejects.toThrow(/constrained by 2 schemas/);
   });
 
-  it("a builtin named by -s forks through the same machinery", async () => {
-    // The config resolves to the two local schemas; only -s puts the builtin
-    // in play — so the fork proves the CLI set drove the planner, and the
-    // config (whose entries never named the builtin) is correctly left alone
-    // rather than refused for an impossible repoint.
+  it("refuses to fork a builtin nothing in the corpus would resolve — no orphans", async () => {
+    // Nothing here — no config entry, no in-file $schema — names the
+    // builtin, so after the run nothing would validate against the fork:
+    // validate keeps resolving the un-evolved contract while the statement
+    // reports success. Refused instead (review of #139, finding 1; this
+    // revises the fork-with-config-untouched behavior first pinned here).
     const d = copy("query-schema-flag");
-    const cfgBefore = readFileSync(join(d, "docmeta.config.yaml"), "utf8");
+    await expect(
+      runQuery({
+        sql: "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+        inputs: ["docs"],
+        cwd: d,
+        schemas: ["google:okf:0.1"],
+      }),
+    ).rejects.toThrow(/orphan/);
+    expect(existsSync(join(d, "schemas", "okf-0.1.local.json"))).toBe(false);
+  });
+
+  it("repoints the config entry naming a cli-forked builtin, raw-id spelling", async () => {
+    // THE bricking repro: config carries [house.json, google:okf:0.1],
+    // -s names the builtin alone. The fork must repoint the entry that
+    // names the builtin — whole-set equality can never hold here, since the
+    // -s set is by definition not the config's set.
+    const d = copy("query-schema-flag");
+    writeFileSync(
+      join(d, "docmeta.config.yaml"),
+      'paths:\n  - "docs/**/*.md"\nschemas:\n  - ./schemas/house.json\n  - google:okf:0.1\n',
+    );
+    writeFileSync(
+      join(d, "docs", "one.md"),
+      "---\ntitle: One\ntype: concept\n---\n\nBody one.\n",
+    );
+    writeFileSync(
+      join(d, "docs", "two.md"),
+      "---\ntitle: Two\ntype: concept\n---\n\nBody two.\n",
+    );
     const run = await runQuery({
       sql: "ALTER TABLE docs ADD COLUMN reviewed TEXT",
       inputs: ["docs"],
@@ -254,9 +283,50 @@ describe("runQuery DDL — -s names the contract (0030)", () => {
         (c) => "schema" in c && c.forkedFrom === "google:okf:0.1",
       ),
     ).toBe(true);
+    const cfg = readFileSync(join(d, "docmeta.config.yaml"), "utf8");
+    expect(cfg).toContain("./schemas/okf-0.1.local.json");
+    expect(cfg).not.toContain("google:okf:0.1");
+    expect(cfg).toContain("./schemas/house.json");
+    // The evolved contract is the one validate now resolves.
+    const v = await runValidate({ inputs: ["docs"], cwd: d });
+    expect(v.summary.failed).toBe(0);
+  });
+
+  it("repoints a config entry spelling the builtin as its published URL", async () => {
+    const okf = publishedBuiltins().find((b) => b.id === "google:okf:0.1");
+    expect(okf).toBeDefined();
+    if (!okf) return;
+    const d = copy("query-schema-flag");
+    writeFileSync(
+      join(d, "docmeta.config.yaml"),
+      `paths:\n  - "docs/**/*.md"\nschemas:\n  - ./schemas/house.json\n  - ${okf.url}\n`,
+    );
+    await runQuery({
+      sql: "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+      inputs: ["docs"],
+      cwd: d,
+      schemas: ["google:okf:0.1"],
+    });
+    const cfg = readFileSync(join(d, "docmeta.config.yaml"), "utf8");
+    expect(cfg).toContain("./schemas/okf-0.1.local.json");
+    expect(cfg).not.toContain(okf.url);
+  });
+
+  it("an in-file $schema naming the builtin is repointed and averts the orphan refusal", async () => {
+    const d = copy("query-schema-flag");
+    writeFileSync(
+      join(d, "docs", "two.md"),
+      "---\n$schema: google:okf:0.1\ntitle: Two\ntype: concept\n---\n\nBody two.\n",
+    );
+    await runQuery({
+      sql: "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+      inputs: ["docs"],
+      cwd: d,
+      schemas: ["google:okf:0.1"],
+    });
     expect(existsSync(join(d, "schemas", "okf-0.1.local.json"))).toBe(true);
-    expect(readFileSync(join(d, "docmeta.config.yaml"), "utf8")).toBe(
-      cfgBefore,
+    expect(readFileSync(join(d, "docs", "two.md"), "utf8")).toContain(
+      "./schemas/okf-0.1.local.json",
     );
   });
 

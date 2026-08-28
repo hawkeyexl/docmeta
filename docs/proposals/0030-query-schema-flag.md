@@ -151,13 +151,22 @@ b.json` where both constrain `title`, then `DROP COLUMN title` — still "constr
 about ownership inside it; a bypass here would recreate the corpus-fails-after-a-
 successful-write bug that stress test found.
 
-**3. One machinery, verified at the three edges.** `-s` refs flow through the same
-loader as resolved sets: a URL ref refuses "vendor it first"; a builtin id forks with
-the config repoint and `$schema` repoints riding the same write (the repoint applies
-when the config's own entry names the forked ref, and is correctly skipped — not
-errored — when only `-s` named it, since no config entry resolved the run); a path
-outside the repository refuses at the write-target boundary. No `-s`-only branch
-touches trust, classification, or loading.
+**3. One machinery, verified at the three edges — and the fork must stay resolvable.**
+`-s` refs flow through the same loader as resolved sets: a URL ref refuses "vendor it
+first"; a builtin id forks with the config repoint and `$schema` repoints riding the
+same write; a path outside the repository refuses at the write-target boundary. No
+`-s`-only branch touches trust, classification, or loading. The first implementation
+got the fork's repoint wrong, and review caught it as the worst finding in the set: the
+repoint matched whole-set equality, which a cli-named set can never satisfy against a
+config whose set is by definition different — so `-s google:okf:0.1` over a config
+carrying `[house.json, google:okf:0.1]` exited 0 with a fork on disk, the config
+untouched, and `validate` still resolving the un-evolved builtin. The rule that fixes
+it: a cli-named fork repoints by **builtin identity** — every config `schemas:` or
+override entry, and every loaded file's `$schema`, that names the builtin in either
+spelling (raw id or published URL) is repointed to the fork. And when *nothing* names
+it — no entry, no `$schema` — the fork would be an orphan nothing ever resolves, so
+the statement refuses with "add the schema to the config (or the files' `$schema`)
+first" instead of reporting a success that changed no contract.
 
 **4. The export-only gate is the CLI's, mirroring `--param`.** `docmeta query -s x
 --db out.db docs/` runs no statement, so nothing can classify — the refusal lives

@@ -1733,18 +1733,37 @@ async function planSchemaMutation(
     );
     baseObject = { ...target.schema, $id: `${target.builtinId}+local` };
     styleReference = "\n";
+    // Repoints match refs that NAME THE BUILTIN — the raw id or its
+    // published URL — not the spelling the run's set happened to use. A
+    // cli-named set has no reason to agree textually with the config or
+    // the files, and the exact-string match orphaned every fork whose
+    // corpus spelled the builtin differently (review of #139, finding 1).
+    const forkOf = target.builtinId;
+    const builtinIdOf = (r: string): string | undefined => {
+      const { kind } = classifyRef(r);
+      if (kind === "builtin") return r;
+      if (kind === "url" && isPublishedBuiltinUrl(r)) {
+        return publishedBuiltins().find((b) => b.url === r)?.id;
+      }
+      return undefined;
+    };
+    const namesFork = (r: unknown): boolean =>
+      typeof r === "string" && builtinIdOf(r) === forkOf;
     if (ctx.configPath !== undefined && ctx.configDir !== undefined) {
       const rel = posixRelative(ctx.configDir, schemaAbs);
       configEdit.repoint = {
         oldRef: target.ref,
         newRef: rel.startsWith(".") ? rel : `./${rel}`,
+        // The resolved-set path keeps its whole-set gate; a cli-named set
+        // can never satisfy it, so it matches by builtin identity instead.
+        ...(ctx.cliSchemas !== undefined ? { matchRef: namesFork } : {}),
       };
     }
     const docRel = posixRelative(ctx.cwd, schemaAbs);
     const newRefForDocs = docRel.startsWith(".") ? docRel : `./${docRel}`;
     for (const e of entries) {
       const fileSchema = e.extracted.data[FILE_SCHEMA_KEY];
-      if (fileSchema === target.ref) {
+      if (namesFork(fileSchema)) {
         changes.push({
           file: e.label,
           key: FILE_SCHEMA_KEY,
@@ -1758,21 +1777,21 @@ async function planSchemaMutation(
         const list = fileSchema.filter(
           (r): r is string => typeof r === "string",
         );
-        if (
-          list.length === fileSchema.length &&
-          list.includes(target.ref)
-        ) {
+        if (list.length === fileSchema.length && list.some(namesFork)) {
           changes.push({
             file: e.label,
             key: FILE_SCHEMA_KEY,
             from: fileSchema,
-            to: list.map((r) => (r === target.ref ? newRefForDocs : r)),
+            to: list.map((r) => (namesFork(r) ? newRefForDocs : r)),
             written: false,
           });
         }
       }
     }
   }
+  // Doc-side repoints planned so far — the fork block is the only writer of
+  // `changes` up to here, so this is the count the orphan check below needs.
+  const docRepoints = changes.length;
 
   // BOM-strip before sniffing: the regex anchors at the string head, and a
   // BOM'd file would silently fall back to two-space and be reformatted.
@@ -1815,10 +1834,12 @@ async function planSchemaMutation(
     }
   }
 
+  let configRepointed = false;
   if (configEdit.repoint || configEdit.integrity) {
     const edited = await planConfigEdit(ctx, configEdit, refs);
     changes.push(...edited.changes);
     if (edited.write) writes.push(edited.write);
+    configRepointed = edited.repointed;
     if (
       configEdit.repoint &&
       !edited.repointed &&
@@ -1828,6 +1849,20 @@ async function planSchemaMutation(
         `The run resolved ${configEdit.repoint.oldRef} through the config, but no \`schemas:\` entry in it matches — refusing to fork with a reference that cannot be repointed.`,
       );
     }
+  }
+  // A cli-named fork that nothing would resolve afterwards is an orphan:
+  // the statement reports success while validate keeps resolving the
+  // un-evolved builtin. Refused with nothing written — the mirror of the
+  // config-source no-repoint refusal above (review of #139, finding 1).
+  if (
+    ctx.cliSchemas !== undefined &&
+    forkedFrom !== undefined &&
+    !configRepointed &&
+    docRepoints === 0
+  ) {
+    throw new DocmetaError(
+      `The fork of ${forkedFrom} would be orphaned: nothing in this corpus resolves it — no config \`schemas:\` entry and no loaded file's \`$schema\` names the builtin, so nothing would validate against "${displayPath(ctx, schemaAbs)}" after the run. Add the schema to the config (or the files' \`$schema\`) first, then evolve it.`,
+    );
   }
 
   return { changes, writes, schemaLast: op.op === "add" };
@@ -1886,8 +1921,17 @@ function mutateSchemaObject(
 }
 
 interface ConfigEditRequest {
-  /** A builtin fork: point the entry that named the builtin at the fork. */
-  repoint?: { oldRef: string; newRef: string };
+  /**
+   * A builtin fork: point the entry that named the builtin at the fork.
+   * With `matchRef` (a cli-named fork), every entry the predicate accepts is
+   * repointed wherever it appears; without it, only entries spelled exactly
+   * `oldRef` inside a sequence that resolves to the run's whole set are.
+   */
+  repoint?: {
+    oldRef: string;
+    newRef: string;
+    matchRef?: (raw: string) => boolean;
+  };
   /**
    * An in-place edit of a pinned schema: the pin over the new bytes. `path`
    * is the schema's absolute path — entries match by resolved path, so the
@@ -1949,14 +1993,25 @@ async function planConfigEdit(
   };
 
   const repoint = (node: unknown): number => {
-    if (!edit.repoint || !isSeq(node) || !seqResolvesToRunSet(node)) return 0;
+    if (!edit.repoint || !isSeq(node)) return 0;
+    const spec = edit.repoint;
+    // `matchRef` (a cli-named fork) matches entries by builtin identity in
+    // every sequence: an entry naming the forked builtin is this statement's
+    // business wherever it lives. The whole-set gate stays for the
+    // resolved-set path, where rewriting another group's sequence would
+    // change validation for files the statement never loaded.
+    if (spec.matchRef === undefined && !seqResolvesToRunSet(node)) return 0;
+    const wants = (raw: string): boolean =>
+      spec.matchRef ? spec.matchRef(raw) : raw === spec.oldRef;
     let n = 0;
     for (const item of node.items) {
-      if (isScalar(item) && item.value === edit.repoint.oldRef) {
-        item.value = edit.repoint.newRef;
+      const raw = rawRefOf(item);
+      if (raw === undefined || !wants(raw)) continue;
+      if (isScalar(item)) {
+        item.value = spec.newRef;
         n += 1;
-      } else if (isMap(item) && item.get("ref") === edit.repoint.oldRef) {
-        item.set("ref", edit.repoint.newRef);
+      } else if (isMap(item)) {
+        item.set("ref", spec.newRef);
         n += 1;
       }
     }
