@@ -1,3 +1,21 @@
+# [4.9.0](https://github.com/hawkeyexl/docmeta/compare/v4.8.2...v4.9.0) (2026-08-28)
+
+
+### Bug Fixes
+
+* **query:** a cli-named builtin fork repoints by identity, or refuses as an orphan ([a5afe12](https://github.com/hawkeyexl/docmeta/commit/a5afe12e19259a56f0bf1d1052ff79d8dbe92cf3)), closes [#139](https://github.com/hawkeyexl/docmeta/issues/139)
+* **query:** key schema-file identity and pins by resolved path ([e2438e5](https://github.com/hawkeyexl/docmeta/commit/e2438e5e60f6085851eee17613fff036c7c857cc)), closes [#139](https://github.com/hawkeyexl/docmeta/issues/139)
+* **query:** name the --db residue in the orphan refusal ([3390b62](https://github.com/hawkeyexl/docmeta/commit/3390b623bfc71a10957739034baad516825c5f1e))
+* **query:** refuse an ADD that cannot tell which builtin to fork ([d78c711](https://github.com/hawkeyexl/docmeta/commit/d78c71163cca19bf0a3adb852507c9c4898d370f)), closes [#139](https://github.com/hawkeyexl/docmeta/issues/139)
+* **query:** refuse schemas and params on export-only runs in the core ([6edc774](https://github.com/hawkeyexl/docmeta/commit/6edc77474c96cc39e950b229a78714a9fa33f0cc)), closes [#139](https://github.com/hawkeyexl/docmeta/issues/139)
+* **query:** scope the export-only -s gate's wording to what it guards ([926bb1d](https://github.com/hawkeyexl/docmeta/commit/926bb1df4fa5cf4956fa8fc5dc4facc09e619477))
+* **query:** tell the truth in the -s refusals ([3169947](https://github.com/hawkeyexl/docmeta/commit/316994716b7969c782ce521b5386147909e446c2))
+
+
+### Features
+
+* **query:** -s/--schema names the DDL target set ([7fb87ab](https://github.com/hawkeyexl/docmeta/commit/7fb87ab6bbcce5c54e533533d1fa66fe41b55489))
+
 ## [4.8.2](https://github.com/hawkeyexl/docmeta/compare/v4.8.1...v4.8.2) (2026-08-28)
 
 
