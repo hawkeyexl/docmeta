@@ -147,7 +147,12 @@ export async function runGet(opts: GetOptions): Promise<GetFileResult[]> {
       // fault rather than a document one, and the extractor's message names the
       // line but never the file. In a corpus of any size that left nothing to
       // act on.
-      throw new DocmetaError(`${label}: ${(err as Error).message}`);
+      // `err` is `unknown`, and an extractor is not obliged to throw an
+      // `Error`. `(err as Error).message` would render a thrown string as
+      // `<file>: undefined` — worse than the "Unexpected error" this replaced,
+      // because it loses the reason entirely.
+      const reason = err instanceof Error ? err.message : String(err);
+      throw new DocmetaError(`${label}: ${reason}`);
     }
     const values: Record<string, unknown> = {};
     for (const f of opts.fields) values[f] = resolveField(extracted.data, f);
