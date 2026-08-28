@@ -86,6 +86,15 @@ export function renderInfer(
   if (result.unreadable.length > 0) {
     headline.push(`${count(result.unreadable.length)} unreadable`);
   }
+  // Same reason `validate` names it on its summary line: every coverage
+  // percentage below is computed over `filesScanned`, so a denominator that
+  // quietly shrank moves every number in the report. A key at 100% across the
+  // eight files `.gitignore` left is not the same finding as one at 100%
+  // across all forty, and the headline is the only place that is visible.
+  // Omitted at zero, which is every run in a clean repo.
+  if (result.gitignoreSkipped > 0) {
+    headline.push(`${count(result.gitignoreSkipped)} skipped by .gitignore`);
+  }
   lines.push(headline.join(c.dim(" · ")));
 
   if (result.keys.length === 0) {

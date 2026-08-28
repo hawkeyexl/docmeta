@@ -641,6 +641,11 @@ interface InferCliOptions extends InputCliOptions {
   out?: string;
   /** `--min-coverage <pct>`; commander's default value is `0`. */
   minCoverage: number;
+  allowEmpty?: boolean;
+  /** `--no-gitignore`; commander's `true` default, see `gitignoreFlag`. */
+  gitignore: boolean;
+  /** `--offline`; a no-op here by construction, see `InferOptions.offline`. */
+  offline?: boolean;
 }
 
 interface VendorCliOptions {
@@ -857,7 +862,7 @@ export function buildProgram(): Command {
     .option("--no-gitignore", "read files .gitignore covers")
     .option(
       "--offline",
-      "never fetch a remote schema; resolve URL refs from the schema cache",
+      "accepted and ignored: get loads no schema, so there is nothing to fetch",
     )
     .addHelpText(
       "after",
@@ -928,6 +933,11 @@ export function buildProgram(): Command {
               );
             }
           }
+          // A document that would not parse is a finding, not an operational
+          // failure: the run completed and reported on every file it was given.
+          // Set after the report is written, so the values that did resolve are
+          // on stdout either way.
+          process.exitCode = results.some((r) => r.error !== undefined) ? 1 : 0;
         } catch (err) {
           fail(err);
         }
@@ -989,7 +999,7 @@ export function buildProgram(): Command {
     .option("--no-gitignore", "load files .gitignore covers")
     .option(
       "--offline",
-      "never fetch a remote schema; resolve URL refs from the schema cache",
+      "accepted and ignored: query resolves schemas from disk and built-ins, never the network",
     )
     .addHelpText(
       "after",
@@ -1416,6 +1426,12 @@ export function buildProgram(): Command {
     )
     .option("-c, --config <path>", "path to a docmeta config file")
     .option("--no-config", "ignore any discovered config file")
+    .option("--allow-empty", "treat zero matched files as success")
+    .option("--no-gitignore", "scan files .gitignore covers")
+    .option(
+      "--offline",
+      "accepted and ignored: infer loads no schema and no provider",
+    )
     .addHelpText(
       "after",
       [
@@ -1452,6 +1468,15 @@ export function buildProgram(): Command {
           stdinContent,
           out: options.out,
           minCoverage: options.minCoverage,
+          // Same shape as the other four input-taking commands: only an
+          // explicit `--allow-empty` / `--no-gitignore` travels, so config
+          // `allowEmpty:` and `respectGitignore:` still decide otherwise.
+          allowEmpty: options.allowEmpty ? true : undefined,
+          respectGitignore: gitignoreFlag(options.gitignore),
+          // Accepted and ignored — `infer` never fetches. `undefined` rather
+          // than `false` all the same, so this stays the same shape as the
+          // other four if it ever does gain a meaning.
+          offline: options.offline ? true : undefined,
           onNotice: notice,
         });
 

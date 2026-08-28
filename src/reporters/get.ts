@@ -44,6 +44,15 @@ export function renderGet(
   const c = palette(opts.color ?? false);
   const lines: string[] = [];
   for (const r of results) {
+    // Checked before `quiet`, deliberately. An unparseable file resolves no
+    // values, so the quiet rule below would hide the one file the reader most
+    // needs to see — and `--quiet` must never be the reason a missing value
+    // goes unexplained, which is the same rule that keeps it hiding files
+    // rather than values.
+    if (r.error !== undefined) {
+      lines.push(`${c.dim(`${r.file}:`)} ${c.red(`(parse) ${r.error}`)}`);
+      continue;
+    }
     if (opts.quiet && fields.every((f) => r.values[f] === undefined)) continue;
     for (const f of fields) {
       lines.push(`${c.dim(`${r.file}:`)} ${f}=${stringifyValue(r.values[f])}`);

@@ -34,7 +34,7 @@ changed as a result, and lists what it depends on.
 | [0008](0008-remote-schema-durability.md) | Remote schema durability | Devin · D2 | Implemented |
 | [0009](0009-publish-builtin-schemas.md) | Publish built-in schemas at stable URLs | Sara · S1 | Implemented |
 | [0010](0010-init-and-schema-inference.md) | `docmeta init` and schema inference | Maya · M1 / Sara · S1 | Partly shipped — `infer` landed; `init` rejected by [0019](0019-no-docmeta-init.md) |
-| [0011](0011-fill-in-content-strategy.md) | Fold `fill` into the content strategy | strategy debt | Proposed |
+| [0011](0011-fill-in-content-strategy.md) | Fold `fill` into the content strategy | strategy debt | Implemented |
 | [0012](0012-fill-cost-and-privacy.md) | `fill` cost, privacy, and offline operation | Maya · M4 / Devin · D1 | Superseded by [0017](0017-fill-egress-and-bounds.md) |
 | [0013](0013-cleanup-dead-code-and-exit-codes.md) | Dead code, unpopulated fields, usage exit codes | correctness | Implemented |
 | [0014](0014-empty-input-is-not-success.md) | An empty input set is not success | correctness | Implemented |
@@ -54,6 +54,7 @@ changed as a result, and lists what it depends on.
 | [0028](0028-ddl-type-bridge.md) | The DDL type bridge: formats as column types, enums as CHECK IN | Sara · S1, S3 / Maya · M2, M3 | Implemented (#135) |
 | [0029](0029-query-for-scripts.md) | query for scripts: CSV output and bound parameters | Devin · D3, D4 | Implemented (#133) |
 | [0030](0030-query-schema-flag.md) | `-s/--schema` on `query`: naming the contract DDL evolves | Sara · S1, S3 / Maya · M2, M3 | Implemented (#139) |
+| [0031](0031-input-formats-notebooks-and-markdoc.md) | The input-format gap: Jupyter notebooks and Markdoc in, standalone data files out | Maya · M1, M4 / Sara · S1, S2 | Proposed |
 
 0014 was not in the original review. It surfaced while stress-testing 0004 and
 is the most severe item in the set: **docmeta currently exits `0` when it
@@ -73,6 +74,18 @@ documented `fill`'s egress when one had for two weeks. The gap it was reaching
 for is real and narrower — the docs say *that* content is sent, never *what*,
 *how much*, or *what is kept* — and 0017 answers it mostly by changing the
 behavior rather than describing it.
+
+0011 shipped much smaller than it was written, and the reason is worth recording
+because it is the same lesson as 0017's. By the time it was implemented, most of
+what it asked for had already been done *incidentally* by the proposals downstream
+of it: 0017 added the M4 CUJ and the egress page while implementing itself, and
+0001 renumbered the retrofit page's steps underneath it. What was left was the
+part no other proposal had a reason to touch — the retrofit row's missing M4 tag,
+the dangling `fill` source-of-truth row, and the two persona sentences. The
+proposal was not amended to match; it was implemented as written, and the items
+already satisfied were verified page by page rather than assumed. That check is
+what turned up the last published-page gap, which no proposal had named: the T1
+fix-it page recommends `fill` without ever linking to the M4 egress page.
 
 ## Dependency order
 
@@ -102,6 +115,11 @@ At a glance, so a planning pass does not have to reconstruct it from 29 headers.
 0024 ──┬─> 0027          (its "scope the run to one override group" remedy gets a name)
        ├─> 0028          (extends 0024's deliberately thin type mapping)
        └─> 0030          (the `--schema <ref>` its design text sketched, shipped as query's -s)
+
+0020 ──┬─> 0031          (parent-is-the-namespace, and both channels validated, applied
+       │                  to the next structured format)
+0018 ──┤                 (write where you read — load-bearing once a format has two channels)
+0014 ──┘                 (why an unreadable corpus errors instead of passing green)
 ```
 
 The four `Proposed` SQL items (0026–0029) are independent of each other except that
@@ -110,10 +128,14 @@ six-value surface, and whichever is implemented second merges into the one const
 Recommended implementation order is 0026 → 0029 → 0027 → 0028 — impact-first, with the
 two config-touching ones (0026, 0027) landed apart so the second rebases trivially.
 
-**Safe to start in any order, no blockers:** 0011.
+**Safe to start in any order, no blockers:** 0031 (its dependencies are all
+shipped; the arrows above record which rules it inherits, not what it waits on).
+0011 held this slot until it shipped, and 0023, the only other `Proposed` entry,
+is not in this bucket — it waits on public review rather than on an
+implementation slot.
 
 **Shipped so far:** everything the table above marks `Implemented` — through 0025 that
-is all but 0011 and 0023 (`Proposed`), 0016 and 0019 (`Accepted`, nothing to ship), and
+is all but 0023 (`Proposed`), 0016 and 0019 (`Accepted`, nothing to ship), and
 the superseded/rejected halves the Status column records — plus the standalone
 false-green guard called out in
 [0008 § Problem](0008-remote-schema-durability.md#problem). The dependency graph

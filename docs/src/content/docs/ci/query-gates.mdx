@@ -23,7 +23,7 @@ one row per file, one column per top-level metadata key, plus four system
 columns — `_path` (the file), `_format`, `_present` (did the file carry
 metadata at all), and `_data` (the whole block as JSON, for reaching into
 nested values with `->>` and `json_each`). The [CLI
-reference](/docmeta/reference/cli/#query) has the full contract.
+reference](/docmeta/reference/query/#the-docs-table) has the full contract.
 
 Retrieval is plain SQL. A tag census over a corpus:
 
@@ -122,7 +122,7 @@ parses the value as JSON when you deliberately mean a number or boolean. A
 parameter the SQL references but nothing binds is refused (exit 2) rather
 than silently matching nothing — an unbound parameter would otherwise read as
 a passing gate. The [bound parameters
-reference](/docmeta/reference/cli/#bound-parameters) has the full contract,
+reference](/docmeta/reference/query/#bound-parameters) has the full contract,
 shell-quoting pitfalls included.
 
 <Aside type="tip" title="Where do the queries live?">
@@ -180,7 +180,7 @@ Two behaviors to know about, both there to keep the answers honest:
 
 The ad-hoc spelling stays available: `query --check` now takes
 `-f github|sarif|junit` too ([rows as
-findings](/docmeta/reference/cli/#rows-as-findings)), for a rule you are
+findings](/docmeta/reference/query/#rows-as-findings)), for a rule you are
 still drafting or a one-off audit — same column convention, findings named
 `check:query`.
 
@@ -199,7 +199,7 @@ pages are stale, by team" straight into Sheets or `pandas.read_csv`, no `jq`
 in between. The header row is always there, so a zero-row result (the header
 alone) stays distinguishable from a step that failed and printed nothing; the
 dialect details, including the deliberate LF-not-CRLF line endings, are in
-[the reference](/docmeta/reference/cli/#csv-output):
+[the reference](/docmeta/reference/query/#the-csv-dialect):
 
 ```bash
 npx docmeta query -f csv "SELECT _path, title, last_reviewed
@@ -246,16 +246,16 @@ docs/gamma.md: reviewed: (unset) -> todo
 
 Statements that could write outside the corpus refuse by name — `ATTACH`,
 `VACUUM`, `DROP TABLE`, multi-statement input — and the refusal says what to
-run instead. The [vocabulary table](/docmeta/reference/cli/#query) is the
+run instead. The [vocabulary table](/docmeta/reference/query/#the-sql-vocabulary) is the
 complete list of what each statement means in file terms; the schema-editing
 half of it (`ALTER`) is the one-statement ratchet covered in the journeys
 below.
 
 <CardGrid>
   <LinkCard
-    title="query in the CLI reference"
-    description="The docs table contract, every flag, the vocabulary table, and the DDL rules."
-    href="/docmeta/reference/cli/#query"
+    title="query command reference"
+    description="The docs table contract, the vocabulary, the DDL rules, findings, and every output format."
+    href="/docmeta/reference/query/"
   />
   <LinkCard
     title="Roll out a new required field"

@@ -80,6 +80,15 @@ jobs:
       - name: Build docs site
         run: npm run build
         working-directory: docs
+
+      # Reads the rendered HTML, so it has to follow the build. It catches the
+      # quiet half of a broken link: an href whose page exists but whose anchor
+      # does not, which resolves without a 404 and drops the reader at the top
+      # of the page. Two of those had been live for months — `#json` on the
+      # output reference, and a `#schematrust` that should have been
+      # `#schema-trust` — because nothing looked.
+      - name: Check internal links and anchors resolve
+        run: npm run docs:check-links
       - uses: actions/upload-pages-artifact@v5
         if: github.event_name != 'pull_request'
         with:

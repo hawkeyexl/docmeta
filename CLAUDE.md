@@ -281,6 +281,9 @@ npm run test:coverage  # vitest with v8 coverage; reported, not gated
 npm run docs:check-cli  # CLI reference must match src/cli.ts
 npm run docs:check-action  # Action reference must match action.yml
 npm run docs:check-api  # API reference must match the built dist/index.d.ts
+npm run docs:check-links  # every internal link and anchor in the built site
+                        # resolves. Reads docs/dist, so it needs
+                        # `cd docs && npm run build` first.
 npm run schemas:check   # published built-in schemas immutable and in sync (local)
 npm run schemas:check-published  # ...and the live URLs still serve those bytes.
                         # Hits the network, so it runs on a daily schedule

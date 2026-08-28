@@ -317,7 +317,7 @@ the precedence chain.
 #### Named collections
 
 An override carrying `name:` becomes a **view** over the `docs` table wherever
-SQL runs — [`docmeta query`](/docmeta/reference/cli/#query) and the [`checks:`](#checks)
+SQL runs — [`docmeta query`](/docmeta/reference/query/) and the [`checks:`](#checks)
 list alike — so a cross-file rule can say `FROM docs d LEFT JOIN authors a`
 instead of duplicating the config's glob as a SQL `GLOB` pattern:
 
@@ -346,7 +346,7 @@ chain](/docmeta/reference/schema-resolution/#precedence):
   prepare was swallowed and retried. A `query` statement that never touches a
   collection resolves nothing and prints no membership notice.
 - Trust settings move membership: under
-  [`schemaTrust.documentRefs: none`](#schematrust) the document's `$schema` is
+  [`schemaTrust.documentRefs: none`](#schema-trust) the document's `$schema` is
   ignored, the override wins the file back, and the view grows. A per-file
   trust *refusal* (a `$schema` URL the settings reject) demotes the file to
   member of no view — it never turns a working `SELECT` into exit 2; `validate`
@@ -355,7 +355,7 @@ chain](/docmeta/reference/schema-resolution/#precedence):
 Views are **read-only**: an `UPDATE` through one refuses with the remedy —
 write through `docs`, scoped by the view
 (`UPDATE docs … WHERE _path IN (SELECT _path FROM "authors")`). They ride into
-a [`--db` export](/docmeta/reference/cli/#query) as ordinary `CREATE VIEW`
+a [`--db` export](/docmeta/reference/query/#exporting-the-database) as ordinary `CREATE VIEW`
 rows, and the effect gate never sees them.
 
 Any string is a legal name — view names are quoted identifiers — except what
@@ -371,7 +371,7 @@ standard new-key caveat.
 
 `checks` is a list of named cross-file rules. Each is one SQL statement run
 over the same `docs` projection [`docmeta
-query`](/docmeta/reference/cli/#query) builds — one row per file, one column
+query`](/docmeta/reference/query/#the-docs-table) builds — one row per file, one column
 per top-level metadata key — and every row the statement returns is reported
 as a **finding**, exactly as a schema violation is: it renders in every
 [output format](/docmeta/reference/output-and-exit-codes/), counts toward

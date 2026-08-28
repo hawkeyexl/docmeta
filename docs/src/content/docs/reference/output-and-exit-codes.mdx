@@ -410,7 +410,7 @@ schema](/docmeta/reference/schema-resolution/#what-docmeta-requires-of-a-fetched
 | Command | Exits 1 when |
 |---|---|
 | `validate` | One or more files failed validation. |
-| `get` | Never — a requested field that is absent is reported as unset, not as a failure. An absent **file** is a different thing: it is an operational error and exits 2. |
+| `get` | One or more files had a metadata block that could not be read — frontmatter that is not valid YAML, or that parses to something other than a mapping. A requested field that is merely *absent* is reported as unset and is **not** a failure. An absent **file** is different again: that is an operational error and exits 2. |
 | [`fill`](/docmeta/reference/cli/#fill) | A property the schema lists as `required` could not be filled confidently, or a file errored. Skipped **optional** properties leave the exit code at `0`. |
 | `schemas` | Never. |
 

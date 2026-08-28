@@ -1,11 +1,11 @@
 ---
 title: Built-in platform schemas
-description: The Starlight, Antora, Sphinx, MyST, Hugo, Jekyll, and VitePress front matter schemas shipped with docmeta, covering every field they check, what each one requires and why, and how they compose with a vocabulary.
+description: The Starlight, Antora, Sphinx, MyST, Hugo, Jekyll, VitePress, and MkDocs Material front matter schemas shipped with docmeta, covering every field they check, what each one requires and why, and how they compose with a vocabulary.
 ---
 
 import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-Seven built-ins describe the front matter contract of a documentation toolchain
+Eight built-ins describe the front matter contract of a documentation toolchain
 that is not Docusaurus. Like the [Docusaurus
 schemas](/docmeta/reference/docusaurus-schemas/), they are *platform* schemas:
 they say what your site generator accepts, not what your team has agreed a page
@@ -20,6 +20,7 @@ should say. That makes them safe to stack under any vocabulary.
 | `hugo:page:0.165` | Hugo 0.165 | `.md` | nothing |
 | `jekyll:page:4.4` | Jekyll 4.4 | `.md`, `.markdown` | nothing |
 | `vitepress:page:1.6` | VitePress 1.6 | `.md` | nothing |
+| `mkdocs:material:9.7` | MkDocs 1.6 + Material 9.7 | `.md` | nothing |
 
 ## What a platform schema requires
 
@@ -34,13 +35,15 @@ demand `title` — a page failing that check was already broken, and docmeta is
 telling you at review time instead of at build time. MyST requires nothing
 because it will lift a missing `title` from the first heading in the document.
 
-Hugo, Jekyll and VitePress require nothing either, and for the plainest reason
-of the lot: all three render a page that has no front matter at all. Hugo falls
-back to a title derived from the file name, VitePress has a default for every
-option, and in Jekyll it is the *presence* of the `---` block, not its contents,
-that marks a file for processing — an empty one is valid. That makes all three
-pure shape checks, which is where their value is. The mistakes they catch are
-the ones the generator accepts without complaint and then acts on wrongly.
+Hugo, Jekyll, VitePress and MkDocs require nothing either, and for the plainest
+reason of the lot: all four render a page that has no front matter at all. Hugo
+falls back to a title derived from the file name, MkDocs works down a list of
+four title sources and stops at the first that answers, VitePress has a default
+for every option, and in Jekyll it is the *presence* of the `---` block, not its
+contents, that marks a file for processing — an empty one is valid. That makes
+all four pure shape checks, which is where their value is. The mistakes they
+catch are the ones the generator accepts without complaint and then acts on
+wrongly.
 
 ## `astro:starlight:0.41`
 
@@ -265,6 +268,105 @@ written, so it is deliberately not described — a pin to a moving alpha would
 promise a contract that is still changing. A 2.0 line will ship as a new id.
 </Aside>
 
+## `mkdocs:material:9.7`
+
+The two keys MkDocs itself defines, plus the seventeen Material for MkDocs adds
+on top of them. Material is the theme the overwhelming majority of MkDocs sites
+run, and it is where nearly all of the front matter surface lives — core MkDocs
+reads `title` and `template` and nothing else — so one id covers both, the way
+`vitepress:page:1.6` covers VitePress and its default theme in one.
+
+| Field | Type | Notes |
+|---|---|---|
+| `title` | string | MkDocs. Fourth of four title sources, so never required. |
+| `template` | string | MkDocs. The theme template rendering this page. |
+| `description` | string | The `<meta name="description">`, and the social card's text. |
+| `author` | string | The `<meta name="author">`. One name, not a list. |
+| `icon` | string | An icon shortcode, resolved as `.icons/<value>.svg`. |
+| `status` | string | `new` and `deprecated` ship; others come from `theme.extra.status`. |
+| `subtitle` | string | Rendered under the navigation entry. Material 9.6 and later. |
+| `hide` | string array | `navigation`, `toc`, `path`, `tags`, `footer`, `feedback`. |
+| `tags` | string array | Read by the tags plugin and added to the search index. |
+| `search` | object | `exclude` and `boost`. |
+| `social` | object | `cards`, `cards_layout`, `cards_layout_options`. |
+| `date` | date \| object | A post's date, or a mapping requiring `created`. |
+| `authors`, `categories` | string array | A post's authors and categories. |
+| `draft`, `pin` | boolean | Hold a post back; pin it to the top of a view. |
+| `readtime` | integer | Overrides the computed reading time, in minutes. |
+| `slug` | string | Overrides a post's URL segment. |
+| `links` | array | A post's sidebar links, in `nav` shape. |
+
+`hide` is the field this schema exists for. Material decides what to hide by
+testing membership of the list — `"navigation" in page.meta.hide` — and says
+nothing at all about an entry it does not recognise, so `hide: [sidebar]` builds
+cleanly and hides nothing. The six values are transcribed from the templates
+that test them, not from a documentation page, so the list is what the theme
+actually honours.
+
+The rest of the value is in the typing. `readtime`, `draft` and `pin` go through
+the blog plugin's own configuration validation, which refuses a quoted number or
+a quoted boolean outright; `tags` reaches a search plugin that checks
+`isinstance(tags, list)` and skips a bare string without a word; and `boost` is
+copied into the search index exactly as written, so a quoted one ranks nothing.
+
+<Aside type="caution" title="The blog plugin requires `date`, and this schema cannot">
+A post under the blog plugin *must* carry `date` — "the build fails when it's
+not set" — and a `date` written as a mapping must carry `created`. That is the
+one thing in the MkDocs toolchain that refuses to build over missing front
+matter, and it is deliberately not in `required` here, because this schema fits
+any Material page and the overwhelming majority of them are not posts. Requiring
+`date` would fail every ordinary page in the docs tree.
+
+The shape is still checked: a `date` mapping with no `created` fails. To demand
+the key itself, point a schema of your own at the posts directory:
+
+```json title="blog-post.schema.json"
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "allOf": [{ "$ref": "mkdocs:material:9.7" }],
+  "required": ["date"]
+}
+```
+
+```yaml title="docmeta.config.yaml"
+overrides:
+  - files: "docs/blog/posts/**"
+    schemas:
+      - ./blog-post.schema.json
+```
+</Aside>
+
+<Aside type="note" title="Dates are typed but not format-checked">
+`date`, and every value inside the mapping form, is a plain `string`. MkDocs
+parses front matter with PyYAML, which resolves both `2026-06-25` and
+`2026-06-25T12:00:00` to a real date, and docmeta's YAML reader hands the
+validator the spelling that was authored. Pinning one format here would fail
+input the plugin accepts — the same reasoning as Hugo's dates above.
+
+One failure mode this cannot see: a *quoted* date. PyYAML leaves it a string,
+which the plugin rejects, but by the time a schema sees the value the quotes are
+gone and it is indistinguishable from the unquoted spelling.
+</Aside>
+
+<Aside type="caution" title="Pinned to Material 9.7, which is the end of the line">
+Material 9.7.0 was announced as the last release of Material for MkDocs to
+receive new features, with the team moving on to a separate generator. That
+makes this pin unusually stable for a platform schema: unlike
+`astro:starlight:0.41`, which describes a pre-1.0 line that adds fields every
+few weeks, `mkdocs:material:9.7` describes a front matter surface that is not
+expected to grow. Everything that was Insiders-only, including navigation paths
+and custom social card layouts, is in 9.7 and so is described here.
+</Aside>
+
+<Aside type="note" title="Your plugin's keys are not MkDocs'">
+`git_revision_date_localized`, `glightbox`, `nav_order`, `comments` — most of
+what appears in a real MkDocs site's front matter comes from a third-party
+plugin or from a template override you wrote, not from MkDocs or Material. None
+are described here and all pass as unknown keys. The `.meta.yml` files the meta
+plugin merges into a directory's pages are not Markdown, so docmeta does not
+read them either.
+</Aside>
+
 ## Composing with a vocabulary
 
 A platform schema claims the keys your generator reads. A vocabulary claims the
@@ -346,6 +448,21 @@ overrides:
   - files: "docs/**"
     schemas:
       - vitepress:page:1.6
+```
+
+</TabItem>
+<TabItem label="A MkDocs site">
+
+MkDocs keeps everything under `docs_dir`, so one override covers the site:
+
+```yaml title="docmeta.config.yaml"
+schemas:
+  - google:okf:0.1
+overrides:
+  - files: "docs/**"
+    schemas:
+      - mkdocs:material:9.7
+      - diataxis:diataxis:1.0
 ```
 
 </TabItem>
