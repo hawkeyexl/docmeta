@@ -1,3 +1,10 @@
+# [4.12.0](https://github.com/hawkeyexl/docmeta/compare/v4.11.0...v4.12.0) (2026-08-28)
+
+
+### Features
+
+* **config:** let an overrides entry carry a list of globs ([a556323](https://github.com/hawkeyexl/docmeta/commit/a556323746cc53e19d3165eada9d8c3fadb68840))
+
 # [4.11.0](https://github.com/hawkeyexl/docmeta/compare/v4.10.0...v4.11.0) (2026-08-28)
 
 
