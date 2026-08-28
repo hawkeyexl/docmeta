@@ -1908,7 +1908,11 @@ async function planSchemaMutation(
     docRepoints === 0
   ) {
     throw new DocmetaError(
-      `The fork of ${forkedFrom} would be orphaned: nothing in this corpus resolves it — no config \`schemas:\` entry and no loaded file's \`$schema\` names the builtin, so nothing would validate against "${displayPath(ctx, schemaAbs)}" after the run. Add the schema to the config (or the files' \`$schema\`) first, then evolve it.`,
+      `The fork of ${forkedFrom} would be orphaned: nothing in this corpus resolves it — no config \`schemas:\` entry and no loaded file's \`$schema\` names the builtin, so nothing would validate against "${displayPath(ctx, schemaAbs)}" after the run. No schema or file writes were applied${
+        ctx.target === undefined
+          ? ""
+          : "; the --db export was still written and reflects the statement"
+      }. Add the schema to the config (or the files' \`$schema\`) first, then evolve it.`,
     );
   }
 

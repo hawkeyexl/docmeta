@@ -317,6 +317,30 @@ describe("runQuery DDL — -s names the contract (0030)", () => {
     expect(existsSync(join(d, "schemas", "okf-0.1.local.json"))).toBe(false);
   });
 
+  it("the orphan refusal names the --db residue when a target exists", async () => {
+    // The export is the working database, written before the plan refuses —
+    // the message must own the residue exactly as the no-schema-evolving
+    // refusal does, and still promise no schema or file writes.
+    const d = copy("query-schema-flag");
+    const out = join(d, "export.db");
+    let message = "";
+    try {
+      await runQuery({
+        sql: "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+        inputs: ["docs"],
+        cwd: d,
+        schemas: ["google:okf:0.1"],
+        db: out,
+      });
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toMatch(/orphan/);
+    expect(message).toContain("the --db export was still written");
+    expect(existsSync(out)).toBe(true);
+    expect(existsSync(join(d, "schemas", "okf-0.1.local.json"))).toBe(false);
+  });
+
   it("repoints the config entry naming a cli-forked builtin, raw-id spelling", async () => {
     // THE bricking repro: config carries [house.json, google:okf:0.1],
     // -s names the builtin alone. The fork must repoint the entry that
