@@ -17,6 +17,8 @@ Maya owns a 2,000-page docs-as-code repo for a platform product. She is comforta
 
 **How she uses docmeta:** installs it, writes or adopts a schema, adds a CI step, then mostly operates it hands-off. She returns when the standard needs tightening.
 
+**The one decision she is not equipped for:** `fill` is the only part of docmeta that sends her documents to a third party, so clearing the retrofit backlog (M4) makes her choose a provider — or refuse hosted inference entirely and run it on her own hardware. She does not own her organization's data-egress policy, but she is the one who has to answer to it, and the default is detected from her environment rather than chosen.
+
 **Why she is the lead persona:** she is the primary adopter. She touches installation, config, schema selection, and CI wiring — every layer of the stack. Her journey (M1) is the anchor.
 
 ---
@@ -33,6 +35,8 @@ Devin maintains CI/CD infrastructure for dozens of repos on a mix of GitHub Acti
 - Wants one canonical schema shared across repos rather than copies that drift.
 
 **How he uses docmeta:** installs via CI step, sets flags, plugs exit code into pipeline gate, optionally passes JSON output to a dashboard. Returns when a new CI platform is added or the output format changes.
+
+**The one command that breaks his model of the tool:** every other part of docmeta reads files and stays on the box, so `fill` is the exception he has to make a call on — it is the one thing that transmits repo content off-site, and provider detection means an unpinned runner picks one from whatever environment variable happens to be set, or falls through to a multi-gigabyte local-model download on every fresh agent. He pins it in config rather than leaving it to the environment.
 
 ---
 

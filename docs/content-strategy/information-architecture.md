@@ -61,8 +61,8 @@ Home — "What do you want to do?" router + 30-second proof
 | Create your `docmeta.config.yaml` | M1 | ★ | paths, exclude, schemas, discovery keys with types and defaults. |
 | Apply different schemas to different folders | M3 | ★ | Overrides, glob precedence, multi-schema per file. |
 | Roll out a new required field without breaking the build | M2 | | Tool-supported ratchet (0001): the field goes `required` immediately and `--write-baseline` records the backlog. Rewritten from the four-stage manual rollout, whose hand-maintained `overrides:` glob list the baseline replaces. Now also carries the DDL one-statement ratchet (0024) for fields whose backfill value is uniform. |
-| Retrofit docmeta into an existing docs repo | M1/M2 | | Start lenient, tighten over time. Cross-cutting guide. Step 5 now ratchets via the baseline, in step with the M2 page. |
-| Run `fill` under a data-egress policy | M4 | | The security-review answers for the step 7 `fill` pass: what each inference call transmits (path as matched, the whole metadata block, the whole file including front matter, each candidate's lifted subschema with its `description`, and every `$defs`/`definitions` block referenced or not), what the pre-gating cache retains, and the `--local` / `--offline` / `--max-turns` bounds. Consequences and decisions only — the flag surface stays in the drift-checked CLI reference. Source of truth: `src/commands/fill-prompt.ts`, `src/commands/fill.ts`. |
+| Retrofit docmeta into an existing docs repo | M1/M2/M4 | | Start lenient, tighten over time. Cross-cutting guide. Step 6 ratchets via the baseline, in step with the M2 page. Step 7 carries the M4 `fill` journey and hands off to the egress page below — there is deliberately no separate `fill` journey page, because splitting step 7 out would duplicate working content. |
+| Run `fill` under a data-egress policy | M4, D1 | | The security-review answers for the step 7 `fill` pass: what each inference call transmits (path as matched, the whole metadata block, the whole file including front matter, each candidate's lifted subschema with its `description`, and every `$defs`/`definitions` block referenced or not), what the pre-gating cache retains, and the `--local` / `--offline` / `--max-turns` bounds. Consequences and decisions only — the flag surface stays in the drift-checked CLI reference. Source of truth: `src/commands/fill-prompt.ts`, `src/commands/fill.ts`. |
 
 ### Run it in CI (Devin)
 
@@ -131,7 +131,7 @@ Reference pages must never contradict the source code. Before writing any Refere
 | Schema resolution reference | `src/core/resolve-schema.ts`, `src/core/schema-registry.ts`, `src/core/validator.ts` |
 | Supported formats reference | `src/extractors/index.ts`, individual extractors, `src/extractors/frontmatter-write.ts` (writability) |
 | Output formats & exit codes | `src/reporters/index.ts`, `src/reporters/fill.ts` |
-| `fill` command & confidence gate | `src/commands/fill.ts`, `src/commands/fill-prompt.ts`, `src/commands/fill-types.ts` |
+| `fill` — CLI reference §`fill` (flags, drift-checked), Run `fill` under a data-egress policy (what is sent and kept), Retrofit step 7 (the journey) | `src/commands/fill.ts`, `src/commands/fill-prompt.ts`, `src/commands/fill-types.ts` |
 | Built-in OKF schema | `src/schemas/okf/0.1.json` |
 | Built-in taxonomy schemas | `src/schemas/diataxis/1.0.json`, `src/schemas/tgdp/1.0.json`, `src/schemas/seven-action/1.0.json`, `src/core/resolve-schema.ts` (the default set) |
 | Built-in schemas (registry) | `src/core/schema-registry.ts` (the id list), `src/core/resolve-schema.ts` (the default set) |
