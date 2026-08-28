@@ -223,6 +223,23 @@ export async function runQuery(opts: QueryOptions): Promise<QueryRun> {
   if (sql === "" && opts.db === undefined) {
     throw new DocmetaError("Specify SQL to run.");
   }
+  if (sql === "") {
+    // Export-only run. Options that speak to a statement would be silently
+    // ignored past this point (runSql returns before either is consulted),
+    // and an ignored option is the false green 0029's rule exists to
+    // refuse. Guarded here in the core, not only in the CLI gates, so a
+    // library caller gets the same refusal the flags get.
+    if (opts.schemas !== undefined && opts.schemas.length > 0) {
+      throw new DocmetaError(
+        "`schemas` names the schema set DDL evolves, and an export-only run (no SQL) runs no statement. Pass the SQL, or drop `schemas`.",
+      );
+    }
+    if (opts.params !== undefined && Object.keys(opts.params).length > 0) {
+      throw new DocmetaError(
+        "`params` binds named parameters in a statement, and an export-only run (no SQL) references none. Pass the SQL, or drop `params`.",
+      );
+    }
+  }
   if (sql !== "") assertSingleStatement(sql);
 
   // The false-green guard (proposal 0029): the engine throws on an extra

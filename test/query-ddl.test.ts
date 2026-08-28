@@ -205,6 +205,31 @@ describe("runQuery DDL — -s names the contract (0030)", () => {
     expect(existsSync(dbPath)).toBe(true);
   });
 
+  it("the core refuses schemas and params on an export-only run — the API seam", async () => {
+    // The CLI gates catch the flag spellings, but a library caller passing
+    // `schemas` (or `params`) with no SQL hit runSql's empty-SQL early
+    // return and was silently ignored (review finding 5).
+    const d = copy("query-schema-flag");
+    await expect(
+      runQuery({
+        sql: "",
+        inputs: ["docs"],
+        cwd: d,
+        db: join(d, "a.db"),
+        schemas: ["./schemas/house.json"],
+      }),
+    ).rejects.toThrow(/runs no statement/);
+    await expect(
+      runQuery({
+        sql: "",
+        inputs: ["docs"],
+        cwd: d,
+        db: join(d, "b.db"),
+        params: { x: 1 },
+      }),
+    ).rejects.toThrow(/references none/);
+  });
+
   it("states the true zero-files rationale under -s", async () => {
     // The resolved-set wording ("the schema it edits is the one the corpus
     // resolves") is stale when -s named the set (review finding 9).
