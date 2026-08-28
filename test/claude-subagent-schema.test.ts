@@ -111,9 +111,13 @@ describe("required fields", () => {
     expect(r.errors[0]?.schema).toBe(AGENT);
   });
 
+  it("accepts the two required fields and nothing else", async () => {
+    // The baseline every `checkInline` case below builds on: with `name` and
+    // `description` present and no other key, the file is valid.
+    expect((await checkInline("")).ok).toBe(true);
+  });
+
   it("rejects an empty `description`", async () => {
-    const r = await checkInline("");
-    expect(r.ok).toBe(true);
     const { results } = await runValidate({
       inputs: ["-"],
       as: "markdown",
@@ -217,13 +221,37 @@ describe("closed value sets", () => {
     expect(r.ok).toBe(false);
     expect(r.errors[0]?.instancePath).toBe("/effort");
   });
+
+  it("puts no lower bound on the integer effort, unlike `maxTurns`", async () => {
+    // Deliberate asymmetry, and a fact about the loader rather than an
+    // oversight. `maxTurns` is checked for a *positive* integer and warns
+    // otherwise; `effort` is checked with a bare `Number.isInteger`, so `0` and
+    // `-3` are both taken and neither is reported. A `minimum` here would fail
+    // an agent that runs.
+    for (const effort of ["0", "-3"]) {
+      expect((await checkInline(`effort: ${effort}`)).ok, effort).toBe(true);
+      expect((await checkInline(`maxTurns: ${effort}`)).ok, effort).toBe(false);
+    }
+  });
 });
 
 describe("`background` is not a skill flag", () => {
   it("takes booleans and the two exact strings", async () => {
+    // `True` and `FALSE` pass on the *boolean* branch: YAML 1.2 resolves all
+    // three casings of the core spellings, so they never reach the validator
+    // as strings.
     for (const value of ["true", "false", "True", "FALSE", '"true"']) {
       expect((await checkInline(`background: ${value}`)).ok, value).toBe(true);
     }
+  });
+
+  it("separates the boolean branch from the string one", async () => {
+    // Quoting is what makes the difference visible. `"True"` stays a string,
+    // and the loader compares the string form against 'true'/'false' exactly,
+    // so the schema's case-sensitive pattern is the right model of it.
+    const r = await checkInline('background: "True"');
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]?.instancePath).toBe("/background");
   });
 
   it("refuses the spellings a `SKILL.md` accepts", async () => {

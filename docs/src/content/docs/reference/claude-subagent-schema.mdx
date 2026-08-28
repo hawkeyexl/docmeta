@@ -155,6 +155,12 @@ forms and a wrong value is reported once, against the key, rather than once per
 failed branch. `maxTurns: 0`, `maxTurns: -3` and `maxTurns: null` all fail;
 the loader treats `null` as an invalid value rather than as an absent one.
 
+**`effort` has no such lower bound, and that asymmetry is deliberate.**
+`maxTurns` is checked for a *positive* integer and warns otherwise, while
+`effort` is checked with a bare integer test — so `effort: 0` and `effort: -3`
+are both taken, and neither is reported. A `minimum` here would read as
+symmetry and would fail an agent that runs.
+
 ## One parse failure docmeta reports and Claude Code recovers from
 
 An agent `description` is usually long, and a long sentence tends to contain a

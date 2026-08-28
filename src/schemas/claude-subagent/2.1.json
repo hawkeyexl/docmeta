@@ -54,7 +54,7 @@
     "effort": {
       "type": ["string", "integer"],
       "pattern": "^(?:low|medium|high|xhigh|max)$",
-      "description": "Reasoning effort while the agent runs, overriding the session level. Either one of the five published levels or an integer, which is why this is typed as two: `pattern` constrains only the string form and leaves the integer one alone, so a wrong value is reported once, against the key. Which levels a model actually offers varies. The loader additionally folds case and resolves two internal aliases; neither is part of the published contract, and both are left out here so the accepted set matches `anthropic:claude-skill:2.1`."
+      "description": "Reasoning effort while the agent runs, overriding the session level. Either one of the five published levels or an integer, which is why this is typed as two: `pattern` constrains only the string form and leaves the integer one alone, so a wrong value is reported once, against the key. Which levels a model actually offers varies. The loader additionally folds case and resolves two internal aliases; neither is part of the published contract, and both are left out here so the accepted set matches `anthropic:claude-skill:2.1`. The integer form carries **no lower bound**, deliberately, and that asymmetry with `maxTurns` is a fact about the loader rather than an oversight: `maxTurns` is checked for a positive integer and warns otherwise, while `effort` is checked with a bare integer test, so `0` and `-3` are both taken and neither is reported. A `minimum` here would fail an agent that runs."
     },
     "permissionMode": {
       "enum": [
@@ -94,7 +94,7 @@
     "background": {
       "type": ["boolean", "string"],
       "pattern": "^(?:true|false)$",
-      "description": "`true` keeps the agent in the background even when Claude asks for its result in the foreground. Accepts a YAML boolean or the exact strings `true` and `false`, and nothing else. This is the trap in moving between the two Claude Code contracts: a `SKILL.md` flag takes `yes`, `no`, `on`, `off`, `1` and `0` as well, while the agent loader answers every one of those with `Must be 'true', 'false', or omitted.` Written as two type-scoped keywords rather than a branch, so a wrong value is reported once, against the key."
+      "description": "`true` keeps the agent in the background even when Claude asks for its result in the foreground. Accepts a YAML boolean, or the exact lowercase strings `true` and `false`. The two branches are not the same set and the difference is invisible in the file: YAML 1.2 resolves `true`, `True` and `TRUE` to booleans, so all three reach the validator on the boolean branch and pass, while a *quoted* `\"True\"` stays a string and fails, because the loader compares the string form against `'true'` and `'false'` exactly. This is the trap in moving between the two Claude Code contracts: a `SKILL.md` flag takes `yes`, `no`, `on`, `off`, `1` and `0` as well, while the agent loader answers every one of those with `Must be 'true', 'false', or omitted.` Written as two type-scoped keywords rather than a branch, so a wrong value is reported once, against the key."
     },
     "isolation": {
       "enum": ["worktree", "remote"],
