@@ -691,14 +691,23 @@ async function runSql(
         snapshotCatalogSql(db),
       );
       // 0030: -s speaks only to the DDL planner, and DDL is judged by its
-      // effects — so "no DDL happened" is knowable only here, after
-      // execution. The placement is load-bearing: the refusal must land on
-      // the plan side of the all-or-nothing line, BEFORE buildChanges and
-      // applyChanges, so a DML statement under -s never writes files and
-      // then errors (the applies-then-refuses trap the -f csv review found).
+      // effects — so "no schema-evolving effects" is knowable only here,
+      // after execution. The placement is load-bearing: the refusal must
+      // land on the plan side of the all-or-nothing line, BEFORE
+      // buildChanges and applyChanges, so a DML statement under -s never
+      // writes files and then errors (the applies-then-refuses trap the
+      // -f csv review found). Two truths in the wording: "no
+      // schema-evolving effects" rather than "no DDL" (a CREATE INDEX into
+      // a --db export is DDL the planner deliberately ignores), and the
+      // --db residue named when it exists — the export target was written
+      // before the statement ran and holds whatever the statement did.
       if (ctx.cliSchemas !== undefined && schemaOps.length === 0) {
         throw new DocmetaError(
-          "-s names the schema set DDL evolves; this statement ran no DDL, so the flag would silently mean nothing — nothing was applied. Drop -s, or evolve the schema with ALTER TABLE.",
+          `-s names the schema set DDL evolves; this statement produced no schema-evolving effects (ALTER TABLE docs …), so the flag would silently mean nothing.${
+            target
+              ? " No file or schema writes were applied; the --db export was still written and reflects the statement."
+              : " Nothing was applied."
+          } Drop -s, or evolve the schema with ALTER TABLE docs.`,
         );
       }
       // Structural, not textual: a read always yields result columns, DML and
@@ -1526,8 +1535,14 @@ async function planSchemaMutation(
     );
   }
   if (entries.length === 0) {
+    // Two rationales for one refusal: without -s the set comes from the
+    // corpus, so no corpus means no set; with -s the set is known, but the
+    // backfill and the corpus-satisfies-the-evolved-set reconciliation
+    // still run over the loaded files (review of #139, finding 9).
     throw new DocmetaError(
-      "DDL needs at least one loaded file: the schema it edits is the one the corpus resolves, and this run matched no files.",
+      ctx.cliSchemas !== undefined
+        ? "DDL needs at least one loaded file: the statement's backfill and the check that the corpus satisfies the evolved set both run over the loaded files, and this run matched none."
+        : "DDL needs at least one loaded file: the schema it edits is the one the corpus resolves, and this run matched no files.",
     );
   }
 

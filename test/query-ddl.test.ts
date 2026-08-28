@@ -177,9 +177,47 @@ describe("runQuery DDL — -s names the contract (0030)", () => {
 
   it("refuses -s on a statement that runs no DDL, naming the flag's meaning", async () => {
     const d = copy("query-schema-flag");
+    // "produced no schema-evolving effects", not "ran no DDL": CREATE INDEX
+    // into a --db export IS DDL, just none the planner maps to a schema
+    // (review finding 4b).
     await expect(
       ddlS("SELECT _path FROM docs", d, ["./schemas/house.json"]),
-    ).rejects.toThrow(/-s names the schema set DDL evolves.*ran no DDL/);
+    ).rejects.toThrow(
+      /-s names the schema set DDL evolves.*produced no schema-evolving effects.*Nothing was applied/,
+    );
+  });
+
+  it("tells the truth about the --db residue in the -s refusal", async () => {
+    // With --db the export target is created before the statement runs, so
+    // "nothing was applied" would be a lie — the refusal names what
+    // persists (review finding 4a).
+    const d = copy("query-schema-flag");
+    const dbPath = join(d, "out.db");
+    await expect(
+      runQuery({
+        sql: "SELECT _path FROM docs",
+        inputs: ["docs"],
+        cwd: d,
+        db: dbPath,
+        schemas: ["./schemas/house.json"],
+      }),
+    ).rejects.toThrow(/--db export was still written/);
+    expect(existsSync(dbPath)).toBe(true);
+  });
+
+  it("states the true zero-files rationale under -s", async () => {
+    // The resolved-set wording ("the schema it edits is the one the corpus
+    // resolves") is stale when -s named the set (review finding 9).
+    const d = copy("query-schema-flag");
+    await expect(
+      runQuery({
+        sql: "ALTER TABLE docs ADD COLUMN x TEXT",
+        inputs: ["nope/**/*.md"],
+        cwd: d,
+        allowEmpty: true,
+        schemas: ["./schemas/house.json"],
+      }),
+    ).rejects.toThrow(/backfill.*matched none/);
   });
 
   it("refuses -s on DML before anything applies — the files stay untouched", async () => {
@@ -192,7 +230,7 @@ describe("runQuery DDL — -s names the contract (0030)", () => {
         ["./schemas/house.json"],
         true,
       ),
-    ).rejects.toThrow(/ran no DDL/);
+    ).rejects.toThrow(/produced no schema-evolving effects/);
     // The half that matters: the refusal fired on the plan side of the
     // all-or-nothing line, not after the UPDATE landed (0030 § stress 1).
     expect(readFileSync(join(d, "docs", "one.md"), "utf8")).toBe(before);

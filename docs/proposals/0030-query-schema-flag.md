@@ -76,12 +76,14 @@ two indirect ones, in both its spellings (the plain one, and 0027's named-groups
 variant): *"…or pass `-s <schema>` to name the contract directly."* The ADD-ambiguity
 refusal (several local files in one set) names it too, retiring the phantom-flag pin.
 
-### A run whose statement runs no DDL refuses, before anything applies
+### A run whose statement evolves no schema refuses, before any write applies
 
 `-s` speaks only to the DDL planner. A `SELECT` under `-s`, or an `UPDATE`, would leave
 the flag silently meaning nothing — the rule 0029's export-only `--param` fix
-established is that such a flag refuses, exit 2, naming its meaning. Two placements,
-both load-bearing:
+established is that such a flag refuses, exit 2, naming its meaning. The refusal says
+"produced no schema-evolving effects", not "ran no DDL": a `CREATE INDEX` into a
+`--db` export is DDL, just none the planner maps to a schema. Two placements, both
+load-bearing:
 
 - **Export-only runs** (`--db` with no SQL) refuse at the CLI gate beside `--param`'s,
   before any file is read.
@@ -143,7 +145,13 @@ after execution, and `applyChanges` runs right after judgment — a careless pla
 refuses *after* the UPDATE landed in the files, the exact applies-then-errors trap the
 `-f csv` review found (its fix forces the dry run before dispatch). The refusal here is
 pinned after `columnDiffOps` and before any plan or apply, and the test asserts both
-halves: exit 2 *and* the file bytes unchanged.
+halves: exit 2 *and* the file bytes unchanged. Review then held the message itself to
+the same standard: "nothing was applied" is false under `--db` — the export target is
+created before the statement runs and holds whatever the statement did — so the
+refusal names that residue when a target exists; and "ran no DDL" is false for
+planner-invisible DDL (a `CREATE INDEX` into the export is legal and *is* DDL), so
+the wording is "produced no schema-evolving effects". Both wordings are pinned by
+test.
 
 **2. Stress 14 stands: `-s` names the contract, not the outcome.** `-s a.json -s
 b.json` where both constrain `title`, then `DROP COLUMN title` — still "constrained by

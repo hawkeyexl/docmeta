@@ -528,7 +528,7 @@ describe("cli query (built bin)", () => {
         undefined, undefined, dir,
       );
       expect(dml.status).toBe(2);
-      expect(dml.stderr).toContain("ran no DDL");
+      expect(dml.stderr).toContain("produced no schema-evolving effects");
       expect(readFileSync(join(dir, "docs", "one.md"), "utf8")).toBe(before);
 
       // Export-only runs refuse -s beside --param's gate: no statement, no DDL.

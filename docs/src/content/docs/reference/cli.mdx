@@ -347,7 +347,7 @@ built-ins only, or from `-s` when given — see [writing back](#writing-back).
 | Option | Argument | Default | Description |
 |---|---|---|---|
 | `--query` | `<sql>` | the `[sql]` positional | The SQL statement. When given, **every** positional is a path. |
-| `-s, --schema` | `<ref>` | resolved per file | The schema set a DDL statement evolves; repeatable. CLI precedence for the **DDL planner only**: the per-file resolution walk is skipped and the deduped refs are the set, with every DDL guard unchanged inside it. Collection views and plain reads are untouched. A statement that runs no DDL under `-s` is an error (exit 2), refused before anything is applied. See [writing back](#writing-back). |
+| `-s, --schema` | `<ref>` | resolved per file | The schema set a DDL statement evolves; repeatable. CLI precedence for the **DDL planner only**: the per-file resolution walk is skipped and the deduped refs are the set, with every DDL guard unchanged inside it. Collection views and plain reads are untouched. A statement that produces no schema-evolving effects under `-s` is an error (exit 2), refused before any file or schema write — though a `--db` export target, written before the statement runs, persists and reflects the statement. See [writing back](#writing-back). |
 | `--check` | — | off | Treat returned rows as findings: exit 1 if the query returns any, 0 if it returns none. The `pretty` verdict line shows ✓/✗. |
 | `--param` | `<name=value>` | — | Bind a named SQL parameter (`$name`, `:name`, or `@name`) as a **string**; `name:=value` parses the value as JSON for a typed bind. Repeatable. See [bound parameters](#bound-parameters). |
 | `--db` | `<path>` | — | Also write the built database to this file; the SQL is then optional. The file is a regenerated artifact: an existing SQLite database at the path is overwritten, anything else is refused. See [exporting the database](#exporting-the-database). |
@@ -513,8 +513,11 @@ DROP and RENAME still need a sole declarer, a builtin still forks, a URL
 still refuses with "vendor it first", and the trust boundary still holds.
 Unlike `validate`'s `-s`, it does not reshape the corpus: collection views
 and plain reads keep following the config's resolution — which is why a
-statement that runs no DDL under `-s` refuses (exit 2) rather than letting
-the flag silently mean nothing, and refuses **before** anything is applied.
+statement that produces no schema-evolving effects under `-s` refuses
+(exit 2) rather than letting the flag silently mean nothing, and refuses
+**before any file or schema write** lands. The one thing that persists is a
+`--db` export target: written before the statement runs, it reflects what
+the statement did, and the refusal says so.
 
 **Declared types carry formats; a CHECK carries an enum** (proposal 0028).
 The format-name set is derived from what the validator itself enforces —
