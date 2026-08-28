@@ -89,7 +89,8 @@
           },
           "description": "Per-field model confidence, 0..1."
         }
-      }
+      },
+      "description": "One model's proposal: who generated it, which of these keys it wrote, and how sure it was. Closed, because the whole value of the trail is that a reviewer can read it at a glance and delete the entry once the fields are checked — an unrecognized key here would be an unretired claim nobody notices."
     },
     "riskFlag": {
       "anyOf": [

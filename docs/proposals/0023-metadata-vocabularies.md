@@ -456,6 +456,36 @@ What was tried against this design during the walk, and what it changed:
    decades-overdue `last-reviewed` validates, by design and by test: schemas
    cannot read clocks, and the field-ranged W3CDTF pattern only keeps
    impossible dates (month 13) from turning downstream date math into NaN.
+7. **A mechanical conformance audit, run from outside.** Drafting
+   [0031](0031-content-strategy-vocabularies.md) against this family meant
+   first working out what patterns it actually establishes, which is a
+   different question from what it says it establishes. Checking every
+   property and `$defs` entry for a `description`, every string for a floor,
+   every array for `minItems`/`uniqueItems`, and every open enum for branch
+   order found three things the nine had drifted on, all since closed:
+   - **Twenty nodes carried no `description`** — most of `evals` and
+     `artifact-evals`, and, worst, the two envelope roots themselves:
+     `kg` and `metadata`, the single most visible field in each of those
+     schemas. On ids where the descriptions substantially *are* the
+     deliverable, and where `fill` menus and editor completion read exactly
+     that string, an undescribed envelope root is the gap that matters most.
+   - **`generated-assertion-hash` accepted the empty string** in both eval
+     schemas — no `pattern`, no `minLength`. The same class as the
+     `owner: []` hole found in the earlier round: a hash that compares falsy
+     matches nothing, so a generation contract could look recorded and be
+     inert. Floored at `minLength: 1`.
+   - **Four of the nine titles did not say "vocabulary"** (`docmeta eval
+     declarations`, `docmeta artifact eval declarations`, `docmeta
+     knowledge-graph frontmatter`, `docmeta core page vocabulary`), while
+     this proposal's own prose insists all nine are common vocabularies.
+     `docmeta schemas list` prints titles, so the drift was user-visible.
+     Normalized to `docmeta <name> vocabulary (<version>)`.
+
+   The audit's remaining flags were checked and are correct as they stand:
+   the other unfloored strings carry `pattern`s that already exclude the
+   empty string; `command` and `success-exit-codes` are ordered arrays where
+   a repeat is meaningful, so they take no `uniqueItems`; and the `default`
+   annotations are the restored 0.1 defaults this proposal argued for.
 
 ## Do not
 
