@@ -338,9 +338,12 @@ reads return rows; metadata-column changes become a per-file diff; an added
 row is a file created, a removed row a front matter block stripped, and a
 `_path` move a file rename. Files are never *deleted* through SQL, and the
 other system columns are read-only. Like `get`, `query` resolves no schema on
-reads and DML, and makes no network requests. DDL is the one exception: an
-`ALTER` resolves the schema set it evolves — from disk and the bundled
-built-ins only, or from `-s` when given — see [writing back](#writing-back).
+plain reads and DML, and makes no network requests. Two things do consult
+resolution: a statement naming a configured
+[collection](/docmeta/reference/configuration/#named-collections) walks it
+for view membership, and DDL resolves the schema set it evolves — from disk
+and the bundled built-ins only, or from `-s` when given — see
+[writing back](#writing-back).
 
 ### Options
 
