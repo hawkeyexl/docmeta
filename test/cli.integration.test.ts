@@ -544,7 +544,7 @@ describe("cli query (built bin)", () => {
         undefined, undefined, dir,
       );
       expect(exportOnly.status).toBe(2);
-      expect(exportOnly.stderr).toMatch(/statement/);
+      expect(exportOnly.stderr).toContain("no statement to evolve");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

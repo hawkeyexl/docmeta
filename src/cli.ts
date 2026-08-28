@@ -1060,12 +1060,13 @@ export function buildProgram(): Command {
               "--param needs a statement to bind into; a --db export without SQL references no parameters. Pass the SQL, or drop --param.",
             );
           }
-          // And -s (0030): it names the schema set DDL evolves, and a --db
-          // export without SQL runs no statement at all — the same
-          // flag-means-nothing seam, refused at the same gate.
+          // And -s (0030): it names the schema set DDL evolves, and with no
+          // SQL nothing can evolve it — the same flag-means-nothing seam,
+          // refused at the same gate. Worded without naming --db: the gate
+          // guards every empty-SQL arrival, not just the export spelling.
           if (options.schema.length > 0 && sql === "") {
             throw new DocmetaError(
-              "-s names the schema set DDL evolves; a --db export without SQL runs no statement. Pass the SQL, or drop -s.",
+              "-s names the schema set DDL evolves; without SQL there is no statement to evolve it. Pass the SQL, or drop -s.",
             );
           }
           const params = parseQueryParams(options.param);
