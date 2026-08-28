@@ -19,7 +19,7 @@ and using the **first** one that yields a non-empty set:
 |---|---|---|
 | 1 | `-s/--schema` on the command line | All files in the run. |
 | 2 | `$schema` in the file's own metadata | That file only. A repo can [narrow what a document may name](#what-a-document-may-reference-and-how-a-repo-narrows-it). |
-| 3 | First matching config `overrides` entry (by glob) | Files matching the glob. |
+| 3 | First matching config `overrides` entry (by glob) | Files matching the glob. An entry whose `files` is a **list** matches on any glob in it, and still counts as one entry here. |
 | 4 | Config `schemas` | All files not matched above. |
 | 5 | Built-in default set: `google:okf:0.1` + `passo-uno:seven-action:1.0` | Every file, when nothing else applies. |
 

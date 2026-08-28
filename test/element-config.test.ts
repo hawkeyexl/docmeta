@@ -179,3 +179,28 @@ describe("resolveElements accumulates rather than replacing", () => {
     expect(resolveElements("a.xml", undefined)).toEqual([]);
   });
 });
+
+describe("a list-form override contributes elements too", () => {
+  it("accumulates from whichever glob in the list matched", () => {
+    const got = resolveElements("docs/specs/a.xml", {
+      elements: ["article/title"],
+      overrides: [
+        {
+          files: ["docs/specs/**", "other/**"],
+          schemas: [],
+          elements: ["spec/revision"],
+        },
+      ],
+    });
+    expect(got).toEqual(["article/title", "spec/revision"]);
+  });
+
+  it("contributes once when two globs in one list both match", () => {
+    const got = resolveElements("docs/specs/a.xml", {
+      overrides: [
+        { files: ["docs/**", "docs/specs/**"], schemas: [], elements: ["a/b"] },
+      ],
+    });
+    expect(got).toEqual(["a/b"]);
+  });
+});

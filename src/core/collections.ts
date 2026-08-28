@@ -20,6 +20,7 @@ import type { DocmetaConfig, SchemaTrustRoot } from "./config.js";
 import {
   FILE_SCHEMA_KEY,
   matchesFileGlob,
+  overrideGlobs,
   resolveSchemaSetWithSource,
   type ResolvedSchemaSet,
 } from "./resolve-schema.js";
@@ -35,7 +36,7 @@ export interface Collection {
 /** The named `overrides[]` entries, with the glob and index membership needs. */
 function namedOverrides(
   config: DocmetaConfig | null | undefined,
-): { name: string; files: string; index: number }[] {
+): { name: string; files: string | string[]; index: number }[] {
   return (config?.overrides ?? []).flatMap((o, i) =>
     o.name !== undefined ? [{ name: o.name, files: o.files, index: i }] : [],
   );
@@ -137,7 +138,7 @@ export function collectCollections(
       const excluded = named.find((g) => matchesFileGlob(g.files, entry.label));
       if (excluded) {
         params.onNotice?.(
-          `${entry.label}: not in the "${excluded.name}" collection — its own "${FILE_SCHEMA_KEY}" won schema resolution over the override (${excluded.files}). Membership follows the schema a file is validated as; set schemaTrust.documentRefs to "none" to let the override decide.`,
+          `${entry.label}: not in the "${excluded.name}" collection — its own "${FILE_SCHEMA_KEY}" won schema resolution over the override (${overrideGlobs(excluded.files).join(", ")}). Membership follows the schema a file is validated as; set schemaTrust.documentRefs to "none" to let the override decide.`,
         );
       }
     }

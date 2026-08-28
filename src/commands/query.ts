@@ -11,6 +11,7 @@ import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { dirname, isAbsolute, resolve, extname, sep } from "node:path";
 import {
   FILE_SCHEMA_KEY,
+  overrideGlobs,
   collectSchemaPins,
   resolveElements,
   resolveSchemaSetWithSource,
@@ -1642,7 +1643,9 @@ async function planSchemaMutation(
       .sort((a, b) => a - b)
       .flatMap((i) => {
         const o = overrides[i];
-        return o?.name !== undefined ? [`${o.name} (${o.files})`] : [];
+        return o?.name !== undefined
+          ? [`${o.name} (${overrideGlobs(o.files).join(", ")})`]
+          : [];
       });
     const last = named[named.length - 1];
     // 0030: -s makes the set unanimous by construction, so it is the third

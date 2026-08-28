@@ -910,3 +910,82 @@ describe("named overrides (0027)", () => {
     );
   });
 });
+
+describe("overrides[].files accepts a list of globs", () => {
+  const withFiles = (files: string) =>
+    ["overrides:", `  - files: ${files}`, "    schemas: [google:okf:0.1]", ""].join(
+      "\n",
+    );
+
+  it("parses a list and keeps it as written", () => {
+    const cfg = parseConfig(
+      withFiles('[".claude/skills/*/SKILL.md", ".claude/agents/*.md"]'),
+      "docmeta.config.yaml",
+    );
+    expect(cfg.overrides?.[0]?.files).toEqual([
+      ".claude/skills/*/SKILL.md",
+      ".claude/agents/*.md",
+    ]);
+  });
+
+  it("still parses the single-string form unchanged", () => {
+    const cfg = parseConfig(withFiles('"docs/**/*.md"'), "docmeta.config.yaml");
+    expect(cfg.overrides?.[0]?.files).toBe("docs/**/*.md");
+  });
+
+  // The same false-green the `schemas`/`elements` no-effect refusal exists to
+  // end: a rule that reads as configured and matches nothing.
+  it("refuses an empty list", () => {
+    expect(() => parseConfig(withFiles("[]"), "c.yaml")).toThrow(
+      /overrides\[0\]\.files is an empty list/,
+    );
+  });
+
+  it("refuses a blank glob in either shape", () => {
+    expect(() => parseConfig(withFiles('""'), "c.yaml")).toThrow(
+      /overrides\[0\]\.files/,
+    );
+    expect(() => parseConfig(withFiles('["docs/**", "  "]'), "c.yaml")).toThrow(
+      /overrides\[0\]\.files\[1\]/,
+    );
+  });
+
+  it("refuses a non-string element, naming the index", () => {
+    expect(() => parseConfig(withFiles('["docs/**", 3]'), "c.yaml")).toThrow(
+      /overrides\[0\]\.files\[1\]/,
+    );
+  });
+
+  // The path a user actually takes: YAML in, schema set out. Both halves of
+  // the feature have to line up — a parser that accepts the list and a
+  // resolver that matches on every entry — and each unit test above covers
+  // only one of them.
+  it("resolves through a parsed list-form override", () => {
+    const cfg = parseConfig(
+      [
+        "schemas: [google:okf:0.1]",
+        "overrides:",
+        "  - files:",
+        '      - ".claude/skills/*/SKILL.md"',
+        '      - ".claude/agents/*.md"',
+        "    schemas: [agentskills:skill:1.0]",
+        "",
+      ].join("\n"),
+      "docmeta.config.yaml",
+    );
+    for (const p of [".claude/skills/demo/SKILL.md", ".claude/agents/rev.md"]) {
+      expect(resolveSchemaSet({ filePath: p, config: cfg })).toEqual([
+        "agentskills:skill:1.0",
+      ]);
+    }
+    expect(resolveSchemaSet({ filePath: "docs/guide.md", config: cfg })).toEqual([
+      "google:okf:0.1",
+    ]);
+  });
+
+  it("names both accepted shapes when the value is neither", () => {
+    expect(() => parseConfig(withFiles("3"), "c.yaml")).toThrow(
+      /must be a glob string or a list of glob strings/,
+    );
+  });
+});

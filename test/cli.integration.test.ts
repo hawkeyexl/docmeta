@@ -2956,3 +2956,84 @@ describe("docmeta CLI: corpus checks (0026, built bin)", () => {
     expect(r.stderr).toContain("path");
   });
 });
+
+describe("an overrides entry may group several globs", () => {
+  let dir: string;
+  afterEach(() => {
+    removeTempRepo(dir);
+  });
+
+  /**
+   * Two path shapes with no common stem, held to one schema set — the case a
+   * single glob cannot express. Run through the built binary rather than the
+   * command core, because the affordance is a *config file* one: the parser
+   * accepting the list and the resolver matching on every entry have to line
+   * up across a real config discovery, and the unit tests cover one each.
+   */
+  // `paths:` names the dot directory explicitly, and has to: directory and
+  // glob expansion both run with `dot: false`, so a bare `validate .` walks
+  // past `.claude/` and would check nothing at all. The override's own globs
+  // match dotfiles fine — the two settings are independent — which is exactly
+  // the trap worth pinning down: a config that looks right and matches zero
+  // files unless the dot path is named.
+  const CONFIG = [
+    "paths: [.claude, docs]",
+    "schemas: [./baseline.json]",
+    "overrides:",
+    "  - files:",
+    '      - ".claude/skills/*/SKILL.md"',
+    '      - ".claude/agents/*.md"',
+    "    schemas: [./strict.json]",
+    "",
+  ].join("\n");
+
+  // Requires `owner`, which no file here has and the baseline does not ask
+  // for — so a failure is proof the override won, not that the doc was bad.
+  const STRICT = JSON.stringify({
+    type: "object",
+    required: ["owner"],
+    properties: { owner: { type: "string" } },
+  });
+  const BASELINE = JSON.stringify({ type: "object", required: ["title"] });
+
+  const tree = () => ({
+    "docmeta.config.yaml": CONFIG,
+    "strict.json": STRICT,
+    "baseline.json": BASELINE,
+    ".claude/skills/demo/SKILL.md": DOC,
+    ".claude/agents/reviewer.md": DOC,
+    "docs/guide.md": DOC,
+  });
+
+  it("applies the override to a file matching any glob in the list", () => {
+    dir = makeTempRepo({ files: tree() });
+    const r = spawnText(
+      spawnSync("node", [bin, "validate", "-f", "json"], {
+        cwd: dir,
+        encoding: "utf8",
+      }),
+    );
+    const parsed = JSON.parse(r.stdout ?? "") as {
+      results: { file: string; ok: boolean; schemas: string[] }[];
+    };
+    // Assert the schema set each file resolved to, not merely that it failed.
+    // Pass/fail alone would go green for an override that matched everything
+    // as readily as for one that matched the right two.
+    const resolved = Object.fromEntries(
+      parsed.results.map((x) => [x.file.replace(/\\/g, "/"), x.schemas]),
+    );
+    expect(resolved).toEqual({
+      ".claude/skills/demo/SKILL.md": ["./strict.json"],
+      ".claude/agents/reviewer.md": ["./strict.json"],
+      "docs/guide.md": ["./baseline.json"],
+    });
+    const failed = parsed.results
+      .filter((x) => !x.ok)
+      .map((x) => x.file.replace(/\\/g, "/"))
+      .sort();
+    expect(failed).toEqual([
+      ".claude/agents/reviewer.md",
+      ".claude/skills/demo/SKILL.md",
+    ]);
+  });
+});
