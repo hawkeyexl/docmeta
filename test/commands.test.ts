@@ -393,6 +393,22 @@ describe("runGet", () => {
     });
     expect(results.length).toBeGreaterThan(0);
   });
+
+  // A document whose frontmatter will not parse is a diagnosable condition,
+  // not an internal fault. `validate` reports it as a per-file `(parse)`
+  // finding; `get`'s documented contract makes a file-level problem
+  // operational instead (exit 2, never exit 1), so it still aborts — but it
+  // must say which file, and it must not read as a crash.
+  it("names the file when frontmatter will not parse", async () => {
+    const run = runGet({
+      fields: ["title"],
+      inputs: ["test/fixtures/get-parse-error/unparseable.md"],
+      cwd: root,
+    });
+    await expect(run).rejects.toBeInstanceOf(DocmetaError);
+    await expect(run).rejects.toThrow(/unparseable\.md/);
+    await expect(run).rejects.toThrow(/Invalid YAML frontmatter/);
+  });
 });
 
 describe("getSchemasInfo", () => {

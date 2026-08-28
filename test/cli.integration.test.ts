@@ -2574,6 +2574,40 @@ describe("get names the real mistake when a path lands in [fields] (0005 §2)", 
 // 0005 § 2/3 — `-q/--quiet` on `get` and `fill`, `-f github` on `fill`
 // ---------------------------------------------------------------------------
 
+describe("get: a document whose frontmatter will not parse", () => {
+  // `validate` reports an unparseable file as a per-file `(parse)` finding and
+  // keeps going. `get`'s contract is deliberately different — a file-level
+  // problem is operational, so it exits 2 and never exits 1 — but the
+  // diagnostic still has to be usable. It named neither the file nor itself as
+  // a document problem, so in a large corpus there was nothing to go on.
+  const fixture = "test/fixtures/get-parse-error";
+
+  it("names the offending file", () => {
+    const r = run(["get", "title", fixture, "--no-config"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("unparseable.md");
+  });
+
+  it("does not report a document problem as an internal fault", () => {
+    const r = run(["get", "title", fixture, "--no-config"]);
+    expect(r.stderr).not.toContain("Unexpected error");
+    expect(r.stderr).toContain("Invalid YAML frontmatter");
+  });
+
+  it("still reads a sibling that parses", () => {
+    const r = run([
+      "get",
+      "title",
+      `${fixture}/readable.md`,
+      "--no-config",
+      "-f",
+      "json",
+    ]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("Readable");
+  });
+});
+
 describe("get --quiet (0005 §2)", () => {
   // `--no-config` on both runs, because the assertion is that quiet stdout is
   // *empty*. The repo root's own config would otherwise put `Using

@@ -128,9 +128,27 @@ export async function runGet(opts: GetOptions): Promise<GetFileResult[]> {
         `Unsupported file type "${extension}" for "${label}". Supported: ${supportedExtensions().join(", ")}. Use --as to override.`,
       );
     }
-    const extracted = extractor.extract(content, label, {
-      elements: resolveElements(label, config),
-    });
+    let extracted;
+    try {
+      extracted = extractor.extract(content, label, {
+        elements: resolveElements(label, config),
+      });
+    } catch (err) {
+      // A `DocmetaError` is already operational and already carries a message
+      // written for a person — rethrow it untouched, exactly as `validate`
+      // does with the same call.
+      if (err instanceof DocmetaError) throw err;
+      // Anything else is a document that will not parse. `validate` turns that
+      // into a per-file `(parse)` finding and keeps going; `get` must not, and
+      // deliberately so — its contract makes a file-level problem operational,
+      // so it exits 2 and never exits 1 (see the exit-code reference). What was
+      // wrong was the diagnostic, not the abort: `fail()` prefixes any
+      // non-`DocmetaError` with "Unexpected error", which reads as a docmeta
+      // fault rather than a document one, and the extractor's message names the
+      // line but never the file. In a corpus of any size that left nothing to
+      // act on.
+      throw new DocmetaError(`${label}: ${(err as Error).message}`);
+    }
     const values: Record<string, unknown> = {};
     for (const f of opts.fields) values[f] = resolveField(extracted.data, f);
     out.push({ file: label, present: extracted.present, values });
