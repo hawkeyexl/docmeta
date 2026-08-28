@@ -862,7 +862,7 @@ export function buildProgram(): Command {
     .option("--no-gitignore", "read files .gitignore covers")
     .option(
       "--offline",
-      "never fetch a remote schema; resolve URL refs from the schema cache",
+      "accepted and ignored: get loads no schema, so there is nothing to fetch",
     )
     .addHelpText(
       "after",
@@ -999,7 +999,7 @@ export function buildProgram(): Command {
     .option("--no-gitignore", "load files .gitignore covers")
     .option(
       "--offline",
-      "never fetch a remote schema; resolve URL refs from the schema cache",
+      "accepted and ignored: query resolves schemas from disk and built-ins, never the network",
     )
     .addHelpText(
       "after",
@@ -1430,7 +1430,7 @@ export function buildProgram(): Command {
     .option("--no-gitignore", "scan files .gitignore covers")
     .option(
       "--offline",
-      "never fetch a remote schema; resolve URL refs from the schema cache",
+      "accepted and ignored: infer loads no schema and no provider",
     )
     .addHelpText(
       "after",
