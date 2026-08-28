@@ -1,0 +1,112 @@
+---
+title: "docmeta:journey:1.0.0-proposal.1"
+description: "The proposed journey vocabulary — the contract for a critical user journey, and the thing that turns docs coverage into a query."
+sidebar:
+  order: 13
+  label: "journey"
+---
+
+:::caution[Proposed — not shipped, and never default]
+Part of the [content-strategy vocabularies proposal](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0031-content-strategy-vocabularies.md),
+open for community review. Draft schema:
+[`docs/proposals/0031/schemas/journey/1.0.0-proposal.1.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0031/schemas/journey/1.0.0-proposal.1.json).
+**Override-only**: it requires four fields, so defaulting it would fail every
+ordinary page.
+:::
+
+**The question it answers: what path does a reader take, and where does it
+break?**
+
+A journey names its steps and, for each, the page that serves it — so the gaps
+in a docs set become a query instead of a workshop. It is the other end of
+every `journeys: [cuj-install]` reference a page carries.
+
+## Fields
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` **(required)** | string, non-empty | The anchor pages point at: `cuj-prove-value` |
+| `trigger` **(required)** | string, non-empty | What puts the reader on this path. Without it, a journey is a table of contents |
+| `success-criteria` **(required)** | string, non-empty | How you know the reader finished. Stated as an outcome, never as a page reached |
+| `steps` **(required)** | array, non-empty | The ordered path. See below |
+| `entry-point` | string, non-empty | Where the reader actually arrives — often *not* the first step |
+| `evidence` | string or list | What the journey was derived from |
+| `evidence-strength` | enum | `strong · moderate · thin · assumed` |
+
+Each step is an object:
+
+| Step field | Type | Notes |
+|---|---|---|
+| `stage` **(required)** | string, non-empty | What the reader is trying to do, in their terms |
+| `doc` | string | The page that serves it — or, when missing, the route it should live at |
+| `coverage` | enum | `covered · partial · missing · cross-reference`. A `cross-reference` step must also carry `doc` |
+| `note` | string | Why the coverage is what it is |
+
+The step object is **closed** — with an `^x-` prefix as the escape hatch
+(`x-issue`, `x-owner`) — which is the one place this vocabulary catches typos.
+
+## Example
+
+```yaml
+---
+title: Demonstrate docs-team value and ROI to leadership
+description: The make-the-case-upward journey, for champions who must justify spend.
+id: cuj-prove-value
+personas: [persona-enterprise-docs-lead, persona-scaleup-solo-writer]
+trigger: The champion needs to show leadership that the docs function delivers leverage.
+success-criteria: The champion can report merged doc PRs, coverage gains, and time saved.
+entry-point: /docs/using-the-web-interface
+steps:
+  - stage: See activity — PRs drafted and merged
+    doc: /docs/using-the-web-interface
+    coverage: partial
+    note: Activity is visible; the reporting view is not documented.
+  - stage: Quantify impact — time saved, freshness
+    doc: /docs/reporting-and-roi
+    coverage: missing
+    x-issue: DOCS-4192
+evidence: [customer-interviews]
+evidence-strength: moderate
+---
+```
+
+## Design decisions
+
+- **`coverage` replaces a boolean, and that is a typing fix.** The corpus this
+  was modelled on used `exists: true | partial | false | ref`. A key whose value
+  is sometimes a YAML boolean and sometimes a string is a trap: YAML 1.1 also
+  reads `no` and `off` as booleans, and TOML and JSON frontmatter type the same
+  key differently again. The question is not boolean anyway — `partial` and a
+  cross-reference are not degrees of existence.
+- **The step object is closed, and that is affordable because it is nested.**
+  No other schema in the registry reaches inside `steps[]`, so closing it
+  cannot break anyone — unlike a constant on a root key like `type`. A
+  misspelled `coverage` on an open object would be invisible, and a gap report
+  would read the step as unassessed while the author believed it was filled in.
+- **A `cross-reference` step must name what it refers to.** This is the
+  family's conditional idiom applied one level down — the same shape as
+  `lifecycle: deprecated` requiring `replaced-by` in
+  [lifecycle](/docmeta/proposals/lifecycle/): a value that defers to something
+  else must say what. A hand-off with no `doc` is indistinguishable from an
+  unassessed step. `missing` deliberately does *not* require `doc`; a team that
+  has found a gap but not decided where the page goes is in a real state.
+- **`entry-point` is not `steps[0]`.** Readers land where search and marketing
+  send them and work backwards; the gap between the two is itself a finding.
+- **`steps` is not `uniqueItems`**, unlike every list in the family. Those are
+  label sets, where a repeat is always noise; this is an ordered record array,
+  like `command` and `success-exit-codes` in
+  [evals](/docmeta/proposals/evals/). A journey that revisits a stage — review,
+  fix, review again — is a real shape.
+- **`steps` cannot be empty.** An empty list would read to a coverage report as
+  a fully covered journey — the exact failure this vocabulary exists to catch.
+- **There is no `type: journey` key**, for the reason set out on
+  [audience-profile](/docmeta/proposals/audience-profile/). "CUJ" stays the word
+  people say; `journeys` is the key every page already uses to point here.
+
+## What reviewers should poke at
+
+Whether the closed step object plus its `^x-` escape is worth introducing a
+second extension idiom into a family that otherwise only uses "open root", and
+whether `doc` should be constrained at all — it is a route, a repo path, or a
+URL depending on the team, and link-checking it is a corpus check's job rather
+than a schema's.

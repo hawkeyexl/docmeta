@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docmeta:persona:1.0.0-proposal.1",
+  "title": "docmeta persona vocabulary (1.0.0-proposal.1)",
+  "description": "The contract for a document that *defines* a persona — the reader a page means when it says `personas: [persona-platform-admin]`. This is the other end of that reference, and the place docmeta:audience:1.0.0-proposal.1 deliberately sent reader level when it cut `expertise` from the page: level is a fact about the persona, so it lives on the persona. The document's name and summary stay `title`/`description` (docmeta:core:1.0.0-proposal.1), its parent segment is `audiences` and the journeys it takes are `journeys` (docmeta:audience:1.0.0-proposal.1), and its upkeep is docmeta:stewardship:1.0.0-proposal.1's — a persona is a page like any other, and inherits the family it sits in. Wired with an `overrides:` glob over the directory personas live in; there is deliberately no `type: persona` constant, because `type` is the registry's most contested key and pinning it would trade stackability for a claim the config already makes.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "id",
+    "role"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The stable anchor pages point at — `persona-enterprise-docs-lead`. Required, where core leaves it optional, because every `personas:` value in the corpus resolves here; the whole value of the reference is that it does not dangle."
+    },
+    "role": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What this person does, in their own org's words — `Manager/Director of Documentation`, `SRE on call for the platform`. The one required fact beyond identity, because a persona without a role is a label: it names a group without saying who is in it, and every downstream judgment — which content types serve them, what they already know — hangs off the role. Deliberately not enumerated and deliberately singular: it is prose about one person-shaped reader, not a taxonomy."
+    },
+    "expertise": {
+      "$ref": "#/$defs/stringList",
+      "description": "What this reader already brings — `docs-as-code`, `git-and-prs`, `kubernetes-operations`. **This is where reader level lives**, and the reason docmeta:audience:1.0.0-proposal.1 has no `expertise` field: a page claiming `expertise: beginner` beside `personas: [persona-expert-admin]` could contradict the persona it points at, so the fact sits at the altitude that owns it. Baseline knowledge and prerequisites are one list on purpose — a separate `prerequisites` key would both duplicate this at a slightly different confidence and collide with docmeta:structure:1.0.0-proposal.1's `prerequisites`, which means the opposite thing (what a *page* needs, not what a *reader* has)."
+    },
+    "goals": {
+      "$ref": "#/$defs/stringList",
+      "description": "What this reader is trying to accomplish, one line each — `keep a multi-product corpus current without new headcount`. The persona-level counterpart of a page's `intent` (docmeta:audience:1.0.0-proposal.1): `intent` is the job one page serves, these are the jobs the person has. Free text, because a goal that fits an enum was never a goal."
+    },
+    "pains": {
+      "$ref": "#/$defs/stringList",
+      "description": "What blocks them today, one line each — `cannot see what changed across many repos`. Kept beside `goals` rather than folded into it because they are what the docs must actually answer, and because a persona document with goals and no pains is usually a persona nobody interviewed."
+    },
+    "needs": {
+      "$ref": "#/$defs/stringList",
+      "description": "What this reader most needs documented, as labels — `security-and-self-host`, `roi-reporting`. The same key and shape as the audience vocabulary's, deliberately: the two never judge the same document, because each is wired to its own directory, so one coverage report can read the segment's needs and its personas' needs through a single column. Where `goals` and `pains` are prose for a human, this is labels for a query."
+    },
+    "evidence": {
+      "$ref": "#/$defs/evidenceList",
+      "description": "What this persona was derived from — `customer-interviews`, `support-tickets`, `user-testing`. The difference between a researched reader and an invented one, recorded where a reviewer can see it. Recommendations, not a closed list."
+    },
+    "evidence-strength": {
+      "enum": [
+        "strong",
+        "moderate",
+        "thin",
+        "assumed"
+      ],
+      "description": "How far the evidence goes: `strong`, `moderate`, `thin`, `assumed`. Enumerated because a strategy-coverage report switches on it; absence means unassessed, not strong. Same ladder as the audience and journey vocabularies, so the report is one query."
+    }
+  },
+  "$defs": {
+    "stringList": {
+      "if": {
+        "type": "array"
+      },
+      "then": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "else": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "One non-empty string, or a non-empty list of unique ones. The empty list is rejected on purpose: `goals: []` reads to every downstream consumer as goals recorded, and it is the opposite."
+    },
+    "evidenceSource": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "enum": [
+            "customer-interviews",
+            "prospect-interviews",
+            "support-tickets",
+            "sales-calls",
+            "analytics",
+            "search-logs",
+            "community-forum",
+            "user-testing",
+            "surveys",
+            "assumed"
+          ]
+        }
+      ],
+      "description": "One evidence source: a recommended value, or any non-empty string. The enum branch is advisory; the open branch keeps an org-specific research channel a correct document rather than a violation."
+    },
+    "evidenceList": {
+      "if": {
+        "type": "array"
+      },
+      "then": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {
+          "$ref": "#/$defs/evidenceSource"
+        }
+      },
+      "else": {
+        "$ref": "#/$defs/evidenceSource"
+      },
+      "description": "One evidence source, or a non-empty list of unique ones — the same one-or-list shape as stringList beside it and as kg's labelList, so a value ports between altitudes unchanged. The empty list is rejected on purpose: evidence: [] reads as evidence recorded, and it is the opposite of that."
+    }
+  }
+}

@@ -1,0 +1,94 @@
+---
+title: "docmeta:persona:1.0.0-proposal.1"
+description: "The proposed persona vocabulary — the contract for a document that defines a reader, and the place reader expertise finally lives."
+sidebar:
+  order: 12
+  label: "persona"
+---
+
+:::caution[Proposed — not shipped, and never default]
+Part of the [content-strategy vocabularies proposal](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0031-content-strategy-vocabularies.md),
+open for community review. Draft schema:
+[`docs/proposals/0031/schemas/persona/1.0.0-proposal.1.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0031/schemas/persona/1.0.0-proposal.1.json).
+**Override-only**: it requires `id` and `role`, so defaulting it would fail
+every ordinary page.
+:::
+
+**The question it answers: who is this reader, and what do they already know?**
+
+This is what a page means when it says `personas: [persona-platform-admin]` —
+the other end of a reference the family already publishes but cannot yet check.
+
+## Fields
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` **(required)** | string, non-empty | The anchor pages point at: `persona-enterprise-docs-lead` |
+| `role` **(required)** | string, non-empty | What this person does, in their org's words. A persona without one is a label |
+| `expertise` | string or list | What the reader already brings. **Where reader level lives** |
+| `goals` | string or list | What they are trying to accomplish, one line each |
+| `pains` | string or list | What blocks them today, one line each |
+| `needs` | string or list | What they most need documented, as labels. Same key as [audience-profile](/docmeta/proposals/audience-profile/)'s, so one report reads both |
+| `evidence` | string or list | What the persona was derived from. Recommendations, not a closed list |
+| `evidence-strength` | enum | `strong · moderate · thin · assumed` |
+
+The persona's name is `title`, its one-line summary is `description`
+([core](/docmeta/proposals/core/)), its segment is `audiences` and the journeys
+it takes are `journeys` ([audience](/docmeta/proposals/audience/)). A persona
+is a page like any other, and inherits the family it sits in.
+
+## Example
+
+```yaml
+---
+title: Dana — Documentation Manager
+description: Leads 3–50 writers across many products and engineering teams.
+id: persona-enterprise-docs-lead
+audiences: aud-enterprise-docs-team
+journeys: [cuj-evaluate-pilot, cuj-prove-value]
+role: Manager/Director of Documentation
+expertise: [docs-as-code, ci-release-process, security-compliance-vocab]
+goals:
+  - Keep a large multi-product corpus current without new headcount
+  - Pass security, self-host, and SSO review
+pains:
+  - Cannot see what changed across many products, repos, and orgs
+needs: [security-and-self-host, multi-repo-routing, roi-reporting]
+evidence: [customer-interviews]
+evidence-strength: strong
+---
+```
+
+## Design decisions
+
+- **`expertise` is the field the family already cut, twice.**
+  [`docmeta:audience`](/docmeta/proposals/audience/) records that it has *no*
+  `expertise` key because "level belongs to the persona definitions a page
+  points at." [`docmeta:structure`](/docmeta/proposals/structure/) records the
+  same reasoning again when it refuses an `advanced` key, and admits the cost:
+  "a docs set with no persona definitions cannot derive it." The fact was cut
+  from the page because it had nowhere better to be. This is the somewhere
+  better.
+- **`expertise` also absorbs prerequisites.** The corpus this was modelled on
+  kept `proficiency` and `prerequisites` side by side, with `git-and-prs` in
+  both. They are one fact at two confidences — and `prerequisites` is already
+  claimed by [structure](/docmeta/proposals/structure/) at the *opposite*
+  meaning (what a page needs, not what a reader has). One key reachable at two
+  altitudes with inverted meanings would poison every query over it.
+- **`goals` and `pains` stay apart.** Pains are what the docs must actually
+  answer, and a persona with goals and no pains is usually a persona nobody
+  interviewed.
+- **There is no `type: persona` key**, for the reason set out on
+  [audience-profile](/docmeta/proposals/audience-profile/): a constant on
+  `type` would make the schema unstackable with Diataxis, okf and DCMI at once.
+  Misfiling is still caught here — a journey filed into `personas/` has no
+  `role` — just not by name.
+
+## What reviewers should poke at
+
+Whether `role` should really be required: it is what makes a persona a persona
+and the only thing standing between a misfiled journey and a green run, but it
+also means a team cannot stub `id` + `title` and fill in later — which
+[audience-profile](/docmeta/proposals/audience-profile/) explicitly allows.
+And whether sharing `needs` with the audience vocabulary collapses two facts
+that will drift apart.

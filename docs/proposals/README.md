@@ -54,6 +54,7 @@ changed as a result, and lists what it depends on.
 | [0028](0028-ddl-type-bridge.md) | The DDL type bridge: formats as column types, enums as CHECK IN | Sara · S1, S3 / Maya · M2, M3 | Implemented (#135) |
 | [0029](0029-query-for-scripts.md) | query for scripts: CSV output and bound parameters | Devin · D3, D4 | Implemented (#133) |
 | [0030](0030-query-schema-flag.md) | `-s/--schema` on `query`: naming the contract DDL evolves | Sara · S1, S3 / Maya · M2, M3 | Implemented (#139) |
+| [0031](0031-content-strategy-vocabularies.md) | The content-strategy vocabularies — audience, persona and journey *definition* documents, the other end of 0023's dangling references. Drafts and ladders under [0031/](0031/); override-only, never default | Sara · S1 / S2 | Proposed |
 
 0014 was not in the original review. It surfaced while stress-testing 0004 and
 is the most severe item in the set: **docmeta currently exits `0` when it

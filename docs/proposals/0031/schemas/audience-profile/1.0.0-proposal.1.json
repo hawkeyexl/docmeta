@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docmeta:audience-profile:1.0.0-proposal.1",
+  "title": "docmeta audience-profile vocabulary (1.0.0-proposal.1)",
+  "description": "The contract for a document that *defines* an audience segment, as distinct from a page that merely names one. `docmeta:audience:1.0.0-proposal.1` is the facet every page may carry (`audiences: [administrators]`); this is the document-type id you point at the directory where the segments themselves live, with an `overrides:` glob. **What makes a document an audience definition is the glob, not a key inside the file.** There is deliberately no `type: audience` constant here: `type` is the most contested key in the registry — required by google:okf:0.1, required and enumerated by diataxis:core:1.0, claimed by docmeta:core:1.0.0-proposal.1, mirrored by `kg.type` — so pinning it would make this schema unstackable with half the registry to say something the config already said. The vocabulary is deliberately thin for the same reason: the rest of the family carries what an audience document needs. Its name and summary are `title`/`description` (docmeta:core:1.0.0-proposal.1), its member personas are `personas` (docmeta:audience:1.0.0-proposal.1), its upkeep is `owner`/`last-reviewed`/`review-interval` (docmeta:stewardship:1.0.0-proposal.1), and a retired segment is `lifecycle: archived` (docmeta:lifecycle:1.0.0-proposal.1). `id` is the one key re-claimed, and only to narrow it.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The stable anchor other documents point at — `aud-enterprise-docs-team`. Required, where core leaves it optional, because an audience nothing can reference is not doing the job an audience document exists to do: every `audiences:` value on a page and every `audiences:` value on a persona resolves to one of these. Rename it and the references dangle, which is what a corpus check is for."
+    },
+    "traits": {
+      "$ref": "#/$defs/stringList",
+      "description": "What defines the segment, as flat labels — `enterprise`, `multi-repo`, `procurement-driven`. Named dimensions (maturity, who owns docs, relationship stage, firmographics) were tried and simplified away for the same reason `applies-to` was in docmeta:structure:1.0.0-proposal.1: every org segments on different axes, and a fixed set of axis keys is a guess about somebody else's business. An org that wants axes prefixes them — `maturity:enterprise`, `stage:prospect`, `owner:established-docs-team` — which is the same escape hatch, in the same convention, and stays greppable."
+    },
+    "needs": {
+      "$ref": "#/$defs/stringList",
+      "description": "What this audience most needs documented, as labels — `release-timing`, `sso`, `multi-repo-routing`. The field that makes coverage checkable: a label here with no page claiming it under `applies-to` or `concepts` (docmeta:structure:1.0.0-proposal.1) is a documented gap in a documented segment, which is a query, not an opinion. Deliberately the same key and shape as the persona vocabulary's, so one report reads both altitudes."
+    },
+    "evidence": {
+      "$ref": "#/$defs/evidenceList",
+      "description": "What this segment was derived from — `customer-interviews`, `support-tickets`, `analytics`. A strategy document is a claim about people, and the difference between a researched segment and an invented one is invisible in the prose but decisive for anyone acting on it. Distinct from `verified-against` (docmeta:stewardship:1.0.0-proposal.1), which names the one version of the thing a page describes; this names the kinds of research the claim rests on. Recommendations, not a closed list."
+    },
+    "evidence-strength": {
+      "enum": [
+        "strong",
+        "moderate",
+        "thin",
+        "assumed"
+      ],
+      "description": "How far the evidence goes: `strong` (repeated, independent, recent), `moderate` (real but narrow), `thin` (one or two data points — the segment is a hypothesis worth keeping), `assumed` (nobody has checked). Enumerated, unlike `evidence` beside it, because a strategy-coverage report switches on it and an unrecognized value would fail open — the same asymmetry `visibility` has against `audiences` in docmeta:audience:1.0.0-proposal.1. Absence means unassessed, not strong."
+    }
+  },
+  "$defs": {
+    "stringList": {
+      "if": {
+        "type": "array"
+      },
+      "then": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "else": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "One non-empty string, or a non-empty list of unique ones — the same shape the rest of the family uses, so values port between the facet and definition altitudes unchanged."
+    },
+    "evidenceSource": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "enum": [
+            "customer-interviews",
+            "prospect-interviews",
+            "support-tickets",
+            "sales-calls",
+            "analytics",
+            "search-logs",
+            "community-forum",
+            "user-testing",
+            "surveys",
+            "assumed"
+          ]
+        }
+      ],
+      "description": "One evidence source: a recommended value, or any non-empty string. The enum branch is advisory — it feeds editor completion, docs, and fill proposals; the open string branch keeps an org-specific research channel a correct document rather than a violation."
+    },
+    "evidenceList": {
+      "if": {
+        "type": "array"
+      },
+      "then": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {
+          "$ref": "#/$defs/evidenceSource"
+        }
+      },
+      "else": {
+        "$ref": "#/$defs/evidenceSource"
+      },
+      "description": "One evidence source, or a non-empty list of unique ones — the same one-or-list shape as stringList beside it and as kg's labelList, so a value ports between altitudes unchanged. The empty list is rejected on purpose: evidence: [] reads as evidence recorded, and it is the opposite of that."
+    }
+  }
+}

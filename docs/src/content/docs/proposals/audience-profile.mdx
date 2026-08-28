@@ -1,0 +1,86 @@
+---
+title: "docmeta:audience-profile:1.0.0-proposal.1"
+description: "The proposed audience-profile vocabulary — the contract for a document that defines an audience segment, rather than a page that names one."
+sidebar:
+  order: 11
+  label: "audience-profile"
+---
+
+:::caution[Proposed — not shipped, and never default]
+Part of the [content-strategy vocabularies proposal](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0031-content-strategy-vocabularies.md),
+open for community review. Draft schema:
+[`docs/proposals/0031/schemas/audience-profile/1.0.0-proposal.1.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0031/schemas/audience-profile/1.0.0-proposal.1.json).
+Unlike the [nine facet vocabularies](/docmeta/proposals/frontmatter-vocabularies/),
+this one is **override-only**: it requires an `id`, so defaulting it would fail
+every ordinary page.
+:::
+
+**The question it answers: who is this segment, and how well do we know?**
+
+[`docmeta:audience`](/docmeta/proposals/audience/) is the facet a *page*
+carries — `audiences: [administrators]`. This is the contract for the document
+that defines `administrators`. It is the other end of a reference that, today,
+has nowhere to point.
+
+## Fields
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` **(required)** | string, non-empty | The anchor pages point at: `aud-enterprise-docs-team`. Required here, optional in `docmeta:core` — a strict narrowing, so the two never disagree |
+| `traits` | string or list | What defines the segment, as flat labels. Axes go in the prefix: `maturity:enterprise`, `stage:prospect` |
+| `needs` | string or list | What this audience most needs documented. The field a coverage check reads |
+| `evidence` | string or list | What the segment was derived from: `customer-interviews`, `analytics`, `assumed`. Recommendations, not a closed list |
+| `evidence-strength` | enum | `strong · moderate · thin · assumed`. Closed, because a report switches on it. Absence means unassessed |
+
+Everything else an audience document needs is already published: `title` and
+`description` name it ([core](/docmeta/proposals/core/)), `personas` lists its
+members ([audience](/docmeta/proposals/audience/)), and `owner` /
+`last-reviewed` keep it fresh ([stewardship](/docmeta/proposals/stewardship/)).
+
+## Example
+
+```yaml
+---
+title: Enterprise documentation team
+description: Established docs orgs keeping a multi-product corpus accurate without adding headcount.
+id: aud-enterprise-docs-team
+personas: [persona-enterprise-docs-lead]
+traits: [maturity:enterprise, multi-repo, procurement-driven, stage:prospect]
+needs: [release-timing, sso, multi-repo-routing, localization]
+evidence: [customer-interviews, prospect-interviews]
+evidence-strength: strong
+owner: content-strategy
+last-reviewed: 2026-08-20
+review-interval: P180D
+---
+```
+
+## Design decisions
+
+- **There is no `type: audience` key.** What makes a document an audience
+  definition is the `overrides:` glob that wired this schema, not a key inside
+  the file. `type` is the most contested key in the registry — required by
+  `google:okf:0.1`, required *and* enumerated by `diataxis:diataxis:1.0`,
+  claimed by core, mirrored by `kg.type` — so a constant there would forbid
+  every other claimant's value and make this schema unstackable with all three
+  at once. The proposal's compat-check proves that rather than asserting it.
+- **The cost is admitted.** With only `id` required, a persona document filed
+  into `audiences/` validates. That hole is pinned as a passing case in the
+  ladder so it stays a known cost, and it closes with one corpus `check:` that
+  also catches the inverse — an audience document filed anywhere else.
+- **`traits` flattens four fields into one.** Segment maturity, who owns docs,
+  firmographics, and relationship stage were four keys in the corpus this was
+  modelled on. They became labels with a prefix convention, for the same reason
+  `applies-to` did in [structure](/docmeta/proposals/structure/): every org
+  segments on different axes, and fixed axis keys are a guess about someone
+  else's business.
+- **`evidence-strength` is enumerated and `evidence` is not**, one field apart
+  — the same asymmetry `visibility` has against `audiences`. A report switches
+  on the strength, so an unknown value would fail open; the sources are the
+  org's own research channels.
+
+## What reviewers should poke at
+
+Whether requiring only `id` is too little — a stub segment is legitimate, but
+it is also what leaves the misfiling hole open — and whether the `traits`
+prefix convention gets used in practice or everyone overlays real axis keys.
