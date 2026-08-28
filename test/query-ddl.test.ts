@@ -374,6 +374,27 @@ describe("runQuery DDL — -s names the contract (0030)", () => {
     expect(v.summary.failed).toBe(0);
   });
 
+  it("ADD refuses when the set names several builtins and no local file, in either order", async () => {
+    // fileMembers[0] ?? builtinMembers[0] silently picked by flag order
+    // (review finding 6) — the ambiguity refusal must mirror the
+    // several-local-files one instead.
+    const d = copy("query-schema-flag");
+    for (const order of [
+      ["google:okf:0.1", "passo-uno:seven-action:1.0"],
+      ["passo-uno:seven-action:1.0", "google:okf:0.1"],
+    ]) {
+      await expect(
+        runQuery({
+          sql: "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+          inputs: ["docs"],
+          cwd: d,
+          dryRun: true,
+          schemas: order,
+        }),
+      ).rejects.toThrow(/2 built-ins .*which one to fork/);
+    }
+  });
+
   it("a URL ref via -s refuses with the vendor-first remedy", async () => {
     const d = copy("query-schema-flag");
     await expect(

@@ -1640,6 +1640,15 @@ async function planSchemaMutation(
         `The resolved set names ${String(fileMembers.length)} local schema files (${fileMembers.map((m) => m.ref).join(", ")}) — DDL cannot tell which one to evolve. Scope the run to an override group that names one, set the files' \`$schema\` to the schema to evolve, or pass -s <schema> to name it directly.`,
       );
     }
+    // The same ambiguity rule as several local files: with no local file
+    // and several builtins, "the one to fork" would be decided by flag or
+    // list order — a silent pick where every sibling refusal names its
+    // reasons (review of #139, finding 6).
+    if (fileMembers.length === 0 && builtinMembers.length > 1) {
+      throw new DocmetaError(
+        `The resolved set names ${String(builtinMembers.length)} built-ins (${builtinMembers.map((m) => m.builtinId).join(", ")}) and no local schema file — DDL cannot tell which one to fork. Name one with -s, or evolve a local schema.`,
+      );
+    }
     const chosen = fileMembers[0] ?? builtinMembers[0];
     if (!chosen) {
       throw new DocmetaError(
