@@ -1,3 +1,20 @@
+# [4.10.0](https://github.com/hawkeyexl/docmeta/compare/v4.9.0...v4.10.0) (2026-08-28)
+
+
+### Bug Fixes
+
+* **cli:** say in --help that --offline is a no-op where it is one ([2b77f5e](https://github.com/hawkeyexl/docmeta/commit/2b77f5edfc7a005d69f1c9b10c4ff1f9361dc460))
+* **get:** keep the parse diagnostic sound when a throw is not an Error ([87b9e97](https://github.com/hawkeyexl/docmeta/commit/87b9e971065c56bc7dc6efb9160d40105a49e54a))
+* **get:** name the file when its frontmatter will not parse ([5458375](https://github.com/hawkeyexl/docmeta/commit/545837592e6a84f9bb2c8ae54dd1cd059334b181))
+* **get:** report an unreadable metadata block per file, not as a run failure ([337fde8](https://github.com/hawkeyexl/docmeta/commit/337fde8a59cc651b5516103edd95dced87fbc6d6))
+* **reporters:** name the .gitignore skip count on the infer headline ([434b7d6](https://github.com/hawkeyexl/docmeta/commit/434b7d688fdec323f0f3fe3f6d0b26c65270bd0d))
+
+
+### Features
+
+* **cli:** give schemas infer the shared input flags ([cdc0bd4](https://github.com/hawkeyexl/docmeta/commit/cdc0bd4cde0423fbb3ae7f0244383e954501a703))
+* **schemas:** add the MkDocs Material front matter schema ([8c00731](https://github.com/hawkeyexl/docmeta/commit/8c0073178c4ae14a6161748426118736fb98b1ac))
+
 # [4.9.0](https://github.com/hawkeyexl/docmeta/compare/v4.8.2...v4.9.0) (2026-08-28)
 
 
