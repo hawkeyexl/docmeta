@@ -42,6 +42,7 @@ import xCards10 from "../schemas/x-cards/1.0.json" with { type: "json" };
 import agentSkills10 from "../schemas/agent-skills/1.0.json" with { type: "json" };
 import claudeSkill21 from "../schemas/claude-skill/2.1.json" with { type: "json" };
 import mkdocsMaterial97 from "../schemas/mkdocs-material/9.7.json" with { type: "json" };
+import claudeSubagent21 from "../schemas/claude-subagent/2.1.json" with { type: "json" };
 
 export interface BuiltinInfo {
   id: string;
@@ -73,6 +74,7 @@ const BUILTINS = new Map<string, Record<string, unknown>>([
   ["agentskills:skill:1.0", agentSkills10],
   ["anthropic:claude-skill:2.1", claudeSkill21],
   ["mkdocs:material:9.7", mkdocsMaterial97],
+  ["anthropic:claude-subagent:2.1", claudeSubagent21],
 ]);
 
 /**
@@ -152,6 +154,10 @@ const PUBLISHED_ALIAS: ReadonlyMap<string, string> = new Map([
   [`${PUBLISHED_BASE}agent-skills/1.0.json`, "agentskills:skill:1.0"],
   [`${PUBLISHED_BASE}claude-skill/2.1.json`, "anthropic:claude-skill:2.1"],
   [`${PUBLISHED_BASE}mkdocs-material/9.7.json`, "mkdocs:material:9.7"],
+  [
+    `${PUBLISHED_BASE}claude-subagent/2.1.json`,
+    "anthropic:claude-subagent:2.1",
+  ],
 ]);
 
 /**

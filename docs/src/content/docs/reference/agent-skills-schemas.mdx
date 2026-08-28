@@ -167,3 +167,12 @@ docmeta validate skills/**/SKILL.md \
 The two agree on every field they share, so a spec-conformant `SKILL.md` passes
 both. What the pair reports is the Claude Code-only keys, which is the list of
 things to remove before you package.
+
+## The other file in `.claude/`
+
+A subagent definition is a different contract, not a third skill schema: it
+lives under `.claude/agents/`, it *requires* `name` and `description`, and it
+spells its tool grants `tools` and `disallowedTools` rather than
+`allowed-tools` and `disallowed-tools`. Validating one against a `SKILL.md`
+schema passes it while every key it set does nothing. See [Claude Code subagent
+schema](/docmeta/reference/claude-subagent-schema/).

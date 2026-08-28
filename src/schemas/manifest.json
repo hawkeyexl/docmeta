@@ -4,6 +4,7 @@
     "agent-skills/1.0.json": "sha256-03be80305cae9f8100382c9bbb812798fb8cf23c67abb43ce5acc3ea1cd3932f",
     "antora/3.1.json": "sha256-fcce5415e1742725a4980eebee9ab219dfe685f7721d927810e050069331ceb0",
     "claude-skill/2.1.json": "sha256-be05a82322caaf1daab6773bc15f3962ca6b986c3f1bc2e769916327409dfd50",
+    "claude-subagent/2.1.json": "sha256-9a7f4c304bfe97e4e691a611d894d1d36a4f66b3f52f88bd66d7a790d847cc5e",
     "dcmi/1.1.json": "sha256-a60f0d4a88059851b135d4954483d3f1cebc86d7c043844439d495e8aa0c6832",
     "diataxis/1.0.json": "sha256-5796a1ca72aa9b5f7e5273a18b9b1c91ba331bbad9a3623443d569cacd24576b",
     "dita/1.3.json": "sha256-6bee32c4e967c1499cbd237e568a3eea501e91a6d243a872e7c9a8711c1d153e",

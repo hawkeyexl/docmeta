@@ -174,6 +174,7 @@ describe("docmeta CLI (built bin)", () => {
       "agentskills:skill:1.0",
       "anthropic:claude-skill:2.1",
       "mkdocs:material:9.7",
+      "anthropic:claude-subagent:2.1",
     ]);
   });
 
