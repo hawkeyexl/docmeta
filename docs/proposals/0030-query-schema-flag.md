@@ -1,6 +1,6 @@
 # 0030 — `-s/--schema` on `query`: naming the contract DDL evolves
 
-- **Status:** Proposed
+- **Status:** Implemented (#139)
 - **Serves:** Sara · S1, S3 · Maya · M2, M3
 - **Depends on:** [0024](0024-standard-sql-vocabulary.md) (the DDL planner, its
   single-set rule, and the `--schema <ref>` its design text sketched and never shipped)
