@@ -32,6 +32,7 @@ vi.mock("../src/core/resolve-schema.js", async (importOriginal) => {
 });
 
 import { runValidate } from "../src/commands/validate.js";
+import { runQuery } from "../src/commands/query.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const corpus = resolve(here, "fixtures", "collections");
@@ -85,6 +86,28 @@ describe("validate+checks: one resolution walk (not two)", () => {
     expect(notice).toBeDefined();
     expect(notice).toContain('"authors"');
     expect(notice).toContain("$schema");
+  });
+
+  it("query DDL under -s resolves the CLI set once, never per file (0030)", async () => {
+    // The -s set goes through the same resolver as every other CLI-ref
+    // surface — its cli branch, called exactly once for the run. The pin is
+    // "not O(files)": a per-entry walk under -s would defeat the flag's
+    // whole point (the walk's disagreement is what -s exists to bypass).
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-resolution-walk-"));
+    tempDirs.push(dir);
+    cpSync(resolve(here, "fixtures", "query-schema-flag"), dir, {
+      recursive: true,
+    });
+    counter.calls = 0;
+    const run = await runQuery({
+      sql: "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+      inputs: ["docs"],
+      cwd: dir,
+      dryRun: true,
+      schemas: ["./schemas/house.json"],
+    });
+    expect(run.changes?.some((c) => "schema" in c)).toBe(true);
+    expect(counter.calls).toBe(1);
   });
 
   it("a file whose resolution failed is a member of no view, not re-resolved", async () => {

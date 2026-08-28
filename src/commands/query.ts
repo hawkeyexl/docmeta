@@ -398,7 +398,11 @@ interface RunContext {
   target?: { resolved: string; display: string };
   /** Named-parameter binds, bare-name keys, already through `bindValue`. */
   params: Record<string, SqlValue>;
-  /** `-s` refs: the DDL planner's set, in place of the per-file walk (0030). */
+  /**
+   * `-s` refs: the DDL planner's set, in place of the per-file walk (0030).
+   * INVARIANT: set only when non-empty — `runQuery` threads it only then —
+   * so `!== undefined` is the one guard every consumer uses.
+   */
   cliSchemas?: string[];
   write: boolean;
   /** Directory file labels resolve against (see `resolveRunConfig`). */
@@ -1501,9 +1505,21 @@ async function planSchemaMutation(
   const sources = new Set<string>();
   const groupIndexes = new Set<number>();
   let splitLabel: string | undefined;
-  if (ctx.cliSchemas !== undefined && ctx.cliSchemas.length > 0) {
-    refs = [...new Set(ctx.cliSchemas)];
-    sources.add("cli");
+  if (ctx.cliSchemas !== undefined) {
+    // One implementation of CLI-ref handling across commands: the resolver's
+    // own cli branch (textual dedupe, source "cli"), called exactly once for
+    // the run — never per file; the counter seam in resolution-walk.test.ts
+    // pins that. `filePath` feeds only override matching, which the cli
+    // branch never reaches. The path-canonical dedupe file members also need
+    // lives in `loadSetMembers`, where refs are resolved anyway — the
+    // resolver's dedupe stays textual by design for validate.
+    refs = resolveSchemaSetWithSource({
+      filePath: "",
+      cliSchemas: ctx.cliSchemas,
+      config: ctx.config,
+      fileBase: ctx.cwd,
+      trustRoot: ctx.trustRoot,
+    }).schemas;
   } else {
     for (const e of entries) {
       let resolved;
