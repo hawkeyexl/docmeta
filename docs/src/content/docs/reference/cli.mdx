@@ -272,6 +272,20 @@ prints an array of `{ file, present, values }` objects, where `values` maps each
 requested field to its value; a requested field that is unset is omitted from
 `values`. `present` reports whether the file had a metadata block at all.
 
+A file whose metadata block could not be **read at all** — frontmatter that is
+not valid YAML, or that parses to something other than a mapping — is reported
+against that file rather than ending the run. In `pretty` it prints as
+`<file>: (parse) <reason>`; in `json` that file's object carries an extra
+`error` string, with `present: false` and an empty `values`. Every other file in
+the run is read and reported as usual, and the run exits `1`.
+
+`error` is set only for a block that could not be read. A file with no metadata
+block, and a file where every requested field is unset, are both answers rather
+than the absence of one: they carry no `error` and leave the exit code at `0`.
+Objects for files that parsed are unchanged, so a consumer that never looks at
+`error` sees exactly what it saw before. `--quiet` never hides a file carrying
+one.
+
 ### Examples
 
 ```sh
@@ -959,6 +973,7 @@ with `No files matched` (exit 2) rather than reporting a green zero.
 {/* step {"description":"get reports an absent field as unset (pretty) and present:false for a file with no metadata block.","runShell":{"command":"docmeta get title test/fixtures/no-frontmatter.md","exitCodes":[0],"stdio":"title=(unset)"}} */}
 {/* step {"description":"--fields is the flag form; with it, every positional is a path.","runShell":{"command":"docmeta get --fields title,type test/fixtures/valid.md","exitCodes":[0],"stdio":"title=A Valid Document"}} */}
 {/* step {"description":"-q hides a file where every requested field is unset, so nothing is printed at all.","runShell":{"command":"docmeta get title test/fixtures/no-frontmatter.md -q","exitCodes":[0],"stdio":"/^$/"}} */}
+{/* step {"description": "get reports an unreadable metadata block against the file, keeps reading the rest, and exits 1.", "runShell": {"command": "docmeta get title test/fixtures/get-parse-error --no-config", "exitCodes": [1], "stdio": "/title=Readable[\\s\\S]*Invalid YAML frontmatter/"}} */}
 {/* step {"description":"A path in the field-list position names the real mistake instead of reporting the paths as missing (exit 2).","runShell":{"command":"docmeta get test/fixtures/valid.md","exitCodes":[2],"stdio":"looks like a path, not a field list"}} */}
 {/* step {"description":"Naming no fields at all is an operational error, not an empty report (exit 2).","runShell":{"command":"docmeta get","exitCodes":[2],"stdio":"Specify at least one field"}} */}
 {/* step {"description":"Nested fields: dot-notation, JSON Pointer (/author/email), and array index all resolve in one comma-separated request.","runShell":{"command":"docmeta get author.name,/author/email,tags.0 test/fixtures/nested/doc.md -f json","exitCodes":[0],"stdio":"/\"Jane\"[\\s\\S]*\"jane@example.com\"[\\s\\S]*\"intro\"/"}} */}

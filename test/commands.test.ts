@@ -394,20 +394,44 @@ describe("runGet", () => {
     expect(results.length).toBeGreaterThan(0);
   });
 
-  // A document whose frontmatter will not parse is a diagnosable condition,
-  // not an internal fault. `validate` reports it as a per-file `(parse)`
-  // finding; `get`'s documented contract makes a file-level problem
-  // operational instead (exit 2, never exit 1), so it still aborts — but it
-  // must say which file, and it must not read as a crash.
-  it("names the file when frontmatter will not parse", async () => {
-    const run = runGet({
+  // A document whose frontmatter will not parse is a document-level fact, not
+  // an operational one, so it is recorded per file and the run continues —
+  // the same call `validate` wraps into a `(parse)` finding. It used to reject
+  // the whole promise, which meant one bad file hid every other file's values.
+  it("records a parse failure per file instead of aborting the run", async () => {
+    const results = await runGet({
+      fields: ["title"],
+      inputs: ["test/fixtures/get-parse-error"],
+      cwd: root,
+    });
+    expect(results.length).toBe(3);
+    const readable = results.find((r) => r.file.endsWith("readable.md"));
+    expect(readable?.values.title).toBe("Readable");
+    expect(readable?.error).toBeUndefined();
+    expect(results.filter((r) => r.error !== undefined).length).toBe(2);
+  });
+
+  it("carries the reason and leaves the values unresolved", async () => {
+    const results = await runGet({
       fields: ["title"],
       inputs: ["test/fixtures/get-parse-error/unparseable.md"],
       cwd: root,
     });
-    await expect(run).rejects.toBeInstanceOf(DocmetaError);
-    await expect(run).rejects.toThrow(/unparseable\.md/);
-    await expect(run).rejects.toThrow(/Invalid YAML frontmatter/);
+    expect(results[0]?.error).toMatch(/Invalid YAML frontmatter/);
+    expect(results[0]?.present).toBe(false);
+    expect(results[0]?.values.title).toBeUndefined();
+  });
+
+  // The second reproducer: the fences parse, but to a scalar rather than a
+  // mapping. It fails at a different point from `unparseable.md`, and both
+  // have to land in the same channel.
+  it("treats a non-object frontmatter root as a parse failure too", async () => {
+    const results = await runGet({
+      fields: ["title"],
+      inputs: ["test/fixtures/get-parse-error/toml-fences.md"],
+      cwd: root,
+    });
+    expect(results[0]?.error).toMatch(/root must be an object/);
   });
 });
 

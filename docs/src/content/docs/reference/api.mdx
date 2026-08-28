@@ -42,7 +42,7 @@ exit code is the caller's.
 | `ValidateRun` (type) | What `runValidate` resolves to: `results`, `summary`, and the `frame` describing where the run stood. |
 | `runGet` | Read named metadata fields from each input. Backs `docmeta get`. Always returns every file it saw — `--quiet` filtering lives in the reporter. |
 | `GetOptions` (type) | Input to `runGet`: the same input model plus the `fields` to read. |
-| `GetFileResult` (type) | One `runGet` result: the file, whether metadata was `present`, and the resolved `values`. |
+| `GetFileResult` (type) | One `runGet` result: the file, whether metadata was `present`, the resolved `values`, and an optional `error` when the metadata block could not be read at all. |
 | `runQuery` | Run one SQL statement over an in-memory table built from every input's metadata. Backs `docmeta query`. Returns every row — the `--check` verdict is the CLI's exit code, not the result's. |
 | `QueryOptions` (type) | Input to `runQuery`: the same input model plus the `sql` to run, optional named-parameter `params` (values encoded like stored cells: booleans as `1`/`0`, arrays and objects as JSON text), optional `schemas` naming the set a DDL statement evolves (the CLI's `-s`; a run that produces no schema-evolving effects then refuses, export-only runs included), and an optional `db` export path (which makes `sql` optional). |
 | `QueryRun` (type) | What `runQuery` resolves to: result `columns` (present even for zero rows), `rows`, a mutating statement's `changes`, the `frame` describing where the run stood (what SARIF and JUnit rendering need), and — when `db` was written — its path and size. |

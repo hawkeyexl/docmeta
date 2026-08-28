@@ -933,6 +933,11 @@ export function buildProgram(): Command {
               );
             }
           }
+          // A document that would not parse is a finding, not an operational
+          // failure: the run completed and reported on every file it was given.
+          // Set after the report is written, so the values that did resolve are
+          // on stdout either way.
+          process.exitCode = results.some((r) => r.error !== undefined) ? 1 : 0;
         } catch (err) {
           fail(err);
         }

@@ -2575,36 +2575,60 @@ describe("get names the real mistake when a path lands in [fields] (0005 §2)", 
 // ---------------------------------------------------------------------------
 
 describe("get: a document whose frontmatter will not parse", () => {
-  // `validate` reports an unparseable file as a per-file `(parse)` finding and
-  // keeps going. `get`'s contract is deliberately different — a file-level
-  // problem is operational, so it exits 2 and never exits 1 — but the
-  // diagnostic still has to be usable. It named neither the file nor itself as
-  // a document problem, so in a large corpus there was nothing to go on.
+  // A malformed document is a document-level fact, not an operational failure.
+  // `validate` has always reported it as a per-file `(parse)` finding at exit 1
+  // and kept going; `get` promoted the same throw to exit 2 and aborted, so one
+  // bad file hid the values of every other file in the run. The exit-code
+  // contract (0 ok / 1 findings / 2 operational) puts it on the findings side.
   const fixture = "test/fixtures/get-parse-error";
 
-  it("names the offending file", () => {
+  it("exits 1, not 2, and says nothing about an internal fault", () => {
     const r = run(["get", "title", fixture, "--no-config"]);
-    expect(r.status).toBe(2);
-    expect(r.stderr).toContain("unparseable.md");
-  });
-
-  it("does not report a document problem as an internal fault", () => {
-    const r = run(["get", "title", fixture, "--no-config"]);
+    expect(r.status).toBe(1);
     expect(r.stderr).not.toContain("Unexpected error");
-    expect(r.stderr).toContain("Invalid YAML frontmatter");
   });
 
-  it("still reads a sibling that parses", () => {
-    const r = run([
-      "get",
-      "title",
-      `${fixture}/readable.md`,
-      "--no-config",
-      "-f",
-      "json",
-    ]);
+  it("names the file and the reason in the report", () => {
+    const r = run(["get", "title", fixture, "--no-config"]);
+    expect(r.stdout).toContain("unparseable.md");
+    expect(r.stdout).toContain("Invalid YAML frontmatter");
+  });
+
+  // The whole point of the change: the other files survive.
+  it("still prints the values of every file that parsed", () => {
+    const r = run(["get", "title", fixture, "--no-config"]);
+    expect(r.stdout).toContain("title=Readable");
+  });
+
+  it("carries the failure in json as an `error` on that file", () => {
+    const r = run(["get", "title", fixture, "--no-config", "-f", "json"]);
+    expect(r.status).toBe(1);
+    const parsed = JSON.parse(r.stdout) as {
+      file: string;
+      present: boolean;
+      values: Record<string, unknown>;
+      error?: string;
+    }[];
+    const broken = parsed.find((x) => x.file.endsWith("unparseable.md"));
+    expect(broken?.error).toContain("Invalid YAML frontmatter");
+    expect(broken?.present).toBe(false);
+    const ok = parsed.find((x) => x.file.endsWith("readable.md"));
+    expect(ok?.error).toBeUndefined();
+    expect(ok?.values.title).toBe("Readable");
+  });
+
+  // `--quiet` hides files whose every requested field is unset. An unparseable
+  // file has no resolved values, so the naive rule would hide the one file the
+  // reader most needs to see — the same principle as "quiet hides files, never
+  // values": it must never be the reason a missing value goes unexplained.
+  it("--quiet never hides a file that failed to parse", () => {
+    const r = run(["get", "title", fixture, "--no-config", "--quiet"]);
+    expect(r.stdout).toContain("unparseable.md");
+  });
+
+  it("still exits 0 when every file parses", () => {
+    const r = run(["get", "title", `${fixture}/readable.md`, "--no-config"]);
     expect(r.status).toBe(0);
-    expect(r.stdout).toContain("Readable");
   });
 });
 
