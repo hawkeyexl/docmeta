@@ -929,7 +929,10 @@ Four things bound it:
   [`summary.gitignoreSkipped`](/docmeta/reference/output-and-exit-codes/#output-formats).
   The count covers only files that passed the extension filter, so it answers
   "how many candidate documents did `.gitignore` take away". `--exclude`
-  removals are not counted — those you asked for.
+  removals are not counted — those you asked for. `schemas infer` reports the
+  same count on its headline (`… · 1 skipped by .gitignore`), where it is what
+  tells you the coverage percentages below were computed over a smaller
+  denominator.
 - **Outside a repository, nothing is filtered.** An extracted tarball, `npm
   pack` output, or a container with no `git` binary runs exactly as before, and
   silently. Set [`respectGitignore:
