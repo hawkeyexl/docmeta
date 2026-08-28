@@ -285,6 +285,12 @@ with no API key, pass `--provider` or see the
 [`fill` reference](/docmeta/reference/cli/#fill) before the first run, so the
 download is a choice rather than a surprise.
 
+You are usually fixing someone else's repo, so it is worth knowing that `fill` is
+the one docmeta command that sends the page off your machine.
+[Run `fill` under a data-egress policy](/docmeta/set-up/fill-providers/) spells
+out what each call transmits and what the cache keeps, and `--local` is the flag
+that keeps inference on your own hardware.
+
 Anything below the confidence threshold is skipped and named, so you still get a
 short list of what needs you. `fill` leaves any field that is already present and
 valid exactly as it is, and its confidence scores stay in the report.

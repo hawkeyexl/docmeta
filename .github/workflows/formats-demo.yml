@@ -40,6 +40,27 @@
 # ahead of the fixtures 0029 and 0027 add for the same reason — a glob that
 # matches nothing is harmless.
 #
+# `test/fixtures/platform/` is excluded on the same principle, and it is the
+# clearest case of it. Every file there exists to be judged against the platform
+# schema it is named for — Starlight, Antora, Hugo, Jekyll, VitePress, MkDocs.
+# Those are *platform* schemas, which by design require only what the generator
+# refuses to build without, and no generator requires `type:`. So judged against
+# this workflow's default set, every one of them is a standing alert for a file
+# doing its job.
+#
+# They went unnoticed until MkDocs landed only because this workflow does not
+# run on every push — it triggers on reporter changes, so a PR adding a platform
+# fixture without touching a reporter never surfaced them. The MkDocs PR did
+# both at once, and eleven alerts arrived together.
+#
+# `test/fixtures/infer-parity/` is excluded for the reason `test/fixtures/infer/`
+# already is: those files exist to be *counted* by `docmeta schemas infer`, one
+# of them deliberately carrying a key the other does not.
+#
+# `test/fixtures/get-parse-error/` is deliberately NOT excluded. Its unparseable
+# file is a real parse failure, which is exactly the explainable alert this
+# workflow exists to demonstrate — the same standing as `dd/malformed-yaml.md`.
+#
 # It runs over `test/fixtures/`, which already holds deliberately-invalid
 # documents (missing-type.md, bad-timestamp.md, dd/malformed-yaml.md, …). Those
 # are committed, reproducible, and already the material the docs' worked
@@ -94,6 +115,8 @@ jobs:
             --exclude "test/fixtures/checks/**" \
             --exclude "test/fixtures/query-csv/**" \
             --exclude "test/fixtures/collections/**" \
+            --exclude "test/fixtures/platform/**" \
+            --exclude "test/fixtures/infer-parity/**" \
             --allow-empty -f sarif > docmeta.sarif
           echo "results=$(jq '.runs[0].results | length' docmeta.sarif)" >> "$GITHUB_OUTPUT"
 
@@ -129,6 +152,8 @@ jobs:
             --exclude "test/fixtures/checks/**" \
             --exclude "test/fixtures/query-csv/**" \
             --exclude "test/fixtures/collections/**" \
+            --exclude "test/fixtures/platform/**" \
+            --exclude "test/fixtures/infer-parity/**" \
             --allow-empty -f junit > docmeta-junit.xml
 
       # GitHub renders no JUnit natively. A third-party reporter action would be

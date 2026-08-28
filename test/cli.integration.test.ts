@@ -173,6 +173,7 @@ describe("docmeta CLI (built bin)", () => {
       "x:cards:1.0",
       "agentskills:skill:1.0",
       "anthropic:claude-skill:2.1",
+      "mkdocs:material:9.7",
       "anthropic:claude-subagent:2.1",
     ]);
   });
@@ -1960,6 +1961,20 @@ describe("docmeta CLI: --offline and the cross-run schema cache (built bin)", ()
     expect(r.stdout).toContain("--offline");
   });
 
+  /**
+   * Accepted and ignored, exactly as on `get` and `query`. `infer` resolves no
+   * schema, so there is no fetch to suppress — but a script that passes
+   * `--offline` to every docmeta invocation should not have to know that.
+   */
+  it("--offline is accepted by schemas infer, and changes nothing", () => {
+    const args = ["schemas", "infer", "test/fixtures/infer", "--no-config", "-f", "json"];
+    const withFlag = run([...args, "--offline"]);
+    expect(withFlag.status).toBe(0);
+    const without = run(args);
+    expect(without.status).toBe(0);
+    expect(withFlag.stdout).toBe(without.stdout);
+  });
+
   it("--offline fails on an uncached URL, naming it, without a request", () => {
     repo = makeTempRepo({ files: { "doc.md": DOC } });
     // A closed loopback port: reaching the network at all would produce the
@@ -2560,6 +2575,64 @@ describe("get names the real mistake when a path lands in [fields] (0005 §2)", 
 // 0005 § 2/3 — `-q/--quiet` on `get` and `fill`, `-f github` on `fill`
 // ---------------------------------------------------------------------------
 
+describe("get: a document whose frontmatter will not parse", () => {
+  // A malformed document is a document-level fact, not an operational failure.
+  // `validate` has always reported it as a per-file `(parse)` finding at exit 1
+  // and kept going; `get` promoted the same throw to exit 2 and aborted, so one
+  // bad file hid the values of every other file in the run. The exit-code
+  // contract (0 ok / 1 findings / 2 operational) puts it on the findings side.
+  const fixture = "test/fixtures/get-parse-error";
+
+  it("exits 1, not 2, and says nothing about an internal fault", () => {
+    const r = run(["get", "title", fixture, "--no-config"]);
+    expect(r.status).toBe(1);
+    expect(r.stderr).not.toContain("Unexpected error");
+  });
+
+  it("names the file and the reason in the report", () => {
+    const r = run(["get", "title", fixture, "--no-config"]);
+    expect(r.stdout).toContain("unparseable.md");
+    expect(r.stdout).toContain("Invalid YAML frontmatter");
+  });
+
+  // The whole point of the change: the other files survive.
+  it("still prints the values of every file that parsed", () => {
+    const r = run(["get", "title", fixture, "--no-config"]);
+    expect(r.stdout).toContain("title=Readable");
+  });
+
+  it("carries the failure in json as an `error` on that file", () => {
+    const r = run(["get", "title", fixture, "--no-config", "-f", "json"]);
+    expect(r.status).toBe(1);
+    const parsed = JSON.parse(r.stdout) as {
+      file: string;
+      present: boolean;
+      values: Record<string, unknown>;
+      error?: string;
+    }[];
+    const broken = parsed.find((x) => x.file.endsWith("unparseable.md"));
+    expect(broken?.error).toContain("Invalid YAML frontmatter");
+    expect(broken?.present).toBe(false);
+    const ok = parsed.find((x) => x.file.endsWith("readable.md"));
+    expect(ok?.error).toBeUndefined();
+    expect(ok?.values.title).toBe("Readable");
+  });
+
+  // `--quiet` hides files whose every requested field is unset. An unparseable
+  // file has no resolved values, so the naive rule would hide the one file the
+  // reader most needs to see — the same principle as "quiet hides files, never
+  // values": it must never be the reason a missing value goes unexplained.
+  it("--quiet never hides a file that failed to parse", () => {
+    const r = run(["get", "title", fixture, "--no-config", "--quiet"]);
+    expect(r.stdout).toContain("unparseable.md");
+  });
+
+  it("still exits 0 when every file parses", () => {
+    const r = run(["get", "title", `${fixture}/readable.md`, "--no-config"]);
+    expect(r.status).toBe(0);
+  });
+});
+
 describe("get --quiet (0005 §2)", () => {
   // `--no-config` on both runs, because the assertion is that quiet stdout is
   // *empty*. The repo root's own config would otherwise put `Using
@@ -2852,6 +2925,75 @@ describe("schemas infer end to end", () => {
     const r = run(["schemas", "infer", fixtures, "--min-coverage", "150"]);
     expect(r.status).toBe(2);
     expect(r.stderr).toContain("--min-coverage");
+  });
+
+  // The two escape hatches every other input-taking command already carries.
+  // `infer` reads the same `[paths...]`, so an empty scan and a gitignored
+  // docset have to mean the same thing here as they do on `validate`.
+  describe("--allow-empty and --no-gitignore", () => {
+    const parity = resolve(root, "test", "fixtures", "infer-parity");
+    let repo: string | undefined;
+
+    const parityRepo = (): string =>
+      makeTempRepo({
+        files: {
+          ".gitignore": "build/\n",
+          "docs/tracked.md": readFileSync(join(parity, "tracked.md"), "utf8"),
+          "build/generated.md": readFileSync(
+            join(parity, "generated.md"),
+            "utf8",
+          ),
+        },
+      });
+
+    afterEach(() => {
+      removeTempRepo(repo);
+      repo = undefined;
+    });
+
+    it("refuses an empty scan and names the flag that permits it", () => {
+      const r = run(["schemas", "infer", "test/fixtures/*.nomatch", "--no-config"]);
+      expect(r.status).toBe(2);
+      expect(r.stderr).toContain("--allow-empty");
+    });
+
+    it("--allow-empty returns to 0 on an unmatched glob", () => {
+      const r = run([
+        "schemas",
+        "infer",
+        "test/fixtures/*.nomatch",
+        "--no-config",
+        "--allow-empty",
+      ]);
+      expect(r.status).toBe(0);
+      expect(r.stdout).toContain("0 files scanned");
+    });
+
+    it("skips a gitignored file", () => {
+      repo = parityRepo();
+      const r = run(
+        ["schemas", "infer", "**/*.md", "--no-config"],
+        undefined,
+        undefined,
+        repo,
+      );
+      expect(r.status).toBe(0);
+      expect(r.stdout).toContain("1 file scanned");
+      expect(r.stdout).not.toContain("generatedBy");
+    });
+
+    it("--no-gitignore scans it again", () => {
+      repo = parityRepo();
+      const r = run(
+        ["schemas", "infer", "**/*.md", "--no-config", "--no-gitignore"],
+        undefined,
+        undefined,
+        repo,
+      );
+      expect(r.status).toBe(0);
+      expect(r.stdout).toContain("2 files scanned");
+      expect(r.stdout).toContain("generatedBy");
+    });
   });
 });
 

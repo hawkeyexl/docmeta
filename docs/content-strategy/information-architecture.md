@@ -24,9 +24,9 @@ Home — "What do you want to do?" router + 30-second proof
 ├─ Fix a failing check (Theo)      → T1   (highest-traffic; cross-cutting)
 │
 └─ Reference (lookup shelf)        → Built-in schemas (registry) · CLI ·
-                                      Config · Schema resolution · Formats ·
-                                      Output & exit codes · OKF · Taxonomies ·
-                                      Docusaurus
+                                      query · Config · Schema resolution ·
+                                      Formats · Output & exit codes · API ·
+                                      Action · OKF · Taxonomies · Docusaurus
 ```
 
 ### Directory mapping (Starlight content paths)
@@ -61,8 +61,8 @@ Home — "What do you want to do?" router + 30-second proof
 | Create your `docmeta.config.yaml` | M1 | ★ | paths, exclude, schemas, discovery keys with types and defaults. |
 | Apply different schemas to different folders | M3 | ★ | Overrides, glob precedence, multi-schema per file. |
 | Roll out a new required field without breaking the build | M2 | | Tool-supported ratchet (0001): the field goes `required` immediately and `--write-baseline` records the backlog. Rewritten from the four-stage manual rollout, whose hand-maintained `overrides:` glob list the baseline replaces. Now also carries the DDL one-statement ratchet (0024) for fields whose backfill value is uniform. |
-| Retrofit docmeta into an existing docs repo | M1/M2 | | Start lenient, tighten over time. Cross-cutting guide. Step 5 now ratchets via the baseline, in step with the M2 page. |
-| Run `fill` under a data-egress policy | M4 | | The security-review answers for the step 7 `fill` pass: what each inference call transmits (path as matched, the whole metadata block, the whole file including front matter, each candidate's lifted subschema with its `description`, and every `$defs`/`definitions` block referenced or not), what the pre-gating cache retains, and the `--local` / `--offline` / `--max-turns` bounds. Consequences and decisions only — the flag surface stays in the drift-checked CLI reference. Source of truth: `src/commands/fill-prompt.ts`, `src/commands/fill.ts`. |
+| Retrofit docmeta into an existing docs repo | M1/M2/M4 | | Start lenient, tighten over time. Cross-cutting guide. Step 6 ratchets via the baseline, in step with the M2 page. Step 7 carries the M4 `fill` journey and hands off to the egress page below — there is deliberately no separate `fill` journey page, because splitting step 7 out would duplicate working content. |
+| Run `fill` under a data-egress policy | M4, D1 | | The security-review answers for the step 7 `fill` pass: what each inference call transmits (path as matched, the whole metadata block, the whole file including front matter, each candidate's lifted subschema with its `description`, and every `$defs`/`definitions` block referenced or not), what the pre-gating cache retains, and the `--local` / `--offline` / `--max-turns` bounds. Consequences and decisions only — the flag surface stays in the drift-checked CLI reference. Source of truth: `src/commands/fill-prompt.ts`, `src/commands/fill.ts`. |
 
 ### Run it in CI (Devin)
 
@@ -103,13 +103,15 @@ Home — "What do you want to do?" router + 30-second proof
 
 | Page | CUJ | ★ | Notes |
 |---|---|---|---|
-| Built-in schemas (registry) | S1, M1 | ★ | The hub for everything docmeta ships: one table of all twenty-two ids with what each constrains, what it requires, and which two are on by default; the editorial-vs-platform distinction; the three ways to turn one on. The OKF, taxonomy, Docusaurus, platform, vocabulary, DITA, Agent Skills, and Claude Code subagent pages are its detail pages. Source of truth: `src/core/schema-registry.ts`, `src/core/resolve-schema.ts`. |
-| CLI reference | All | ★ | `validate`/`get`/`schemas`; every flag. Source of truth: `src/cli.ts`. |
+| Built-in schemas (registry) | S1, M1 | ★ | The hub for everything docmeta ships: one table of all twenty-three ids with what each constrains, what it requires, and which two are on by default; the editorial-vs-platform distinction; the three ways to turn one on. The OKF, taxonomy, Docusaurus, platform, vocabulary, DITA, Agent Skills, and Claude Code subagent pages are its detail pages. Source of truth: `src/core/schema-registry.ts`, `src/core/resolve-schema.ts`. |
+| CLI reference | All | ★ | `validate`/`get`/`query`/`fill`/`schemas`; every flag. The `query` section is the flag surface only — the command's contract lives on its own page below, so the two cannot drift. Source of truth: `src/cli.ts`, guarded by `npm run docs:check-cli`. |
+| `query` command reference | D4, D3, M2, S3 | | The lookup page for the largest module in the repo: the `docs` table (system and data columns, value encoding, `lineFor`/`explicit_null`), named collections as read-only views, the vocabulary split — DML edits the files, DDL edits the schema — the DDL type bridge (formats as column types, `CHECK IN` as `enum`), which schema an `ALTER` edits and every refusal it raises, `-s` as the DDL target, write-by-default with `--dry-run` as the preview, rows as findings, bound parameters, the six output formats, the `--db` export, and the exit-code contract. Doc-detective steps run the whole surface over `test/fixtures/query/`, `collections/`, and `ddl-bridge/`. Source of truth: `src/commands/query.ts`, `src/core/{projection,collections,checks}.ts`, `src/reporters/query.ts`. |
 | Configuration reference | M1, D1 | ★ | Full `docmeta.config.yaml` keys, types, defaults, CLI-merge precedence. Source of truth: `src/core/config.ts`. |
 | Schema resolution reference | S2, D2 | ★ | Precedence chain + ref kinds + dialects. Source of truth: `resolve-schema.ts`, `schema-registry.ts`, `validator.ts`. |
 | Supported formats reference | All | ★ | Extractor/extension/metadata-model table: Markdown, MDX, AsciiDoc, RST, XML, HTML. Source of truth: `src/extractors/`. |
 | Output formats & exit codes | D1, D3 | ★ | `pretty`/`json`/`github` shapes; `NO_COLOR`/TTY behavior. Source of truth: `src/reporters/index.ts`. |
 | GitHub Action reference | D1 | ★ | Every input and output of `hawkeyexl/docmeta@v4`, with defaults, the one-item-per-line rule for multi-value inputs, and why globs reach docmeta unexpanded. Source of truth: `action.yml`, guarded by `npm run docs:check-action`. |
+| TypeScript API reference | D3 | | Every symbol the programmatic entry point publishes — command cores, schema resolution, config, cache, reporters, extractors, result types — with a purpose per export. Drift-checked against the built `dist/index.d.ts` by `npm run docs:check-api`, so a new export cannot ship undocumented. Source of truth: `src/index.ts`. |
 | Glossary | All | | frontmatter, extractor, schema set, dialect, `$schema`, OKF. |
 
 ### Supporting / project
@@ -128,11 +130,13 @@ Reference pages must never contradict the source code. Before writing any Refere
 | Reference page | Source file(s) |
 |---|---|
 | CLI reference | `src/cli.ts` |
+| `query` command reference | `src/commands/query.ts`, `src/core/projection.ts`, `src/core/collections.ts`, `src/core/checks.ts` (the column convention), `src/reporters/query.ts`, `src/cli.ts` (the flag gates) |
+| TypeScript API reference | `src/index.ts`, the built `dist/index.d.ts` (guarded by `scripts/check-api-reference.mjs`) |
 | Configuration reference | `src/core/config.ts` |
 | Schema resolution reference | `src/core/resolve-schema.ts`, `src/core/schema-registry.ts`, `src/core/validator.ts` |
 | Supported formats reference | `src/extractors/index.ts`, individual extractors, `src/extractors/frontmatter-write.ts` (writability) |
 | Output formats & exit codes | `src/reporters/index.ts`, `src/reporters/fill.ts` |
-| `fill` command & confidence gate | `src/commands/fill.ts`, `src/commands/fill-prompt.ts`, `src/commands/fill-types.ts` |
+| `fill` — CLI reference §`fill` (flags, drift-checked), Run `fill` under a data-egress policy (what is sent and kept), Retrofit step 7 (the journey) | `src/commands/fill.ts`, `src/commands/fill-prompt.ts`, `src/commands/fill-types.ts` |
 | Built-in OKF schema | `src/schemas/okf/0.1.json` |
 | Built-in taxonomy schemas | `src/schemas/diataxis/1.0.json`, `src/schemas/tgdp/1.0.json`, `src/schemas/seven-action/1.0.json`, `src/core/resolve-schema.ts` (the default set) |
 | Built-in schemas (registry) | `src/core/schema-registry.ts` (the id list), `src/core/resolve-schema.ts` (the default set) |

@@ -60,6 +60,16 @@ export interface GetFileResult {
   file: string;
   present: boolean;
   values: Record<string, unknown>;
+  /**
+   * Why this file yielded no values, when it yielded none for a reason.
+   *
+   * Set only when the document's metadata block could not be read at all — the
+   * same throw `validate` turns into a `(parse)` finding. Absent on every file
+   * that parsed, including one with no metadata block and one where every
+   * requested field was unset: those are answers, and this is the absence of
+   * one. A run carrying any `error` exits 1.
+   */
+  error?: string;
 }
 
 export async function runGet(opts: GetOptions): Promise<GetFileResult[]> {
@@ -128,9 +138,30 @@ export async function runGet(opts: GetOptions): Promise<GetFileResult[]> {
         `Unsupported file type "${extension}" for "${label}". Supported: ${supportedExtensions().join(", ")}. Use --as to override.`,
       );
     }
-    const extracted = extractor.extract(content, label, {
-      elements: resolveElements(label, config),
-    });
+    let extracted;
+    try {
+      extracted = extractor.extract(content, label, {
+        elements: resolveElements(label, config),
+      });
+    } catch (err) {
+      // A `DocmetaError` is already operational and already carries a message
+      // written for a person — rethrow it untouched, exactly as `validate`
+      // does with the same call.
+      if (err instanceof DocmetaError) throw err;
+      // Anything else is a document that will not parse, which is a fact about
+      // the document and not about the run. It is recorded against the file and
+      // the walk continues, the same call `validate` turns into a `(parse)`
+      // finding. Promoting it to an operational error put it on the wrong side
+      // of the 0/1/2 contract and, worse, made one malformed file hide the
+      // values of every other file in the directory.
+      //
+      // `err` is `unknown` and an extractor is not obliged to throw an `Error`,
+      // so the reason is narrowed rather than cast: `(err as Error).message`
+      // would record `undefined` and lose the reason entirely.
+      const reason = err instanceof Error ? err.message : String(err);
+      out.push({ file: label, present: false, values: {}, error: reason });
+      return;
+    }
     const values: Record<string, unknown> = {};
     for (const f of opts.fields) values[f] = resolveField(extracted.data, f);
     out.push({ file: label, present: extracted.present, values });

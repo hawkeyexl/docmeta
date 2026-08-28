@@ -24,6 +24,7 @@ import {
   type ReportFormat,
 } from "../src/reporters/index.js";
 import { renderGet } from "../src/reporters/get.js";
+import { renderInfer } from "../src/reporters/infer.js";
 import {
   FILL_FORMATS,
   FILL_FORMAT_LIST,
@@ -35,6 +36,7 @@ import {
   type FillReportFormat,
 } from "../src/reporters/fill.js";
 import type { GetFileResult } from "../src/commands/get.js";
+import type { InferResult } from "../src/commands/schemas.js";
 import type {
   FillFileResult,
   FilledField,
@@ -255,6 +257,34 @@ describe("reporters: the .gitignore skip count", () => {
       renderJson(results, { ...summary, gitignoreSkipped: 3 }),
     ) as { summary: { gitignoreSkipped?: number } };
     expect(parsed.summary.gitignoreSkipped).toBe(3);
+  });
+
+  // `infer` carries the same count and, until this, never printed it. The
+  // reason it matters is the reason it matters on `validate`: a coverage
+  // percentage silently computed over a smaller denominator is the dangerous
+  // direction of change, and the headline is the only place a reader would
+  // catch it.
+  const inferResult: InferResult = {
+    filesScanned: 2,
+    filesWithoutMetadata: 0,
+    unreadable: [],
+    keys: [],
+    hiddenByMinCoverage: 0,
+    draft: {},
+    gitignoreSkipped: 3,
+  };
+
+  it("names it on the infer headline", () => {
+    const out = renderInfer(inferResult, { color: false });
+    expect(out).toContain("3 skipped by .gitignore");
+  });
+
+  it("says nothing on the infer headline when nothing was skipped", () => {
+    const out = renderInfer(
+      { ...inferResult, gitignoreSkipped: 0 },
+      { color: false },
+    );
+    expect(out).not.toContain("skipped by .gitignore");
   });
 });
 
