@@ -138,6 +138,12 @@ an object and a server list is a list — but what goes *inside* either one is a
 separate contract, versioned separately from the agent file, and pinning it here
 would date this schema to whichever week it was written.
 
+`initialPrompt`, `observer` and `observerMessage` are checked for one thing
+beyond being strings: they have to contain a non-space character. That is the
+`color` rule again rather than tidiness — the loader keeps each of them only
+when the value survives a `.trim()`, and discards it silently otherwise, so
+`observer: "   "` is an observer that never spawns and never says why.
+
 ## Two fields that take a YAML number or a quoted string
 
 `maxTurns` and `effort` both reach the validator as either type, depending on how
@@ -148,7 +154,12 @@ maxTurns: 15       # integer
 maxTurns: "15"     # string — also accepted
 effort: high       # string
 effort: 8          # integer — also accepted
+effort: "8"        # quoted integer — also accepted
 ```
+
+The quoted integer matters more than it looks: a templating tool that quotes
+every scalar produces it by accident, and the loader reaches the numeric form
+through `parseInt` on the string, so `"8"` and `8` are the same value to it.
 
 The constraint keywords are type-scoped, so each applies to only one of the two
 forms and a wrong value is reported once, against the key, rather than once per

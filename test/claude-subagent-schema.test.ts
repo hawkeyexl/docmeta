@@ -233,6 +233,18 @@ describe("closed value sets", () => {
       expect((await checkInline(`maxTurns: ${effort}`)).ok, effort).toBe(false);
     }
   });
+
+  it("takes the integer effort quoted too, as `maxTurns` does", async () => {
+    // The loader reaches the numeric form through `parseInt` on the string, so
+    // `"8"` and `8` are the same value to it. Rejecting the quoted spelling
+    // here would fail a working agent, and would contradict `maxTurns` in this
+    // same schema, which accepts both.
+    for (const effort of ['"8"', '"0"', '"-3"']) {
+      expect((await checkInline(`effort: ${effort}`)).ok, effort).toBe(true);
+    }
+    // Still not a free-for-all: a word is not a level and not a number.
+    expect((await checkInline('effort: "8x"')).ok).toBe(false);
+  });
 });
 
 describe("`background` is not a skill flag", () => {
@@ -327,6 +339,20 @@ describe("what the schema deliberately leaves open", () => {
       (await checkInline("mcpServers:\n  - pw:\n      type: stdio")).ok,
     ).toBe(true);
     expect((await checkInline("mcpServers: github")).ok).toBe(false);
+  });
+
+  it("catches a whitespace-only value the loader drops silently", async () => {
+    // Same class as `color`: the loader keeps `initialPrompt`, `observer` and
+    // `observerMessage` only when the value has a non-space character, and
+    // discards it without a warning otherwise. `minLength: 1` alone would pass
+    // a run of spaces, so the one tool that could surface the drop would not.
+    for (const field of ["initialPrompt", "observer", "observerMessage"]) {
+      const blank = await checkInline(`${field}: "   "`);
+      expect(blank.ok, field).toBe(false);
+      expect(blank.errors[0]?.instancePath, field).toBe(`/${field}`);
+      // Leading whitespace around real content is kept, so it must still pass.
+      expect((await checkInline(`${field}: "  real "`)).ok, field).toBe(true);
+    }
   });
 
   it("tolerates a key Claude Code does not recognise", async () => {

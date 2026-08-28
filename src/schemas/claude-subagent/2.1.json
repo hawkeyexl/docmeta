@@ -53,8 +53,8 @@
     },
     "effort": {
       "type": ["string", "integer"],
-      "pattern": "^(?:low|medium|high|xhigh|max)$",
-      "description": "Reasoning effort while the agent runs, overriding the session level. Either one of the five published levels or an integer, which is why this is typed as two: `pattern` constrains only the string form and leaves the integer one alone, so a wrong value is reported once, against the key. Which levels a model actually offers varies. The loader additionally folds case and resolves two internal aliases; neither is part of the published contract, and both are left out here so the accepted set matches `anthropic:claude-skill:2.1`. The integer form carries **no lower bound**, deliberately, and that asymmetry with `maxTurns` is a fact about the loader rather than an oversight: `maxTurns` is checked for a positive integer and warns otherwise, while `effort` is checked with a bare integer test, so `0` and `-3` are both taken and neither is reported. A `minimum` here would fail an agent that runs."
+      "pattern": "^(?:low|medium|high|xhigh|max|-?[0-9]+)$",
+      "description": "Reasoning effort while the agent runs, overriding the session level. Either one of the five published levels or an integer, which is why this is typed as two: `pattern` constrains only the string form and leaves the integer one alone, so a wrong value is reported once, against the key. Which levels a model actually offers varies. The loader additionally folds case and resolves two internal aliases; neither is part of the published contract, and both are left out here so the accepted set matches `anthropic:claude-skill:2.1`. The integer form carries **no lower bound**, deliberately, and that asymmetry with `maxTurns` is a fact about the loader rather than an oversight: `maxTurns` is checked for a positive integer and warns otherwise, while `effort` is checked with a bare integer test, so `0` and `-3` are both taken and neither is reported. A `minimum` here would fail an agent that runs. The integer may also be written quoted, which is why the pattern carries a digit branch as well as the five names — the loader reaches the numeric form through `parseInt` on the string, so `\"8\"` and `8` are the same value to it, exactly as they are for `maxTurns`."
     },
     "permissionMode": {
       "enum": [
@@ -103,17 +103,20 @@
     "initialPrompt": {
       "type": "string",
       "minLength": 1,
-      "description": "First user turn, submitted automatically when this definition runs as the *main* session — through `--agent` or the `agent` setting — and prepended to any prompt the user supplies. Commands and skills in it are expanded. Not read when the definition is spawned as a subagent, which is the usual case, so an agent that only ever gets delegated to has no use for it."
+      "pattern": "\\S",
+      "description": "First user turn, submitted automatically when this definition runs as the *main* session — through `--agent` or the `agent` setting — and prepended to any prompt the user supplies. Commands and skills in it are expanded. Not read when the definition is spawned as a subagent, which is the usual case, so an agent that only ever gets delegated to has no use for it. A value that is only whitespace is discarded silently by the loader, so the pattern requires one non-space character rather than leaving `minLength` to pass it."
     },
     "observer": {
       "type": "string",
       "minLength": 1,
-      "description": "Agent type spawned automatically as a background observer whenever this agent runs, to watch how it works rather than to do the work. Names an agent type, so it is not enumerated: the set includes whatever the project, its plugins and the user define. Blank or whitespace-only is dropped."
+      "pattern": "\\S",
+      "description": "Agent type spawned automatically as a background observer whenever this agent runs, to watch how it works rather than to do the work. Names an agent type, so it is not enumerated: the set includes whatever the project, its plugins and the user define. Blank or whitespace-only is dropped silently, which is why the pattern demands a non-space character instead of letting `minLength` wave a run of spaces through."
     },
     "observerMessage": {
       "type": "string",
       "minLength": 1,
-      "description": "Extra instruction appended, after the harness-owned default, to each activity digest sent to the `observer`. Only meaningful alongside `observer`; that pairing is a cross-field rule the schema does not express."
+      "pattern": "\\S",
+      "description": "Extra instruction appended, after the harness-owned default, to each activity digest sent to the `observer`. Only meaningful alongside `observer`; that pairing is a cross-field rule the schema does not express. Whitespace alone is discarded silently, so the pattern reports it."
     }
   }
 }
