@@ -1,0 +1,583 @@
+---
+title: query command reference
+description: The complete contract of docmeta query — the docs table and its columns, the DML and DDL vocabulary, named collections as views, rows as findings, bound parameters, and every output format.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`docmeta query` builds a SQLite database from the metadata of the files you
+point it at, runs **one** SQL statement over it, and judges what the statement
+did. A read returns rows. An edit becomes per-file changes, applied through the
+same writers `fill` uses. Where [`validate`](/docmeta/reference/cli/#validate)
+judges one file against a schema, `query` sees the whole corpus at once, which
+is what makes cross-file rules — duplicate slugs, dangling author references, a
+tag used exactly once — expressible at all.
+
+The engine is Node's built-in [`node:sqlite`](https://nodejs.org/api/sqlite.html).
+Nothing is installed, and it is loaded only when a query actually runs.
+
+This page is the command's data model and semantics. The **flag surface** —
+every option, its argument, and its default — lives in the [CLI
+reference](/docmeta/reference/cli/#query), which is drift-checked against
+`src/cli.ts`. For the guided version, see [gate on rules that span
+files](/docmeta/ci/query-gates/).
+
+## The `docs` table
+
+One row per input file, built fresh in memory on every run and discarded when
+it ends. [`--db`](#exporting-the-database) writes a copy out; nothing else
+persists.
+
+`SELECT *` returns a deterministic column order regardless of the order files
+were read: the four system columns first, then the data columns sorted by name.
+
+### System columns
+
+Four columns are docmeta's own. They are **reserved**: a frontmatter key named
+exactly `_path`, `_format`, `_present`, or `_data` is not lifted to a column, so
+ordinary metadata can never shadow one. The reservation is those four names, not
+the `_` prefix — any other underscore-prefixed key lifts like any other key.
+
+| Column | Type | Value |
+|---|---|---|
+| `_path` | TEXT, primary key | The file's label as docmeta prints it everywhere: relative to the run's base directory, `/`-separated on every platform. `<stdin>` for piped input. |
+| `_format` | TEXT | The [extractor](/docmeta/reference/formats/) that read the file — `markdown`, `mdx`, `asciidoc`, `rst`, `xml`, `html`. |
+| `_present` | INTEGER | `1` when the file carries a metadata block or surface at all, `0` when it does not. `WHERE _present = 0` lists the files with no metadata yet. |
+| `_data` | TEXT | The complete extracted metadata as JSON text — the escape hatch for nested values and for a key a system column shadowed. |
+
+A shadowed key stays reachable through `_data`:
+
+```sh
+docmeta query "SELECT _path, _data ->> '\$._path' AS shadowed FROM docs" docs/
+```
+
+### Data columns
+
+The data columns are the **union of top-level metadata keys across the corpus**,
+plus any key the statement itself names as a `SET` or `INSERT` target — that is
+how a key no file has yet gets created. A key absent from a file is SQL `NULL`
+in that row.
+
+Only top-level keys are lifted. Nested values are reached through `_data` with
+SQLite's [JSON functions](https://sqlite.org/json1.html) — `->>`,
+`json_extract`, `json_each`. Keys that are not bare identifiers are ordinary
+quoted identifiers:
+
+```sh
+docmeta query 'SELECT "sidebar position" FROM docs' docs/
+```
+
+Data columns are declared with **no type affinity**, so SQLite stores exactly
+what each file held and never coerces one file's string into another file's
+number. The consequence worth knowing: a bound *number* `2026` never equals a
+stored *string* `"2026"` — see [bound parameters](#bound-parameters).
+
+### How values are encoded
+
+| Metadata value | In the table |
+|---|---|
+| String | The string. |
+| Number | The number. A non-finite number (`NaN`, `Infinity`) is `NULL`. |
+| Boolean | `1` / `0` — `node:sqlite` refuses to bind a boolean. |
+| Array or object | JSON text, which `json_each` and `->>` query directly. |
+| `null`, or key absent | `NULL`. The two are told apart by `_data`. |
+
+The encoding is symmetric: a write restores the value to the type the file
+had. See [type restoration](#type-restoration).
+
+### Functions available to a statement
+
+Beyond everything stock SQLite provides, two functions are registered per run:
+
+| Function | Returns |
+|---|---|
+| `lineFor(path, key)` | The 1-based source line the key sits on in that file, or `NULL` for an unknown path, a key the extractor cannot place, or a non-string argument. This is how a [finding](#rows-as-findings) carries a line. |
+| `explicit_null()` | A per-run sentinel that writes a literal `key: null` into a file. Needed because `SET k = NULL` means *remove the key*. |
+
+## Named collections as views
+
+Every [`overrides[]`](/docmeta/reference/configuration/#overrides) entry that
+carries a `name:` becomes a **read-only SQL view** over `docs`, so a rule can
+say `FROM authors` instead of re-spelling the group's glob in SQL:
+
+```yaml title="docmeta.config.yaml"
+overrides:
+  - name: authors
+    files: "authors/**"
+    schemas: [./schemas/author.json]
+```
+
+```sh
+docmeta query "SELECT d._path, d.author FROM docs d
+  LEFT JOIN authors a ON a.slug = d.author
+  WHERE d.author IS NOT NULL AND a._path IS NULL"
+```
+
+The rules that define membership:
+
+- **Membership is the resolution winner, not the glob match.** A view holds
+  exactly the files that override *won [schema
+  resolution](/docmeta/reference/schema-resolution/) for*. Because resolution is
+  first-match-wins, views are disjoint: a file two named globs both match
+  belongs to the earlier one only, and the later view simply does not contain it.
+- **A file whose own `$schema` outranks the override is not a member**, since it
+  is not judged by that group's schema. docmeta says so on stderr rather than
+  leaving it to be discovered.
+- **A file whose resolution fails is a member of no view.** Labeling never gates:
+  a refused or malformed `$schema` demotes that file out of the views and the
+  query still runs. `validate` is where that refusal becomes a finding.
+- **An empty group is an empty view**, not an error.
+- **Views are read-only.** `UPDATE authors …` is refused by SQLite, and docmeta
+  completes the refusal with the write-through spelling:
+  `UPDATE docs … WHERE _path IN (SELECT _path FROM "authors")`.
+
+Views are built lazily, so a plain read that never names a collection pays no
+resolution walk at all. They are built eagerly for a [`--db`
+export](#exporting-the-database) and for statements that observe the catalog
+(`sqlite_master`, `sqlite_schema`, `PRAGMA`, `CREATE`/`DROP`/`ALTER`), where a
+missing view could not be detected and retried.
+
+<Aside type="note">
+The same views exist for the named [`checks:`](/docmeta/reference/configuration/#checks)
+`validate` runs, from the same code, so `FROM authors` means the same thing in
+both places.
+</Aside>
+
+## The SQL vocabulary
+
+One statement per run. Text after the first `;` is refused rather than silently
+dropped, because `prepare()` would compile only the first statement and ignore
+the rest.
+
+Statements are judged by their **effects** on the disposable projection, never
+by parsing their syntax. A read leaves no diff and returns rows. A statement
+that changes a cell, adds a row, removes one, or changes the column set has done
+something to the corpus, and docmeta maps that effect back into file space.
+
+The split, in one line: **DML edits the rows — the files. DDL edits the table
+definition — the schema.**
+
+### DML — statements that edit files
+
+| Statement | Meaning in file space |
+|---|---|
+| `SELECT …` | Rows out. Nothing is written, no schema is resolved, no network is used. |
+| `UPDATE docs SET k = v` | Set key `k` in every matching file. A key no file has yet widens the table and is created. |
+| `UPDATE docs SET k = NULL` | **Remove** `k` from matching files. Absent already is a no-op. |
+| `UPDATE docs SET k = explicit_null()` | Write a literal `k: null` — the rare case `SET k = NULL` cannot express. |
+| `UPDATE docs SET b = a, a = NULL` | Rename a key. The original value is carried over verbatim, never round-tripped through its JSON-text projection. |
+| `UPDATE docs SET _path = '…'` | Move or rename the file. The body is byte-preserved; the extension may not change. |
+| `INSERT INTO docs (_path, …) VALUES (…)` | Create a file: that front matter, an empty body. |
+| `DELETE FROM docs WHERE …` | Strip the front matter **block**. The file and its body survive — SQL never deletes a file. |
+
+Constraints on a DML statement:
+
+- **System columns other than `_path` are read-only.** Changing `_format`,
+  `_present`, or `_data` is an error naming the column and the file.
+- **A `_path` move may not be combined with cell edits** in one statement, so
+  each has its own preview.
+- **A new path must be usable**: relative, no `..` segment, inside the corpus,
+  and not the corpus root itself. An `INSERT` or rename onto a `_path` already
+  loaded is refused by the table's primary key.
+- **A write cannot touch `<stdin>`** — there is no file behind it.
+
+### Format limits on a write
+
+| Operation | Works on |
+|---|---|
+| Set a key, remove a key, rename a key | Any writable format. Element-backed keys in HTML and XML refuse rather than half-apply. |
+| `DELETE` (strip the block) | Formats whose metadata lives in a fenced front matter block: markdown, MDX, AsciiDoc, reStructuredText. HTML and XML have no block to strip and refuse by name. |
+| `INSERT` (create a file) | Formats whose writer can build a block from nothing: **markdown and MDX**. Every other writer needs an existing block, `<head>`, or root element and refuses. |
+| `UPDATE … SET _path` (move) | Any format — the file is moved, not rewritten. |
+
+### Type restoration
+
+A value written back is restored to the type the file held for that key: `1`/`0`
+back to a boolean, JSON text back to an array or object, a number stays a number.
+For a key **no file had**, the column's dominant type across the corpus decides;
+when the corpus is tied, or the key is new everywhere, the value is written as
+SQL handed it back. A [DDL `BOOLEAN` add](#the-type-bridge) always restores real
+booleans.
+
+A value the target type cannot hold — a non-boolean for a boolean key, invalid
+JSON for an array key, an unquoted number for a string key, a BLOB — refuses by
+file and key.
+
+### Statements that are refused
+
+| Statement | Why |
+|---|---|
+| `ATTACH …` | It creates a database file of its own, outside the table the effect gate watches. |
+| `VACUUM …` | `VACUUM INTO` writes its target before the engine could refuse. |
+| `DROP TABLE docs` | Refused as the accident-shaped spelling of two real statements; the message names both `DELETE FROM docs WHERE …` and `ALTER TABLE docs DROP COLUMN`. |
+| Anything after a `;` | A second statement would be compiled away silently. |
+
+The refusal is on the statement's first real token, and leading comments do not
+disguise it.
+
+## Writes apply by default
+
+**A mutating statement applies.** There is no `--write` flag. This is the
+polarity most people guess wrong, so it is worth stating flatly: running
+`docmeta query "UPDATE docs SET draft = false WHERE draft IS NULL" docs/` edits
+your files.
+
+The polarity matches `fill`, so one flag name means "show, don't do" across
+every command that writes:
+
+| Invocation | What happens |
+|---|---|
+| `docmeta query "UPDATE …" docs/` | The edit is applied. |
+| `docmeta query --dry-run "UPDATE …" docs/` | The exact per-file diff is printed. Nothing is touched. |
+| `docmeta query --check "UPDATE …" docs/` | `--check` **implies** the dry run. Pending changes are counted as findings and the exit code carries the verdict. Nothing is touched. |
+| `docmeta query -f csv "UPDATE …" docs/` | Refused (exit 2) — a diff has no tabular shape. The run was forced dry first, so the refusal is truthful: nothing landed. |
+
+Because `--check` never mutates, every `query --check` gate in CI is a read-only
+step by construction — including the ones whose statement is an `UPDATE`, which
+is how a backfill becomes a drift gate.
+
+Application is **all-or-nothing**. Phase one computes every file's new content;
+any refusal — an unwritable format, a bad restoration, a file that changed on
+disk since it was read — aborts before a single byte lands. Phase two writes
+atomically. A half-applied bulk edit would leave the corpus in a state no
+statement describes.
+
+## DDL edits the schema
+
+An `ALTER TABLE docs` statement changes the corpus **and the schema that governs
+it** in one step, which is what turns a rollout that used to be two commits into
+one statement.
+
+| Statement | Effect on the schema | Effect on the files |
+|---|---|---|
+| `ALTER TABLE docs ADD COLUMN k <type>` | `properties.k` gains the [mapped type](#the-type-bridge). | None, without a `DEFAULT`. |
+| `… ADD COLUMN k <type> NOT NULL` | `k` also joins `required`. | — |
+| `… ADD COLUMN k <type> DEFAULT v` | — | `v` is backfilled into every file. |
+| `… ADD COLUMN k TEXT CHECK (k IN ('a','b'))` | `properties.k` gains `enum: ["a", "b"]`. | — |
+| `ALTER TABLE docs DROP COLUMN k` | `properties.k` and its `required` entry are removed. | `k` is removed from every file. |
+| `ALTER TABLE docs RENAME COLUMN a TO b` | The property is renamed, carrying its whole subschema. | The key is renamed in every file, values verbatim. |
+
+One DDL action per statement — SQLite's own `ALTER` grammar — and DDL needs at
+least one loaded file, because the backfill and the reconciliation both run over
+the corpus.
+
+### Which schema an ALTER edits
+
+DDL is the one part of `query` that resolves schemas. It does so from disk and
+the bundled built-ins only, under the same trust boundary
+[`validate`](/docmeta/reference/schema-resolution/) uses: a document's `$schema`
+cannot point the edit outside the repository.
+
+- **The corpus must resolve to one schema set.** A run split across override
+  groups refuses, naming each group and its glob. Scope the run to one group, or
+  name the set with [`-s`](#naming-the-ddl-target-directly).
+- **A corpus on the built-in default set refuses.** There is no schema of yours
+  to evolve; the message points at the `UPDATE` spellings, which cover every
+  data-only case.
+- **A local schema file is edited in place** — `properties` and `required` only,
+  your indent and line endings preserved, git as the review surface. A vendored
+  file's `integrity:` pin is refreshed in the same write.
+- **A built-in forks.** Built-ins are immutable, so the statement writes
+  `schemas/<name>-<version>.local.json` beside the config, with `$id` suffixed
+  `+local`, and repoints every reference that named the built-in — the config
+  entry (either spelling, comments intact) and any in-file `$schema`, string or
+  list. Every file the statement touches, the config included, appears in the
+  preview.
+- **A URL reference refuses** with "vendor it first"
+  ([`docmeta schemas vendor`](/docmeta/reference/cli/#schemas-vendor)). DDL
+  cannot inspect, let alone edit, a schema a server owns.
+
+Where ownership is unclear, DDL refuses rather than guesses:
+
+| Situation | Refusal |
+|---|---|
+| The set names several local schema files | DDL cannot tell which to evolve. |
+| The set names several built-ins and no local file | DDL cannot tell which to fork. |
+| `ADD` of a key the target already declares | Its subschema, constraints included, would be overwritten. Edit the file. |
+| `ADD` of a key another schema in the set declares or requires | Two contracts on one key. |
+| `DROP`/`RENAME` of a key no schema in the set declares | Nothing to edit. |
+| `DROP`/`RENAME` of a key several schemas declare | A statement edits one schema. Evolve them separately. |
+| `RENAME` onto a name already declared in the set | The existing declaration would be overwritten. |
+| A `DEFAULT` the declared type or format cannot hold | The corpus would fail the schema it just gained. |
+
+### The type bridge
+
+An `ALTER`'s declared column type becomes the JSON Schema property. The mapping
+is checked in this order, and the order is load-bearing — a bare affinity rule
+would let `/INT/` swallow `json-pointer`:
+
+| Declared type | Property |
+|---|---|
+| A name equal (case-insensitively) to a format the validator enforces | `{ "type": "string", "format": "<name>" }` |
+| `DATETIME`, `TIMESTAMP` | `{ "type": "string", "format": "date-time" }` — a closed alias pair of exactly two |
+| `BOOLEAN`, `BOOL` | `{ "type": "boolean" }` |
+| Anything matching `INT` | `{ "type": "integer" }` |
+| Anything matching `CHAR`, `CLOB`, or `TEXT` | `{ "type": "string" }` |
+| Anything matching `REAL`, `FLOA`, `DOUB`, `NUMERIC`, or `DEC` | `{ "type": "number" }` |
+| Anything else | No type. The property is added unconstrained. |
+
+The format set is derived from the validator's own registration rather than a
+parallel list, so a formats upgrade widens it for free. It currently holds
+`byte`, `date`, `date-time`, `duration`, `email`, `hostname`, `ipv4`, `ipv6`,
+`iso-date-time`, `iso-time`, `json-pointer`, `json-pointer-uri-fragment`,
+`regex`, `relative-json-pointer`, `time`, `uri`, `uri-reference`, `uri-template`,
+`url`, and `uuid`. A hyphenated name is written as a quoted type:
+`ADD COLUMN updated "date-time"`.
+
+`BOOLEAN` columns accept only `0`, `1`, `true`, or `false` as a `DEFAULT`, and
+the backfill writes real booleans into the files — the `1`/`0` encoding is a
+bind-layer detail, not a file-layer one.
+
+A `CHECK` becomes an `enum`, in exactly one shape:
+`CHECK (<the-new-column> IN (<literals>))`, with the literals all strings or all
+numbers, agreeing with the declared type. A mixed list, an expression, another
+column, an `AND`, or a second `CHECK` refuses and names the hand edit to the
+schema file instead — a constraint silently dropped from a schema would be worse.
+
+The preview always prints the whole property the schema will gain, so a
+near-miss is visible before anything is written:
+
+```
+schema schemas/house.json: + reviewed_on (string, format date, required)
+docs/one.md: reviewed_on: (unset) -> 2026-08-26
+docs/two.md: reviewed_on: (unset) -> 2026-08-26
+3 changes across 3 files — dry run; run again without --dry-run to apply
+```
+
+`ADD COLUMN due "DUE-DATE"` maps to nothing and shows as an unconstrained
+`+ due`, which is the tell that the type name was wrong.
+
+### Naming the DDL target directly
+
+`-s <ref>` (repeatable) names the schema set the statement's DDL evolves. Use it
+when resolution is ambiguous — several local schemas in one set, a corpus split
+across override groups — or when you simply know which contract you are
+evolving:
+
+```sh
+docmeta query -s ./schemas/house.json \
+  "ALTER TABLE docs ADD COLUMN reviewed TEXT NOT NULL DEFAULT 'pending'" docs/
+```
+
+The flag is CLI precedence for the **DDL planner only**. The per-file resolution
+walk is skipped and the deduped `-s` refs are the set, unanimous by
+construction. Unlike `validate`'s `-s`, it does not reshape the corpus: named
+collection views and plain reads keep following the config's resolution. Every
+guard in the section above still runs inside the named set.
+
+Because the flag speaks only to DDL, three situations refuse rather than let it
+quietly mean nothing:
+
+| Situation | Refusal |
+|---|---|
+| The statement produced no schema-evolving effects | Exit 2, **before any file or schema write**. Judged after execution, since DDL is effect-judged — so the refusal lands on the plan side of the all-or-nothing line. A `--db` export target, written before the statement ran, persists and reflects the statement; the message says so. |
+| There is no SQL at all (a bare `--db` export) | Exit 2. Nothing can evolve without a statement. |
+| A `-s`-named fork nothing would resolve afterwards | Exit 2 with nothing written. If no config `schemas:` entry and no loaded file's `$schema` names the built-in, the fork would be orphaned and `validate` would keep using the un-evolved built-in. |
+
+## Rows as findings
+
+`--check` reinterprets the result: **rows are findings**. Any returned row exits
+`1`; an empty result exits `0`. Pending changes count the same way, which is
+what makes a mutating statement a read-only drift gate. The `pretty` verdict
+line shows ✓ or ✗.
+
+With `-f github`, `-f sarif`, or `-f junit`, the rows render as annotations,
+SARIF results, or JUnit failures — through the same **column convention** the
+config's [`checks:`](/docmeta/reference/configuration/#the-column-convention)
+entries use:
+
+| Column | Role |
+|---|---|
+| `path` | **Required.** The file the finding attaches to. |
+| `line` | The 1-based source line. A non-integer or non-positive value is dropped. Usually `lineFor(_path, 'key')`. |
+| `key` | The metadata field at fault. It becomes the finding's `instancePath`, and with it part of the finding's baseline identity. |
+| `message` | The prose. |
+| anything else | Folded into the message as `col=value` pairs, NULL cells omitted. When nothing is left, the message is `check matched`. |
+
+Findings from a `query --check` run carry the rule id `check:query/check`, and
+JUnit testcases ship under the classname `docmeta.query` rather than
+`docmeta.validate`:
+
+```
+::error file=docs/alpha.md,line=3::[check:query] /slug duplicate slug alpha
+```
+
+A findings format without `--check`, a `--check` result with no `path` column, or
+a findings format on a statement that produced changes rather than rows is an
+error (exit 2).
+
+<Aside type="tip">
+`query --check` with a findings format is the **ad-hoc** spelling. The named home
+for a rule your team keeps is a config
+[`checks:`](/docmeta/reference/configuration/#checks) entry, which a bare
+`docmeta validate` runs alongside the per-file schemas — and which the
+[baseline ratchet](/docmeta/reference/cli/#baselines) covers.
+</Aside>
+
+## Bound parameters
+
+Bind a runtime value; never splice it into the SQL text, where one apostrophe
+breaks the statement:
+
+```sh
+docmeta query --param author="O'Brien" \
+  "SELECT _path FROM docs WHERE author = \$author" docs/
+```
+
+- `--param name=value` binds the value as a **string**. The statement refers to
+  it with any of SQLite's named-parameter spellings: `$name`, `:name`, or
+  `@name`. (`:` is the shell-friendliest.)
+- `--param name:=json` parses the value as JSON for a deliberate typed bind:
+  `n:=5` a number, `d:=true` a boolean (as `1`/`0`, the projection's encoding),
+  `v:=null` NULL.
+- The split happens at the **first** separator and everything after it is the
+  value verbatim, so `--param msg=a=b` binds `a=b`. `:=` is checked before `=`.
+- Parameter names are letters, digits, and underscores, starting with a letter
+  or underscore. Anything else is refused, because a name the scanner cannot see
+  could never be bound.
+- Parameters work anywhere a value goes: reads, `--check` gates, and `UPDATE`s.
+  Anonymous `?` placeholders are not supported from the CLI — flag order is not
+  a contract to rely on.
+
+Strings are the default because metadata is mostly strings and the data columns
+have no type affinity: a bound number `2026` would never equal a stored string
+`"2026"`. Mind the shell when a typed value is a string that looks like a
+number — `--param 'v:="5"'` binds the string `5`, while `--param v:=5` binds the
+number.
+
+Two refusals (exit 2) keep a typo from becoming a silently-green gate:
+
+- A parameter the SQL **references with nothing bound**. Unbound would bind NULL
+  and match nothing, and a zero-row `--check` is a passing gate.
+- A `--param` the statement **never references**, reported by the engine as an
+  unknown named parameter.
+
+One bare name under two prefixes (`$p` and `:p` in one statement) is refused
+with both spellings named, rather than left to the engine's generic
+"conflicting names".
+
+## Output formats
+
+| Format | Renders | Gate |
+|---|---|---|
+| `pretty` | An aligned table (header, then values; SQL `NULL` prints as `(null)`) and a row count — or, for an edit, the per-file diff and the mode's verdict. | Default. |
+| `json` | The **bare array**: row objects for a read, change objects for an edit. The `--check` verdict travels in the exit code, not the envelope. | — |
+| `csv` | Result rows as CSV. | Refuses a statement that produced changes, and a `--db`-only export. |
+| `github` | One `::error` annotation per row. | Needs `--check` and a `path` column. |
+| `sarif` | One SARIF result per row. | Needs `--check` and a `path` column. |
+| `junit` | One JUnit `<failure>` per row. | Needs `--check` and a `path` column. |
+
+There is no `-q/--quiet`: `get` uses it to hide files and `validate` to hide
+passes, and a query result has no analogous noise — the rows are exactly what
+was asked for.
+
+### The change objects in `json`
+
+An edit's `json` output is an array of change objects. Every object carries
+`file` and `written`; the rest of the shape says which kind of change it is —
+a cell set (`key`, `from`, `to`), a deletion (`key`, `from`, `deleted`), a key
+rename (`key`, `renamedFrom`, `to`), a stripped block (`cleared`, `from`), a
+created file (`created`, `to`), a moved file (`renamed`), a schema edit
+(`schema`, `op`, `key`, and the mapped `type`/`format`/`enum`/`required`), or a
+config side effect (`config`, `key`, `from`, `to`). `from` is omitted when the
+file had no previous value.
+
+```json
+[
+  {
+    "file": "docs/beta.md",
+    "key": "title",
+    "from": "Beta",
+    "to": "X",
+    "written": false
+  }
+]
+```
+
+### The CSV dialect
+
+`-f csv` is the single-table hop into a spreadsheet or a pandas one-liner;
+`--db` remains the heavyweight export. The dialect, chosen once:
+
+- **A header row always.** A zero-row result is the header alone, which a script
+  can tell apart from a step that failed and printed nothing.
+- **LF line endings** — a deliberate divergence from RFC 4180, which specifies
+  CRLF. LF is the right default for scripts and CI; a consumer that insists on
+  CRLF (Excel double-clicking a `.csv` on Windows) should re-terminate the lines.
+  Quoting itself is RFC 4180: a field containing a comma, quote, or newline is
+  wrapped in double quotes, and quotes double.
+- **SQL `NULL` is an empty field.**
+- **Arrays and objects stay JSON text** — the same encoding `json` and the `--db`
+  export use.
+
+`-f csv --check` is legal: a check's rows are still rows, the exit code carries
+the verdict, and the header-only output *is* the passing gate.
+
+## Exporting the database
+
+`--db <path>` writes the built table — collection views included — to a SQLite
+file for any other tool to open. With no SQL, the export is the whole job:
+
+```sh
+docmeta query --db docs.db docs/
+```
+
+```
+Wrote docs.db (4 files, 11 columns)
+```
+
+With SQL as well, the rows own stdout and the export note goes to stderr as a
+diagnostic. In `json`, an export-only run prints `{ path, files, columns }`.
+
+The file is a **regenerated artifact** of your corpus: rebuild it whenever you
+like, and do not edit it expecting the files to notice. docmeta will overwrite a
+SQLite database or an empty file at that path and refuses anything else, since
+anything else is somebody's data. Missing parent directories are created.
+
+[Datasette](https://datasette.io/) is the natural front-end, and its
+[Datasette Lite](https://lite.datasette.io/) build runs entirely in the browser.
+`sqlite3`, DuckDB, and Grafana read the format just as well.
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | The statement ran. With `--check`: it returned no rows and no pending changes. For a mutating statement: it applied cleanly. |
+| `1` | **Only** from `--check`, when rows or pending changes came back. Because `--check` implies the dry run, its findings are always still pending. |
+| `2` | Operational — SQL that cannot be prepared, a refused statement, a flag that would mean nothing, and every write refusal. A broken statement is a usage error, not a finding. |
+
+{/* Doc Detective inline tests: verify this page's documented behavior against
+    the local build, exposed as `docmeta` / `npx docmeta` via `npm link` (see
+    .github/workflows/docs-as-tests.yml), over committed fixtures. Every step is
+    a read, a --dry-run, or a --check, so the suite never mutates a fixture.
+    Run with `npx doc-detective`. Config: .doc-detective.json. */}
+{/* test {"testId":"query-reference","description":"The docs table contract, the DML/DDL vocabulary, collections as views, findings, and the refusal posture."} */}
+{/* step {"description":"SELECT * returns the four system columns first, then the data columns sorted by name.","runShell":{"command":"npx docmeta query --no-config \"SELECT * FROM docs\" test/fixtures/query/docs","exitCodes":[0],"stdio":"/_path +_format +_present +_data +author +draft +last_reviewed +sidebar position +slug +tags +title/"}} */}
+{/* step {"description":"A frontmatter key named _path is not lifted to a column; it stays reachable through _data.","runShell":{"command":"npx docmeta query --no-config \"SELECT _path, _data ->> '$._path' AS shadowed FROM docs\" test/fixtures/query/docs","exitCodes":[0],"stdio":"/gamma\\.md +sneaky/"}} */}
+{/* step {"description":"A key that is not a bare identifier is an ordinary quoted identifier.","runShell":{"command":"npx docmeta query --no-config 'SELECT \"sidebar position\" AS sp FROM docs WHERE sp IS NOT NULL' test/fixtures/query/docs","exitCodes":[0],"stdio":"/sp[\\s\\S]*3[\\s\\S]*1 row/"}} */}
+{/* step {"description":"_present is 0 for a file with no metadata block at all.","runShell":{"command":"npx docmeta query --no-config \"SELECT _path FROM docs WHERE _present = 0\" test/fixtures/query/docs","exitCodes":[0],"stdio":"/plain\\.md[\\s\\S]*1 row/"}} */}
+{/* step {"description":"A named override becomes a view of the files that override won schema resolution for.","runShell":{"command":"npx docmeta query -c test/fixtures/collections/docmeta.config.yaml \"SELECT _path, slug FROM authors\"","exitCodes":[0],"stdio":"/ada\\.md +ada[\\s\\S]*3 rows/"}} */}
+{/* step {"description":"A file whose own $schema won resolution over the named glob is not a member, and docmeta says so on stderr.","runShell":{"command":"npx docmeta query -c test/fixtures/collections/docmeta.config.yaml \"SELECT _path FROM authors\"","exitCodes":[0],"stdio":"not in the \"authors\" collection"}} */}
+{/* step {"description":"Views are disjoint: authors/** wins first-match, so the later notes group is empty rather than overlapping.","runShell":{"command":"npx docmeta query -c test/fixtures/collections/docmeta.config.yaml \"SELECT count(*) n FROM notes\"","exitCodes":[0],"stdio":"/n[\\s\\S]*0[\\s\\S]*1 row/"}} */}
+{/* step {"description":"A collection view is read-only, and the refusal completes itself with the write-through-docs spelling (exit 2).","runShell":{"command":"npx docmeta query -c test/fixtures/collections/docmeta.config.yaml --dry-run \"UPDATE authors SET slug = 'x'\"","exitCodes":[2],"stdio":"because it is a view"}} */}
+{/* step {"description":"SET k = NULL removes the key; the preview says (deleted), not (null).","runShell":{"command":"npx docmeta query --no-config --dry-run \"UPDATE docs SET author = NULL WHERE slug = 'beta'\" test/fixtures/query/docs","exitCodes":[0],"stdio":"/author: grace -> \\(deleted\\)/"}} */}
+{/* step {"description":"A paired SET renames a key: the deletion and the creation pair up, and the original value is carried over.","runShell":{"command":"npx docmeta query --no-config --dry-run \"UPDATE docs SET byline = author, author = NULL WHERE slug = 'beta'\" test/fixtures/query/docs","exitCodes":[0],"stdio":"/author -> byline \\(key renamed\\)/"}} */}
+{/* step {"description":"A _path move may not change the extension (exit 2).","runShell":{"command":"npx docmeta query --no-config --dry-run \"UPDATE docs SET _path = 'test/fixtures/query/docs/beta.txt' WHERE slug = 'beta'\" test/fixtures/query/docs","exitCodes":[2],"stdio":"a rename may not change the extension"}} */}
+{/* step {"description":"explicit_null() is the literal-null spelling SET k = NULL cannot express.","runShell":{"command":"npx docmeta query --no-config --dry-run \"UPDATE docs SET author = explicit_null() WHERE slug = 'beta'\" test/fixtures/query/docs","exitCodes":[0],"stdio":"/author: grace -> \\(null\\)/"}} */}
+{/* step {"description":"DELETE strips the front matter block and names the keys it removes; the file and body survive.","runShell":{"command":"npx docmeta query --no-config --dry-run \"DELETE FROM docs WHERE slug = 'beta'\" test/fixtures/query/docs","exitCodes":[0],"stdio":"/frontmatter removed: title, slug, author, tags, draft, last_reviewed/"}} */}
+{/* step {"description":"A system column other than _path is read-only (exit 2).","runShell":{"command":"npx docmeta query --no-config --dry-run \"UPDATE docs SET _format = 'x' WHERE slug = 'beta'\" test/fixtures/query/docs","exitCodes":[2],"stdio":"system columns are read-only"}} */}
+{/* step {"description":"--check implies the dry run: pending changes are findings, exit 1, files untouched.","runShell":{"command":"npx docmeta query --no-config --check \"UPDATE docs SET reviewed = 'todo' WHERE _present = 1\" test/fixtures/query/docs","exitCodes":[1],"stdio":"/3 changes across 3 files — check failed/"}} */}
+{/* step {"description":"The type bridge: a declared format name previews as the whole property the schema will gain.","runShell":{"command":"npx docmeta query --dry-run -c test/fixtures/ddl-bridge/docmeta.config.yaml \"ALTER TABLE docs ADD COLUMN reviewed_on DATE NOT NULL DEFAULT '2026-08-26'\" test/fixtures/ddl-bridge/docs","exitCodes":[0],"stdio":"+ reviewed_on (string, format date, required)"}} */}
+{/* step {"description":"A CHECK (k IN (...)) on the added column becomes an enum on the property.","runShell":{"command":"npx docmeta query --dry-run -c test/fixtures/ddl-bridge/docmeta.config.yaml \"ALTER TABLE docs ADD COLUMN tier TEXT CHECK (tier IN ('a','b'))\" test/fixtures/ddl-bridge/docs","exitCodes":[0],"stdio":"/\\+ tier \\(string, enum \\[\"a\", \"b\"\\]\\)/"}} */}
+{/* step {"description":"A corpus on the built-in default set has no schema of yours to evolve, so DDL refuses and names the data-only spellings (exit 2).","runShell":{"command":"npx docmeta query --no-config --dry-run \"ALTER TABLE docs ADD COLUMN x TEXT\" test/fixtures/query/docs","exitCodes":[2],"stdio":"runs on the built-in default set"}} */}
+{/* step {"description":"-s names the DDL target set directly, replacing the per-file walk for the planner.","runShell":{"command":"npx docmeta query --no-config --dry-run -s ./test/fixtures/ddl-bridge/schemas/house.json \"ALTER TABLE docs ADD COLUMN reviewed TEXT NOT NULL DEFAULT 'pending'\" test/fixtures/ddl-bridge/docs","exitCodes":[0],"stdio":"+ reviewed (string, required)"}} */}
+{/* step {"description":"-s on a statement with no schema-evolving effect refuses before anything is applied (exit 2).","runShell":{"command":"npx docmeta query --no-config --dry-run -s ./test/fixtures/ddl-bridge/schemas/house.json \"SELECT _path FROM docs\" test/fixtures/ddl-bridge/docs","exitCodes":[2],"stdio":"no schema-evolving effects"}} */}
+{/* step {"description":"An unbound named parameter is refused rather than binding NULL into a silently-green gate (exit 2).","runShell":{"command":"npx docmeta query --no-config --check \"SELECT _path FROM docs WHERE author = :who\" test/fixtures/query/docs","exitCodes":[2],"stdio":"with nothing bound"}} */}
+{/* step {"description":"The column convention in the ad-hoc spelling: path, key, lineFor, and message become a GitHub annotation under check:query.","runShell":{"command":"npx docmeta query --no-config --check -f github \"SELECT _path AS path, 'slug' AS key, lineFor(_path, 'slug') AS line, 'duplicate slug ' || slug AS message FROM docs WHERE slug IN (SELECT slug FROM docs GROUP BY slug HAVING count(*) > 1)\" test/fixtures/query/docs","exitCodes":[1],"stdio":"/::error file=test\\/fixtures\\/query\\/docs\\/alpha\\.md,line=3::\\[check:query\\] \\/slug duplicate slug alpha/"}} */}
+{/* step {"description":"A findings format without --check is refused before the run (exit 2).","runShell":{"command":"npx docmeta query --no-config -f sarif \"SELECT _path AS path FROM docs\" test/fixtures/query/docs","exitCodes":[2],"stdio":"which only --check produces"}} */}
+{/* step {"description":"CSV always emits a header row; arrays stay JSON text, RFC 4180 quoted.","runShell":{"command":"npx docmeta query --no-config -f csv \"SELECT _path, title, tags FROM docs WHERE _present = 1 ORDER BY _path\" test/fixtures/query/docs","exitCodes":[0],"stdio":"/_path,title,tags\\n[\\s\\S]*alpha\\.md,Alpha,\"\\[\"\"guide\"\",\"\"intro\"\"\\]\"/"}} */}
+{/* step {"description":"CSV refuses a statement that produced changes, and says nothing was applied (exit 2).","runShell":{"command":"npx docmeta query --no-config -f csv \"UPDATE docs SET reviewed = 'todo'\" test/fixtures/query/docs","exitCodes":[2],"stdio":"nothing was applied"}} */}
+{/* step {"description":"ATTACH is refused by name because it can write outside the docs table (exit 2).","runShell":{"command":"npx docmeta query --no-config \"ATTACH DATABASE 'x.db' AS y\" test/fixtures/query/docs","exitCodes":[2],"stdio":"ATTACH is refused"}} */}
+{/* step {"description":"A second statement after a semicolon is refused rather than silently compiled away (exit 2).","runShell":{"command":"npx docmeta query --no-config \"SELECT 1; SELECT 2\" test/fixtures/query/docs","exitCodes":[2],"stdio":"single SQL statement"}} */}
+{/* step {"description":"A write cannot touch <stdin>, since there is no file behind it (exit 2).","runShell":{"command":"npx docmeta query --no-config \"UPDATE docs SET title = 'X'\" - --as markdown < test/fixtures/query/docs/alpha.md","exitCodes":[2],"stdio":"cannot touch <stdin>"}} */}
+{/* test end */}
