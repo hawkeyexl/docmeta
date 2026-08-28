@@ -12,6 +12,14 @@ const { createRequire } = require("module");
 const req = createRequire(process.cwd() + "/");
 let Ajv = req("ajv/dist/2020.js");
 Ajv = Ajv.default ?? Ajv;
+// The registered built-ins use `format` (Starlight's `editUrl` is a
+// uri-reference, okf's `resource` a uri) and several are lax about `strict`.
+// The shipped validator registers ajv-formats and compiles with strict off, so
+// this ladder does too: a verdict here should mean what a verdict there means,
+// and without these eight built-ins fail to compile and the section reports
+// them as findings rather than checking them.
+let addFormats = req("ajv-formats");
+addFormats = addFormats.default ?? addFormats;
 
 const PROPOSED_ROOT = "docs/proposals/0023/schemas";
 // The drafts' semver prerelease, spelled once. Both the file name and the `$id`
@@ -92,7 +100,8 @@ console.log(`\nproposed-only keys (no other claimant): ${proposedOnly.length} of
 // the proposed owner of each shared key. EXPECTED-REJECT entries are the
 // recorded design exceptions in proposal 0023; anything else rejecting — or
 // any expected exception silently passing — is a finding.
-const ajv = new Ajv({ allErrors: true, allowUnionTypes: true });
+const ajv = new Ajv({ allErrors: true, strict: false });
+addFormats(ajv);
 const compiled = new Map(proposed.map((s) => [s.$id, ajv.compile(s)]));
 const base = { title: "T", description: "D" };
 
@@ -145,16 +154,119 @@ for (const [name, doc, ownerShort, expectReject] of probes) {
   console.log(`${tag}  ${name}${detail}`);
 }
 
-// 3. Envelope keys: the sibling vocabularies' top-level claims must not be
-// claimed by any current built-in — and a violation fails the run.
+// 3. Envelope keys: the companion vocabularies' top-level claims must survive
+// alongside every built-in a page could realistically stack them with.
+//
+// This used to assert that *no* built-in may claim these keys at all, and that
+// was the wrong test. It is not the composability law — which is about whether
+// two claimants' *values* agree (section 2's method), not about whether a name
+// appears twice — and this proposal never argued for the stricter rule. It
+// also produced a false positive that stood for a while: `metadata` is claimed
+// by anthropic:claude-skill:2.1, whose `metadata` is a free-form object, which
+// is *exactly* the arrangement docmeta:artifact-evals is designed around ("an
+// artifact's top level is the host tool's contract and `metadata` is its
+// sanctioned extension bag"). The overlap there is the design working, not a
+// collision.
+//
+// So the test now asks the real question: does adding the envelope key to a
+// document break the other claimant? Errors are compared before and after, and
+// only a new error pointing *at that key* counts.
+//
+// One precondition first. A schema sealed against the family's own floor
+// composes with nothing docmeta publishes — docmeta:core requires `title`, so a
+// root that forbids unknown keys and does not declare `title` can never be
+// stacked with any of the nine. Per-key probes against such a schema report a
+// conflict for every key, which says nothing about the key. Those are named and
+// set aside with the reason, rather than silently skipped or counted.
 console.log("\n=== envelope keys vs current built-ins ===");
-for (const key of ["evals", "eval-suite", "eval-skip", "eval-provenance", "kg", "metadata"]) {
-  const claimants = others
-    .filter((s) => Object.prototype.hasOwnProperty.call(s.properties ?? {}, key))
-    .map((s) => s.$id);
-  if (claimants.length) findings++;
-  console.log(`${key}: ${claimants.length ? `CLAIMED by ${claimants.join(", ")} — violation` : "unclaimed — clear"}`);
+
+/** One legal value per envelope key, exercising the shape the schema allows. */
+const ENVELOPE_VALUES = {
+  evals: [{ id: "cites-a-source", assertion: "must cite a source" }],
+  "eval-suite": "house-suite",
+  "eval-skip": true,
+  "eval-provenance": [{ "generated-by": "claude-opus-5" }],
+  kg: { label: "Configuration" },
+  metadata: {
+    evals: [{ id: "used-the-tool", assertion: "must call the search tool" }],
+    "eval-skip": false,
+  },
+};
+
+/** Errors the schema raises for a document, as instancePath+keyword pairs. */
+function errorsFor(validate, doc) {
+  validate(doc);
+  return (validate.errors ?? []).map((e) => `${e.instancePath}|${e.keyword}|${e.params?.additionalProperty ?? ""}`);
 }
+
+/**
+ * Can this built-in be stacked with the docmeta family at all? Probed, not
+ * assumed: add the family's own required floor and see whether the schema
+ * rejects the key itself.
+ */
+function sealedAgainstTheFamily(validate) {
+  const before = new Set(errorsFor(validate, {}));
+  return errorsFor(validate, { title: "T" }).some(
+    (e) => !before.has(e) && e.includes("|additionalProperties|title"),
+  );
+}
+
+const compiledOthers = others.map((s) => {
+  try {
+    return { id: s.$id, validate: ajv.compile(s) };
+  } catch (err) {
+    // A built-in that will not compile is a finding in its own right, not a
+    // reason to report the envelope keys as clear.
+    console.log(`!!! ${s.$id} failed to compile: ${err.message}`);
+    findings++;
+    return null;
+  }
+}).filter(Boolean);
+
+const sealed = compiledOthers.filter((o) => sealedAgainstTheFamily(o.validate));
+for (const o of sealed) {
+  console.log(
+    `${o.id}: sealed root — rejects docmeta:core's own \`title\`, so it composes with no vocabulary in this family. Per-key probes below skip it.`,
+  );
+}
+const stackable = compiledOthers.filter((o) => !sealed.includes(o));
+
+for (const [key, value] of Object.entries(ENVELOPE_VALUES)) {
+  const conflicts = [];
+  for (const { id, validate } of stackable) {
+    const before = new Set(errorsFor(validate, {}));
+    const introduced = errorsFor(validate, { [key]: value }).filter(
+      (e) => !before.has(e) && (e.startsWith(`/${key}`) || e.includes(`|${key}`)),
+    );
+    if (introduced.length) conflicts.push(`${id} (${introduced[0]})`);
+  }
+  const alsoClaims = stackable
+    .filter(({ validate }) => {
+      const s = others.find((o) => o.$id === validate.schema.$id);
+      return Object.prototype.hasOwnProperty.call(s?.properties ?? {}, key);
+    })
+    .map((o) => o.id);
+  if (conflicts.length) findings += conflicts.length;
+  const note = alsoClaims.length
+    ? ` (also claimed, compatibly, by ${alsoClaims.join(", ")})`
+    : "";
+  console.log(
+    `${key}: ${conflicts.length ? `CONFLICTS with ${conflicts.join(", ")} — violation` : `clear${note}`}`,
+  );
+}
+
+// The one detail worth carrying even though it is not a finding: inside the
+// sealed set, agentskills:skill:1.0 declares `metadata` as a map of strings, so
+// of docmeta:artifact-evals' shapes only the single-assertion string shorthand
+// would fit it. That is moot while the same schema also forbids `title` — the
+// pair can never validate one document — but it is the thing to re-check if the
+// standard ever opens its root.
+console.log(
+  "\nnote: agentskills:skill:1.0 types `metadata` as a string map, so only artifact-evals'",
+);
+console.log(
+  "      single-assertion shorthand would fit it. Moot while its root also forbids `title`.",
+);
 
 console.log(`\nunexpected findings: ${findings}`);
 process.exit(findings ? 1 : 0);
