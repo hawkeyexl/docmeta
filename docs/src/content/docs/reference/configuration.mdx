@@ -346,7 +346,7 @@ chain](/docmeta/reference/schema-resolution/#precedence):
   prepare was swallowed and retried. A `query` statement that never touches a
   collection resolves nothing and prints no membership notice.
 - Trust settings move membership: under
-  [`schemaTrust.documentRefs: none`](#schematrust) the document's `$schema` is
+  [`schemaTrust.documentRefs: none`](#schema-trust) the document's `$schema` is
   ignored, the override wins the file back, and the view grows. A per-file
   trust *refusal* (a `$schema` URL the settings reject) demotes the file to
   member of no view — it never turns a working `SELECT` into exit 2; `validate`
