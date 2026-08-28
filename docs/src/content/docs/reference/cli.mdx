@@ -107,7 +107,7 @@ Commit it. Reviewers should see it grow or shrink in a diff.
 
 A fingerprint is 16 hex characters of
 `sha256(schema + NUL + instancePath + NUL + keyword + NUL + subject)` — the four
-[machine-stable fields](/docmeta/reference/output-and-exit-codes/#json) of a
+[machine-stable fields](/docmeta/reference/output-and-exit-codes/#output-formats) of a
 violation. It deliberately excludes the **line number**, so editing a document
 does not invalidate it; the **message prose**, so an Ajv upgrade that rewords a
 message does not invalidate every entry at once; and the **file path**, which is
@@ -926,7 +926,7 @@ Four things bound it:
 - **The count is reported.** A run that skipped something says so:
   `1 file checked, 1 passed, 0 failed, 0 errors, 1 skipped by .gitignore`, and
   `json` output carries
-  [`summary.gitignoreSkipped`](/docmeta/reference/output-and-exit-codes/#json).
+  [`summary.gitignoreSkipped`](/docmeta/reference/output-and-exit-codes/#output-formats).
   The count covers only files that passed the extension filter, so it answers
   "how many candidate documents did `.gitignore` take away". `--exclude`
   removals are not counted — those you asked for.
