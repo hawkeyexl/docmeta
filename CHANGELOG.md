@@ -1,3 +1,20 @@
+## [4.8.2](https://github.com/hawkeyexl/docmeta/compare/v4.8.1...v4.8.2) (2026-08-28)
+
+
+### Bug Fixes
+
+* **query:** eager views for catalog observers; newline-safe retry; bracket-aware scan ([70753c1](https://github.com/hawkeyexl/docmeta/commit/70753c138ce9ecaf4ba20090da3ac27136ac521d))
+* **query:** skip comments in the catalog CHECK scan ([35c0739](https://github.com/hawkeyexl/docmeta/commit/35c07395a77857898715db601a3b479c07c29909))
+* **query:** skip comments in the SET-expression scan ([b2ae16b](https://github.com/hawkeyexl/docmeta/commit/b2ae16bbd87675011acfcd6a5ab9e75ae7a98344))
+* **query:** skip comments when counting parens in the CHECK scan ([9af3bf1](https://github.com/hawkeyexl/docmeta/commit/9af3bf18d810d25a4c8954eb0bcbafa17b650a80))
+
+
+### Performance Improvements
+
+* **query:** build collection views lazily, on first reference ([b6c516b](https://github.com/hawkeyexl/docmeta/commit/b6c516bbf2acd38dce6548cad028f71448de22a4)), closes [UPDATE-throu#view](https://github.com/UPDATE-throu/issues/view)
+* **query:** prepare before the baseline snapshots in runOnce ([544e0b0](https://github.com/hawkeyexl/docmeta/commit/544e0b0bb72e1554b5cdcf559aeabd32398be148))
+* **validate:** reuse the per-file resolution walk for check collections ([1ba3a76](https://github.com/hawkeyexl/docmeta/commit/1ba3a761a5d4cf21c6bc4c902d7b608f44711c98))
+
 ## [4.8.1](https://github.com/hawkeyexl/docmeta/compare/v4.8.0...v4.8.1) (2026-08-27)
 
 
