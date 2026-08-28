@@ -53,6 +53,7 @@ changed as a result, and lists what it depends on.
 | [0027](0027-named-collections.md) | Named collections: override groups as SQL views | Devin · D4 / Maya · M2 | Implemented (#134) |
 | [0028](0028-ddl-type-bridge.md) | The DDL type bridge: formats as column types, enums as CHECK IN | Sara · S1, S3 / Maya · M2, M3 | Implemented (#135) |
 | [0029](0029-query-for-scripts.md) | query for scripts: CSV output and bound parameters | Devin · D3, D4 | Implemented (#133) |
+| [0030](0030-query-schema-flag.md) | `-s/--schema` on `query`: naming the contract DDL evolves | Sara · S1, S3 / Maya · M2, M3 | Proposed |
 
 0014 was not in the original review. It surfaced while stress-testing 0004 and
 is the most severe item in the set: **docmeta currently exits `0` when it
@@ -99,7 +100,8 @@ At a glance, so a planning pass does not have to reconstruct it from 29 headers.
        └─> 0029
 0001 ──> 0026            (check findings ride the baseline)
 0024 ──┬─> 0027          (its "scope the run to one override group" remedy gets a name)
-       └─> 0028          (extends 0024's deliberately thin type mapping)
+       ├─> 0028          (extends 0024's deliberately thin type mapping)
+       └─> 0030          (the `--schema <ref>` its design text sketched, shipped as query's -s)
 ```
 
 The four `Proposed` SQL items (0026–0029) are independent of each other except that
