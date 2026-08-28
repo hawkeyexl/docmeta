@@ -1,3 +1,16 @@
+# [4.11.0](https://github.com/hawkeyexl/docmeta/compare/v4.10.0...v4.11.0) (2026-08-28)
+
+
+### Bug Fixes
+
+* **schemas:** accept a quoted effort integer and catch the whitespace-only drops ([2771d72](https://github.com/hawkeyexl/docmeta/commit/2771d720a118abbe944bb3b88c3a77685d4b7334))
+* **schemas:** pin the effort/maxTurns asymmetry and split a misleading test ([9dcc362](https://github.com/hawkeyexl/docmeta/commit/9dcc362f46ea480f131c38ec08d99f827b81e8f8))
+
+
+### Features
+
+* **schemas:** add the Claude Code subagent definition schema ([2353511](https://github.com/hawkeyexl/docmeta/commit/23535113c89a22e2c333397929b826ef820de183))
+
 # [4.10.0](https://github.com/hawkeyexl/docmeta/compare/v4.9.0...v4.10.0) (2026-08-28)
 
 
