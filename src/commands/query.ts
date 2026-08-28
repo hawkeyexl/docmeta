@@ -1433,6 +1433,12 @@ function foldPath(p: string): string {
  * `-s` ref typed even slightly differently — `schemas/x.json` for
  * `./schemas/x.json` — must still find its pin, or pre-edit verification
  * silently skips and the un-refreshed pin refuses every later run.
+ *
+ * `ctx.cwd` is the right base for these keys: `resolveRunConfig` passes every
+ * loaded config through `rebaseConfigSchemaRefs`, which rewrites file refs to
+ * ABSOLUTE paths whenever configDir differs from cwd (where `resolve` is the
+ * identity) and leaves them cwd-relative-correct when the two coincide —
+ * pinned by the configDir ≠ cwd test in query-ddl.test.ts.
  */
 function filePinsByPath(ctx: RunContext): Map<string, SchemaPin> {
   const byPath = new Map<string, SchemaPin>();

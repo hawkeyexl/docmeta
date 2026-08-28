@@ -458,6 +458,70 @@ describe("runQuery DDL — -s names the contract (0030)", () => {
     }
   });
 
+  it("verifies and refreshes a pin when the config lives below the run's cwd", async () => {
+    // Settles a review question about filePinsByPath's resolution base:
+    // resolveRunConfig rebases config file-refs to ABSOLUTE paths whenever
+    // configDir differs from cwd (rebaseConfigSchemaRefs), and leaves them
+    // cwd-relative-correct when the two coincide — so resolving pin keys
+    // from ctx.cwd is right in both arrangements. Pinned here with
+    // configDir ≠ cwd through the real resolveRunConfig path (-c into a
+    // subdirectory, positional inputs from the parent).
+    const root = mkdtempSync(join(tmpdir(), "docmeta-ddl-"));
+    temps.push(root);
+    const sub = join(root, "sub");
+    cpSync(resolve(here, "fixtures", "query-ddl"), sub, { recursive: true });
+    const pin = integrityOf(readFileSync(join(sub, "schemas", "house.json")));
+    writeFileSync(
+      join(sub, "docmeta.config.yaml"),
+      `paths:\n  - "docs/**/*.md"\nschemas:\n  - ref: ./schemas/house.json\n    integrity: ${pin}\n`,
+    );
+    const run = await runQuery({
+      sql: "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+      inputs: ["sub/docs"],
+      cwd: root,
+      configPath: join(sub, "docmeta.config.yaml"),
+      schemas: ["sub/schemas/house.json"],
+    });
+    expect(
+      run.changes?.some((c) => "config" in c && c.key === "integrity"),
+    ).toBe(true);
+    const cfg = readFileSync(join(sub, "docmeta.config.yaml"), "utf8");
+    expect(cfg).not.toContain(pin);
+    expect(cfg).toContain(
+      integrityOf(readFileSync(join(sub, "schemas", "house.json"))),
+    );
+    const v = await runValidate({
+      inputs: ["sub/docs"],
+      cwd: root,
+      configPath: join(sub, "docmeta.config.yaml"),
+    });
+    expect(v.summary.failed).toBe(0);
+
+    // The verification half of the same lookup: bytes that moved since
+    // vendoring must refuse, in the same configDir ≠ cwd arrangement.
+    const tampered = join(root, "tampered");
+    cpSync(resolve(here, "fixtures", "query-ddl"), tampered, {
+      recursive: true,
+    });
+    const stalePin = integrityOf(
+      readFileSync(join(tampered, "schemas", "house.json")),
+    );
+    writeFileSync(
+      join(tampered, "docmeta.config.yaml"),
+      `paths:\n  - "docs/**/*.md"\nschemas:\n  - ref: ./schemas/house.json\n    integrity: ${stalePin}\n`,
+    );
+    appendFileSync(join(tampered, "schemas", "house.json"), "\n");
+    await expect(
+      runQuery({
+        sql: "ALTER TABLE docs ADD COLUMN reviewed TEXT",
+        inputs: ["tampered/docs"],
+        cwd: root,
+        configPath: join(tampered, "docmeta.config.yaml"),
+        schemas: ["tampered/schemas/house.json"],
+      }),
+    ).rejects.toThrow(/recorded integrity/);
+  });
+
   it("a URL ref via -s refuses with the vendor-first remedy", async () => {
     const d = copy("query-schema-flag");
     await expect(
