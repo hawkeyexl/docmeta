@@ -1,15 +1,17 @@
 /**
- * Behavior of the built-in static-site-generator schemas — Hugo, Jekyll and
- * VitePress — exercised through the real validate path (extraction ->
- * resolution -> validation) rather than against the JSON objects directly.
+ * Behavior of the built-in static-site-generator schemas — Hugo, Jekyll,
+ * VitePress and MkDocs Material — exercised through the real validate path
+ * (extraction -> resolution -> validation) rather than against the JSON
+ * objects directly.
  *
  * These are platform schemas and follow the rule the earlier ones established:
- * require exactly what the generator refuses to build without. All three
- * require *nothing*, because all three build a page with no front matter at
+ * require exactly what the generator refuses to build without. All four
+ * require *nothing*, because all four build a page with no front matter at
  * all. That makes every one of them a pure shape check, and the shapes worth
  * checking are the ones a generator accepts silently and then gets wrong — a
  * quoted `weight` that sorts as a string, a `published: "false"` that publishes
- * because every string is truthy, an `outline` level past 6 that is ignored.
+ * because every string is truthy, an `outline` level past 6 that is ignored,
+ * a `hide: [sidebar]` that hides nothing.
  */
 import { describe, it, expect } from "vitest";
 import { fileURLToPath } from "node:url";
@@ -25,6 +27,7 @@ const root = resolve(here, "..");
 const HUGO = "hugo:page:0.165";
 const JEKYLL = "jekyll:page:4.4";
 const VITEPRESS = "vitepress:page:1.6";
+const MKDOCS = "mkdocs:material:9.7";
 
 /** Validate one platform fixture against an explicit schema set. */
 async function check(fixture: string, cliSchemas: string[]) {
@@ -101,6 +104,42 @@ const VITEPRESS_FIELDS = [
   "footer",
   "pageClass",
   "isHome",
+];
+
+const MKDOCS_FIELDS = [
+  // Read by MkDocs itself.
+  "title",
+  "template",
+  // Read by Material's own templates.
+  "description",
+  "author",
+  "icon",
+  "status",
+  "subtitle",
+  "hide",
+  // Read by Material's bundled plugins.
+  "tags",
+  "search",
+  "social",
+  // Read by the blog plugin, on a post.
+  "date",
+  "authors",
+  "categories",
+  "draft",
+  "pin",
+  "readtime",
+  "slug",
+  "links",
+];
+
+/** The six `hide` entries Material's templates actually test for. */
+const MKDOCS_HIDE = [
+  "navigation",
+  "toc",
+  "path",
+  "tags",
+  "footer",
+  "feedback",
 ];
 
 describe("hugo:page:0.165", () => {
@@ -242,17 +281,93 @@ describe("vitepress:page:1.6", () => {
   });
 });
 
+describe("mkdocs:material:9.7", () => {
+  it("accepts a page using the documented fields", async () => {
+    const r = await check("mkdocs-valid.md", [MKDOCS]);
+    expect(r.errors).toEqual([]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("accepts a blog post using the plugin's post fields", async () => {
+    const r = await check("mkdocs-blog-post-valid.md", [MKDOCS]);
+    expect(r.errors).toEqual([]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("accepts the created/updated form of date", async () => {
+    const r = await check("mkdocs-blog-date-pair.md", [MKDOCS]);
+    expect(r.errors).toEqual([]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("rejects a hide entry no template tests for, naming the entry", async () => {
+    // `hide` is the field this schema exists for. Material tests membership
+    // with `"navigation" in page.meta.hide` and never reports an entry it does
+    // not know, so `hide: [sidebar]` hides nothing and says nothing.
+    const r = await check("mkdocs-bad-hide.md", [MKDOCS]);
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]?.instancePath).toBe("/hide/0");
+  });
+
+  it("rejects a date mapping with no created, which the plugin errors on", async () => {
+    // PostDate: "Expected 'created' date when using dictionary syntax".
+    const r = await check("mkdocs-date-without-created.md", [MKDOCS]);
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]?.instancePath).toBe("/date");
+    expect(r.errors[0]?.message).toContain("created");
+  });
+
+  it("rejects a quoted readtime, which the post config refuses", async () => {
+    const r = await check("mkdocs-bad-readtime.md", [MKDOCS]);
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]?.instancePath).toBe("/readtime");
+  });
+
+  it("rejects a quoted search boost, which lands in the index as a string", async () => {
+    const r = await check("mkdocs-bad-boost.md", [MKDOCS]);
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]?.instancePath).toBe("/search/boost");
+  });
+
+  it("rejects a scalar tags, which the search plugin silently drops", async () => {
+    // `if isinstance(tags, list)` — a bare string is skipped without a word.
+    const r = await check("mkdocs-string-tags.md", [MKDOCS]);
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]?.instancePath).toBe("/tags");
+  });
+
+  it("enumerates exactly the six hide entries Material tests for", async () => {
+    const schema = (await loadSchema(MKDOCS)) as {
+      properties: { hide: { items: { enum: string[] } } };
+    };
+    expect([...schema.properties.hide.items.enum].sort()).toEqual(
+      [...MKDOCS_HIDE].sort(),
+    );
+  });
+
+  it("requires nothing — MkDocs builds a page with no front matter", async () => {
+    const { results } = await runValidate({
+      inputs: ["-"],
+      as: "markdown",
+      stdinContent: "---\n---\n\n# Body\n",
+      cliSchemas: [MKDOCS],
+      cwd: root,
+    });
+    expect(results[0]?.ok).toBe(true);
+  });
+});
+
 describe("a platform schema requires exactly what upstream errors without", () => {
-  it("all three require nothing, because all three build without front matter", async () => {
-    for (const id of [HUGO, JEKYLL, VITEPRESS]) {
+  it("all four require nothing, because all four build without front matter", async () => {
+    for (const id of [HUGO, JEKYLL, VITEPRESS, MKDOCS]) {
       const schema = (await loadSchema(id)) as { required?: string[] };
       expect(schema.required).toBeUndefined();
     }
   });
 });
 
-describe("all three tolerate unknown keys", () => {
-  for (const id of [HUGO, JEKYLL, VITEPRESS]) {
+describe("all four tolerate unknown keys", () => {
+  for (const id of [HUGO, JEKYLL, VITEPRESS, MKDOCS]) {
     it(`${id} sets additionalProperties true`, async () => {
       // Theme and plugin keys — Jekyll's `nav_order`, Hugo's taxonomy terms —
       // are not defined by the generator, so they must pass through.
@@ -265,15 +380,15 @@ describe("all three tolerate unknown keys", () => {
 });
 
 describe("the SSG schemas are opt-in", () => {
-  for (const id of [HUGO, JEKYLL, VITEPRESS]) {
+  for (const id of [HUGO, JEKYLL, VITEPRESS, MKDOCS]) {
     it(`${id} is not in the default set`, () => {
       expect(DEFAULT_SCHEMAS).not.toContain(id);
     });
   }
 
-  it("all three are listed by the schemas command", () => {
+  it("all four are listed by the schemas command", () => {
     const ids = getSchemasInfo().builtins.map((b) => b.id);
-    for (const id of [HUGO, JEKYLL, VITEPRESS]) {
+    for (const id of [HUGO, JEKYLL, VITEPRESS, MKDOCS]) {
       expect(ids).toContain(id);
     }
   });
@@ -284,6 +399,7 @@ describe("the field sets match what upstream documents", () => {
     [HUGO, HUGO_FIELDS],
     [JEKYLL, JEKYLL_FIELDS],
     [VITEPRESS, VITEPRESS_FIELDS],
+    [MKDOCS, MKDOCS_FIELDS],
   ];
   for (const [id, expected] of cases) {
     it(`${id} carries exactly its documented fields`, async () => {

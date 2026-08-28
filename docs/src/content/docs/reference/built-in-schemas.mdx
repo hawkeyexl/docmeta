@@ -5,7 +5,7 @@ description: Every schema shipped with docmeta in one table, showing what each c
 
 import { Aside, Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-docmeta bundles twenty-one schemas. You reference any of them by id, with no file
+docmeta bundles twenty-two schemas. You reference any of them by id, with no file
 to write, no URL to host, and no network call at validation time. This page is
 the registry: what each one constrains, whether it requires anything, and which
 are applied when you pass no flags at all.
@@ -38,13 +38,14 @@ installed.
 | `x:cards:1.0` | 23 `twitter:*` card tags | `twitter:card` | No | [`x-cards/1.0.json`](/docmeta/schemas/x-cards/1.0.json) | [Metadata vocabularies](/docmeta/reference/metadata-vocabularies/) |
 | `agentskills:skill:1.0` | the 6 Agent Skills `SKILL.md` fields | `name`, `description` | No | [`agent-skills/1.0.json`](/docmeta/schemas/agent-skills/1.0.json) | [Agent Skills schemas](/docmeta/reference/agent-skills-schemas/) |
 | `anthropic:claude-skill:2.1` | 20 Claude Code `SKILL.md` fields | nothing | No | [`claude-skill/2.1.json`](/docmeta/schemas/claude-skill/2.1.json) | [Agent Skills schemas](/docmeta/reference/agent-skills-schemas/) |
+| `mkdocs:material:9.7` | 19 MkDocs and Material front matter keys | nothing | No | [`mkdocs-material/9.7.json`](/docmeta/schemas/mkdocs-material/9.7.json) | [Platform schemas](/docmeta/reference/platform-schemas/) |
 
-All twenty-one use [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects)
+All twenty-two use [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects)
 and are [built-in
 references](/docmeta/reference/schema-resolution/#reference-kinds), so a typo in
 an id is reported as an unknown built-in rather than a missing file.
 
-Twenty of them allow additional properties. `agentskills:skill:1.0` is the one
+Twenty-one of them allow additional properties. `agentskills:skill:1.0` is the one
 exception, and not out of strictness: the tooling that packages a skill for
 distribution *hard-errors* on a key outside the standard's six rather than
 ignoring it, so a schema that tolerated unknown keys would pass exactly the file
@@ -78,6 +79,7 @@ https://hawkeyexl.github.io/docmeta/schemas/vitepress/1.6.json
 https://hawkeyexl.github.io/docmeta/schemas/x-cards/1.0.json
 https://hawkeyexl.github.io/docmeta/schemas/agent-skills/1.0.json
 https://hawkeyexl.github.io/docmeta/schemas/claude-skill/2.1.json
+https://hawkeyexl.github.io/docmeta/schemas/mkdocs-material/9.7.json
 ```
 
 They exist for three jobs: `$ref`-ing a built-in from a schema of your own,
@@ -227,7 +229,7 @@ compose](/docmeta/reference/taxonomy-schemas/#which-ones-compose).
 
 ## What runs when you pass no flags
 
-Only two of the twenty-one are in the default set:
+Only two of the twenty-two are in the default set:
 
 ```text
 google:okf:0.1 + passo-uno:seven-action:1.0
@@ -306,6 +308,11 @@ standard, not docmeta's own release number:
   its front matter fields change far more slowly, so this id is not expected to
   move every month — a new one ships when the *contract* changes, not when Hugo
   does.
+- `mkdocs:material:9.7` versions on **Material for MkDocs 9.7**, not on MkDocs
+  1.6, even though the vendor segment says `mkdocs`. MkDocs itself defines two
+  front matter keys and Material defines the other seventeen, so Material is
+  what the contract tracks and Material's version is the one that can move it.
+  `astro:starlight:0.41` pairs a platform with a theme the same way.
 Ids are stable. A new upstream version arrives as a *new* id rather than a
 change to an existing one, so upgrading docmeta never silently retightens a
 check you already passed. Pin the id you validated against and move it
@@ -361,6 +368,7 @@ and editing it is usually faster than starting from nothing.
 {/* step {"description":"The registry lists hugo:page:0.165.","runShell":{"command":"npx docmeta schemas","exitCodes":[0],"stdio":"hugo:page:0.165"}} */}
 {/* step {"description":"The registry lists jekyll:page:4.4.","runShell":{"command":"npx docmeta schemas","exitCodes":[0],"stdio":"jekyll:page:4.4"}} */}
 {/* step {"description":"The registry lists vitepress:page:1.6.","runShell":{"command":"npx docmeta schemas","exitCodes":[0],"stdio":"vitepress:page:1.6"}} */}
+{/* step {"description":"The registry lists mkdocs:material:9.7.","runShell":{"command":"npx docmeta schemas","exitCodes":[0],"stdio":"mkdocs:material:9.7"}} */}
 {/* step {"description":"The registry lists x:cards:1.0.","runShell":{"command":"npx docmeta schemas","exitCodes":[0],"stdio":"x:cards:1.0"}} */}
 {/* step {"description":"A platform schema composes with an editorial one in a single run, as the page claims.","runShell":{"command":"npx docmeta validate test/fixtures/docusaurus/docs-unknown-key.md -s docusaurus:docs:3.10 -s diataxis:diataxis:1.0","exitCodes":[0],"stdio":"1 passed"}} */}
 {/* step {"description":"The default set applies when no flag is given, and does not include a Docusaurus schema.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md","exitCodes":[0],"stdio":"1 passed"}} */}
