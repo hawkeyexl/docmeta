@@ -246,6 +246,95 @@ describe("named collections (0027): views over override groups", () => {
     expect(message).toContain("re-run over one group's files");
   });
 
+  it("a plain SELECT never walks resolution: no views, no exclusion notice", async () => {
+    // 0021's founding rule, kept under 0027: a read that names no collection
+    // resolves nothing. The observable proxy is the "$schema won" notice —
+    // it can only come from the membership walk, so a plain SELECT with
+    // named overrides configured must not produce it.
+    const notices: string[] = [];
+    const run = await q("SELECT _path FROM docs ORDER BY _path LIMIT 1", {
+      onNotice: (m) => notices.push(m),
+    });
+    expect(run.rows).toEqual([{ _path: "authors/ada.md" }]);
+    expect(notices.find((m) => m.includes("authors/self.md"))).toBeUndefined();
+  });
+
+  it("a case-variant collection reference still resolves lazily", async () => {
+    // SQLite table names are case-insensitive: the engine reports
+    // `no such table: Authors`, which must still case-fold to the configured
+    // collection and trigger the build-and-retry.
+    const run = await q('SELECT _path FROM "Authors" ORDER BY _path');
+    expect(run.rows.map((r) => r._path)).toEqual([
+      "authors/ada.md",
+      "authors/deep.md",
+      "authors/grace.md",
+    ]);
+  });
+
+  it("a genuinely unknown table surfaces normally, without a rebuild loop", async () => {
+    await expect(q("SELECT * FROM nowhere")).rejects.toThrow(
+      /no such table: nowhere/,
+    );
+  });
+
+  // Catalog-observing statements never raise `no such table`, so the lazy
+  // retry cannot rescue them — they must see the views eagerly, exactly as
+  // v4.8.0's always-eager build did.
+  it("sqlite_master lists every collection view", async () => {
+    const run = await q(
+      "SELECT name FROM sqlite_master WHERE type = 'view' ORDER BY name",
+    );
+    expect(run.rows).toEqual([{ name: "authors" }, { name: "notes" }]);
+  });
+
+  it("PRAGMA table_info(collection) reports the docs columns, not silence", async () => {
+    const run = await q("PRAGMA table_info(authors)");
+    expect(run.rows.map((r) => r.name)).toContain("_path");
+    expect(run.rows.map((r) => r.name)).toContain("title");
+  });
+
+  it("CREATE VIEW onto a collection name refuses instead of shadowing", async () => {
+    await expect(
+      q("CREATE VIEW authors AS SELECT * FROM docs"),
+    ).rejects.toThrow(/already exists/);
+  });
+
+  it("DROP VIEW of a collection is the silent no-op it always was", async () => {
+    const run = await q("DROP VIEW authors");
+    expect(run.changes).toEqual([]);
+  });
+
+  it("the retry path tolerates a collection name containing a newline", async () => {
+    // The name embeds both a double quote and a newline. The SQL spells the
+    // quote doubled (`a""` + newline + `b`), so the raw statement does not
+    // contain the name as a substring and the eager pre-trigger deliberately
+    // misses — this is the one spelling that still exercises the pure
+    // build-and-retry path, where the engine's `no such table: a"\nb`
+    // message spans a line break.
+    const dir = mkdtempSync(join(tmpdir(), "docmeta-newline-view-"));
+    tempDirs.push(dir);
+    cpSync(corpus, dir, { recursive: true });
+    writeFileSync(
+      join(dir, "docmeta.config.yaml"),
+      [
+        "paths:",
+        '  - "docs/**/*.md"',
+        '  - "authors/**/*.md"',
+        "overrides:",
+        '  - name: "a\\"\\nb"',
+        '    files: "authors/**"',
+        "    schemas: [./author.schema.json]",
+        "",
+      ].join("\n"),
+    );
+    const run = await runQuery({
+      sql: 'SELECT _path FROM "a""\nb" ORDER BY _path',
+      inputs: [],
+      cwd: dir,
+    });
+    expect(run.rows.map((r) => r._path)).toContain("authors/ada.md");
+  });
+
   it("corpus checks read the same views", async () => {
     const dir = tempCopy();
     writeFileSync(

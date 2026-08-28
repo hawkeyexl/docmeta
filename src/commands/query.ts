@@ -60,11 +60,16 @@ import {
   createDocsTable,
   loadSqlite,
   registerLineFor,
+  skipComment,
+  skipStringOrIdent,
+  startsComment,
+  startsStringOrIdent,
   stripLeadingTrivia,
   type SqlValue,
 } from "../core/projection.js";
 import {
   collectCollections,
+  collectionNames,
   createCollectionViews,
 } from "../core/collections.js";
 import type { FingerprintContext } from "../core/baseline.js";
@@ -429,6 +434,38 @@ async function prepareDbTarget(resolved: string, display: string): Promise<void>
 }
 
 /**
+ * Internal signal for the lazy view build: the statement referenced a
+ * configured collection whose view is not created yet. Never escapes
+ * `runSql` — its retry catch either rebuilds once or is not reached.
+ */
+class MissingCollectionView extends Error {}
+
+/**
+ * Wrap an engine error from the user's statement — prepare-time or
+ * execution-time — into the operational refusal the CLI reports. Two cases
+ * get a remedy: an INSERT/rename onto a loaded `_path` (the projection's
+ * primary key catches it before any disk check can), and a write through a
+ * collection view (0027) — SQLite's own refusal, completed with the
+ * write-through-docs spelling. The view-name capture is non-greedy up to the
+ * literal tail: a collection name may contain spaces, which \S+ would
+ * truncate into a remedy naming a view that does not exist.
+ */
+function refuseSqlError(err: unknown): never {
+  const message = (err as Error).message;
+  if (message.includes("UNIQUE constraint failed: docs._path")) {
+    throw new DocmetaError("That _path already exists in the corpus.");
+  }
+  const viewWrite = /cannot modify (.+?) because it is a view/.exec(message);
+  const viewName = viewWrite?.[1];
+  if (viewName !== undefined) {
+    throw new DocmetaError(
+      `SQL error: ${message}; a collection is read-only — write through docs: UPDATE docs … WHERE _path IN (SELECT _path FROM "${viewName.replaceAll('"', '""')}").`,
+    );
+  }
+  throw new DocmetaError(`SQL error: ${message}`);
+}
+
+/**
  * Build the `docs` table — in memory, or at the export target — run the
  * user's statement over it (none, when only exporting), and judge what the
  * statement *did*: reads return rows; metadata edits become per-file changes,
@@ -477,19 +514,33 @@ async function runSql(
   try {
     createDocsTable(db, entries, dataColumns);
     // Named collections (0027): one view per named override, of the files it
-    // won resolution for. `collectCollections` walks resolution only when the
-    // config names a collection at all, so a config without `name:` builds a
-    // byte-identical SQL surface to today. Before the export-only return, so
-    // a `--db` file carries the views (0027 § stress test 5).
-    createCollectionViews(
-      db,
-      collectCollections(entries, {
-        config: ctx.config,
-        fileBase: ctx.cwd,
-        trustRoot: ctx.trustRoot,
-        ...(ctx.onNotice ? { onNotice: ctx.onNotice } : {}),
-      }),
-    );
+    // won resolution for — built LAZILY on the normal path, because 0021's
+    // founding rule is that plain reads resolve nothing: a statement that
+    // never names a collection must not pay the per-file resolution walk
+    // membership costs. The build happens on demand (below, when the engine
+    // reports the collection's table as missing) — with one eager exception:
+    // a `--db` export must carry the views (0027 § stress test 5), empty-SQL
+    // export-only runs included.
+    // Annotated `boolean`: assignments happen inside `buildViews`, which
+    // narrowing does not track — an inferred `false` reads every later
+    // `!viewsBuilt` as always-true.
+    let viewsBuilt: boolean = false;
+    const buildViews = (): void => {
+      // Idempotent, because the eager triggers overlap: a `--db` export and
+      // the catalog pre-trigger may both ask for the same build.
+      if (viewsBuilt) return;
+      createCollectionViews(
+        db,
+        collectCollections(entries, {
+          config: ctx.config,
+          fileBase: ctx.cwd,
+          trustRoot: ctx.trustRoot,
+          ...(ctx.onNotice ? { onNotice: ctx.onNotice } : {}),
+        }),
+      );
+      viewsBuilt = true;
+    };
+    if (target) buildViews();
     if (sql === "") {
       return { columns: [], rows: [], ...(dbInfo ? { db: dbInfo } : {}) };
     }
@@ -511,6 +562,28 @@ async function runSql(
       );
     }
 
+    // Fail-safe eager build for catalog-observing statements — and any
+    // statement that plausibly names a collection. A sqlite_master /
+    // sqlite_schema read, a PRAGMA, and CREATE/DROP/ALTER never raise
+    // `no such table` for a missing view, so the lazy retry below cannot
+    // rescue them: without this they would observe a catalog with no views
+    // (empty listings, table_info silence, CREATE silently shadowing a
+    // collection name) where the always-eager build listed, answered, or
+    // refused. The substring search deliberately OVER-triggers: a collection
+    // name inside a string literal or comment costs one always-correct eager
+    // build, while under-triggering is exactly this silent-miss bug class.
+    // The retry stays as the backstop for the one spelling a raw-text search
+    // cannot see — a name whose quoted-identifier spelling doubles a quote
+    // character inside it.
+    const lower = sql.toLowerCase();
+    const observesCatalog =
+      lower.includes("sqlite_master") ||
+      lower.includes("sqlite_schema") ||
+      lower.includes("pragma") ||
+      /^(create|drop|alter)\b/i.test(head) ||
+      collectionNames(ctx.config).some((n) => lower.includes(n.toLowerCase()));
+    if (observesCatalog) buildViews();
+
     // 0024: `SET k = NULL` is the removal spelling, so the literal `k: null`
     // gets a function instead — `explicit_null()` returns a per-run random
     // sentinel no real content can collide with and nothing can type.
@@ -522,109 +595,167 @@ async function runSql(
     // 0022: the statement runs freely against this disposable projection and
     // is judged by its effects, not its syntax. A read leaves no diff. The
     // column snapshot (0024) is what makes DDL an effect too.
-    const before = snapshotRows(db);
-    const colBefore = snapshotColumns(db);
-    // 0028: table_info cannot see a CHECK, so the stored CREATE TABLE text is
-    // snapshotted alongside the column shapes and consulted for adds only.
-    const catalogBefore = snapshotCatalogSql(db);
-    let columns: string[];
-    let rows: Record<string, unknown>[];
-    try {
-      const stmt = db.prepare(sql);
-      columns = stmt.columns().map((c) => c.name);
-      // The single user-SQL call site (proposal 0029): binding here is why
-      // parameters work uniformly across reads, `--check` gates, and DML.
-      // Passed unconditionally — probed on node:sqlite, `all({})` behaves
-      // identically to `all()` for statements with and without parameters,
-      // and the unbound-reference guard already refused any statement whose
-      // named parameters this object does not cover.
-      // node:sqlite types rows as unknown[]; each row is a name->value record.
-      rows = stmt.all(ctx.params);
-    } catch (err) {
-      const message = (err as Error).message;
-      if (message.includes("UNIQUE constraint failed: docs._path")) {
-        // INSERT of a loaded path, or a rename onto one — the projection's
-        // primary key catches it before any disk check can.
+    //
+    // One closure, so the lazy view build below can re-run it intact. The
+    // ordering invariant: prepare first — compiling is effect-free, so a
+    // lazy-view miss on the first attempt costs one compile and never a
+    // full-corpus snapshot — then the baseline snapshots, then execution:
+    // the baseline must precede the statement's effects. The snapshots
+    // themselves are all docs-scoped (`SELECT * FROM docs`,
+    // `PRAGMA table_info(docs)`, the catalog row named `docs`) and cannot
+    // see views, so a rebuild between attempts changes nothing they record.
+    const runOnce = async (): Promise<QueryRun> => {
+      let stmt: ReturnType<typeof db.prepare>;
+      let columns: string[];
+      try {
+        stmt = db.prepare(sql);
+        columns = stmt.columns().map((c) => c.name);
+      } catch (err) {
+        const message = (err as Error).message;
+        // Lazy collection views: the first time a statement names a configured
+        // collection, its view does not exist yet and the engine reports the
+        // table as missing (case-folded — SQLite resolves table names
+        // case-insensitively). Signal the build-and-retry; on the retry
+        // `viewsBuilt` is true, so a second failure surfaces normally below.
+        const missing = missingTableName(message);
+        if (
+          missing !== undefined &&
+          !viewsBuilt &&
+          namesConfiguredCollection(missing, ctx.config)
+        ) {
+          // INVARIANT: this signal may only ever be raised from this
+          // prepare-time catch. `no such table` is a compile error — probed
+          // unreachable from execution on node:sqlite — and a retry thrown
+          // after execution began would re-run `stmt.all` and double-apply
+          // whatever DML the first run already did.
+          throw new MissingCollectionView();
+        }
+        refuseSqlError(err);
+      }
+      const before = snapshotRows(db);
+      const colBefore = snapshotColumns(db);
+      // 0028: table_info cannot see a CHECK, so the stored CREATE TABLE text is
+      // snapshotted alongside the column shapes and consulted for adds only.
+      const catalogBefore = snapshotCatalogSql(db);
+      let rows: Record<string, unknown>[];
+      try {
+        // The single user-SQL call site (proposal 0029): binding here is why
+        // parameters work uniformly across reads, `--check` gates, and DML.
+        // Passed unconditionally — probed on node:sqlite, `all({})` behaves
+        // identically to `all()` for statements with and without parameters,
+        // and the unbound-reference guard already refused any statement whose
+        // named parameters this object does not cover.
+        // node:sqlite types rows as unknown[]; each row is a name->value record.
+        rows = stmt.all(ctx.params);
+      } catch (err) {
+        refuseSqlError(err);
+      }
+      let after: Map<string, Record<string, unknown>>;
+      try {
+        after = snapshotRows(db);
+      } catch {
+        // The table itself is gone. "Delete the table definition" is the
+        // accident-shaped spelling of two real statements; name them both.
         throw new DocmetaError(
-          "That _path already exists in the corpus.",
+          "DROP TABLE is refused. DELETE FROM docs WHERE … strips metadata from files; ALTER TABLE docs DROP COLUMN retires one key from the schema and every file.",
         );
       }
-      // A write through a collection view (0027): SQLite's own refusal,
-      // completed with the remedy — writes go through the one authoritative
-      // table, scoped by the view's membership. Non-greedy up to the literal
-      // tail: a collection name may contain spaces, which \S+ would truncate
-      // into a remedy naming a view that does not exist.
-      const viewWrite = /cannot modify (.+?) because it is a view/.exec(message);
-      const viewName = viewWrite?.[1];
-      if (viewName !== undefined) {
-        throw new DocmetaError(
-          `SQL error: ${message}; a collection is read-only — write through docs: UPDATE docs … WHERE _path IN (SELECT _path FROM "${viewName.replaceAll('"', '""')}").`,
-        );
-      }
-      throw new DocmetaError(`SQL error: ${message}`);
-    }
-    let after: Map<string, Record<string, unknown>>;
-    try {
-      after = snapshotRows(db);
-    } catch {
-      // The table itself is gone. "Delete the table definition" is the
-      // accident-shaped spelling of two real statements; name them both.
-      throw new DocmetaError(
-        "DROP TABLE is refused. DELETE FROM docs WHERE … strips metadata from files; ALTER TABLE docs DROP COLUMN retires one key from the schema and every file.",
+      const diff = diffProjection(before, after);
+      const schemaOps = columnDiffOps(
+        colBefore,
+        snapshotColumns(db),
+        before,
+        after,
+        catalogBefore,
+        snapshotCatalogSql(db),
       );
-    }
-    const diff = diffProjection(before, after);
-    const schemaOps = columnDiffOps(
-      colBefore,
-      snapshotColumns(db),
-      before,
-      after,
-      catalogBefore,
-      snapshotCatalogSql(db),
-    );
-    // Structural, not textual: a read always yields result columns, DML and
-    // DDL (without RETURNING) never do — so `WITH … UPDATE …` classifies
-    // correctly even when it matches zero rows. The residual: RETURNING DML
-    // that matches nothing reads as an empty result, which is what it shows.
-    const mutatingIntent = columns.length === 0;
-    const hasEffects =
-      diff.cells.length > 0 ||
-      diff.clearedRows.length > 0 ||
-      diff.createdRows.size > 0 ||
-      diff.renamedFiles.length > 0 ||
-      schemaOps.length > 0;
-    if (!hasEffects && !mutatingIntent) {
-      return { columns, rows, ...(dbInfo ? { db: dbInfo } : {}) };
-    }
+      // Structural, not textual: a read always yields result columns, DML and
+      // DDL (without RETURNING) never do — so `WITH … UPDATE …` classifies
+      // correctly even when it matches zero rows. The residual: RETURNING DML
+      // that matches nothing reads as an empty result, which is what it shows.
+      const mutatingIntent = columns.length === 0;
+      const hasEffects =
+        diff.cells.length > 0 ||
+        diff.clearedRows.length > 0 ||
+        diff.createdRows.size > 0 ||
+        diff.renamedFiles.length > 0 ||
+        schemaOps.length > 0;
+      if (!hasEffects && !mutatingIntent) {
+        return { columns, rows, ...(dbInfo ? { db: dbInfo } : {}) };
+      }
 
-    // DDL edits the schema itself (0024); its plan carries both the schema
-    // change records and — for a builtin fork — the reference repoints.
-    assertDefaultsMatchDeclaredTypes(schemaOps, diff.cells);
-    const schemaPlan =
-      schemaOps.length > 0
-        ? await planSchemaMutation(schemaOps, entries, ctx)
-        : undefined;
-    const renameHints = schemaOps.flatMap((op) =>
-      op.op === "rename" && op.renamedTo !== undefined
-        ? [{ from: op.key, to: op.renamedTo }]
-        : [],
-    );
-    // 0028: a BOOLEAN add's backfill writes real booleans to the files — the
-    // projection's 1/0 encoding is bind-layer, not file-layer.
-    const booleanAdds = new Set(
-      schemaOps.flatMap((op) =>
-        op.op === "add" && op.type === "boolean" ? [op.key] : [],
-      ),
-    );
-    const changes = [
-      ...(schemaPlan?.changes ?? []),
-      ...buildChanges(diff, entries, sentinel, ctx, renameHints, booleanAdds),
-    ];
-    if (ctx.write) await applyChanges(changes, entries, ctx, schemaPlan);
-    return { columns, rows, changes, ...(dbInfo ? { db: dbInfo } : {}) };
+      // DDL edits the schema itself (0024); its plan carries both the schema
+      // change records and — for a builtin fork — the reference repoints.
+      assertDefaultsMatchDeclaredTypes(schemaOps, diff.cells);
+      const schemaPlan =
+        schemaOps.length > 0
+          ? await planSchemaMutation(schemaOps, entries, ctx)
+          : undefined;
+      const renameHints = schemaOps.flatMap((op) =>
+        op.op === "rename" && op.renamedTo !== undefined
+          ? [{ from: op.key, to: op.renamedTo }]
+          : [],
+      );
+      // 0028: a BOOLEAN add's backfill writes real booleans to the files — the
+      // projection's 1/0 encoding is bind-layer, not file-layer.
+      const booleanAdds = new Set(
+        schemaOps.flatMap((op) =>
+          op.op === "add" && op.type === "boolean" ? [op.key] : [],
+        ),
+      );
+      const changes = [
+        ...(schemaPlan?.changes ?? []),
+        ...buildChanges(diff, entries, sentinel, ctx, renameHints, booleanAdds),
+      ];
+      if (ctx.write) await applyChanges(changes, entries, ctx, schemaPlan);
+      return { columns, rows, changes, ...(dbInfo ? { db: dbInfo } : {}) };
+    };
+
+    try {
+      return await runOnce();
+    } catch (err) {
+      if (!(err instanceof MissingCollectionView)) throw err;
+      // The first prepare named a collection with no view yet: build them
+      // all and re-run the closure — prepare, snapshots, execution,
+      // judgment. The first attempt died compiling, so nothing ran and
+      // nothing was snapshotted; re-running the whole closure keeps one code
+      // path with the baseline still taken before the (only) execution. A
+      // write through the fresh view reaches the ordinary "cannot modify X
+      // because it is a view" remedy on this retry; any other second failure
+      // surfaces as usual.
+      buildViews();
+      return await runOnce();
+    }
   } finally {
     db.close();
   }
+}
+
+/**
+ * The name after `no such table: ` in an engine message — sliced rather than
+ * regexed, because a collection name may legally contain a newline, which a
+ * `.`-based capture cannot span.
+ */
+function missingTableName(message: string): string | undefined {
+  const prefix = "no such table: ";
+  const at = message.indexOf(prefix);
+  return at === -1 ? undefined : message.slice(at + prefix.length);
+}
+
+/**
+ * Does the engine's missing-table name refer to a configured collection?
+ * Case-folded, because SQLite resolves table names case-insensitively (see
+ * `collectionNames` for why JS's looser fold is safe here); a `main.`/`temp.`
+ * qualifier the engine may echo for a qualified reference is tolerated too.
+ */
+function namesConfiguredCollection(
+  missing: string,
+  config: DocmetaConfig | null,
+): boolean {
+  const candidates = [missing, missing.replace(/^(main|temp)\./i, "")];
+  return collectionNames(config).some((n) =>
+    candidates.some((c) => c.toLowerCase() === n.toLowerCase()),
+  );
 }
 
 /** The one sliver of the `node:sqlite` surface the snapshots need. */
@@ -903,16 +1034,20 @@ function skipWs(text: string, from: number): number {
   return i;
 }
 
-/** Index of a `CHECK` keyword at or after `from`, outside quoted regions. */
+/**
+ * Index of a `CHECK` keyword at or after `from`, outside quoted regions and
+ * comments. The comment branch matters because SQLite stores an ADD COLUMN's
+ * definition verbatim, comments included — a CHECK spelled inside one must
+ * not satisfy the count guard or trip the one-shape refusal.
+ */
 function indexOfCheck(text: string, from: number): number {
   let i = from;
   while (i < text.length) {
     const ch = text[i];
-    if (ch === "'" || ch === '"' || ch === "`") {
-      i = skipQuoted(text, i, ch);
-    } else if (ch === "[") {
-      while (i < text.length && text[i] !== "]") i++;
-      i++;
+    if (startsStringOrIdent(text, i)) {
+      i = skipStringOrIdent(text, i);
+    } else if (startsComment(text, i)) {
+      i = skipComment(text, i);
     } else if (ch !== undefined && /[A-Za-z_]/.test(ch)) {
       const m = /^[A-Za-z_][A-Za-z0-9_]*/.exec(text.slice(i));
       const word = m?.[0] ?? "";
@@ -925,14 +1060,26 @@ function indexOfCheck(text: string, from: number): number {
   return -1;
 }
 
-/** Index just past `(…)` starting at `open`, paren- and quote-aware. */
+/**
+ * Index just past `(…)` starting at `open` — paren-aware, and skipping every
+ * string/identifier form, brackets included: `[a)b]` is a legal identifier
+ * whose `)` must not close the group early. Comments too: a paren inside a
+ * block or line comment must not move the depth. (The enum member grammar's
+ * own whitespace walks stay strict on purpose — a comment between literals
+ * refuses loudly per the one-shape contract, which is the designed outcome,
+ * not a miscount.)
+ */
 function matchingParenEnd(text: string, open: number): number {
   let depth = 0;
   let i = open;
   while (i < text.length) {
     const ch = text[i];
-    if (ch === "'" || ch === '"' || ch === "`") {
-      i = skipQuoted(text, i, ch);
+    if (startsStringOrIdent(text, i)) {
+      i = skipStringOrIdent(text, i);
+      continue;
+    }
+    if (startsComment(text, i)) {
+      i = skipComment(text, i);
       continue;
     }
     if (ch === "(") depth++;
@@ -1013,7 +1160,7 @@ function enumForAddedColumn(
   let k = skipWs(list, 0);
   for (;;) {
     if (list[k] === "'") {
-      const close = skipQuoted(list, k, "'");
+      const close = skipStringOrIdent(list, k);
       if (list[close - 1] !== "'" || close <= k + 1) refuseShape();
       members.push(list.slice(k + 1, close - 1).replaceAll("''", "'"));
       sawString = true;
@@ -2299,8 +2446,10 @@ async function applyChanges(
  * Tolerant by design: it walks strings and comments with the same rules as
  * the semicolon scan, and bails out at anything unexpected — a miss merely
  * leaves today's "no such column" error in place.
+ *
+ * Exported for the scanner parity suite, not via the API index.
  */
-function collectSetTargets(sql: string): string[] {
+export function collectSetTargets(sql: string): string[] {
   const targets: string[] = [];
   let i = 0;
   const n = sql.length;
@@ -2308,17 +2457,10 @@ function collectSetTargets(sql: string): string[] {
     ch !== undefined && /[A-Za-z0-9_]/.test(ch);
   while (i < n) {
     const ch = sql[i];
-    if (ch === "'" || ch === '"' || ch === "`") {
-      i = skipQuoted(sql, i, ch);
-    } else if (ch === "[") {
-      while (i < n && sql[i] !== "]") i++;
-      i++;
-    } else if (ch === "-" && sql[i + 1] === "-") {
-      while (i < n && sql[i] !== "\n") i++;
-    } else if (ch === "/" && sql[i + 1] === "*") {
-      i += 2;
-      while (i < n && !(sql[i] === "*" && sql[i + 1] === "/")) i++;
-      i += 2;
+    if (startsStringOrIdent(sql, i)) {
+      i = skipStringOrIdent(sql, i);
+    } else if (startsComment(sql, i)) {
+      i = skipComment(sql, i);
     } else if (
       (ch === "s" || ch === "S") &&
       /^set$/i.test(sql.slice(i, i + 3)) &&
@@ -2350,8 +2492,10 @@ function collectSetTargets(sql: string): string[] {
 /**
  * Column names an INSERT's column list carries, so a corpus-new key can be
  * introduced by creation too. Same tolerance contract as `collectSetTargets`.
+ *
+ * Exported for the scanner parity suite, not via the API index.
  */
-function collectInsertTargets(sql: string): string[] {
+export function collectInsertTargets(sql: string): string[] {
   const head = stripLeadingTrivia(sql);
   if (!/^(insert|replace)\b/i.test(head)) return [];
   const open = head.indexOf("(");
@@ -2373,36 +2517,23 @@ function collectInsertTargets(sql: string): string[] {
   }
 }
 
-/** Index just past a quoted region starting at `from` (doubling escapes). */
-function skipQuoted(sql: string, from: number, quote: string): number {
-  let i = from + 1;
-  while (i < sql.length) {
-    if (sql[i] === quote) {
-      if (sql[i + 1] === quote) {
-        i += 2;
-        continue;
-      }
-      return i + 1;
-    }
-    i++;
-  }
-  return i;
-}
-
 function readIdentifier(
   sql: string,
   from: number,
 ): { value: string; end: number } | undefined {
   const ch = sql[from];
   if (ch === '"' || ch === "`") {
-    const end = skipQuoted(sql, from, ch);
+    const end = skipStringOrIdent(sql, from);
     const raw = sql.slice(from + 1, end - 1);
     return { value: raw.replaceAll(ch + ch, ch), end };
   }
   if (ch === "[") {
-    let i = from + 1;
-    while (i < sql.length && sql[i] !== "]") i++;
-    return { value: sql.slice(from + 1, i), end: i + 1 };
+    // The bracket skip's unterminated-at-EOF return (length + 1) is what
+    // keeps `end - 1` the content boundary HERE. The quote path above has no
+    // such contract: unterminated, the skip returns length, and `end - 1`
+    // drops the final character — long-standing behavior, unchanged.
+    const end = skipStringOrIdent(sql, from);
+    return { value: sql.slice(from + 1, end - 1), end };
   }
   const m = /^[A-Za-z_][A-Za-z0-9_]*/.exec(sql.slice(from));
   return m ? { value: m[0], end: from + m[0].length } : undefined;
@@ -2421,8 +2552,16 @@ function skipExpression(
   const n = sql.length;
   while (i < n) {
     const ch = sql[i];
-    if (ch === "'" || ch === '"' || ch === "`") {
-      i = skipQuoted(sql, i, ch);
+    // Every string/identifier form, brackets included — a bracket identifier
+    // may contain the `,`/`(`/`)` this scan otherwise acts on. Comments too:
+    // `SET k = /* a, b */ 1` must not read the comment's comma as a
+    // target separator.
+    if (startsStringOrIdent(sql, i)) {
+      i = skipStringOrIdent(sql, i);
+      continue;
+    }
+    if (startsComment(sql, i)) {
+      i = skipComment(sql, i);
       continue;
     }
     if (ch === "(") depth++;

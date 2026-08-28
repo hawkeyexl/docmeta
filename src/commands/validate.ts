@@ -319,6 +319,11 @@ export async function runValidate(
   // matters — but the common no-checks path should not retain every file's
   // extraction, so the list fills only when the checks will actually run.
   const checkEntries: CheckEntry[] = [];
+  // Each file's resolution outcome from the loop below, so the checks'
+  // collection-view membership (0027) reuses this walk instead of re-running
+  // it per file. A file whose resolution threw has no entry — deliberately:
+  // it was filed as a schema finding and is a member of no view.
+  const checkResolved = new Map<string, ResolvedSchemaSet>();
 
   const processOne = async (
     label: string,
@@ -369,6 +374,7 @@ export async function runValidate(
       );
       return;
     }
+    if (checksWillRun) checkResolved.set(label, resolved);
 
     const schemaSet = resolved.schemas;
     let errors: FieldError[];
@@ -432,11 +438,13 @@ export async function runValidate(
       const findings = await runChecks(configuredChecks, checkEntries, {
         // The same resolution inputs the per-file loop used, so a check's
         // collection views (0027) hold exactly the files each override group
-        // was validated as.
+        // was validated as — and `resolved` hands over that loop's outcomes,
+        // so membership is read from them instead of resolving twice.
         config,
         ...(opts.cliSchemas ? { cliSchemas: opts.cliSchemas } : {}),
         fileBase: cwd,
         trustRoot,
+        resolved: checkResolved,
         ...(opts.onNotice ? { onNotice: opts.onNotice } : {}),
       });
       const byFile = new Map(results.map((r) => [r.file, r]));

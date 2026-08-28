@@ -244,6 +244,53 @@ describe("enums are CHECK (col IN (…)) (0028)", () => {
     });
   });
 
+  it("a bracket identifier containing a paren parses (bracket-aware scan)", async () => {
+    // `[mo)od]` is a legal SQLite bracket identifier; the `)` inside it must
+    // not close the CHECK's paren early. This exercises matchingParenEnd's
+    // bracket-awareness through the catalog path.
+    const d = copy();
+    const run = await ddl(
+      "ALTER TABLE docs ADD COLUMN [mo)od] TEXT CHECK ([mo)od] IN ('x','y'))",
+      d,
+    );
+    expect(schemaAddOf(run)).toMatchObject({
+      key: "mo)od",
+      type: "string",
+      enum: ["x", "y"],
+    });
+  });
+
+  it("a comment inside the CHECK parens refuses loudly, never miscounts", async () => {
+    // Every comment position inside the parens hits the strict one-shape
+    // walks before depth could matter, so the designed outcome is the named
+    // refusal — not a paren miscount surfacing as a shape error on clean
+    // input, and not a silently dropped constraint. matchingParenEnd itself
+    // is comment-aware for family consistency; this pins the contract.
+    const d = copy();
+    await expect(
+      ddl(
+        "ALTER TABLE docs ADD COLUMN phase TEXT CHECK (phase IN ('a','b') /* (decoy */)",
+        d,
+      ),
+    ).rejects.toThrow(/one shape/);
+  });
+
+  it("a CHECK spelled inside a comment does not confuse the parse", async () => {
+    // SQLite stores an ADD COLUMN's definition verbatim, comments included —
+    // the scan must skip the comment's decoy CHECK rather than count two
+    // constraints and trip the one-shape refusal.
+    const d = copy();
+    const run = await ddl(
+      "ALTER TABLE docs ADD COLUMN stage TEXT /* CHECK (stage IN ('nope')) */ CHECK (stage IN ('a','b'))",
+      d,
+    );
+    expect(schemaAddOf(run)).toMatchObject({
+      key: "stage",
+      type: "string",
+      enum: ["a", "b"],
+    });
+  });
+
   it("a numeric IN list with INTEGER maps consistently (stress 7)", async () => {
     const d = copy();
     await ddl(
