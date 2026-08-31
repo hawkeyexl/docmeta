@@ -2,10 +2,27 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "docmeta:stewardship:1.0.0-proposal.1",
   "title": "docmeta stewardship vocabulary (1.0.0-proposal.1)",
-  "description": "Is this page cared for: ownership, review, and the anchors that make drift detectable. Every field is a fact only a human can assert — dates the repo can derive (creation, last change) are deliberately absent, because git owns them and hand-typed copies go stale. The review dates are records, not freshness gates: JSON Schema cannot compare a date to today, and deriving the due date from `last-reviewed` + `review-interval` belongs to tooling that can read a clock (any freshness grader reads `last-reviewed`).",
+  "description": "Is this page cared for: attribution, ownership, review, and the anchors that make drift detectable. Every field is a fact only a human can assert — dates the repo can derive (creation, last change) are deliberately absent, because git owns them and hand-typed copies go stale. `authors` is not one of those derivable facts, which is why it sits here with the rest of the people: git records who committed a change, not who wrote the prose, and the two part ways every time a page is landed by a bot, a CMS, or a colleague merging someone else's draft. The review dates are records, not freshness gates: JSON Schema cannot compare a date to today, and deriving the due date from `last-reviewed` + `review-interval` belongs to tooling that can read a clock (any freshness grader reads `last-reviewed`).",
   "type": "object",
   "additionalProperties": true,
   "properties": {
+    "authors": {
+      "type": [
+        "string",
+        "object",
+        "array"
+      ],
+      "description": "Who wrote the page: a name, a list of names, or the structured person objects MyST and Docusaurus define. Attribution rather than answerability — `owner` is the party on the hook for the page now, and the two part company the moment an author moves on. The one field here that is not a `stringList`: `owner` and `reviewed-by` are plain names by design, while `authors` must also accept every documented MyST and Docusaurus person form. List members are names or person objects — never bare numbers or nulls. Never empty in any form: minLength, minItems and minProperties each bind to their own type and are ignored for the others.",
+      "items": {
+        "type": [
+          "string",
+          "object"
+        ]
+      },
+      "minLength": 1,
+      "minItems": 1,
+      "minProperties": 1
+    },
     "owner": {
       "$ref": "#/$defs/stringList",
       "description": "The person or team answerable for this page — the one required field of every docs-ownership system from Backstage to GitLab. A name, a handle, a chat channel, a team slug, or a list of them; write the spelling people can actually reach."

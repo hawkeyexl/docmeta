@@ -21,8 +21,8 @@ Nine metadata vocabularies, published by docmeta, designed as one family:
 
 | Id | One question it answers | Fields |
 |---|---|---|
-| `docmeta:core:1.0.0-proposal.1` | What is this page? | 7 (requires `title`, `description`) |
-| `docmeta:stewardship:1.0.0-proposal.1` | Is it cared for? | 7 |
+| `docmeta:core:1.0.0-proposal.1` | What is this page? | 6 (requires `title`, `description`) |
+| `docmeta:stewardship:1.0.0-proposal.1` | Is it cared for? | 8 |
 | `docmeta:audience:1.0.0-proposal.1` | Who does it serve; who may see it? | 5 |
 | `docmeta:lifecycle:1.0.0-proposal.1` | Where is it in its life? | 4 (+ the deprecation rule) |
 | `docmeta:structure:1.0.0-proposal.1` | What does it connect to? | 6 |
@@ -136,12 +136,13 @@ test), so stacking all six behaves exactly like the monolith did.
 
 `*` = required. All ids are `additionalProperties: true`.
 
-**docmeta:core:1.0.0-proposal.1** — `title`\*, `description`\*, `id`, `type`, `keywords`,
-`authors`, `language`. The descriptive floor, and the only id in the default
-set that requires anything. The shared keys are claimed at the loosest lawful definition
-(`authors` up to MyST/Docusaurus person objects and nothing looser — list
-members are strings or objects, never bare numbers; `keywords` down to
-Antora's comma-string) **except where looseness would teach a bad habit**,
+**docmeta:core:1.0.0-proposal.1** — `title`\*, `description`\*, `id`, `type`,
+`keywords`, `language`. The descriptive floor, and the only id in the default
+set that requires anything. Purely descriptive since review round 6: who wrote
+the page is not part of what the page *is*, so `authors` moved to stewardship
+with the other people (below). The shared keys are claimed at the loosest lawful
+definition (`keywords` down to Antora's comma-string) **except where looseness
+would teach a bad habit**,
 and those exceptions are recorded here in full: the required pair is two
 non-empty single strings; every other string core claims is also non-empty
 (`type: ""` otherwise reaches the kg type derivation and template selection
@@ -151,9 +152,15 @@ repeated `type`/`language` is an override case, exactly like its repeated
 titles. The `compat-check` ladder pins every one of these as an
 expected-reject, so an exception this list does not name fails the check.
 
-**docmeta:stewardship:1.0.0-proposal.1** — `owner`, `stakeholders`, `reviewed-by`,
-`last-reviewed`, `review-interval` (ISO 8601 duration), `verified-against`,
-`source-of-truth`. The review dates are records, not freshness gates — JSON
+**docmeta:stewardship:1.0.0-proposal.1** — `authors`, `owner`, `stakeholders`,
+`reviewed-by`, `last-reviewed`, `review-interval` (ISO 8601 duration),
+`verified-against`, `source-of-truth`. Every people fact in the family, behind
+one adoption decision: `authors` is attribution, `owner` is answerability, and
+the two part company the moment an author moves on. `authors` is the one field
+here claimed at the loosest lawful definition — up to MyST/Docusaurus person
+objects and nothing looser, list members strings or objects, never bare numbers
+— and so the one field here that is not a `stringList`: no claimant asks `owner`
+or `reviewed-by` to be anything but plain names. The review dates are records, not freshness gates — JSON
 Schema cannot compare a date to today, and the overdue-review case is pinned
 as *passing*; a freshness grader reads the same `last-reviewed` field
 and is the thing that owns the clock.
@@ -198,6 +205,24 @@ is only a useful verdict if the reasoning is written down:
   exists to prevent. `related-pages` already accepts URLs, so a style guide
   that splits "See also" from an off-site "Learn more" is making a rendering
   decision over one field, not needing two.
+
+Round 6 moved one field between two of these ids, and the reasoning is
+recorded for the same reason round 5's non-changes are:
+
+- **`authors` belongs to stewardship, not core.** Core answers *what is this
+  page*; who wrote it answers *is it cared for*, which is the question
+  stewardship already asks. The split now falls where principle 5 (facts live
+  at their altitude) puts it: core is description, stewardship is the people
+  and the dates. The concrete gain is one adoption decision instead of two —
+  a team wiring up attribution is already wiring up `owner` and `reviewed-by`,
+  and `authors` arriving with them is what they expected. Field counts move
+  (core 7 → 6, stewardship 7 → 8); the family total stays 33 and disjoint. The
+  cost is that stewardship is no longer uniform in shape: `authors` keeps its
+  own type union rather than the `stringList` its neighbors share, because
+  MyST and Docusaurus person objects are legal there and nowhere else in the
+  schema. Rejected as the alternative: normalizing `authors` down to
+  `stringList` for tidiness, which would break the compatibility rule against
+  two documented claimants to make one schema look neater.
 
 **docmeta:ai-context:1.0.0-proposal.1** — `generated-by`, `provenance`, `risks`
 (recommended flags `cost-incurring · destructive · irreversible · privileged ·
