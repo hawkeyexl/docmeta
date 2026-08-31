@@ -15,6 +15,15 @@ docs pages name no tools and no draft-contract versions — the vocabularies
 stand on their own claims. The walk's history lives only here and in
 proposal 0023's design ledgers, framed as record, not identity.
 
+**2026-08-31 ruling: `authors` moves to stewardship.** Core is the answer to
+*what is this page*, and who wrote it is not that — it is a fact about the
+page's care, which is what stewardship already collects. The move puts all
+four people fields (`authors`, `owner`, `stakeholders`, `reviewed-by`) behind
+one adoption decision and leaves core purely descriptive. Core 7 → 6 fields,
+stewardship 7 → 8; the family total stays 33 and disjoint. `authors` keeps its
+own loose shape rather than stewardship's `stringList` — it must still accept
+MyST and Docusaurus person objects, which `owner` and `reviewed-by` never do.
+
 **2026-08-26 correction: the whole family is default.** All nine append to
 `DEFAULT_SCHEMAS`, superseding the core-only intent below wherever it
 appears. Bare runs require the pair, validate every family key present,
@@ -63,8 +72,11 @@ Field homes:
 - **Core (docmeta:core:1.0.0-proposal.1):** title*, description* — and every string core
   claims is non-empty, with type/language single-valued even against DCMI
   (the recorded exception family)
-  plus id, type, keywords, authors, language
-- **Stewardship (docmeta:stewardship:1.0.0-proposal.1):** owner, stakeholders,
+  plus id, type, keywords, language
+- **Stewardship (docmeta:stewardship:1.0.0-proposal.1):** authors (moved from
+  core 2026-08-31 — attribution is a fact about care, not about what the page
+  is; keeps its own shape, since person objects are legal here and not in
+  `stringList`), owner, stakeholders,
   reviewed-by, last-reviewed, review-interval, verified-against,
   source-of-truth
 - **Audience & intent (docmeta:audience:1.0.0-proposal.1):** audiences, personas,

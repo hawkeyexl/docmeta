@@ -122,13 +122,13 @@ const probes = [
   ["keywords: Docusaurus/Hugo array", { ...base, keywords: ["alpha", "beta"] }, "core", false],
   ["keywords: Docusaurus empty-string item", { ...base, keywords: [""] }, "core", true],
   ["keywords: Antora empty string", { ...base, keywords: "" }, "core", true],
-  ["authors: empty string", { ...base, authors: "" }, "core", true],
-  ["authors: empty list", { ...base, authors: [] }, "core", true],
   ["id: Docusaurus path-shaped id", { ...base, id: "folder/doc" }, "core", false],
   ["id: empty string", { ...base, id: "" }, "core", true],
-  ["authors: MyST person objects", { ...base, authors: [{ name: "J", orcid: "0000-0002-1825-0097", roles: ["Writing"] }] }, "core", false],
-  ["authors: Docusaurus authors.yml key", { ...base, authors: "jdoe" }, "core", false],
-  ["authors: Docusaurus mixed list", { ...base, authors: ["jdoe", { name: "J", imageURL: "/j.png" }] }, "core", false],
+  ["authors: empty string", { ...base, authors: "" }, "stewardship", true],
+  ["authors: empty list", { ...base, authors: [] }, "stewardship", true],
+  ["authors: MyST person objects", { ...base, authors: [{ name: "J", orcid: "0000-0002-1825-0097", roles: ["Writing"] }] }, "stewardship", false],
+  ["authors: Docusaurus authors.yml key", { ...base, authors: "jdoe" }, "stewardship", false],
+  ["authors: Docusaurus mixed list", { ...base, authors: ["jdoe", { name: "J", imageURL: "/j.png" }] }, "stewardship", false],
 ];
 
 console.log("\n=== law probes (other claimants' extreme legal values vs the proposed owner) ===");

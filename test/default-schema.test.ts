@@ -51,9 +51,10 @@ const DRAFTS = "./docs/proposals/0023/schemas";
  */
 const V = "1.0.0-proposal.1";
 const CORE = `${DRAFTS}/core/${V}.json`;
+const STEWARDSHIP = `${DRAFTS}/stewardship/${V}.json`;
 const HOUSE = [
   CORE,
-  `${DRAFTS}/stewardship/${V}.json`,
+  STEWARDSHIP,
   `${DRAFTS}/audience/${V}.json`,
   `${DRAFTS}/lifecycle/${V}.json`,
   `${DRAFTS}/structure/${V}.json`,
@@ -68,7 +69,6 @@ const SIBLINGS = [
 /** The fields each house schema claims, pinned so growth is deliberate. */
 const FIELDS: Record<string, string[]> = {
   core: [
-    "authors",
     "description",
     "id",
     "keywords",
@@ -77,6 +77,7 @@ const FIELDS: Record<string, string[]> = {
     "type",
   ],
   stewardship: [
+    "authors",
     "last-reviewed",
     "owner",
     "review-interval",
@@ -226,7 +227,7 @@ describe("the six house vocabularies", () => {
   it("rejects a prose review date, attributed to stewardship", async () => {
     const r = await check("bad-last-reviewed.md");
     expect(r.ok).toBe(false);
-    expect(r.errors[0]?.schema).toBe(`${DRAFTS}/stewardship/${V}.json`);
+    expect(r.errors[0]?.schema).toBe(STEWARDSHIP);
     expect(r.errors[0]?.instancePath).toBe("/last-reviewed");
   });
 
@@ -406,15 +407,27 @@ describe("the six house vocabularies", () => {
       'title: T\ndescription: D\nid: ""',
       'title: T\ndescription: D\nkeywords: ""',
       'title: T\ndescription: D\nkeywords: ["", "beta"]',
-      'title: T\ndescription: D\nauthors: ""',
-      "title: T\ndescription: D\nauthors: []",
     ]) {
       const r = await checkStdin(yaml, [CORE]);
       expect(r.ok, yaml).toBe(false);
     }
+  });
+
+  it("holds authors non-empty in every form, attributed to stewardship", async () => {
+    // The same weak-floor rule as core's strings, applied where the field
+    // now lives: minLength, minItems and minProperties each bind to their
+    // own type, so no spelling of "an author I did not name" gets through.
+    for (const yaml of [
+      'title: T\ndescription: D\nauthors: ""',
+      "title: T\ndescription: D\nauthors: []",
+      "title: T\ndescription: D\nauthors: {}",
+    ]) {
+      const r = await checkStdin(yaml, [STEWARDSHIP]);
+      expect(r.ok, yaml).toBe(false);
+    }
     const badAuthors = await checkStdin(
       "title: T\ndescription: D\nauthors: [123, true]",
-      [CORE],
+      [STEWARDSHIP],
     );
     expect(badAuthors.ok).toBe(false);
   });
@@ -497,7 +510,7 @@ describe("the composability law on claimed keys", () => {
   it("tolerates MyST person objects in authors", async () => {
     const r = await checkStdin(
       "title: T\ndescription: D\nauthors:\n  - name: Jane Doe\n    orcid: 0000-0002-1825-0097",
-      [CORE, "myst:frontmatter:1.10"],
+      [STEWARDSHIP, "myst:frontmatter:1.10"],
     );
     expect(r.ok).toBe(true);
   });

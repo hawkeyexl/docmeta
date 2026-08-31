@@ -4,9 +4,9 @@ description: Deploy the operator with Helm and verify the rollout.
 id: install-operator-k8s
 type: how-to
 keywords: [helm, operator]
-authors: [Jane Doe]
 language: en
 
+authors: [Jane Doe]
 owner: platform-docs
 stakeholders: [jane.doe, pm-alex]
 reviewed-by: [sam.reviewer]

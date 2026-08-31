@@ -1,6 +1,6 @@
 ---
 title: "docmeta:stewardship:1.0.0-proposal.1"
-description: "The proposed ownership and review vocabulary — who is answerable for a page, when it was verified, and what reality it is checked against."
+description: "The proposed attribution, ownership, and review vocabulary — who wrote a page, who is answerable for it, when it was verified, and against what."
 sidebar:
   order: 2
   label: "stewardship"
@@ -13,15 +13,16 @@ open for community review. Draft schema:
 :::
 
 **The question it answers: is this page cared for?** Every field here is a
-fact only a human can assert — who owns the page, who to consult, when it
-was last verified and against what. Dates the repo can derive (creation,
-last change) are deliberately absent: git owns them, and hand-typed copies
-lie.
+fact only a human can assert — who wrote the page, who owns it, who to
+consult, when it was last verified and against what. Dates the repo can
+derive (creation, last change) are deliberately absent: git owns them, and
+hand-typed copies lie.
 
 ## Fields
 
 | Field | Type | Notes |
 |---|---|---|
+| `authors` | string, object, or list of them | Attribution — who wrote it, where `owner` is who answers for it now |
 | `owner` | string or list | The party answerable — a name, handle, chat channel, or team slug; the one field every ownership system from Backstage to GitLab requires |
 | `stakeholders` | string or list | Who has a stake in this page being right: the feature's engineer, the product owner, the support lead. Page-level on purpose — the right people differ page by page |
 | `reviewed-by` | string or list | Who did the last pass (`reviewers` belongs to MyST's scholarly objects, hence the spelling) |
@@ -30,7 +31,9 @@ lie.
 | `verified-against` | string, non-empty | The product version or spec the content was checked against: `operator 1.4.2` |
 | `source-of-truth` | string or list | Where reality lives — a repo path, an API spec; the anchor a drift check compares the page against |
 
-All list fields accept one string or a non-empty, duplicate-free list.
+All list fields accept one string or a non-empty, duplicate-free list —
+except `authors`, which also accepts the person objects MyST and Docusaurus
+define, and is the only field here that does.
 
 ## Example
 
@@ -38,6 +41,9 @@ All list fields accept one string or a non-empty, duplicate-free list.
 ---
 title: Install the operator on Kubernetes
 description: Deploy the operator with Helm and verify the rollout.
+authors:
+  - Jane Doe
+  - name: Sam Reviewer          # MyST/Docusaurus person objects are legal
 owner: platform-docs
 stakeholders: [jane.doe, pm-alex]
 reviewed-by: [sam.reviewer]
@@ -50,6 +56,20 @@ source-of-truth: https://github.com/example/operator/tree/main/helm
 
 ## Design decisions
 
+- **`authors` is attribution; `owner` is answerability.** They part company
+  the moment an author moves on, which is why both exist. `authors` moved
+  here from [core](/docmeta/proposals/core/) in review round 6: core answers
+  *what is this page*, and who wrote it does not. It is not a derivable fact
+  either — git records who *committed* a change, not who wrote the prose, and
+  the two differ every time a page is landed by a bot, a CMS, or a colleague
+  merging someone else's draft.
+- **`authors` keeps its own shape, and that is a real cost.** Every other
+  list here is a plain name or a list of them; `authors` must also accept
+  every documented MyST and Docusaurus person form, so it cannot share the
+  `stringList` definition. Normalizing it for tidiness would break the
+  family's compatibility rule against two claimants to make one schema look
+  neater. It still refuses everything empty — no `""`, no `[]`, no `{}`,
+  no bare numbers.
 - **Records, not gates.** JSON Schema cannot compare a date to today, so a
   `last-reviewed` from 1998 validates — deliberately, and pinned by a test.
   Deriving the due date (`last-reviewed` + `review-interval`) and judging it
@@ -73,7 +93,10 @@ source-of-truth: https://github.com/example/operator/tree/main/helm
 ## What reviewers should poke at
 
 Whether `owner` should eventually be required for teams adopting this
-vocabulary (it is optional as proposed), and whether the
+vocabulary (it is optional as proposed); whether the
 `verified-against` / `last-reviewed` distinction — reviewed *against
 something* vs reviewed *at some time* — reads clearly enough from the field
-names alone.
+names alone; and whether `authors` reads as belonging here. Generators put
+it next to `title`, so expecting it in [core](/docmeta/proposals/core/) is
+reasonable — the counter-argument is that every other people field is here,
+and splitting them means two adoption decisions for one habit.
