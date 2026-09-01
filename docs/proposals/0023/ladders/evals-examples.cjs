@@ -258,7 +258,7 @@ evals:
 evals:
   - The install command is correct.`],
 
-  ["17 a use: reference weighting a config-defined eval for this page", true,
+  ["P14 a use: reference weighting a config-defined eval for this page", true,
 `evals:
   - use: fresh-enough
     weight: 3`],

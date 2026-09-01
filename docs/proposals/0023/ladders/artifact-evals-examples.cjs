@@ -274,7 +274,7 @@ metadata:
   evals:
     - The session followed the skill.`],
 
-  ["18 the core version declaration, nested as artifacts nest the trio", true,
+  ["P13 the core version declaration, nested as artifacts nest the trio", true,
 `metadata:
   docmeta-vocabularies:
     evals: 1.0.0-proposal.2
