@@ -1,3 +1,15 @@
+# [4.13.0](https://github.com/hawkeyexl/docmeta/compare/v4.12.0...v4.13.0) (2026-09-01)
+
+
+### Bug Fixes
+
+* **0023:** constrain metadata.docmeta-vocabularies in artifact-evals ([f1004df](https://github.com/hawkeyexl/docmeta/commit/f1004df8a3565dbaeb06a62eca5f521668cf27de))
+
+
+### Features
+
+* **0023:** allow weight on the use: form, and floor the vocabulary map ([67e8475](https://github.com/hawkeyexl/docmeta/commit/67e8475c47793016a88a2ebc0030e83eb41296ac))
+
 # [4.12.0](https://github.com/hawkeyexl/docmeta/compare/v4.11.0...v4.12.0) (2026-08-28)
 
 
