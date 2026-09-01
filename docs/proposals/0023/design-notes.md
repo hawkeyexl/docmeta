@@ -367,3 +367,23 @@ distinct error naming both versions, checked *before* any unknown-key rejection.
 description already explains the open-kebab design and explicitly accepts the page side's `tool:`
 namespace "so one grader spelling ports across both eval vocabularies". Read shallowly this looks
 like a missing constraint. It is a documented decision, and it stands.
+
+### Round 6 follow-up: the declaration is constrained where it is nested
+
+`core` grew `docmeta-vocabularies`, and its description says artifacts nest it as
+`metadata.docmeta-vocabularies` — but `artifact-evals` only *allowed* the key, through
+`additionalProperties: true`, without constraining it. Review caught it, correctly.
+
+An unvalidated declaration is worse than an absent one. `Evals: 1.0.0-proposal.2` or
+`eval: 1.0.0-proposal.2` would pass, mean nothing to any tool, and read to its author as a
+version declaration that was accepted. The whole point of the key is to run *before* the
+`eval-` prefix rejection so a newer vocabulary's key is never reported as a typo; a
+silently-ignored declaration means that check never runs, on precisely the files whose prefix
+guard depends on it.
+
+`artifact-evals` now carries the same `propertyNames` pattern and string-valued
+`additionalProperties` as `core`, and the ladder gains three cases: the nested declaration
+accepted, a mis-cased family name rejected, and a non-string version rejected. The shape is
+duplicated rather than `$ref`'d, matching how the rest of this family's nesting works — the two
+schemas are published separately and a cross-family `$ref` would make one unresolvable without
+the other.

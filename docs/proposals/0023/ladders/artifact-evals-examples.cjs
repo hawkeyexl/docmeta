@@ -273,6 +273,27 @@ metadata:
   eval-skipp: true
   evals:
     - The session followed the skill.`],
+
+  ["18 the core version declaration, nested as artifacts nest the trio", true,
+`metadata:
+  docmeta-vocabularies:
+    evals: 1.0.0-proposal.2
+  evals:
+    - The session followed the skill.`],
+
+  ["N16 a mis-cased family name in the declaration", false,
+`metadata:
+  docmeta-vocabularies:
+    Evals: 1.0.0-proposal.2
+  evals:
+    - The session followed the skill.`],
+
+  ["N17 a version that is not a string", false,
+`metadata:
+  docmeta-vocabularies:
+    evals: 1
+  evals:
+    - The session followed the skill.`],
 ];
 
 let bad = 0;

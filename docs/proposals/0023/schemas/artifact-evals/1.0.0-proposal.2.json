@@ -10,6 +10,17 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
+        "docmeta-vocabularies": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "The `docmeta:core` declaration, nested one level down as artifacts nest the rest of this trio. Constrained here rather than left to `additionalProperties`, because an unvalidated declaration is worse than an absent one: a mis-cased or misspelled family name would pass silently and the version check it exists to drive would never run, on exactly the files whose `eval-` prefix guard depends on it. Same shape as the top-level key in `docmeta:core` - see that schema for what it means and when a tool must check it."
+        },
         "evals": {
           "type": [
             "string",
