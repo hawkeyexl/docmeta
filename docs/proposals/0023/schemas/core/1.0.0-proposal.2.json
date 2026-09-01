@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docmeta:core:1.0.0-proposal.2",
+  "title": "docmeta core page vocabulary (1.0.0-proposal.2)",
+  "description": "What the page is: the descriptive floor of the docmeta house vocabulary, and the only part of the default set that requires anything. Requires `title` and `description`, and holds every string it claims non-empty — an empty value is the habit a default exists to prevent, and an empty `type` reaches the tooling that switches on it (the kg type derivation, template selection) as a falsy key instead of a loud failure. Empty strings that other claimants permit are override cases, and so are Dublin Core's repeated-element arrays for type and language — the same recorded exception family as the required pair: core is deliberately stricter than the loosest claimant wherever looseness would teach a bad habit. Every other key here is a deliberately loose claim on a name other schemas share, made only where the fact is about the content and never where it is about the rendering, which stays with the generator. Facts about people are not here either: `authors` sits with `owner` and `reviewed-by` in `docmeta:stewardship:1.0.0-proposal.1`, because who made a page is a fact about its care rather than about what it is. One shape rule across the whole family: a single-valued fact is a plain string; a list-valued fact is a string or a list. proposal.2 adds `docmeta-vocabularies`, the one key that is about the vocabularies themselves rather than about the page - it lives in core because all nine families share the problem it solves, and none of them could solve it alone.",
+  "type": "object",
+  "required": [
+    "title",
+    "description"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What the page is called, as one non-empty string. Deliberately stricter than the other schemas that claim this key: Dublin Core's repeated-title array and Docusaurus's empty title are override cases here, because a default whose floor accepts an empty title teaches the habit it exists to prevent."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One full non-empty sentence saying what the page is for. Doubles as the search snippet, the link-card subtitle, and the first thing a retrieval system reads. Held to a single non-empty string for the same reason as `title`."
+    },
+    "id": {
+      "type": "string",
+      "description": "Stable identifier for this page, independent of its path. References from other pages (`related-pages`, `prerequisites`, `replaced-by`) stay valid across moves when they point at ids.",
+      "minLength": 1
+    },
+    "type": {
+      "type": "string",
+      "description": "The kind of content this page is, as one string. Pair with a taxonomy schema (`diataxis:diataxis:1.0`, `tgdp:templates:1.0`) to constrain it to a published vocabulary; `kg.type` narrows it to the iiRDS ladder, and the seven-action `action` names what the reader is doing rather than what the page is.",
+      "minLength": 1
+    },
+    "keywords": {
+      "type": [
+        "string",
+        "array"
+      ],
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Search keywords. A list of strings, or a single comma-separated string — the AsciiDoc form Antora reads. Deliberately distinct from two neighbors: `tags` (the browsable site taxonomy) is left entirely to your generator's schema, and `concepts` (docmeta:structure:1.0.0-proposal.1) holds controlled glossary terms rather than free words.",
+      "minLength": 1
+    },
+    "language": {
+      "type": "string",
+      "description": "The language of the page, as one string. A BCP 47 tag such as `en` or `pt-BR` is the recommendation, not enforced.",
+      "minLength": 1
+    },
+    "docmeta-vocabularies": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Which version of each docmeta vocabulary this file is written against, keyed by family name (`evals`, `kg`, `structure`, ...). Absent means the file targets whatever version the reading tool implements, which is today's behaviour and stays the common case. Present, it lets a tool give the right answer instead of the wrong one: a major above what the tool implements is a distinct error naming both versions - 'this file targets evals 2.0; this build supports up to 1.x' - and it must be checked BEFORE any unknown-key rejection, so a key from a newer vocabulary is never reported as a typo. Without it every family that reserves a key prefix has to choose between rejecting future keys and catching present typos; the evals family hit exactly that, which is what prompted this. Artifacts nest the key one level down as `metadata.docmeta-vocabularies`, matching how artifact-evals nests the rest of its trio."
+    }
+  }
+}

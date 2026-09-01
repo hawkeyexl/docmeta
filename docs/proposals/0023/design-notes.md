@@ -305,3 +305,110 @@ lint multiple different kinds of documents in a single run" (today
   `docs/proposals/0023/schemas/` (outside the frozen registry), verified
   by the `ladders/*.cjs` runs and the green spec suite. Proposal 0023 and
   the published review page are up; next is the community review itself.
+
+## Review round 6 — scoring, targeting, and versioning
+
+Three families move to `1.0.0-proposal.2`: `evals`, `artifact-evals`, and `core`. The other six
+stay at proposal.1 — bumping them would announce a revision none of them made and leave six pairs
+of byte-identical files to explain. `test/default-schema.test.ts` and `ladders/compat-check.cjs`
+each carry a per-family `VERSIONS` table so a family's next bump is still a one-line edit.
+
+Six decisions, and the reasoning that is not already in the field descriptions.
+
+**`weight` (both eval families).** Positive number, default 1. It changes how much an outcome moves
+an aggregate and **never** the eval's own pass/fail — the binary outcome is what SARIF, JUnit and
+findings baselines consume downstream, and a score leaking into it would change all three at once.
+Zero is excluded deliberately: a weightless eval is a silent disable, and `skip` already means that
+loudly.
+
+**`target`, not `focus` (both).** `claude plugin eval` spells this twice — `target` on its `regex`
+grader, `focus` on its `llm` grader — for the same union of values. One name, and `target` is the
+right one for three reasons. It names a *data selector* rather than an emphasis. `evidence` already
+occupies the hint slot in both our families, so `focus` collides with it while `target` does not,
+leaving the pair legible. And it has to serve deterministic graders, which have no focus. That the
+source design reaches for `target` on its deterministic grader is itself the evidence.
+
+Members differ by family because the subjects do — `body`/`raw`/`frontmatter` for a page,
+`transcript`/`last-message`/`files`/`artifact` for a session — with a shared `{source: file, path}`
+object form, branched with if/then in the house style.
+
+**`runs` and `model` (both).** Per-eval ensemble count and judging model. Capped at 50 because runs
+multiply cost directly. Both, plus the pre-existing `provider`, are now constrained to `ai` evals by
+a conditional: proposal.1 stated that for `provider` in prose while giving command's fields a hard
+conditional, which was an asymmetry with no reason behind it.
+
+`model` also has a second purpose worth recording: it lets an eval name a judge *other than* the
+model that produced what it grades. `ai-context`'s `generated-by` already says a judge should know
+when it is grading its own author; without a per-eval `model` a tool could only warn about that,
+never fix it.
+
+**`assertion` becomes conditional in `artifact-evals`.** It was flatly required there and
+conditionally required on the page side. A `tool-usage` criterion says everything in `options`, just
+as a page-side `tool:freshness` one does, so the requirement forced authors to write a sentence no
+grader reads. The page side's `allOf` block is ported verbatim: `ai`, `human` and a bare entry still
+require an assertion; `command` requires an assertion or a command.
+
+**The `eval-` prefix guard is encoded, not described.** Both families asked consumers to reject
+unrecognized `eval-*` keys in prose, and neither enforced it — so a consumer validating against the
+published bytes got the guard only if it implemented one itself. moose-docevals did;
+moose-tracevals, following the description faithfully, did not. Now `evals` carries
+`"^eval-(?!suite$|skip$|provenance$)": false` at the root and `artifact-evals` the equivalent inside
+`metadata`.
+
+**`docmeta-vocabularies` in `core`.** The guard above is only safe once a file can say which
+vocabulary version it targets: without it, a key from a *newer* vocabulary is rejected as a typo —
+precisely the diagnosis the prefix rule exists to prevent, one level up. It lives in `core` because
+all nine families share the gap and none could solve it alone. Absent means "assume the version the
+reading tool implements", which is today's behaviour; a major above what the tool implements is a
+distinct error naming both versions, checked *before* any unknown-key rejection.
+
+**Not changed, though it looked like it should be.** `artifact-evals.grader` has no top-level
+`pattern` — it is an `anyOf` of `^(tool:)?[a-z0-9][a-z0-9-]*$` plus a recommended enum, and its
+description already explains the open-kebab design and explicitly accepts the page side's `tool:`
+namespace "so one grader spelling ports across both eval vocabularies". Read shallowly this looks
+like a missing constraint. It is a documented decision, and it stands.
+
+### Round 6 follow-up: the declaration is constrained where it is nested
+
+`core` grew `docmeta-vocabularies`, and its description says artifacts nest it as
+`metadata.docmeta-vocabularies` — but `artifact-evals` only *allowed* the key, through
+`additionalProperties: true`, without constraining it. Review caught it, correctly.
+
+An unvalidated declaration is worse than an absent one. `Evals: 1.0.0-proposal.2` or
+`eval: 1.0.0-proposal.2` would pass, mean nothing to any tool, and read to its author as a
+version declaration that was accepted. The whole point of the key is to run *before* the
+`eval-` prefix rejection so a newer vocabulary's key is never reported as a typo; a
+silently-ignored declaration means that check never runs, on precisely the files whose prefix
+guard depends on it.
+
+`artifact-evals` now carries the same `propertyNames` pattern and string-valued
+`additionalProperties` as `core`, and the ladder gains three cases: the nested declaration
+accepted, a mis-cased family name rejected, and a non-string version rejected. The shape is
+duplicated rather than `$ref`'d, matching how the rest of this family's nesting works — the two
+schemas are published separately and a cross-family `$ref` would make one unresolvable without
+the other.
+
+### Round 6 follow-up: where the `use:` form's overrides stop
+
+Review asked whether `weight`'s absence from `evalReference` was an intentional boundary or an
+omission. **Omission** — `weight` went onto `inlineEval` and nobody looked at the reference form,
+which is how most pages actually join an aggregate. It is there now, and `weight` is hoisted into
+`$defs` so the two forms cannot drift on what a weight is.
+
+Asking the question did expose where the line belongs, which was not written down anywhere. The
+`use:` form's overrides are statements about **this page's relationship to a check the corpus
+owner defined**: whether it applies (`skip`), what kind of claim it is here (`type`), how badly
+failing matters (`severity`), what it measures here (`options`), and how much it counts
+(`weight`).
+
+Two groups stay out, for different reasons:
+
+- **`provider`, `model`, `runs`** say how the *tool executes*, not what the page claims. A corpus
+  where each page picks its own judge model is one no operator can cost, cache, or reason about,
+  and the run-wide setting exists precisely so that decision has one place.
+- **`target`** would let a named eval read different bytes on different pages, so one name means
+  two things in one corpus — the confusion `use:` exists to prevent. An eval that needs a
+  different subject is a different eval, and defining it costs one config entry.
+
+Also from this round: `docmeta-vocabularies: {}` was valid and declared nothing. It now carries
+`minProperties: 1`, matching the `minItems: 1` floor the family already applies to every list.

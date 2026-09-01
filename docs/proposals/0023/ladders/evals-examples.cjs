@@ -1,4 +1,4 @@
-// Validate the docmeta:evals:1.0.0-proposal.1 example ladder against the draft schema,
+// Validate the docmeta:evals:1.0.0-proposal.2 example ladder against the draft schema,
 // without registering anything. Run from the worktree root.
 const fs = require("fs");
 const { createRequire } = require("module");
@@ -9,7 +9,7 @@ const { parse } = req("yaml");
 
 // The drafts' semver prerelease, spelled once per ladder so a bump is a
 // one-line edit here rather than a literal buried mid-expression.
-const V = "1.0.0-proposal.1";
+const V = "1.0.0-proposal.2";
 const schema = JSON.parse(
   fs.readFileSync(`docs/proposals/0023/schemas/evals/${V}.json`, "utf8"),
 );
@@ -202,6 +202,76 @@ evals:
     assertion: Something.
     grader: command
     generated-assertion-hash: 07d185732a48ace07056e847b0fadd72fa35f830f7b793f2790db1a59182fd7a`],
+
+  // proposal.2: scoring, judge selection, and the target selector.
+  ["P11 weight, model and runs on an ai eval", true,
+`evals:
+  - id: install-is-complete
+    assertion: Every prerequisite is listed before the first command.
+    weight: 2
+    model: claude-sonnet-4-5
+    runs: 5`],
+
+  ["P12 target selects the frontmatter", true,
+`evals:
+  - id: has-owner
+    grader: tool:regex
+    target: frontmatter
+    options:
+      pattern: "^owner:"`],
+
+  ["P13 target selects a companion file", true,
+`evals:
+  - id: sample-compiles
+    assertion: The sample in this page's example project still builds.
+    target:
+      source: file
+      path: examples/quickstart/main.ts`],
+
+  ["N11 weight zero is a silent disable; skip says it loudly", false,
+`evals:
+  - id: weightless
+    assertion: Something.
+    weight: 0`],
+
+  ["N12 runs beyond the cap (it multiplies cost directly)", false,
+`evals:
+  - id: too-many
+    assertion: Something.
+    runs: 51`],
+
+  ["N13 judge selection on a command eval (ai-only fields)", false,
+`evals:
+  - id: wrong-family
+    grader: command
+    command: [./check.sh]
+    model: claude-sonnet-4-5`],
+
+  ["N14 an unknown target member", false,
+`evals:
+  - id: bad-target
+    assertion: Something.
+    target: headings`],
+
+  ["N15 an unrecognized eval-* key is a typo, not an extension", false,
+`eval-suit: default
+evals:
+  - The install command is correct.`],
+
+  ["P14 a use: reference weighting a config-defined eval for this page", true,
+`evals:
+  - use: fresh-enough
+    weight: 3`],
+
+  ["N16 weight zero on a reference, same rule as inline", false,
+`evals:
+  - use: fresh-enough
+    weight: 0`],
+
+  ["N17 a reference cannot pick its own judge model", false,
+`evals:
+  - use: fresh-enough
+    model: claude-opus-4-5`],
 ];
 
 let bad = 0;

@@ -25,8 +25,8 @@
  *    docmeta house schemas, so a page stacking all six gets every error
  *    attributed to exactly one intent.
  *
- * 3. **Companion namespaces are not claimed.** `evals` (docmeta:evals:1.0.0-proposal.1),
- *    `kg` (docmeta:kg:1.0.0-proposal.1) and `metadata` (docmeta:artifact-evals:1.0.0-proposal.1) are
+ * 3. **Companion namespaces are not claimed.** `evals` (docmeta:evals:1.0.0-proposal.2),
+ *    `kg` (docmeta:kg:1.0.0-proposal.1) and `metadata` (docmeta:artifact-evals:1.0.0-proposal.2) are
  *    common vocabularies validated by their own schemas and implemented by
  *    their own tools; claiming them here — even loosely — would put them on
  *    `docmeta fill`'s menu, and each has its own fill loop.
@@ -46,30 +46,41 @@ const DRAFTS = "./docs/proposals/0023/schemas";
  * hyphen is what makes `1.0.0-proposal.1` sort *below* the `1.0.0` these
  * register as, and what keeps a `docmeta:core:1` range from ever resolving to
  * a draft. Spelled `+proposal.1` it would compare equal to the release, which
- * is the opposite of what a review draft wants. One constant so the next
- * revision is a one-line bump.
+ * is the opposite of what a review draft wants.
+ *
+ * Revisions are **per family**, not per set. proposal.2 of `evals`,
+ * `artifact-evals` and `core` carries scoring, targeting and versioning fields
+ * the other six had no part in; bumping those six alongside would announce a
+ * revision none of them made and leave six pairs of byte-identical files to
+ * explain. `ref()` keeps the mapping in one table, so a family's next bump is
+ * still a one-line edit.
  */
-const V = "1.0.0-proposal.1";
-const CORE = `${DRAFTS}/core/${V}.json`;
-const STEWARDSHIP = `${DRAFTS}/stewardship/${V}.json`;
+const DRAFT_V = "1.0.0-proposal.1";
+const VERSIONS: Record<string, string> = {
+  core: "1.0.0-proposal.2",
+  evals: "1.0.0-proposal.2",
+  "artifact-evals": "1.0.0-proposal.2",
+};
+const ref = (family: string): string =>
+  `${DRAFTS}/${family}/${VERSIONS[family] ?? DRAFT_V}.json`;
+
+const CORE = ref("core");
+const STEWARDSHIP = ref("stewardship");
 const HOUSE = [
   CORE,
   STEWARDSHIP,
-  `${DRAFTS}/audience/${V}.json`,
-  `${DRAFTS}/lifecycle/${V}.json`,
-  `${DRAFTS}/structure/${V}.json`,
-  `${DRAFTS}/ai-context/${V}.json`,
+  ref("audience"),
+  ref("lifecycle"),
+  ref("structure"),
+  ref("ai-context"),
 ];
-const SIBLINGS = [
-  `${DRAFTS}/evals/${V}.json`,
-  `${DRAFTS}/kg/${V}.json`,
-  `${DRAFTS}/artifact-evals/${V}.json`,
-];
+const SIBLINGS = [ref("evals"), ref("kg"), ref("artifact-evals")];
 
 /** The fields each house schema claims, pinned so growth is deliberate. */
 const FIELDS: Record<string, string[]> = {
   core: [
     "description",
+    "docmeta-vocabularies",
     "id",
     "keywords",
     "language",
@@ -156,7 +167,7 @@ describe("the six house vocabularies", () => {
         seen.set(key, ref);
       }
     }
-    expect(seen.size).toBe(33);
+    expect(seen.size).toBe(34);
   });
 
   it("spells every field in lowercase kebab-case", async () => {
@@ -196,10 +207,36 @@ describe("the six house vocabularies", () => {
     expect(r.errors[0]?.subject).toBe("description");
   });
 
+  it("accepts a docmeta-vocabularies declaration, keyed by family", async () => {
+    const r = await checkStdin(
+      [
+        "title: T",
+        "description: D",
+        "docmeta-vocabularies:",
+        "  evals: 1.0.0-proposal.2",
+        "  structure: 1.0.0-proposal.1",
+      ].join("\n"),
+    );
+    expect(r.errors).toEqual([]);
+  });
+
+  it("rejects a docmeta-vocabularies family that is not kebab-case", async () => {
+    // The version a file targets is only useful if the family name it keys is
+    // the one tools look up; a mis-cased key would silently target nothing.
+    const r = await checkStdin(
+      ["title: T", "description: D", "docmeta-vocabularies:", "  Evals: 1.0.0"].join(
+        "\n",
+      ),
+    );
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]?.schema).toBe(CORE);
+    expect(r.errors[0]?.instancePath).toBe("/docmeta-vocabularies");
+  });
+
   it("rejects a lifecycle outside the four-stage ladder, attributed to lifecycle", async () => {
     const r = await check("bad-lifecycle.md");
     expect(r.ok).toBe(false);
-    expect(r.errors[0]?.schema).toBe(`${DRAFTS}/lifecycle/${V}.json`);
+    expect(r.errors[0]?.schema).toBe(ref("lifecycle"));
     expect(r.errors[0]?.instancePath).toBe("/lifecycle");
   });
 
@@ -533,17 +570,24 @@ describe("the composability law on claimed keys", () => {
  * expectations inside are written against that future state on purpose.
  */
 describe.skip("the default set (flips on registration)", () => {
-  const CORE_ID = "docmeta:core:1.0.0-proposal.1";
+  // Derived from the same table `ref()` reads, not repeated as literals. This
+  // block is skipped until the registration PR flips it, so a stale version
+  // here fails nothing in CI and is found only when that PR runs it — which
+  // is exactly when a "no compiled schema" error is most confusing. Three
+  // families have moved to proposal.2 since these strings were written.
+  const idFor = (family: string): string =>
+    `docmeta:${family}:${VERSIONS[family] ?? DRAFT_V}`;
+  const CORE_ID = idFor("core");
   const FAMILY_IDS = [
     CORE_ID,
-    "docmeta:stewardship:1.0.0-proposal.1",
-    "docmeta:audience:1.0.0-proposal.1",
-    "docmeta:lifecycle:1.0.0-proposal.1",
-    "docmeta:structure:1.0.0-proposal.1",
-    "docmeta:ai-context:1.0.0-proposal.1",
-    "docmeta:evals:1.0.0-proposal.1",
-    "docmeta:kg:1.0.0-proposal.1",
-    "docmeta:artifact-evals:1.0.0-proposal.1",
+    idFor("stewardship"),
+    idFor("audience"),
+    idFor("lifecycle"),
+    idFor("structure"),
+    idFor("ai-context"),
+    idFor("evals"),
+    idFor("kg"),
+    idFor("artifact-evals"),
   ];
 
   it("appends the whole family after the two existing members", async () => {

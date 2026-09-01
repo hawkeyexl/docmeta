@@ -1,4 +1,4 @@
-// Validate the docmeta:artifact-evals:1.0.0-proposal.1 example ladder against the draft
+// Validate the docmeta:artifact-evals:1.0.0-proposal.2 example ladder against the draft
 // schema. Run from the repo root:
 //   node docs/proposals/0023/ladders/artifact-evals-examples.cjs
 const fs = require("fs");
@@ -10,7 +10,7 @@ const { parse } = req("yaml");
 
 // The drafts' semver prerelease, spelled once per ladder so a bump is a
 // one-line edit here rather than a literal buried mid-expression.
-const V = "1.0.0-proposal.1";
+const V = "1.0.0-proposal.2";
 const schema = JSON.parse(
   fs.readFileSync(`docs/proposals/0023/schemas/artifact-evals/${V}.json`, "utf8"),
 );
@@ -210,6 +210,90 @@ metadata:
       assertion: Something.
       grader: command
       generated-assertion-hash: 07d185732a48ace07056e847b0fadd72fa35f830f7b793f2790db1a59182fd7a`],
+
+  // proposal.2: assertion is conditional, plus scoring, judge selection, target.
+  ["P10 a deterministic grader needs no assertion (options say it all)", true,
+`metadata:
+  evals:
+    - id: no-force-push
+      grader: tool-usage
+      options:
+        tool: Bash
+        expect: not-used`],
+
+  ["P11 weight, model and runs on an ai eval", true,
+`metadata:
+  evals:
+    - id: followed-the-skill
+      assertion: The session edited files rather than shelling out.
+      weight: 2
+      model: claude-sonnet-4-5
+      runs: 5`],
+
+  ["P12 target selects the final message", true,
+`metadata:
+  evals:
+    - id: reported-cleanly
+      assertion: The final message summarizes what changed.
+      target: last-message`],
+
+  ["N10 an ai eval still needs its assertion", false,
+`metadata:
+  evals:
+    - id: no-assertion
+      grader: ai`],
+
+  ["N11 no grader means the ai default, so the assertion is still required", false,
+`metadata:
+  evals:
+    - id: bare`],
+
+  ["N12 a human eval still needs its assertion", false,
+`metadata:
+  evals:
+    - id: needs-eyes
+      grader: human`],
+
+  ["N13 weight zero is a silent disable; skip says it loudly", false,
+`metadata:
+  evals:
+    - id: weightless
+      assertion: Something.
+      weight: 0`],
+
+  ["N14 a page-side target member on a session", false,
+`metadata:
+  evals:
+    - id: wrong-subject
+      assertion: Something.
+      target: body`],
+
+  ["N15 an unrecognized metadata eval-* key is a typo, not an extension", false,
+`metadata:
+  eval-skipp: true
+  evals:
+    - The session followed the skill.`],
+
+  ["P13 the core version declaration, nested as artifacts nest the trio", true,
+`metadata:
+  docmeta-vocabularies:
+    evals: 1.0.0-proposal.2
+  evals:
+    - The session followed the skill.`],
+
+  ["N16 a mis-cased family name in the declaration", false,
+`metadata:
+  docmeta-vocabularies:
+    Evals: 1.0.0-proposal.2
+  evals:
+    - The session followed the skill.`],
+
+  ["N17 a version that is not a string", false,
+`metadata:
+  docmeta-vocabularies:
+    evals: 1
+  evals:
+    - The session followed the skill.`],
 ];
 
 let bad = 0;
