@@ -257,6 +257,21 @@ evals:
 `eval-suit: default
 evals:
   - The install command is correct.`],
+
+  ["17 a use: reference weighting a config-defined eval for this page", true,
+`evals:
+  - use: fresh-enough
+    weight: 3`],
+
+  ["N16 weight zero on a reference, same rule as inline", false,
+`evals:
+  - use: fresh-enough
+    weight: 0`],
+
+  ["N17 a reference cannot pick its own judge model", false,
+`evals:
+  - use: fresh-enough
+    model: claude-opus-4-5`],
 ];
 
 let bad = 0;

@@ -387,3 +387,28 @@ accepted, a mis-cased family name rejected, and a non-string version rejected. T
 duplicated rather than `$ref`'d, matching how the rest of this family's nesting works — the two
 schemas are published separately and a cross-family `$ref` would make one unresolvable without
 the other.
+
+### Round 6 follow-up: where the `use:` form's overrides stop
+
+Review asked whether `weight`'s absence from `evalReference` was an intentional boundary or an
+omission. **Omission** — `weight` went onto `inlineEval` and nobody looked at the reference form,
+which is how most pages actually join an aggregate. It is there now, and `weight` is hoisted into
+`$defs` so the two forms cannot drift on what a weight is.
+
+Asking the question did expose where the line belongs, which was not written down anywhere. The
+`use:` form's overrides are statements about **this page's relationship to a check the corpus
+owner defined**: whether it applies (`skip`), what kind of claim it is here (`type`), how badly
+failing matters (`severity`), what it measures here (`options`), and how much it counts
+(`weight`).
+
+Two groups stay out, for different reasons:
+
+- **`provider`, `model`, `runs`** say how the *tool executes*, not what the page claims. A corpus
+  where each page picks its own judge model is one no operator can cost, cache, or reason about,
+  and the run-wide setting exists precisely so that decision has one place.
+- **`target`** would let a named eval read different bytes on different pages, so one name means
+  two things in one corpus — the confusion `use:` exists to prevent. An eval that needs a
+  different subject is a different eval, and defining it costs one config entry.
+
+Also from this round: `docmeta-vocabularies: {}` was valid and declared nothing. It now carries
+`minProperties: 1`, matching the `minItems: 1` floor the family already applies to every list.
