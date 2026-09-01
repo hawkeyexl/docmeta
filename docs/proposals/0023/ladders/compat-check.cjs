@@ -26,7 +26,17 @@ const PROPOSED_ROOT = "docs/proposals/0023/schemas";
 // carry it, and a mismatch between the two compiles fine and then looks up
 // nothing — which is how a stale copy here reads as "validate is not a
 // function" rather than as a failed probe.
-const V = "1.0.0-proposal.1";
+const DRAFT_V = "1.0.0-proposal.1";
+// Revisions are per family: evals, artifact-evals and core moved to
+// proposal.2 for the scoring, targeting and versioning fields; the other six
+// had no part in that and stay where they are. One table so the next bump is
+// still a one-line edit.
+const VERSIONS = {
+  core: "1.0.0-proposal.2",
+  evals: "1.0.0-proposal.2",
+  "artifact-evals": "1.0.0-proposal.2",
+};
+const vOf = (family) => VERSIONS[family] ?? DRAFT_V;
 const PROPOSED_DIRS = [
   "core", "stewardship", "audience", "lifecycle", "structure", "ai-context",
   "evals", "kg", "artifact-evals",
@@ -48,7 +58,7 @@ function loadDir(root) {
 }
 
 const proposed = PROPOSED_DIRS.map((name) => JSON.parse(
-  fs.readFileSync(`${PROPOSED_ROOT}/${name}/${V}.json`, "utf8"),
+  fs.readFileSync(`${PROPOSED_ROOT}/${name}/${vOf(name)}.json`, "utf8"),
 ));
 // The drafts live outside src/schemas, so everything there is a real
 // registered built-in — no hand-maintained skip set to drift.
@@ -133,7 +143,7 @@ const probes = [
 
 console.log("\n=== law probes (other claimants' extreme legal values vs the proposed owner) ===");
 for (const [name, doc, ownerShort, expectReject] of probes) {
-  const id = `docmeta:${ownerShort}:${V}`;
+  const id = `docmeta:${ownerShort}:${vOf(ownerShort)}`;
   const validate = compiled.get(id);
   if (!validate) {
     // A probe naming an id nothing compiled to is a broken probe, not a pass.

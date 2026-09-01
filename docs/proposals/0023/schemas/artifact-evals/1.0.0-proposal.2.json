@@ -1,0 +1,460 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docmeta:artifact-evals:1.0.0-proposal.2",
+  "title": "docmeta artifact eval declarations (1.0.0-proposal.2)",
+  "description": "Eval declarations for instruction artifacts - skills, agent definitions, and project-rules files: assertions about what must have held in an agent session that used the artifact. A docmeta common vocabulary sharing the entry shape of docmeta:evals. The page-side trio appears here one level down - `metadata.evals` (one assertion or the list), `metadata.eval-skip`, `metadata.eval-provenance` - because an artifact's top-level frontmatter is the host tool's contract and `metadata` is its sanctioned extension bag; there is no container object inside it - the list is the value. `metadata` stays open so other tools' members pass untouched, and the `eval-` prefix is reserved and enforced inside it: an unrecognized `eval-*` member is rejected, the same loud-typo guard as the page side. proposal.1 asked consumers to implement that themselves, which meant an artifact validated against the published bytes got no guard.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "evals": {
+          "type": [
+            "string",
+            "array"
+          ],
+          "minLength": 1,
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evalEntry"
+          },
+          "description": "The evals for this artifact: one AI-judged assertion as a string, or a non-empty list of entries — string shorthands, or closed objects with a required id. An empty list is not a declaration; an artifact with no evals omits the key. Ids are unique within an artifact: two entries claiming one id is an error, not a last-one-wins override. JSON Schema cannot express that over a mixed-shape array - `uniqueItems` is whole-item equality - so it is a requirement on implementations, stated here so every tool agrees on the rule."
+        },
+        "eval-skip": {
+          "type": "boolean",
+          "default": false,
+          "description": "Skip this artifact's evals entirely — reported as skipped, never silently ignored. The page-side key, one level down; default false."
+        },
+        "eval-provenance": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/provenanceEntry"
+          },
+          "description": "Attribution for machine-proposed evals, one entry per model (consumers merge by generated-by; the schema dedupes identical entries): which eval ids it proposed, at what confidence. A human deletes an entry once those evals are reviewed — the family provenance pattern, one level down.",
+          "uniqueItems": true
+        }
+      },
+      "patternProperties": {
+        "^eval-(?!skip$|provenance$)": false
+      }
+    }
+  },
+  "$defs": {
+    "provenanceEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generated-by"
+      ],
+      "properties": {
+        "generated-by": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Model or agent that proposed the evals."
+        },
+        "evals": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "uniqueItems": true,
+          "description": "Ids of the proposed evals."
+        },
+        "confidence": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "description": "Per-eval model confidence, 0..1, keyed by the same kebab eval ids as `evals`."
+        }
+      }
+    },
+    "evalEntry": {
+      "if": {
+        "type": "string"
+      },
+      "then": {
+        "type": "string",
+        "minLength": 1
+      },
+      "else": {
+        "$ref": "#/$defs/inlineEval"
+      },
+      "description": "One eval: a string shorthand (an AI-judged assertion at error severity — the legitimately id-less form), or a closed object. Branched with if/then rather than oneOf so a fault inside the object form is reported once, against the key that is wrong."
+    },
+    "inlineEval": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$",
+          "description": "Unique (per artifact) kebab-case identifier. Required on the object form — position-derived names orphan cached verdicts whenever entries move; if an eval is worth an object, it is worth a stable name."
+        },
+        "assertion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What must have held in the session that used this artifact."
+        },
+        "type": {
+          "$ref": "#/$defs/evalType"
+        },
+        "grader": {
+          "$ref": "#/$defs/grader"
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Which configured inference provider or agent judges an `ai`-graded eval. Legal values are whatever the inference dependency supports, validated at run time; omit for the config default."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Model that judges an `ai`-graded eval, within `provider`. Legal values are whatever the inference dependency supports, validated at run time; omit for the config default. Two uses: an eval that matters can name a stronger judge than the default, and an eval can name a judge other than the model that produced the session it grades - a model asked whether its own session followed the rules is the sharpest form of self-preference bias there is. Meaningful only on `ai` evals."
+        },
+        "runs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Ensemble runs for this eval, overriding the tool's configured default. Lets a high-stakes or known-flaky assertion buy more agreement than a cheap one, which a corpus-wide setting cannot. Capped because it multiplies cost directly. Meaningful only on `ai` evals."
+        },
+        "command": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Command to execute for command-graded evals. {trace} is replaced with the session trace path — the artifact-side analog of the page side's {file} — and exit 0 (or `success-exit-codes`) is a pass. Omitting it is the generation contract: tooling generates a check script from the assertion, then writes `command` and `generated-assertion-hash` back. Legal only alongside `grader: command`."
+        },
+        "success-exit-codes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "integer"
+          },
+          "default": [
+            0
+          ],
+          "description": "Exit codes that count as a pass."
+        },
+        "timeout-ms": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Timeout for command-graded evals."
+        },
+        "generated-assertion-hash": {
+          "type": "string",
+          "description": "sha256 of the assertion when the check script was generated — written back alongside `command`, and never legal without it. A mismatch with the current assertion triggers regeneration."
+        },
+        "options": {
+          "type": "object",
+          "description": "Grader-specific options; validated by the grader at run time, deliberately outside this schema — a grader's options evolve on the grader's schedule."
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        },
+        "weight": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 1,
+          "description": "Relative contribution to an aggregate score across evals. Does not change this eval's own pass/fail, nor its severity: an eval still passes or fails on its own terms, and weight only decides how much that outcome moves a run total. Zero is excluded deliberately - a weightless eval is a silent disable, and `skip` already means that, loudly."
+        },
+        "severity-map": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/severity"
+          },
+          "description": "Maps a tool grader's own severities onto eval severities. Meaningful only on `tool:*` evals — imported from the page side to keep the entry vocabularies congruent."
+        },
+        "skip": {
+          "type": "boolean"
+        },
+        "evidence": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Hint telling the judge where in the session to look."
+        },
+        "target": {
+          "$ref": "#/$defs/target"
+        },
+        "examples": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "pass": {
+              "$ref": "#/$defs/anchorList"
+            },
+            "fail": {
+              "$ref": "#/$defs/anchorList"
+            }
+          },
+          "description": "Anchor examples of passing and failing behavior for the judge — one or several each."
+        }
+      },
+      "additionalProperties": false,
+      "dependentRequired": {
+        "generated-assertion-hash": [
+          "command"
+        ]
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "grader": {
+                "const": "ai"
+              }
+            },
+            "required": [
+              "grader"
+            ]
+          },
+          "then": {
+            "required": [
+              "assertion"
+            ]
+          }
+        },
+        {
+          "if": {
+            "not": {
+              "required": [
+                "grader"
+              ]
+            }
+          },
+          "then": {
+            "required": [
+              "assertion"
+            ],
+            "description": "No grader means the `ai` default, so the assertion the judge reads is required."
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "grader": {
+                "const": "human"
+              }
+            },
+            "required": [
+              "grader"
+            ]
+          },
+          "then": {
+            "required": [
+              "assertion"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "grader": {
+                "const": "command"
+              }
+            },
+            "required": [
+              "grader"
+            ]
+          },
+          "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "assertion"
+                ]
+              },
+              {
+                "required": [
+                  "command"
+                ]
+              }
+            ],
+            "description": "A command eval carries either the assertion its script is generated from, or the command itself - the generation contract writes the second from the first."
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "grader": {
+                "const": "command"
+              }
+            },
+            "required": [
+              "grader"
+            ],
+            "description": "An entry carrying an executable command must say grader: command."
+          }
+        },
+        {
+          "if": {
+            "anyOf": [
+              {
+                "required": [
+                  "success-exit-codes"
+                ]
+              },
+              {
+                "required": [
+                  "timeout-ms"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "properties": {
+              "grader": {
+                "const": "command"
+              }
+            },
+            "required": [
+              "grader"
+            ],
+            "description": "success-exit-codes and timeout-ms configure command execution, so they are legal only alongside grader: command — present, or generated later under the generation contract."
+          }
+        },
+        {
+          "if": {
+            "anyOf": [
+              {
+                "required": [
+                  "provider"
+                ]
+              },
+              {
+                "required": [
+                  "model"
+                ]
+              },
+              {
+                "required": [
+                  "runs"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "properties": {
+              "grader": {
+                "const": "ai"
+              }
+            },
+            "description": "provider, model and runs configure the AI judge, so they are legal only on an `ai` eval. `grader` is not required alongside them because `ai` is the default."
+          }
+        }
+      ]
+    },
+    "evalType": {
+      "enum": [
+        "capability",
+        "regression"
+      ],
+      "default": "regression",
+      "description": "`capability` probes a boundary and is expected to fail sometimes; `regression` protects behavior that already works. Reported, not enforced."
+    },
+    "severity": {
+      "enum": [
+        "error",
+        "warning",
+        "info"
+      ],
+      "default": "error",
+      "description": "Only error-severity failures fail the eval; warning and info report but pass. Default error — the string shorthand implies it."
+    },
+    "grader": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(tool:)?[a-z0-9][a-z0-9-]*$"
+        },
+        {
+          "enum": [
+            "ai",
+            "human",
+            "command",
+            "tool-usage",
+            "skill-invoked",
+            "file-access",
+            "turn-count",
+            "cost",
+            "regex",
+            "json-output"
+          ]
+        }
+      ],
+      "default": "ai",
+      "description": "How the assertion is checked: the AI judge (`ai`); a human review queue (`human` — judged per session, since every trace is new, unlike the page side where a verdict persists until the page changes); an executable check over the trace (`command`); a deterministic session grader — `tool-usage`, `skill-invoked`, `file-access`, `turn-count`, `cost`, `regex`, `json-output`; or a `tool:<kebab>` integration, the page side's namespace, accepted here so one grader spelling ports across both eval vocabularies. Recommended values, not a closed list: any kebab name is legal and validated against the grader registry at run time, so a new grader never needs a schema version — the one cost is that a stale or misspelled grader name passes this schema and is rejected by the registry instead."
+    },
+    "anchorList": {
+      "if": {
+        "type": "array"
+      },
+      "then": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "else": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "One anchor example, or a non-empty list of them."
+    },
+    "target": {
+      "if": {
+        "type": "object"
+      },
+      "then": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "path"
+        ],
+        "properties": {
+          "source": {
+            "const": "file"
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Path to the file to grade, relative to the session's working directory."
+          }
+        }
+      },
+      "else": {
+        "enum": [
+          "transcript",
+          "last-message",
+          "files",
+          "artifact"
+        ]
+      },
+      "default": "transcript",
+      "description": "What the grader receives: the whole session (`transcript`), the final assistant message (`last-message`), the list of files the session wrote (`files`), the instruction artifact itself (`artifact`), or a named file. Distinct from `evidence`, which hints where to look within what is graded - this selects the bytes themselves, and it is structural, so deterministic graders honour it too. Named `target` rather than `focus` for that reason: a regex grader has no focus, it has a target. Branched with if/then rather than oneOf so a fault inside the object form is reported once, against the key that is wrong."
+    }
+  }
+}
