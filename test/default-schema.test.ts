@@ -570,17 +570,24 @@ describe("the composability law on claimed keys", () => {
  * expectations inside are written against that future state on purpose.
  */
 describe.skip("the default set (flips on registration)", () => {
-  const CORE_ID = "docmeta:core:1.0.0-proposal.1";
+  // Derived from the same table `ref()` reads, not repeated as literals. This
+  // block is skipped until the registration PR flips it, so a stale version
+  // here fails nothing in CI and is found only when that PR runs it — which
+  // is exactly when a "no compiled schema" error is most confusing. Three
+  // families have moved to proposal.2 since these strings were written.
+  const idFor = (family: string): string =>
+    `docmeta:${family}:${VERSIONS[family] ?? DRAFT_V}`;
+  const CORE_ID = idFor("core");
   const FAMILY_IDS = [
     CORE_ID,
-    "docmeta:stewardship:1.0.0-proposal.1",
-    "docmeta:audience:1.0.0-proposal.1",
-    "docmeta:lifecycle:1.0.0-proposal.1",
-    "docmeta:structure:1.0.0-proposal.1",
-    "docmeta:ai-context:1.0.0-proposal.1",
-    "docmeta:evals:1.0.0-proposal.1",
-    "docmeta:kg:1.0.0-proposal.1",
-    "docmeta:artifact-evals:1.0.0-proposal.1",
+    idFor("stewardship"),
+    idFor("audience"),
+    idFor("lifecycle"),
+    idFor("structure"),
+    idFor("ai-context"),
+    idFor("evals"),
+    idFor("kg"),
+    idFor("artifact-evals"),
   ];
 
   it("appends the whole family after the two existing members", async () => {
