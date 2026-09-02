@@ -40,15 +40,19 @@ questions for reviewers:
 
 | Id | The question it answers | Fields |
 |---|---|---|
-| [`docmeta:core:1.0.0-proposal.1`](/docmeta/proposals/core/) | What is this page? | `title`* · `description`* · `id` · `type` · `keywords` · `language` |
+| [`docmeta:core:1.0.0-proposal.2`](/docmeta/proposals/core/) | What is this page? | `title`* · `description`* · `id` · `type` · `keywords` · `language` · `docmeta-vocabularies` |
 | [`docmeta:stewardship:1.0.0-proposal.1`](/docmeta/proposals/stewardship/) | Is it cared for? | `authors` · `owner` · `stakeholders` · `reviewed-by` · `last-reviewed` · `review-interval` · `verified-against` · `source-of-truth` |
 | [`docmeta:audience:1.0.0-proposal.1`](/docmeta/proposals/audience/) | Who does it serve, and who may see it? | `audiences` · `personas` · `journeys` · `intent` · `visibility` |
 | [`docmeta:lifecycle:1.0.0-proposal.1`](/docmeta/proposals/lifecycle/) | Where is it in its life? | `lifecycle` · `replaced-by` · `supersedes` · `remove-by` |
 | [`docmeta:structure:1.0.0-proposal.1`](/docmeta/proposals/structure/) | What does it connect to? | `applies-to` · `not-applicable-to` · `concepts` · `prerequisites` · `next-steps` · `related-pages` |
 | [`docmeta:ai-context:1.0.0-proposal.1`](/docmeta/proposals/ai-context/) | How did machines make it, and how may they use it? | `generated-by` · `provenance` · `risks` · `sample-questions` |
-| [`docmeta:evals:1.0.0-proposal.1`](/docmeta/proposals/evals/) | What must be true of this page? | `evals` · `eval-suite` · `eval-skip` · `eval-provenance` |
+| [`docmeta:evals:1.0.0-proposal.2`](/docmeta/proposals/evals/) | What must be true of this page? | `evals` · `eval-suite` · `eval-skip` · `eval-provenance` |
 | [`docmeta:kg:1.0.0-proposal.1`](/docmeta/proposals/kg/) | What does the knowledge graph know about it? | `kg`, one closed block: SKOS concepts, iiRDS typing, PROV provenance |
-| [`docmeta:artifact-evals:1.0.0-proposal.1`](/docmeta/proposals/artifact-evals/) | What must a session using this artifact have done? | `metadata.evals` · `metadata.eval-skip` · `metadata.eval-provenance` |
+| [`docmeta:artifact-evals:1.0.0-proposal.2`](/docmeta/proposals/artifact-evals/) | What must a session using this artifact have done? | `metadata.evals` · `metadata.eval-skip` · `metadata.eval-provenance` · `metadata.docmeta-vocabularies` |
+
+Three families are at `1.0.0-proposal.2` after review round 6: core,
+evals, and artifact-evals. The other six stay at `1.0.0-proposal.1`,
+because a bump would announce a revision none of them made.
 
 All nine are intended for docmeta's default set, the schemas a run uses
 when no schema is configured. Such a run would then require every page
@@ -65,6 +69,8 @@ you use their keys.
 title: Install the operator on Kubernetes
 description: Deploy the operator with Helm and verify the rollout.
 type: how-to
+docmeta-vocabularies:
+  evals: 1.0.0-proposal.2
 owner: platform-docs
 stakeholders: [jane.doe, pm-alex]
 reviewed-by: [sam.reviewer]
@@ -181,14 +187,15 @@ metadata:
 ```
 
 Entries share one shape on both sides: `id`, `assertion`, `type`,
-`severity`, `evidence`, `examples`, and a per-entry `skip`. The two sides
-differ in their grader families. Pages are graded by `ai`, `command`,
-`human`, or a `tool:*` integration. Sessions are graded by `ai`, `human`,
-`command` over the trace, or a deterministic session grader such as
-`tool-usage` or `cost`. The `tool:*` spelling is accepted on both sides,
-so one grader name works for page and artifact evals. One rule differs:
-an artifact entry always requires an `assertion`, while on the page side
-a tool grader is its own check.
+`severity`, `evidence`, `examples`, `target`, `weight`, `runs`, `model`,
+and a per-entry `skip`. The assertion rule is the same on both sides too:
+`ai`, `human`, and entries with no grader require one, and `command`
+requires an assertion or a command. The two sides differ in their grader
+families and in what `target` can select. Pages are graded by `ai`,
+`command`, `human`, or a `tool:*` integration. Sessions are graded by
+`ai`, `human`, `command` over the trace, or a deterministic session grader
+such as `tool-usage` or `cost`. The `tool:*` spelling is accepted on both
+sides, so one grader name works for page and artifact evals.
 
 ## What we most want your opinion on
 

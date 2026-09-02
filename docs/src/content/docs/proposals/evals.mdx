@@ -1,5 +1,5 @@
 ---
-title: "docmeta:evals:1.0.0-proposal.1"
+title: "docmeta:evals:1.0.0-proposal.2"
 description: "The proposed page-eval vocabulary: named, testable assertions about a page, graded by AI, a command, a human, or a tool."
 sidebar:
   order: 7
@@ -9,7 +9,10 @@ sidebar:
 :::caution[Proposal under review]
 Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-vocabularies/),
 open for community review. Draft schema:
-[`docs/proposals/0023/schemas/evals/1.0.0-proposal.1.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/evals/1.0.0-proposal.1.json).
+[`docs/proposals/0023/schemas/evals/1.0.0-proposal.2.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/evals/1.0.0-proposal.2.json).
+Review round 6 took evals from `proposal.1` to `proposal.2`: it added
+`weight`, `target`, `runs` and `model`, and moved the `eval-` prefix guard
+from prose into the schema.
 :::
 
 **The question it answers: what must be true of this page?** A common
@@ -19,7 +22,8 @@ can implement it, and other schemas can compose on top of it.
 ## Keys
 
 Four page-level keys. Three carry the reserved `eval-` prefix, and the
-fourth is `evals` itself:
+fourth is `evals` itself. Any other `eval-*` key at the page root is
+rejected.
 
 | Key | Type | Notes |
 |---|---|---|
@@ -34,12 +38,24 @@ config, or an inline definition. An inline definition can carry:
 
 - `id` (required, kebab-case) and `assertion`
 - `type`: `capability` or `regression`
-- `grader`, and `provider` for AI graders
+- `grader`, and for AI graders `provider`, `model` (the judging model) and
+  `runs` (ensemble runs, 1 to 50)
+- `target`: what the grader receives. `body` (the default, with
+  frontmatter stripped), `raw` (the file verbatim), `frontmatter` (the
+  parsed frontmatter alone), or an object naming a companion file
+  (`source: file` plus a `path` relative to the page's directory)
+- `weight`: a positive number, default 1, that sets how much this eval's
+  outcome moves an aggregate score
 - `evidence`, and `examples` with one or several pass/fail anchors
 - the command family: `command`, `success-exit-codes`, `timeout-ms`,
   `generated-assertion-hash`
 - `options`, `severity` (`error`, `warning`, or `info`; default `error`),
   `severity-map`, and `skip`
+
+A `use:` reference may override `skip`, `type`, `severity`, `options`, and
+`weight`. It may not override `provider`, `model`, `runs`, or `target`:
+those say how the tool executes, and a named eval must read the same bytes
+on every page that uses it.
 
 ## Graders
 
@@ -72,22 +88,49 @@ evals:
     assertion: The Helm install steps produce a Ready operator pod.
     grader: human
     severity: warning
+  - id: description-says-what-for
+    assertion: The description says what the reader can do after reading.
+    target: frontmatter
+    weight: 2
+    runs: 3
 ```
 
 ## Design decisions
 
 - **Flat, like the rest of the family.** There is no settings object. The
   list is the value, and the settings are page-level `eval-*` keys.
-  Because the page root is open, implementers should reserve the `eval-`
-  prefix and reject unrecognized `eval-*` keys. That gives the root the
-  property a closed container would have: a misspelled key fails instead
-  of being ignored.
+  Because the page root is open, the schema rejects any `eval-*` key other
+  than the three above. That gives the root the property a closed
+  container would have: a misspelled key fails instead of being ignored.
+  In `proposal.1` this was a request to implementers; one implementer
+  honoured it and one did not, so `proposal.2` encodes it. A key from a
+  newer version of this vocabulary would fail the same way, which is why
+  [core](/docmeta/proposals/core/) carries `docmeta-vocabularies`: a tool
+  checks the declared version before it rejects unknown keys.
 - **Ids are required on object entries.** The string shorthand is the
   only id-less form. Names derived from position orphan cached verdicts
   whenever entries move.
 - **Errors name the actual fault.** Entries branch with `if`/`then`
   rather than `oneOf`, so a misspelled field inside an object is reported
   against that key instead of collapsing to "must be string".
+- **`weight` scores; it does not judge.** It changes how much an outcome
+  moves a suite or run total and never the eval's own pass/fail, because
+  the binary outcome is what SARIF, JUnit and findings baselines consume
+  downstream. Zero is excluded: a weightless eval is a silent disable, and
+  `skip` already means that, visibly.
+- **`target` selects the bytes; `evidence` hints where to look.** A
+  deterministic grader has nothing to focus on but can still be pointed at
+  the frontmatter or a companion file, so the selector is structural and
+  every grader honours it. The name is `target` rather than `focus` for
+  the same reason: it selects data, and it does not collide with
+  `evidence`.
+- **`runs` and `model` belong to `ai` evals.** A conditional makes
+  `provider`, `runs` and `model` legal only with the `ai` grader. `runs` is
+  capped at 50 because runs multiply cost directly. `model` also lets an
+  eval name a judge other than the model that wrote the page, which turns
+  the self-preference warning that `generated-by` in
+  [ai-context](/docmeta/proposals/ai-context/) enables into something a
+  tool can act on.
 - **`eval-provenance` is the family's machine-proposal trail** (see
   [ai-context](/docmeta/proposals/ai-context/)). Entries are deleted
   under human review, and a surviving entry means machine-proposed evals
@@ -95,8 +138,9 @@ evals:
 
 ## What reviewers should poke at
 
-Two questions. Is the `eval-` prefix reservation an acceptable ask of
-implementers? And is the split between closed structural graders and the
-open `tool:*` namespace the right one? Its artifact-side counterpart is a
-[fully open list](/docmeta/proposals/artifact-evals/), for reasons stated
-there.
+Three questions. Is the encoded `eval-` prefix rejection an acceptable
+constraint on the page root? Is the split between closed structural
+graders and the open `tool:*` namespace the right one? (Its artifact-side
+counterpart is a [fully open list](/docmeta/proposals/artifact-evals/),
+for reasons stated there.) And should a page be able to set `runs` and
+`model` inline at all, given that a `use:` reference cannot?
