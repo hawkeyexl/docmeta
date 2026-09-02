@@ -1,53 +1,59 @@
-# Default-schema design notes — working ledger
+# Default-schema design notes: working ledger
 
-**Status: design phase — proposal drafted, review open. Nothing is
+**Status: design phase. Proposal drafted, review open. Nothing is
 canonical.** The record is `docs/proposals/0023-metadata-vocabularies.md`;
-the community-facing surface is the docs site's Proposals group — a hub
+the community-facing surface is the docs site's Proposals group: a hub
 overview (`docs/src/content/docs/proposals/frontmatter-vocabularies.mdx`)
 plus one dedicated page per vocabulary, nine in all (all pass the dogfood
 gate and the docs build). Nine draft schemas live unregistered under
-`docs/proposals/0023/schemas/` — the six house ids below plus evals, kg,
-and artifact-evals. Spec-by-example: `test/default-schema.test.ts` (red until
-registration, by design) and the runnable ladders `docs/proposals/0023/ladders/*.cjs` (plus `compat-check.cjs`, the composability cross-check) — and `test/default-schema.test.ts` runs green via file refs, with only default-set membership skipped until registration.
+`docs/proposals/0023/schemas/`: the six house ids below plus evals, kg,
+and artifact-evals. Round 6 moved `core`, `evals` and `artifact-evals` to
+`1.0.0-proposal.2`; the other six stay at `1.0.0-proposal.1`.
+Spec-by-example: `test/default-schema.test.ts` (red until registration, by
+design) and the runnable ladders `docs/proposals/0023/ladders/*.cjs` (plus
+`compat-check.cjs`, the composability cross-check). `test/default-schema.test.ts`
+runs green via file refs, with only default-set membership skipped until
+registration.
 
 **2026-08-26 ruling: no design-lineage presentation.** The schemas and the
-docs pages name no tools and no draft-contract versions — the vocabularies
+docs pages name no tools and no draft-contract versions; the vocabularies
 stand on their own claims. The walk's history lives only here and in
 proposal 0023's design ledgers, framed as record, not identity.
 
 **2026-08-31 ruling: `authors` moves to stewardship.** Core is the answer to
-*what is this page*, and who wrote it is not that — it is a fact about the
-page's care, which is what stewardship already collects. The move puts all
-four people fields (`authors`, `owner`, `stakeholders`, `reviewed-by`) behind
-one adoption decision and leaves core purely descriptive. Core 7 → 6 fields,
-stewardship 7 → 8; the family total stays 33 and disjoint. `authors` keeps its
-own loose shape rather than stewardship's `stringList` — it must still accept
+*what is this page*, and who wrote it is a fact about the page's care, which
+is what stewardship already collects. The move puts all four people fields
+(`authors`, `owner`, `stakeholders`, `reviewed-by`) behind one adoption
+decision and leaves core purely descriptive. Core 7 → 6 fields, stewardship
+7 → 8; the family total stays 33 and disjoint. `authors` keeps its own loose
+shape rather than stewardship's `stringList`, because it must still accept
 MyST and Docusaurus person objects, which `owner` and `reviewed-by` never do.
 
 **2026-08-26 correction: the whole family is default.** All nine append to
 `DEFAULT_SCHEMAS`, superseding the core-only intent below wherever it
 appears. Bare runs require the pair, validate every family key present,
-and put the full menu on bare `fill` — accepted as the teaching surface.
+and put the full menu on bare `fill`, accepted as the teaching surface.
 
 ## The principles (settled through the field walk)
 
 1. **Weak floors teach bad habits.** `title` + `description` required as
-   non-empty strings — a recorded exception to the composability law
+   non-empty strings, a recorded exception to the composability law
    (Docusaurus allows empty; DCMI allows arrays; both are override cases).
 2. **One value is a string; many values are a list.** No per-field trivia.
    DCMI's repeated-element forms for `type`/`language` are override cases.
-3. **Claim content, never rendering.** Killed `tags`, `slug`, `image`,
+3. **Claim content, never rendering.** Cut `tags`, `slug`, `image`,
    `layout` (and the presentation group as a concept).
-4. **Derivable facts lie.** Killed `updated`, `date`, `next-review`,
+4. **Derivable facts lie.** Cut `updated`, `date`, `next-review`,
    `contact`-as-a-second-reach-field. Git owns change dates; `last-reviewed`
    + `review-interval` derive the due date; dates only a human can assert
    stay (`last-reviewed`, `remove-by`).
 5. **Facts live at their altitude.** `stakeholders` is page-level (who to
-   consult about THIS page) — deliberately distinct from the project-level
-   `stakeholders` cut in the exploration brief's addendum (its draft 0021 — not main's query proposal); `expertise` fell because level
-   belongs to the persona definitions the page points at.
+   consult about THIS page), distinct from the project-level `stakeholders`
+   cut in the exploration brief's addendum (its draft 0021, not main's query
+   proposal); `expertise` fell because level belongs to the persona
+   definitions the page points at.
 6. **Enumerate only what is switched-on and bounded** (`visibility`,
-   `lifecycle`); **recommend openly** elsewhere — `risks` uses the open-enum
+   `lifecycle`); **recommend openly** elsewhere. `risks` uses the open-enum
    idiom (`anyOf` of enum + free string).
 7. **Compose, don't duplicate.** `action` comes from
    `passo-uno:seven-action:1.0` in the default set; `kg` (dockg) and
@@ -55,30 +61,32 @@ and put the full menu on bare `fill` — accepted as the teaching surface.
    story is three layers: `type` (what the page is) · `action` (what the
    reader is doing) · `intent` (the specific job).
 
-## The six house vocabularies — 33 fields, split by intent
+## The six house vocabularies: 34 fields, split by intent
 
 Designed as one large schema, then split by owner directive into six
 intent-scoped ids (superseding the earlier `docmeta:frontmatter:1.0` id
-ruling — the split is why): `docmeta:core:1.0.0-proposal.1` (required pair),
-`docmeta:stewardship:1.0.0-proposal.1`, `docmeta:audience:1.0.0-proposal.1`,
-`docmeta:lifecycle:1.0.0-proposal.1`, `docmeta:structure:1.0.0-proposal.1` (honoring the recorded
-naming decision recorded in the exploration brief for the relational schema), `docmeta:ai-context:1.0.0-proposal.1`.
-Disjoint by construction (0 collisions, pinned) — stacking all six behaves
-exactly like the monolith, and every error is attributed to one intent.
-Verified: `npx vitest run test/default-schema.test.ts` — green via file
-refs into the drafts (default-set membership skipped until registration).
-Field homes:
+ruling; the split is why): `docmeta:core` (required pair),
+`docmeta:stewardship`, `docmeta:audience`, `docmeta:lifecycle`,
+`docmeta:structure` (honoring the naming decision recorded in the
+exploration brief for the relational schema), `docmeta:ai-context`. Core is
+at `1.0.0-proposal.2` since round 6; the other five are at
+`1.0.0-proposal.1`. Disjoint by construction (0 collisions, pinned; 33
+fields until round 6 added `docmeta-vocabularies` to core): stacking all
+six behaves like the monolith, and every error is attributed to one intent.
+Verified: `npx vitest run test/default-schema.test.ts`, green via file refs
+into the drafts (default-set membership skipped until registration). Field
+homes:
 
-- **Core (docmeta:core:1.0.0-proposal.1):** title*, description* — and every string core
-  claims is non-empty, with type/language single-valued even against DCMI
-  (the recorded exception family)
-  plus id, type, keywords, language
+- **Core (docmeta:core:1.0.0-proposal.2):** title*, description* (every
+  string core claims is non-empty, with type/language single-valued even
+  against DCMI: the recorded exception family), plus id, type, keywords,
+  language, and docmeta-vocabularies (round 6: the per-file map of family
+  name to targeted version)
 - **Stewardship (docmeta:stewardship:1.0.0-proposal.1):** authors (moved from
-  core 2026-08-31 — attribution is a fact about care, not about what the page
+  core 2026-08-31; attribution is a fact about care, not about what the page
   is; keeps its own shape, since person objects are legal here and not in
-  `stringList`), owner, stakeholders,
-  reviewed-by, last-reviewed, review-interval, verified-against,
-  source-of-truth
+  `stringList`), owner, stakeholders, reviewed-by, last-reviewed,
+  review-interval, verified-against, source-of-truth
 - **Audience & intent (docmeta:audience:1.0.0-proposal.1):** audiences, personas,
   journeys, intent, visibility
   (enum: draft → restricted → confidential → internal → public)
@@ -86,15 +94,15 @@ Field homes:
   draft|published|deprecated|archived; deprecated ⇒ replaced-by or
   remove-by), replaced-by, supersedes, remove-by
 - **Structure (docmeta:structure:1.0.0-proposal.1):** applies-to,
-  not-applicable-to (added in review round 5, for parallelism — the
+  not-applicable-to (added in review round 5, for parallelism: the
   positive had a page-level twin and its negative did not), concepts,
   prerequisites, next-steps, related-pages (renamed in step with kg's
-  related-concepts — each says what it points at)
+  related-concepts; each says what it points at)
 - **AI context (docmeta:ai-context:1.0.0-proposal.1):** generated-by, provenance (the
   kg.provenance pattern generalized; entries retire under human review),
   risks (open enum: cost-incurring, destructive, irreversible, privileged,
-  open-world, read-only, idempotent — first four from the
-  context-engineering deck, last three mirroring MCP tool annotations),
+  open-world, read-only, idempotent; the first four from the
+  context-engineering deck, the last three mirroring MCP tool annotations),
   sample-questions (one question or a list, like every list field)
 
 **Recorded intent for post-review (not applied):** append all nine to
@@ -103,27 +111,29 @@ title+description on bare runs is a deliberate `feat!:`; demo video per
 house rule.
 
 **Open questions for the community draft:** the flattening of `applies-to`
-to labels — the deck modeled named dimensions (product/deployment/
-generation) and this loses them; the prefix-label convention
-(`deploy:kubernetes`) is the escape hatch, and the model's author should
-get a direct look; the `lifecycle` enum's org-ladder cost; `risks` naming now that assurances (`read-only`,
-`idempotent`) sit in a field called risks; the `stakeholders` name against
-the exploration brief's project-level cut (one honest paragraph required).
+to labels (the deck modeled named dimensions, product/deployment/generation,
+and this loses them; the prefix-label convention `deploy:kubernetes` is the
+escape hatch, and the model's author should get a direct look); the
+`lifecycle` enum's org-ladder cost; `risks` naming now that assurances
+(`read-only`, `idempotent`) sit in a field called risks; the `stakeholders`
+name against the exploration brief's project-level cut (one paragraph
+required).
 
-## docmeta:evals:1.0.0-proposal.1 — revised from docevals frontmatter-0.1
+## docmeta:evals (proposal.1 revised from docevals frontmatter-0.1; proposal.2 in round 6 below)
 
 Claims four keys: `evals` (one assertion string, or a list of entries),
 `eval-suite`, `eval-skip`, and `eval-provenance` (the generalized
-provenance pattern under the reserved prefix). Entry forms: string shorthand · `use:` reference ·
-inline definition (closed objects; typos fail loudly).
+provenance pattern under the reserved prefix). Entry forms: string
+shorthand · `use:` reference · inline definition (closed objects; typos
+fail loudly).
 
-Graders — `ai | command | human | tool:<kebab>`, default `ai`:
+Graders (`ai | command | human | tool:<kebab>`, default `ai`):
 
 | Grader | Requirement | Notes |
 |---|---|---|
 | `ai` | assertion | replaces 0.1's `llm`; optional `provider` picks a model endpoint or agent runner, validated at run time by the inference dependency |
 | `command` | assertion or command | no `command` = generation contract: tooling generates a check script, writes back `command` + `generated-assertion-hash` (flattened from 0.1's `generated.assertionHash`) |
-| `human` | assertion | new rule — a reviewer must have something to verify |
+| `human` | assertion | new rule: a reviewer must have something to verify |
 | `tool:*` | nothing | the tool is the check; `options` are the grader's runtime contract, outside the schema |
 
 Vocabularies: `type: capability | regression` (default regression);
@@ -150,7 +160,7 @@ correction accepts it as the teaching surface.
 01000 ("schemas are published by the tool that owns them" → the new line:
 docmeta publishes generic metadata vocabularies, tools own domain
 ontologies); resolver reads the kebab spellings, top-level `generated-by`,
-and `eval-suite`/`eval-skip`; **reserve the `eval-` prefix** — error on
+and `eval-suite`/`eval-skip`; **reserve the `eval-` prefix**: error on
 unrecognized top-level `eval-*` keys, restoring the closed block's
 loud-typo property at the open page root; `frontmatter-valid` points at the
 docmeta-published URL. Open: whether grader runtime option names
@@ -164,19 +174,19 @@ differentiation). Negatives pin: 0.1 object form fails, `llm` spelling
 fails, `generated` wrapper fails, misspelled entry fields fail, ai/human
 without assertion fail, `eval-skip` as string fails.
 
-## docmeta:kg:1.0.0-proposal.1 — revised from dockg frontmatter-0.8
+## docmeta:kg:1.0.0-proposal.1 (revised from dockg frontmatter-0.8)
 
-One closed `kg` envelope (kept deliberately: a closed typo-catching block
+One closed `kg` envelope (kept on purpose: a closed typo-catching block
 coexisting with an open page), nothing required, files without `kg` pass.
 Verified ladder: `ladders/kg-examples.cjs` (9 positive + 7 negative,
-including the 0.8 worked example translated — the fidelity proof).
+including the 0.8 worked example translated, the fidelity proof).
 
 **Fidelity ledger vs 0.8:**
 
 - Renamed (kebab + plain language; the RDF mapping lives in descriptions,
-  where it always did — iiRDS is kebab upstream anyway):
+  where it always did, and iiRDS is kebab upstream anyway):
   prefLabel → **label** · altLabels → alt-labels · subjects →
-  **concepts** (nominal twin of the page-level field — same fact, deeper
+  **concepts** (nominal twin of the page-level field: same fact, deeper
   wins) · related → **related-concepts** (in step with the page-level
   rename to related-pages) · topicType → **type** (nominal twin of the
   page-level `type`: the open page value derives it, the closed iiRDS
@@ -189,11 +199,11 @@ including the 0.8 worked example translated — the fidelity proof).
   not-about-product-aspect · revisionOf → revision-of · derivedFrom →
   derived-from; provenance entries' generated-by; the
   provenance `fields` enum values (self-referential, renamed with the
-  fields). broader/narrower stay bare — nothing collides.
+  fields). broader/narrower stay bare; nothing collides.
 - Removed: kg.generatedBy (top-level `generated-by` owns page provenance);
   the deprecated single-object `provenance` shape (0.2/0.3). The
   provenance ARRAY survives whole: per-model entries of generated-by +
-  fields + confidence, fill's human-review trail. No timestamp, ever —
+  fields + confidence, fill's human-review trail. No timestamp, ever:
   dockg's determinism invariant forbids wall-clock.
 - Widened: every label/enum list takes single-string shorthand; every
   0.8-valid document stays valid.
@@ -202,7 +212,7 @@ including the 0.8 worked example translated — the fidelity proof).
   scope, sections with free slug keys (brokenSectionRef is the build-layer
   check), confidence trail.
 
-**Owner rulings — the harvest rule:** *deeper wins; the top level is the
+**Owner rulings, the harvest rule:** *deeper wins; the top level is the
 harvest fallback*, per fact, not per page. kg.subjects beats `concepts`
 for subjects while everything the block doesn't speak to still harvests
 (`generated-by`, `supersedes`/`replaced-by` → prov:wasRevisionOf,
@@ -216,12 +226,12 @@ wins. dockg-side ledger: superseding ADR over "never a docmeta built-in";
 deriver reads kebab keys + the fallback rule + the type derivation;
 single-string normalization.
 
-## docmeta:artifact-evals:1.0.0-proposal.1 — revised from moose-tracevals artifact-evals-0.2
+## docmeta:artifact-evals (proposal.1 revised from moose-tracevals artifact-evals-0.2; proposal.2 in round 6 below)
 
 Eval declarations for instruction artifacts (skills, agents,
-project-rules). The page-side trio appears verbatim one level down —
-`metadata.evals` (one assertion or the list), `metadata.eval-skip`,
-`metadata.eval-provenance` — because the artifact's top level is the host
+project-rules). The page-side trio appears verbatim one level down
+(`metadata.evals`, one assertion or the list; `metadata.eval-skip`;
+`metadata.eval-provenance`) because the artifact's top level is the host
 tool's contract and `metadata` is its sanctioned extension bag. 0.2's
 `criteria` container is dissolved the same way the page side's object form
 was, so the word criteria leaves the family vocabulary. `metadata` stays
@@ -229,186 +239,213 @@ open (other tools' members pass untouched); entry objects are closed; the
 loud-typo guard is the same `eval` prefix reservation, applied inside
 `metadata`. Verified ladder: `ladders/artifact-evals-examples.cjs`.
 
-**Fidelity ledger vs 0.2** (tracevals unshipped — breaks are free):
+**Fidelity ledger vs 0.2** (tracevals unshipped, so breaks are free):
 
 - Renamed: optional position-derived `name` → **required `id`** on the
   object form (position-derived ids orphan cached verdicts; the string
   shorthand stays the id-less path); `llm` → `ai`.
 - Changed: grader closed-enum(8) → **open enum** (recommended: ai, human, command,
   tool-usage, skill-invoked, file-access, turn-count, cost, regex,
-  json-output — plus the page side's tool:* spelling; any kebab name
+  json-output, plus the page side's tool:* spelling; any kebab name
   legal, registry-validated at run time).
   The grader principle across both eval schemas: *closed where the schema
   switches on the value (page side's ai|command|human conditionals), open
-  where only the runtime registry does* — cost: a stale `llm` passes the
+  where only the runtime registry does*. Cost: a stale `llm` passes the
   schema and is rejected by the registry.
-- Widened: examples pass/fail → string-or-list (both eval schemas — the
+- Widened: examples pass/fail → string-or-list (both eval schemas; the
   artifact side's anchor lists are real usage).
 - Added: `provider` (ai evals), `metadata.eval-provenance` (the family
   pattern; entries keyed `evals:` like the page side), the single-string
   block shorthand (`metadata.evals: <assertion>`), and the `human` and
-  `command` graders from the page side — `human` is judged per session
-  (every trace is new; no verdict caching, unlike pages), `command` runs
+  `command` graders from the page side. `human` is judged per session
+  (every trace is new; no verdict caching, unlike pages). `command` runs
   an executable over `{trace}` with the same generation contract
-  (command + generated-assertion-hash written back), making the two eval
-  schemas' entry vocabularies structurally aligned — with one deliberate
-  asymmetry: `assertion` is unconditionally required here, where every
-  eval must be self-describing, versus conditionally on the page side,
-  where a tool grader is its own check.
+  (command + generated-assertion-hash written back). This makes the two
+  eval schemas' entry vocabularies structurally aligned, with one
+  deliberate asymmetry in proposal.1: `assertion` was unconditionally
+  required here, where every eval must be self-describing, versus
+  conditionally on the page side, where a tool grader is its own check.
+  Round 6 removed the asymmetry (below).
 - Unchanged: the `metadata` envelope (host contract), type/severity
   verbatim, evidence/options, string shorthand entries, every
   session-grader kind.
-- With id + assertion always required, most of the earlier conditional
-  machinery is unnecessary — the entry keeps only the command-family
-  guards (command and its settings ⇒ `grader: command`; hash ⇒ command).
+- With id + assertion always required (proposal.1), most of the earlier
+  conditional machinery was unnecessary. The entry kept only the
+  command-family guards (command and its settings ⇒ `grader: command`;
+  hash ⇒ command).
 - tracevals-side ledger: superseding ADR over "never a docmeta built-in";
   extract/write/fill read `id` and the new spellings; grader registry
   rejects unknown kinds (including `llm`).
 
-## doc-structure-lint — frontmatter fit (looked at, not a schema)
+## doc-structure-lint: frontmatter fit (looked at, not a schema)
 
 Owner's own repo, alpha, dormant since 2025-01 (0.0.5 never published).
-Verdict: improve by **selection, not validation**. The plumbing is ~60%
-there: remark-frontmatter is wired (a `---` block is a yaml node, never
+Verdict: improve by **selection, not validation**. The plumbing is about
+60% there: remark-frontmatter is wired (a `---` block is a yaml node, never
 miscounted as content), `structure.frontmatter` is populated and handed to
-the validator, where `// TODO: Check frontmatter` sits unimplemented — and
+the validator, where `// TODO: Check frontmatter` sits unimplemented, and
 open issue #13 already asks for template selection from frontmatter "to
 lint multiple different kinds of documents in a single run" (today
 `--template` is required and broadcast over every file in a directory).
 
 - **Do:** select the template from the page's `type` via a type→template
   map in templates.yaml (repo-level fact at repo-level altitude), CLI
-  `-t` overriding — zero new frontmatter vocabulary. Do NOT use issue
+  `-t` overriding, with zero new frontmatter vocabulary. Do NOT use issue
   #13's proposed `template:` key: Starlight claims `template` as
   enum(doc|splash), so `template: how-to` breaks stacked platform
-  validation; if a per-page override is ever needed, a kebab house-free
+  validation. If a per-page override is ever needed, a kebab house-free
   key (`structure-template`) is the safe spelling.
-- **Don't:** grow frontmatter-validation rules (README roadmap item) —
+- **Don't:** grow frontmatter-validation rules (README roadmap item).
   docmeta owns that layer, and template-conditional requirements
   ("how-tos must carry intent") are already expressible as if/then on
   `type` in an org schema. Resolve the roadmap item by documented
   delegation; delete the TODO.
 - Housekeeping found in passing: the frontmatter extractor is a
   hand-rolled line splitter that shreds nested YAML (the repo already
-  depends on `yaml` — parse properly); TOML `+++` frontmatter is not
-  enabled and would inflate paragraph counts; suspected latent bugs —
-  the AJV key pattern `^[A-Za-z0-9-_]+$` vs the repo's own spaced
-  section keys ("Next steps"), and a positional section-match undefined
+  depends on `yaml`; parse properly); TOML `+++` frontmatter is not
+  enabled and would inflate paragraph counts; suspected latent bugs: the
+  AJV key pattern `^[A-Za-z0-9-_]+$` vs the repo's own spaced section
+  keys ("Next steps"), and a positional section-match undefined
   dereference (TypeError, not a finding) when a document has fewer
-  sections than its template — both relevant to docevals grader
+  sections than its template. Both are relevant to docevals grader
   robustness.
 
-## Family walk status — COMPLETE
+## Family walk status: COMPLETE
 
-- **docevals** → docmeta:evals:1.0.0-proposal.1 · **dockg** → docmeta:kg:1.0.0-proposal.1 ·
-  **moose-tracevals** → docmeta:artifact-evals:1.0. All drafts live under
-  `docs/proposals/0023/schemas/` (outside the frozen registry), verified
-  by the `ladders/*.cjs` runs and the green spec suite. Proposal 0023 and
-  the published review page are up; next is the community review itself.
+- **docevals** → docmeta:evals:1.0.0-proposal.2 · **dockg** → docmeta:kg:1.0.0-proposal.1 ·
+  **moose-tracevals** → docmeta:artifact-evals:1.0.0-proposal.2. All drafts
+  live under `docs/proposals/0023/schemas/` (outside the frozen registry),
+  verified by the `ladders/*.cjs` runs and the green spec suite. Proposal
+  0023 and the published review pages are up; next is the community review
+  itself.
 
-## Review round 6 — scoring, targeting, and versioning
+## Review round 6: scoring, targeting, and versioning
 
-Three families move to `1.0.0-proposal.2`: `evals`, `artifact-evals`, and `core`. The other six
-stay at proposal.1 — bumping them would announce a revision none of them made and leave six pairs
-of byte-identical files to explain. `test/default-schema.test.ts` and `ladders/compat-check.cjs`
-each carry a per-family `VERSIONS` table so a family's next bump is still a one-line edit.
+Three families move to `1.0.0-proposal.2`: `evals`, `artifact-evals`, and
+`core`. The other six stay at proposal.1, because bumping them would
+announce a revision none of them made and leave six pairs of byte-identical
+files to explain. `test/default-schema.test.ts` and `ladders/compat-check.cjs`
+each carry a per-family `VERSIONS` table so a family's next bump is still a
+one-line edit.
 
-Six decisions, and the reasoning that is not already in the field descriptions.
+Six decisions, and the reasoning that is not already in the field
+descriptions.
 
-**`weight` (both eval families).** Positive number, default 1. It changes how much an outcome moves
-an aggregate and **never** the eval's own pass/fail — the binary outcome is what SARIF, JUnit and
-findings baselines consume downstream, and a score leaking into it would change all three at once.
-Zero is excluded deliberately: a weightless eval is a silent disable, and `skip` already means that
-loudly.
+**`weight` (both eval families).** Positive number, default 1. It changes
+how much an outcome moves an aggregate and never the eval's own pass/fail.
+The binary outcome is what SARIF, JUnit and findings baselines consume
+downstream, and a score leaking into it would change all three at once.
+Zero is excluded on purpose: a weightless eval is a silent disable, and
+`skip` already means that loudly.
 
-**`target`, not `focus` (both).** `claude plugin eval` spells this twice — `target` on its `regex`
-grader, `focus` on its `llm` grader — for the same union of values. One name, and `target` is the
-right one for three reasons. It names a *data selector* rather than an emphasis. `evidence` already
-occupies the hint slot in both our families, so `focus` collides with it while `target` does not,
-leaving the pair legible. And it has to serve deterministic graders, which have no focus. That the
-source design reaches for `target` on its deterministic grader is itself the evidence.
+**`target`, not `focus` (both).** `claude plugin eval` spells this twice
+(`target` on its `regex` grader, `focus` on its `llm` grader) for the same
+union of values. One name, and `target` is the right one for three reasons.
+It names a data selector rather than an emphasis. `evidence` already
+occupies the hint slot in both our families, so `focus` collides with it
+while `target` does not, leaving the pair legible. And it has to serve
+deterministic graders, which have no focus. That the source design reaches
+for `target` on its deterministic grader is itself the evidence.
 
-Members differ by family because the subjects do — `body`/`raw`/`frontmatter` for a page,
-`transcript`/`last-message`/`files`/`artifact` for a session — with a shared `{source: file, path}`
-object form, branched with if/then in the house style.
+Members differ by family because the subjects do (`body`/`raw`/`frontmatter`
+for a page, `transcript`/`last-message`/`files`/`artifact` for a session),
+with a shared `{source: file, path}` object form, branched with if/then in
+the house style.
 
-**`runs` and `model` (both).** Per-eval ensemble count and judging model. Capped at 50 because runs
-multiply cost directly. Both, plus the pre-existing `provider`, are now constrained to `ai` evals by
-a conditional: proposal.1 stated that for `provider` in prose while giving command's fields a hard
-conditional, which was an asymmetry with no reason behind it.
+**`runs` and `model` (both).** Per-eval ensemble count and judging model.
+Capped at 50 because runs multiply cost directly. Both, plus the
+pre-existing `provider`, are now constrained to `ai` evals by a conditional.
+proposal.1 stated that for `provider` in prose while giving command's fields
+a hard conditional, an asymmetry with no reason behind it.
 
-`model` also has a second purpose worth recording: it lets an eval name a judge *other than* the
-model that produced what it grades. `ai-context`'s `generated-by` already says a judge should know
-when it is grading its own author; without a per-eval `model` a tool could only warn about that,
-never fix it.
+`model` also has a second purpose worth recording: it lets an eval name a
+judge other than the model that produced what it grades. `ai-context`'s
+`generated-by` already says a judge should know when it is grading its own
+author; without a per-eval `model` a tool could only warn about that, never
+fix it.
 
-**`assertion` becomes conditional in `artifact-evals`.** It was flatly required there and
-conditionally required on the page side. A `tool-usage` criterion says everything in `options`, just
-as a page-side `tool:freshness` one does, so the requirement forced authors to write a sentence no
-grader reads. The page side's `allOf` block is ported verbatim: `ai`, `human` and a bare entry still
-require an assertion; `command` requires an assertion or a command.
+**`assertion` becomes conditional in `artifact-evals`.** It was flatly
+required there and conditionally required on the page side. A `tool-usage`
+criterion says everything in `options`, just as a page-side `tool:freshness`
+one does, so the requirement forced authors to write a sentence no grader
+reads. The page side's `allOf` block is ported verbatim: `ai`, `human` and a
+bare entry still require an assertion; `command` requires an assertion or a
+command.
 
-**The `eval-` prefix guard is encoded, not described.** Both families asked consumers to reject
-unrecognized `eval-*` keys in prose, and neither enforced it — so a consumer validating against the
-published bytes got the guard only if it implemented one itself. moose-docevals did;
-moose-tracevals, following the description faithfully, did not. Now `evals` carries
-`"^eval-(?!suite$|skip$|provenance$)": false` at the root and `artifact-evals` the equivalent inside
-`metadata`.
+**The `eval-` prefix guard is encoded, not described.** Both families asked
+consumers to reject unrecognized `eval-*` keys in prose, and neither
+enforced it, so a consumer validating against the published bytes got the
+guard only if it implemented one itself. moose-docevals did;
+moose-tracevals, following the description faithfully, did not. Now `evals`
+carries `"^eval-(?!suite$|skip$|provenance$)": false` at the root and
+`artifact-evals` the equivalent inside `metadata`.
 
-**`docmeta-vocabularies` in `core`.** The guard above is only safe once a file can say which
-vocabulary version it targets: without it, a key from a *newer* vocabulary is rejected as a typo —
-precisely the diagnosis the prefix rule exists to prevent, one level up. It lives in `core` because
-all nine families share the gap and none could solve it alone. Absent means "assume the version the
-reading tool implements", which is today's behaviour; a major above what the tool implements is a
-distinct error naming both versions, checked *before* any unknown-key rejection.
+**`docmeta-vocabularies` in `core`.** The guard above is only safe once a
+file can say which vocabulary version it targets. Without it, a key from a
+newer vocabulary is rejected as a typo, which is the diagnosis the prefix
+rule exists to prevent, one level up. It lives in `core` because all nine
+families share the gap and none could solve it alone. Absent means "assume
+the version the reading tool implements", which is today's behaviour; a
+major above what the tool implements is a distinct error naming both
+versions, checked before any unknown-key rejection.
 
-**Not changed, though it looked like it should be.** `artifact-evals.grader` has no top-level
-`pattern` — it is an `anyOf` of `^(tool:)?[a-z0-9][a-z0-9-]*$` plus a recommended enum, and its
-description already explains the open-kebab design and explicitly accepts the page side's `tool:`
-namespace "so one grader spelling ports across both eval vocabularies". Read shallowly this looks
-like a missing constraint. It is a documented decision, and it stands.
+**Not changed, though it looked like it should be.** `artifact-evals.grader`
+has no top-level `pattern`. It is an `anyOf` of `^(tool:)?[a-z0-9][a-z0-9-]*$`
+plus a recommended enum, and its description already explains the
+open-kebab design and explicitly accepts the page side's `tool:` namespace
+"so one grader spelling ports across both eval vocabularies". Read
+shallowly this looks like a missing constraint. It is a documented
+decision, and it stands.
 
 ### Round 6 follow-up: the declaration is constrained where it is nested
 
-`core` grew `docmeta-vocabularies`, and its description says artifacts nest it as
-`metadata.docmeta-vocabularies` — but `artifact-evals` only *allowed* the key, through
-`additionalProperties: true`, without constraining it. Review caught it, correctly.
+`core` grew `docmeta-vocabularies`, and its description says artifacts nest
+it as `metadata.docmeta-vocabularies`. But `artifact-evals` only allowed the
+key, through `additionalProperties: true`, without constraining it. Review
+caught it, correctly.
 
-An unvalidated declaration is worse than an absent one. `Evals: 1.0.0-proposal.2` or
-`eval: 1.0.0-proposal.2` would pass, mean nothing to any tool, and read to its author as a
-version declaration that was accepted. The whole point of the key is to run *before* the
-`eval-` prefix rejection so a newer vocabulary's key is never reported as a typo; a
-silently-ignored declaration means that check never runs, on precisely the files whose prefix
-guard depends on it.
+An unvalidated declaration is worse than an absent one.
+`Evals: 1.0.0-proposal.2` or `eval: 1.0.0-proposal.2` would pass, mean
+nothing to any tool, and read to its author as a version declaration that
+was accepted. The whole point of the key is to run before the `eval-` prefix
+rejection so a newer vocabulary's key is never reported as a typo. A
+silently-ignored declaration means that check never runs, on precisely the
+files whose prefix guard depends on it.
 
-`artifact-evals` now carries the same `propertyNames` pattern and string-valued
-`additionalProperties` as `core`, and the ladder gains three cases: the nested declaration
-accepted, a mis-cased family name rejected, and a non-string version rejected. The shape is
-duplicated rather than `$ref`'d, matching how the rest of this family's nesting works — the two
-schemas are published separately and a cross-family `$ref` would make one unresolvable without
-the other.
+`artifact-evals` now carries the same `propertyNames` pattern and
+string-valued `additionalProperties` as `core`, and the ladder gains three
+cases: the nested declaration accepted, a mis-cased family name rejected,
+and a non-string version rejected. The shape is duplicated rather than
+`$ref`'d, matching how the rest of this family's nesting works: the two
+schemas are published separately, and a cross-family `$ref` would make one
+unresolvable without the other.
 
 ### Round 6 follow-up: where the `use:` form's overrides stop
 
-Review asked whether `weight`'s absence from `evalReference` was an intentional boundary or an
-omission. **Omission** — `weight` went onto `inlineEval` and nobody looked at the reference form,
-which is how most pages actually join an aggregate. It is there now, and `weight` is hoisted into
-`$defs` so the two forms cannot drift on what a weight is.
+Review asked whether `weight`'s absence from `evalReference` was an
+intentional boundary or an omission. **Omission.** `weight` went onto
+`inlineEval` and nobody looked at the reference form, which is how most
+pages actually join an aggregate. It is there now, and `weight` is hoisted
+into `$defs` so the two forms cannot drift on what a weight is.
 
-Asking the question did expose where the line belongs, which was not written down anywhere. The
-`use:` form's overrides are statements about **this page's relationship to a check the corpus
-owner defined**: whether it applies (`skip`), what kind of claim it is here (`type`), how badly
-failing matters (`severity`), what it measures here (`options`), and how much it counts
-(`weight`).
+Asking the question did expose where the line belongs, which was not
+written down anywhere. The `use:` form's overrides are statements about
+**this page's relationship to a check the corpus owner defined**: whether it
+applies (`skip`), what kind of claim it is here (`type`), how badly failing
+matters (`severity`), what it measures here (`options`), and how much it
+counts (`weight`).
 
 Two groups stay out, for different reasons:
 
-- **`provider`, `model`, `runs`** say how the *tool executes*, not what the page claims. A corpus
-  where each page picks its own judge model is one no operator can cost, cache, or reason about,
-  and the run-wide setting exists precisely so that decision has one place.
-- **`target`** would let a named eval read different bytes on different pages, so one name means
-  two things in one corpus — the confusion `use:` exists to prevent. An eval that needs a
-  different subject is a different eval, and defining it costs one config entry.
+- **`provider`, `model`, `runs`** say how the tool executes, not what the
+  page claims. A corpus where each page picks its own judge model is one no
+  operator can cost, cache, or reason about, and the run-wide setting exists
+  so that decision has one place.
+- **`target`** would let a named eval read different bytes on different
+  pages, so one name means two things in one corpus, which is the confusion
+  `use:` exists to prevent. An eval that needs a different subject is a
+  different eval, and defining it costs one config entry.
 
-Also from this round: `docmeta-vocabularies: {}` was valid and declared nothing. It now carries
-`minProperties: 1`, matching the `minItems: 1` floor the family already applies to every list.
+Also from this round: `docmeta-vocabularies: {}` was valid and declared
+nothing. It now carries `minProperties: 1`, matching the `minItems: 1` floor
+the family already applies to every list.
