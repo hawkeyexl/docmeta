@@ -1,42 +1,43 @@
 ---
 title: "docmeta:kg:1.0.0-proposal.1"
-description: "The proposed knowledge-graph vocabulary — SKOS concepts, iiRDS typing, and PROV provenance under one closed kg block."
+description: "The proposed knowledge-graph vocabulary: SKOS concepts, iiRDS typing, and PROV provenance under one closed kg block."
 sidebar:
   order: 8
   label: "kg"
 ---
 
-:::caution[Proposed — not shipped]
+:::caution[Proposal under review]
 Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-vocabularies/),
 open for community review. Draft schema:
 [`docs/proposals/0023/schemas/kg/1.0.0-proposal.1.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/kg/1.0.0-proposal.1.json).
 :::
 
 **The question it answers: what does the knowledge graph know about this
-page?** A common vocabulary any graph builder or retrieval tool can
-implement. Files without a `kg` key pass; the block itself is closed, so a
-typo'd field fails loudly.
+page?** A common vocabulary that any graph builder or retrieval tool can
+implement. Files without a `kg` key pass. The block itself is closed, so
+a misspelled field fails loudly.
 
 ## The block
 
 | Field | Notes |
 |---|---|
 | `label` | The one canonical name of the concept this page is about (`skos:prefLabel`) |
-| `alt-labels` | Every other name — what search matches (`skos:altLabel`) |
-| `broader` · `narrower` | Parent and child concepts; each requires `label` — no synonyms of nothing |
-| `related-concepts` | Associated concepts (`skos:related`) — concepts, where the page-level `related-pages` is pages |
-| `concepts` | What the page covers (`dcterms:subject`) — the deeper twin of the page-level field |
-| `type` | iiRDS topic type: `task` · `concept` · `reference` · `learning` · `troubleshooting` · `form` — the deeper twin of the page-level `type` |
+| `alt-labels` | Every other name; what search matches (`skos:altLabel`) |
+| `broader` · `narrower` | Parent and child concepts. Each requires `label`, so there are no synonyms of nothing |
+| `related-concepts` | Associated concepts (`skos:related`). The page-level `related-pages` relates pages; this relates concepts |
+| `concepts` | What the page covers (`dcterms:subject`). The same fact as the page-level field, one level deeper |
+| `type` | iiRDS topic type: `task` · `concept` · `reference` · `learning` · `troubleshooting` · `form`. The same fact as the page-level `type`, one level deeper |
 | `applies-to` · `not-applicable-to` | Product/variant labels, positive and negative scope (`iirds:relates-to-product-variant`) |
-| `about-product-lifecycle` | Which product phases the *content covers* — never the page's own lifecycle: `administration` · `customization` · `update` · `deployment` · `integration` · `deinstallation` |
+| `about-product-lifecycle` | Which product phases the content covers (never the page's own lifecycle): `administration` · `customization` · `update` · `deployment` · `integration` · `deinstallation` |
 | `about-product-aspect` · `not-about-product-aspect` | `architecture` · `interface` · `system-requirement` (iiRDS Software domain) |
-| `sections` | Per-heading-slug typing — the same fields, one heading down |
+| `sections` | Per-heading typing, keyed by heading slug: the same fields, one heading down |
 | `revision-of` · `derived-from` | Document lineage (`prov:wasRevisionOf`, `prov:wasDerivedFrom`) |
 | `provenance` | The machine-proposal trail: which model proposed which kg fields, at what confidence |
 
-Every label field takes one string or a non-empty, duplicate-free list.
-The three iiRDS enums stay closed — iiRDS publishes the lists, which is
-the authority the no-invented-enums rule asks for.
+Every label field takes one string or a non-empty list without
+duplicates. The three iiRDS enums stay closed because iiRDS publishes the
+lists, which is the kind of authority the family's no-invented-enums rule
+asks for.
 
 ## Example
 
@@ -59,29 +60,32 @@ kg:
 
 ## Design decisions
 
-- **The envelope survives the family's flattening rule** — it is what
-  lets a closed, typo-catching block coexist with an open page.
-- **Deeper wins; the top level is the harvest fallback.** Where the block
-  and a page-level field speak to the same fact — `type`, `concepts`,
-  `applies-to` — the block's declaration wins, per fact, and the
-  page-level field feeds the graph when the block is silent. Absent
-  `kg.type`, an implementer may derive it from the page's `type`
-  (`how-to` → `task`, `tutorial` → `learning`, `explanation` →
-  `concept`); an explicit block always wins.
-- **Plain-language kebab names; the RDF mapping lives in descriptions.**
-  iiRDS itself spells its properties kebab (`has-topic-type`), so mirroring
-  a vocabulary's internal spellings in the key names buys nothing. `label`
-  is `skos:prefLabel`; the field descriptions carry every mapping.
-- **The about- prefix makes about-ness structural.**
+- **The closed block is the one exception to the family's flat-keys
+  rule.** It is what lets a closed, typo-catching block coexist with an
+  open page.
+- **The deeper declaration wins; the page level is the fallback.** Where
+  the block and a page-level field describe the same fact (`type`,
+  `concepts`, `applies-to`), the block's declaration wins, fact by fact,
+  and the page-level field feeds the graph when the block is silent. When
+  `kg.type` is absent, an implementer may derive it from the page's
+  `type` (`how-to` → `task`, `tutorial` → `learning`, `explanation` →
+  `concept`). An explicit block always wins.
+- **Plain-language kebab names; the RDF mapping lives in the
+  descriptions.** iiRDS itself spells its properties in kebab-case
+  (`has-topic-type`), so mirroring a vocabulary's internal spellings in
+  the key names gains nothing. `label` is `skos:prefLabel`, and each field
+  description carries its mapping.
+- **The `about-` prefix makes the subject explicit.**
   `about-product-lifecycle: [deinstallation]` describes what the content
-  covers; a page about uninstalling is not a deprecated page. The page's
+  covers. A page about uninstalling is not a deprecated page. The page's
   own life is [`lifecycle`](/docmeta/proposals/lifecycle/).
-- **Disjointness (`applies-to` vs `not-applicable-to`) is checked at the
-  graph layer**, not here — one file at a time is what JSON Schema sees.
+- **Overlap between `applies-to` and `not-applicable-to` is checked at
+  the graph layer.** JSON Schema sees one file at a time, so the check
+  does not happen here.
 
 ## What reviewers should poke at
 
-Whether the closed block plus open page-root split lands well for graph
-implementers, and whether the plain-language renames (`label`,
-`about-product-aspect`) read better than the SKOS/iiRDS-mirroring names
-they replaced.
+Two questions. Does the closed block plus open page root land well for
+graph implementers? And do the plain-language renames (`label`,
+`about-product-aspect`) read better than the SKOS and iiRDS spellings
+they replaced?

@@ -1,50 +1,52 @@
 ---
 title: "docmeta:artifact-evals:1.0.0-proposal.1"
-description: "The proposed artifact-eval vocabulary — session assertions for skills, agent definitions, and project rules, under metadata.evals."
+description: "The proposed artifact-eval vocabulary: session assertions for skills, agent definitions, and project rules, under metadata.evals."
 sidebar:
   order: 9
   label: "artifact-evals"
 ---
 
-:::caution[Proposed — not shipped]
+:::caution[Proposal under review]
 Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-vocabularies/),
 open for community review. Draft schema:
 [`docs/proposals/0023/schemas/artifact-evals/1.0.0-proposal.1.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/artifact-evals/1.0.0-proposal.1.json).
 :::
 
 **The question it answers: what must a session that used this artifact
-have done?** Instruction artifacts — skills, agent definitions,
-project-rules files — carry evals about the *sessions* that run with them.
-A common vocabulary any session-grading tool can implement.
+have done?** Instruction artifacts (skills, agent definitions,
+project-rules files) carry evals about the sessions that run with them.
+This is a common vocabulary that any session-grading tool can implement.
 
 ## Keys
 
-The [page-side trio](/docmeta/proposals/evals/), one level down — because
-an artifact's top-level frontmatter is the host tool's contract, and
+The [page-side trio](/docmeta/proposals/evals/), one level down. An
+artifact's top-level frontmatter is the host tool's contract, and
 `metadata` is the host's sanctioned extension bag:
 
 | Key | Type | Notes |
 |---|---|---|
 | `metadata.evals` | string, or non-empty list of entries | One assertion, or the list |
-| `metadata.eval-skip` | boolean (default false) | Skip the artifact's evals — reported, never silent |
+| `metadata.eval-skip` | boolean (default false) | Skip the artifact's evals. Tooling reports the skip |
 | `metadata.eval-provenance` | list of entries | The machine-proposal trail |
 
-Entries share the page-side shape: `id` + `assertion` (both required on
+Entries share the page-side shape: `id` and `assertion` (both required on
 the object form), `type`, `severity` (default error), `evidence`,
-`examples` with one-or-several anchors, `provider`, the command family
-with the same guard rails, `options`, `severity-map`, `skip`.
+`examples` with one or several anchors, `provider`, the command family
+with the same guard rails, `options`, `severity-map`, and `skip`.
 
 ## Graders
 
-A full open enum: recommended values `ai` (default) · `human` · `command`
-· `tool-usage` · `skill-invoked` · `file-access` · `turn-count` · `cost` ·
-`regex` · `json-output`, plus the page side's `tool:*` spelling so one
-grader name ports across both vocabularies — and any kebab name is legal,
-validated against the implementer's grader registry at run time, so a new
-grader never needs a schema version. Two semantics differ from the page
-side by nature: `human` is judged **per session** (every trace is new, so
-no verdict caching), and `command` receives **`{trace}`** — the session's
-trace path — where the page side substitutes `{file}`.
+The grader is a fully open list. Recommended values: `ai` (default),
+`human`, `command`, `tool-usage`, `skill-invoked`, `file-access`,
+`turn-count`, `cost`, `regex`, and `json-output`, plus the page side's
+`tool:*` spelling so one grader name works in both vocabularies. Any
+kebab-case name is legal. The implementer's grader registry validates it
+at run time, so a new grader never needs a schema version.
+
+Two graders behave differently from the page side by nature. `human` is
+judged per session, because every trace is new, so verdicts are never
+cached. `command` receives `{trace}`, the session's trace path, where the
+page side substitutes `{file}`.
 
 ## Example
 
@@ -76,24 +78,24 @@ metadata:
 
 ## Design decisions
 
-- **The envelope is the host's, not ours.** The one place the family's
-  flattening rule deliberately cannot reach: a skill's top-level
-  frontmatter belongs to the tool that runs it, and `metadata` is its
-  extension point. `metadata` stays open — other tools' members pass
-  untouched — while entry objects are closed; implementers reserve the
-  `eval` prefix *inside* `metadata` for the same loud-typo guard the page
-  side applies at its root.
-- **Ids are required on object entries.** Position-derived names orphan
-  cached verdicts whenever entries move; if an eval is worth an object, it
-  is worth a stable name.
-- **The grader enum is fully open** because — unlike the page side — no
-  schema conditional switches on it: every object entry requires an
+- **The envelope belongs to the host.** This is the one place the
+  family's flat-keys rule cannot reach: a skill's top-level frontmatter
+  belongs to the tool that runs it, and `metadata` is its extension
+  point. `metadata` stays open, so other tools' members pass untouched,
+  while entry objects are closed. Implementers reserve the `eval` prefix
+  inside `metadata`, which gives it the same protection the page side
+  applies at its root: a misspelled key fails instead of being ignored.
+- **Ids are required on object entries.** Names derived from position
+  orphan cached verdicts whenever entries move. An eval that is worth an
+  object is worth a stable name.
+- **The grader list is fully open** because, unlike the page side, no
+  schema conditional branches on it: every object entry requires an
   assertion regardless. The one cost, stated in the schema: a stale
   legacy grader name passes the schema and is rejected by the registry.
 
 ## What reviewers should poke at
 
-Whether one entry vocabulary across pages and artifacts (differing only
-in envelope and grader family, each for a stated reason) carries its
-weight, and whether the per-session `human` semantics are documented
-clearly enough that implementers won't try to cache verdicts.
+Two questions. Does one entry vocabulary across pages and artifacts
+(differing only in envelope and grader family, each for a stated reason)
+carry its weight? And are the per-session `human` semantics documented
+clearly enough that implementers will not try to cache verdicts?

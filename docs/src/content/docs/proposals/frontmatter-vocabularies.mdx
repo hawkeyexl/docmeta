@@ -1,38 +1,42 @@
 ---
 title: "Proposal: the metadata vocabularies"
-description: Nine proposed frontmatter vocabularies for maintained, machine-consumable docs — open for community review before anything ships.
+description: "Nine proposed frontmatter vocabularies for maintained, machine-readable docs, open for community review before anything ships."
 sidebar:
   order: 0
   label: "Overview"
 ---
 
-:::caution[This is a proposal, not a shipped feature]
+:::caution[A proposal under review]
 Nothing on this page is registered, published, or enforced yet. It is a
-design put in front of the documentation community for review — the
+design put in front of the documentation community for review. The
 decisions below are real, and they are still reversible. The full record
 lives in the repo as
 [proposal 0023](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023-metadata-vocabularies.md),
 with the draft schemas under
 [`docs/proposals/0023/schemas/`](https://github.com/hawkeyexl/docmeta/tree/main/docs/proposals/0023/schemas).
-Each vocabulary's dedicated page is linked from the tables below and
+Each vocabulary has its own page, linked from the tables below and
 listed in the sidebar.
 :::
 
 docmeta is a CLI that validates the presence and format of document
-metadata — frontmatter — against JSON Schema, in CI. Its built-in schemas
+metadata (frontmatter) against JSON Schema, in CI. Its built-in schemas
 have always transcribed contracts other people published: Hugo's front
 matter, DITA's prolog, Open Graph. This proposal adds the first
-vocabularies docmeta would publish itself: the facts a docs set needs in
-order to be **maintained** and **machine-consumable**, which no site
-generator defines and no standard owns.
+vocabularies docmeta would publish itself. They cover the facts a docs
+set needs to stay maintained and readable by machines: ownership,
+review, audience, applicability, lifecycle, relationships, AI
+provenance, and quality checks. No site generator defines those facts,
+and no standard owns them.
 
 ## The nine vocabularies
 
-Nine vocabularies, split by intent so each is one adoption decision — six
-page-level, plus three for quality and knowledge-graph metadata that any
-grader, graph builder, or CI tool can implement and compose on top of.
-**Each has a dedicated page** (the sidebar lists all nine) with its
-fields, examples, design rationale, and its own review asks:
+The nine are designed as one family. They share the same conventions,
+and no two of them claim the same key. They are split by intent so that
+each one is a separate decision to adopt: six describe a page, and three
+carry quality and knowledge-graph metadata that any grader, graph
+builder, or CI tool can implement. Each has its own page (the sidebar
+lists all nine) with its fields, examples, design rationale, and its own
+questions for reviewers:
 
 | Id | The question it answers | Fields |
 |---|---|---|
@@ -41,17 +45,18 @@ fields, examples, design rationale, and its own review asks:
 | [`docmeta:audience:1.0.0-proposal.1`](/docmeta/proposals/audience/) | Who does it serve, and who may see it? | `audiences` · `personas` · `journeys` · `intent` · `visibility` |
 | [`docmeta:lifecycle:1.0.0-proposal.1`](/docmeta/proposals/lifecycle/) | Where is it in its life? | `lifecycle` · `replaced-by` · `supersedes` · `remove-by` |
 | [`docmeta:structure:1.0.0-proposal.1`](/docmeta/proposals/structure/) | What does it connect to? | `applies-to` · `not-applicable-to` · `concepts` · `prerequisites` · `next-steps` · `related-pages` |
-| [`docmeta:ai-context:1.0.0-proposal.1`](/docmeta/proposals/ai-context/) | How did machines make it — and how may they use it? | `generated-by` · `provenance` · `risks` · `sample-questions` |
+| [`docmeta:ai-context:1.0.0-proposal.1`](/docmeta/proposals/ai-context/) | How did machines make it, and how may they use it? | `generated-by` · `provenance` · `risks` · `sample-questions` |
 | [`docmeta:evals:1.0.0-proposal.1`](/docmeta/proposals/evals/) | What must be true of this page? | `evals` · `eval-suite` · `eval-skip` · `eval-provenance` |
-| [`docmeta:kg:1.0.0-proposal.1`](/docmeta/proposals/kg/) | What does the knowledge graph know about it? | `kg` — one closed block: SKOS concepts, iiRDS typing, PROV provenance |
+| [`docmeta:kg:1.0.0-proposal.1`](/docmeta/proposals/kg/) | What does the knowledge graph know about it? | `kg`, one closed block: SKOS concepts, iiRDS typing, PROV provenance |
 | [`docmeta:artifact-evals:1.0.0-proposal.1`](/docmeta/proposals/artifact-evals/) | What must a session using this artifact have done? | `metadata.evals` · `metadata.eval-skip` · `metadata.eval-provenance` |
 
-All nine are intended for docmeta's **default set**. A bare run would then
-require every page to carry a non-empty `title` and `description` — the
-only two required fields in the family — and would validate every other
-family key a page chooses to carry. A page with just the required pair
-stays valid: the other eight vocabularies require nothing until you use
-their keys.
+All nine are intended for docmeta's default set, the schemas a run uses
+when no schema is configured. Such a run would then require every page
+to carry a non-empty `title` and `description`. Those are the only two
+required fields in the family. The run would also validate any other
+family key a page chooses to carry. A page with only the required pair
+stays valid, because the other eight vocabularies require nothing until
+you use their keys.
 
 ## What a fully-annotated page looks like
 
@@ -97,51 +102,56 @@ kg:
 ```
 
 Every key above is optional except `title` and `description`. A page
-carrying only those two is a valid page; everything else is a rung on a
-ladder you climb deliberately.
+that carries only those two is valid. Each further key is a step you
+take when you are ready for it.
 
 ## The principles behind every field
 
-1. **Weak floors teach bad habits.** Every string the core vocabulary
-   claims is non-empty, `title` and `description` are required, and `type`
-   and `language` are single values — deliberately stricter than the
-   loosest schemas sharing those keys (Docusaurus permits empty titles;
-   Dublin Core repeats its elements), because a default whose floor accepts
-   an empty title teaches the habit it exists to prevent. Those are the
-   only exceptions to the compatibility rule below, and each is pinned by
-   an automated check.
-2. **One value is a string; many values are a list.** Everywhere, with no
-   per-field trivia.
+1. **Weak floors teach bad habits.** A default that accepts an empty
+   title teaches the habit it exists to prevent. So `title` and
+   `description` are required, every string the core vocabulary defines
+   must be non-empty, and `type` and `language` take a single value. This
+   is stricter than the loosest schemas that share those keys: Docusaurus
+   permits an empty title, and Dublin Core allows repeated elements. The
+   family's compatibility rule is that a document valid under another
+   built-in schema stays valid under these vocabularies. These strictness
+   choices are the only exceptions to that rule, and an automated check
+   records each one.
+2. **One value is a string; many values are a list.** This holds for
+   every field, with no per-field exceptions to remember.
 3. **Claim content, never rendering.** There is no `slug`, `layout`,
-   `image`, `tags`, ordering, or navigation here — the generator owns how a
-   page is dressed and where it sits. These vocabularies only describe what
-   a page *is*.
-4. **Derivable facts lie.** No `updated`, no creation `date`, no stored
-   review deadline: git knows when files change, and
-   `last-reviewed` + `review-interval` derive the due date. The dates that
-   remain are the ones only a human can assert.
-5. **Facts live at their altitude.** Reader expertise belongs to your
-   persona definitions, not to every page; style guides belong in config;
-   `stakeholders` stays because the right people genuinely differ page by
+   `image`, `tags`, ordering, or navigation here. The generator owns how
+   a page is displayed and where it sits. These vocabularies only
+   describe what a page is.
+4. **Derivable facts lie.** There is no `updated` stamp, no creation
+   `date`, and no stored review deadline. Git knows when files change,
+   and `last-reviewed` plus `review-interval` give the due date. The
+   dates that remain are the ones only a human can assert.
+5. **Facts live at their altitude.** A fact belongs at the level that
+   owns it. Reader expertise belongs in your persona definitions, not on
+   every page. Style guides belong in config. `stakeholders` stays at
+   page level because the right people to consult differ from page to
    page.
 6. **Enumerate only what is switched on and bounded.** `visibility` and
-   `lifecycle` are the only invented enums — something downstream switches
-   on each. Recommendable-but-open vocabularies (`risks`, the artifact
-   grader family) use an open enum: recommended values feed editors and
-   tooling, any string stays legal, and consumers treat unknown values as
-   caution rather than absence.
-7. **Compose, don't duplicate.** Content classification is three layers —
-   `type` (what the page is), Seven-Action's `action` (what the reader is
-   doing), `intent` (the specific job) — each owned by the schema that
-   published it.
-8. **Deeper wins.** Where the `kg` block and a page field describe the same
-   fact (`type`, `concepts`, `applies-to`), the more deliberate, deeper
-   declaration wins and the page-level field is the fallback.
-9. **Machines propose; humans retire the provenance.** The `provenance`
-   pattern — per-model entries naming proposed fields and confidence,
-   deleted as humans review — appears at page level, in the graph block,
-   and in both eval vocabularies. A surviving entry means unreviewed
-   machine metadata.
+   `lifecycle` are the only enums this family invents, because something
+   downstream branches on each value. Fields with recommended but open
+   values (`risks`, the artifact grader family) use an open list: the
+   recommended values feed editors and tooling, any other string stays
+   legal, and a consumer that meets an unknown value should treat it as
+   a caution rather than as nothing.
+7. **Compose, don't duplicate.** Content classification is three layers,
+   each owned by the schema that published it: `type` (what the page is),
+   Seven-Action's `action` (what the reader is doing), and `intent` (the
+   specific job).
+8. **Deeper wins.** Where the `kg` block and a page field describe the
+   same fact (`type`, `concepts`, `applies-to`), the declaration inside
+   the block wins and the page-level field is the fallback.
+9. **Machines propose; humans retire the provenance.** A `provenance`
+   entry names the model that proposed some fields and its confidence in
+   each. Humans delete the entry once they have reviewed those fields.
+   The pattern appears at page level, in the graph block, and in both
+   eval vocabularies. A surviving entry means machine-written metadata
+   that nobody has checked yet.
 
 ## Quality contracts, on pages and on agent artifacts
 
@@ -160,7 +170,7 @@ evals:
 ```
 
 ```yaml
-# a SKILL.md — the host tool owns the top level, so evals nest under metadata
+# a SKILL.md: the host tool owns the top level, so evals nest under metadata
 metadata:
   evals:
     - id: used-read
@@ -170,46 +180,49 @@ metadata:
     - Reproduce the bug with a failing test before applying the fix.
 ```
 
-Entries share one shape — `id`, `assertion`, `type`, `severity`,
-`evidence`, `examples`, per-entry `skip` — and differ in grader families
-(and in one rule: artifact entries always require `assertion`, while a
-page-side tool grader is its own check): pages are graded by `ai`, `command`, `human`, or `tool:*`
-integrations; sessions by `ai`, `human`, `command` over the trace, or
-deterministic session graders like `tool-usage` and `cost` — and the
-`tool:*` spelling is accepted on both sides, so one grader name ports
-across page and artifact evals.
+Entries share one shape on both sides: `id`, `assertion`, `type`,
+`severity`, `evidence`, `examples`, and a per-entry `skip`. The two sides
+differ in their grader families. Pages are graded by `ai`, `command`,
+`human`, or a `tool:*` integration. Sessions are graded by `ai`, `human`,
+`command` over the trace, or a deterministic session grader such as
+`tool-usage` or `cost`. The `tool:*` spelling is accepted on both sides,
+so one grader name works for page and artifact evals. One rule differs:
+an artifact entry always requires an `assertion`, while on the page side
+a tool grader is its own check.
 
 ## What we most want your opinion on
 
-These are the calls we consider genuinely contestable, in the order we
+These are the calls we consider most contestable, in the order we
 expect debate:
 
-1. **Applicability is flat.** `applies-to: [operator-1.4, kubernetes]` —
-   named dimensions (product vs deployment vs generation) were designed and
-   then simplified away, with prefix labels (`deploy:kubernetes`) as the
-   escape hatch. Too flat?
+1. **Applicability is flat.** `applies-to: [operator-1.4, kubernetes]`
+   uses flat labels. Named dimensions (product, deployment, generation)
+   were designed and then removed, with prefix labels such as
+   `deploy:kubernetes` as the escape hatch. Is that too flat?
 2. **`lifecycle` is a closed enum** (`draft · published · deprecated ·
-   archived`). It catches typos and makes "deprecated pages must name a
-   successor or a removal date" airtight — and it rejects your
-   `experimental`/`retired` ladder unless you override the key.
-3. **`risks` holds assurances too.** `read-only` and `idempotent` sit in a
-   field called risks, on the theory that an unannotated page is
-   *unassessed*, not safe. Does the name survive?
-4. **The whole family ships in the default set.** A bare `docmeta
-   validate` would fail pages that cannot say what they are called or what
-   they are for — the one hard nudge — and would validate any other family
-   key a page already carries; a bare `docmeta fill` proposes the full
-   menu. Is family-wide default the right aggressiveness?
-5. **`stakeholders` at page level** — the people to consult about *this*
-   page, deliberately distinct from project-level stakeholder lists, which
+   archived`). It catches typos and makes the rule "a deprecated page
+   must name a successor or a removal date" enforceable. It also rejects
+   an `experimental` or `retired` stage unless you override the key.
+3. **`risks` holds assurances too.** `read-only` and `idempotent` sit in
+   a field called risks. The reasoning: an unannotated page has not been
+   assessed, which is different from being safe. Does the name survive?
+4. **The whole family ships in the default set.** A `docmeta validate`
+   run with no schema configured would fail pages that cannot say what
+   they are called or what they are for. That is the one hard
+   requirement. It would also validate any other family key a page
+   already carries, and a bare `docmeta fill` would propose the full
+   menu. Is a family-wide default the right level of aggressiveness?
+5. **`stakeholders` at page level.** These are the people to consult
+   about this page, distinct from project-level stakeholder lists, which
    stay in project docs.
 
 ## How to review
 
 Open an issue on
-[hawkeyexl/docmeta](https://github.com/hawkeyexl/docmeta/issues) —
-field-level nitpicks are as welcome as structural objections. The complete
-design record (every cut, every rename, every verification ladder) is in
+[hawkeyexl/docmeta](https://github.com/hawkeyexl/docmeta/issues).
+Field-level nitpicks are as welcome as structural objections. The
+complete design record (every cut and rename, plus the runnable example
+sets that verify each schema) is in
 [proposal 0023](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023-metadata-vocabularies.md)
-and the design notes beside it. Nothing registers until this review
-concludes.
+and the design notes beside it. Registration waits for this review to
+conclude.

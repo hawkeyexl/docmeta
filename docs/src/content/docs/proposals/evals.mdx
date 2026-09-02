@@ -1,53 +1,58 @@
 ---
 title: "docmeta:evals:1.0.0-proposal.1"
-description: "The proposed page-eval vocabulary — named, testable assertions about a page, graded by AI, command, human, or tool."
+description: "The proposed page-eval vocabulary: named, testable assertions about a page, graded by AI, a command, a human, or a tool."
 sidebar:
   order: 7
   label: "evals"
 ---
 
-:::caution[Proposed — not shipped]
+:::caution[Proposal under review]
 Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-vocabularies/),
 open for community review. Draft schema:
 [`docs/proposals/0023/schemas/evals/1.0.0-proposal.1.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/evals/1.0.0-proposal.1.json).
 :::
 
 **The question it answers: what must be true of this page?** A common
-vocabulary for per-page quality assertions that any grader, judge, or CI
-tool can implement, and that other schemas can compose on top of.
+vocabulary for per-page quality assertions. Any grader, judge, or CI tool
+can implement it, and other schemas can compose on top of it.
 
 ## Keys
 
-Four page-level keys, all under the reserved `eval-` prefix or the `evals`
-key itself:
+Four page-level keys. Three carry the reserved `eval-` prefix, and the
+fourth is `evals` itself:
 
 | Key | Type | Notes |
 |---|---|---|
 | `evals` | string, or non-empty list of entries | One assertion, or the list |
-| `eval-suite` | string, non-empty | Named suite from the implementer's config; page entries win on id collision |
-| `eval-skip` | boolean (default false) | Skip the page's evals — reported, never silent |
+| `eval-suite` | string, non-empty | A named suite from the implementer's config. On an id collision, the page's entry wins |
+| `eval-skip` | boolean (default false) | Skip the page's evals. Tooling reports the skip |
 | `eval-provenance` | list of entries | The machine-proposal trail, one entry per model |
 
-An entry is a **string shorthand** (an AI-judged assertion at error
-severity), a **`use:` reference** to a config-defined eval, or an **inline
-definition**: `id` (required, kebab), `assertion`, `type`
-(`capability`/`regression`), `grader`, `provider`, `evidence`, `examples`
-(pass/fail anchors, one or several), the command family (`command`,
-`success-exit-codes`, `timeout-ms`, `generated-assertion-hash`),
-`options`, `severity` (`error`/`warning`/`info`, default error),
-`severity-map`, `skip`.
+An entry takes one of three forms: a string shorthand (an AI-judged
+assertion at error severity), a `use:` reference to an eval defined in
+config, or an inline definition. An inline definition can carry:
+
+- `id` (required, kebab-case) and `assertion`
+- `type`: `capability` or `regression`
+- `grader`, and `provider` for AI graders
+- `evidence`, and `examples` with one or several pass/fail anchors
+- the command family: `command`, `success-exit-codes`, `timeout-ms`,
+  `generated-assertion-hash`
+- `options`, `severity` (`error`, `warning`, or `info`; default `error`),
+  `severity-map`, and `skip`
 
 ## Graders
 
-`ai` (default — a model or an agent, selected per-eval with `provider`) ·
-`command` (an executable; `{file}` is the page path) · `human` (a review
-queue) · `tool:*` (named integrations — an open namespace). The structural
-three stay closed because schema conditionals switch on them: `ai` and
-`human` require an `assertion`; `command` requires an `assertion` *or* a
-`command` — omitting the command is the generation contract, where tooling
-generates a check script from the assertion and writes `command` +
-`generated-assertion-hash` back. An entry carrying a `command` must say
-`grader: command`; a hash is never legal without its command.
+`ai` is the default: a model or an agent, chosen per eval with
+`provider`. `command` runs an executable, with `{file}` as the page path.
+`human` puts the entry in a review queue. `tool:*` names an integration,
+and that namespace is open. The first three stay closed because schema
+conditionals branch on them. `ai` and `human` require an `assertion`.
+`command` requires an `assertion` or a `command`. Omitting the command is
+the generation contract: tooling generates a check script from the
+assertion and writes `command` and `generated-assertion-hash` back. An
+entry carrying a `command` must say `grader: command`, and a hash is never
+legal without its command.
 
 ## Examples
 
@@ -71,25 +76,27 @@ evals:
 
 ## Design decisions
 
-- **Flat, like the rest of the family.** There is no settings object: the
-  list is the value, and the settings are page-level `eval-*` keys. Because
-  the page root is open, implementers should **reserve the `eval-` prefix**
-  and reject unrecognized `eval-*` keys — giving the root the loud-typo
-  property a closed container would have.
-- **Ids are required on object entries** (the string shorthand is the
-  legitimately id-less form): position-derived names orphan cached
-  verdicts whenever entries move.
-- **Errors name the actual fault.** Entries branch by `if`/`then` rather
-  than `oneOf`, so a typo'd field inside an object reports against that
-  key instead of collapsing to "must be string".
-- **`eval-provenance`** is the family's machine-proposal trail (see
-  [ai-context](/docmeta/proposals/ai-context/)): entries retire under
-  human review, and a surviving entry means unreviewed machine-proposed
-  evals.
+- **Flat, like the rest of the family.** There is no settings object. The
+  list is the value, and the settings are page-level `eval-*` keys.
+  Because the page root is open, implementers should reserve the `eval-`
+  prefix and reject unrecognized `eval-*` keys. That gives the root the
+  property a closed container would have: a misspelled key fails instead
+  of being ignored.
+- **Ids are required on object entries.** The string shorthand is the
+  only id-less form. Names derived from position orphan cached verdicts
+  whenever entries move.
+- **Errors name the actual fault.** Entries branch with `if`/`then`
+  rather than `oneOf`, so a misspelled field inside an object is reported
+  against that key instead of collapsing to "must be string".
+- **`eval-provenance` is the family's machine-proposal trail** (see
+  [ai-context](/docmeta/proposals/ai-context/)). Entries are deleted
+  under human review, and a surviving entry means machine-proposed evals
+  nobody has checked.
 
 ## What reviewers should poke at
 
-Whether the `eval-` prefix reservation is an acceptable ask of
-implementers, and whether the closed structural graders plus the open
-`tool:*` namespace is the right split (its artifact-side counterpart is a
-[full open enum](/docmeta/proposals/artifact-evals/), for stated reasons).
+Two questions. Is the `eval-` prefix reservation an acceptable ask of
+implementers? And is the split between closed structural graders and the
+open `tool:*` namespace the right one? Its artifact-side counterpart is a
+[fully open list](/docmeta/proposals/artifact-evals/), for reasons stated
+there.

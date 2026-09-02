@@ -1,34 +1,34 @@
 ---
 title: "docmeta:structure:1.0.0-proposal.1"
-description: "The proposed structure vocabulary — what a page connects to: products, concepts, and other pages."
+description: "The proposed structure vocabulary: what a page connects to, including products, concepts, and other pages."
 sidebar:
   order: 5
   label: "structure"
 ---
 
-:::caution[Proposed — not shipped]
+:::caution[Proposal under review]
 Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-vocabularies/),
 open for community review. Draft schema:
 [`docs/proposals/0023/schemas/structure/1.0.0-proposal.1.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/structure/1.0.0-proposal.1.json).
 :::
 
-**The question it answers: what does this page connect to?**
-Relationships between pages — which no generator owns — never position in
-a navigation tree, which every generator does. There is deliberately no
-ordering, no parent, no nav title here.
+**The question it answers: what does this page connect to?** This
+vocabulary describes relationships between pages, which no generator
+owns. It never describes position in a navigation tree, which every
+generator does. There is no ordering, no parent, and no nav title here.
 
 ## Fields
 
 | Field | Type | Notes |
 |---|---|---|
-| `applies-to` | string or list | Flat product/variant/version labels: `operator-1.4`, `kubernetes` |
-| `not-applicable-to` | string or list | The carve-out `applies-to` alone cannot state: `operator-1.4` yes, `operator-1.4-fips` no |
-| `concepts` | string or list | Controlled glossary terms — curated, where core's `keywords` is free words |
+| `applies-to` | string or list | Flat product, variant, or version labels: `operator-1.4`, `kubernetes` |
+| `not-applicable-to` | string or list | The exclusion `applies-to` alone cannot state: `operator-1.4` yes, `operator-1.4-fips` no |
+| `concepts` | string or list | Controlled glossary terms. Core's `keywords` is free words; this is the curated list |
 | `prerequisites` | string or list | Pages, ids, or capabilities the reader needs first |
-| `next-steps` | string or list | Sensible follow-ons, unordered — several of them, not the generator's single `next`. **A more advanced page on the same topic goes here** |
-| `related-pages` | string or list | Associatively related pages, ids, or URLs. **This is what a site renders as "See also"** |
+| `next-steps` | string or list | Sensible follow-ons, unordered. Several are allowed, unlike the generator's single `next`. A more advanced page on the same topic goes here |
+| `related-pages` | string or list | Related pages, ids, or URLs. A site renders this list as "See also" |
 
-Every field accepts one string or a non-empty, duplicate-free list.
+Every field accepts one string or a non-empty list without duplicates.
 
 ## Example
 
@@ -47,59 +47,56 @@ related-pages: [operator-architecture]
 
 ## Design decisions
 
-- **Relationship, not navigation.** A field that duplicates something the
-  generator already owns under a second name is worse than a collision,
-  because a collision at least fails loudly. `next-steps` is several
-  unordered suggestions; the generator's `next`/`prev` position keys are a
-  different fact and stay with the generator.
-- **"A more advanced page" is a `next-steps` entry, not a missing field.**
-  Asked in review whether the family needs a way to point at a deeper
-  treatment of the same topic, the answer is that it already has one. There
-  is deliberately no `advanced` or `deeper-dive` key and no ordering among
-  next-steps, because *more advanced* is a claim about the **reader**, not
-  about the page. It is derived: two pages sharing `concepts` while pointing
-  at [`personas`](/docmeta/proposals/audience/) of different levels. That is
-  the same reasoning that cut reader `expertise` from this family — level
-  belongs to the persona definitions a page points at. The honest cost: a
-  docs set with no persona definitions yet cannot derive it, which is the
-  same day-one trade the audience vocabulary already makes.
-- **"See also" is a label for `related-pages`, not a second field.** The
-  rendered heading most docs sites use is editorial; the key underneath it
-  stays semantic. There is deliberately no `see-also` alias — one fact
-  reachable by two keys is exactly the second surface this family exists to
-  prevent, and an alias is permanent. If your style guide splits "See also"
-  (same product) from "Learn more" (off-site), note that `related-pages`
-  already accepts URLs, so that split is a rendering decision over one
-  field rather than a reason for two.
-- **`applies-to` is flat, and that was a fight.** Named dimensions
-  (`product:` vs `deployment:` vs `generation:`) were designed and then
-  simplified away; an org that needs axes prefixes labels
-  (`deploy:kubernetes`) or overlays its own schema. This is a headline
-  open question for the review.
-- **The negative exists at both altitudes.** `not-applicable-to` was added
-  in review round 5, for parallelism: `applies-to` had a page-level twin
-  and its negative did not, so the only way to say "not the FIPS build"
-  was to open a `kg` block for one field. Disjointness between the pair is
-  a graph-layer (SHACL) check here exactly as it is one level down — JSON
-  Schema cannot compare two sibling lists, so a page naming the same label
-  on both sides *passes*, and the contradiction surfaces at graph build.
-  That deliberate gap is pinned as a passing case, the way the overdue
-  review is.
-- **Three fields are harvest fallbacks of deeper twins.** `applies-to`,
-  `not-applicable-to` and
-  `concepts` share names and shapes with their counterparts inside the
-  [kg vocabulary](/docmeta/proposals/kg/)'s block. The rule is *deeper
-  wins*: when the kg block speaks to a fact, its declaration wins; when it
-  is silent, the page-level field feeds the graph. Both sides accept
-  identical values by construction — same non-empty, duplicate-free list
-  shape — so a promoted fallback can never produce a document the deeper
-  block rejects.
+- **This vocabulary stops at relationships.** A field that duplicates
+  something the generator already owns under a second name is worse than
+  a collision, because a collision at least fails loudly. `next-steps` is
+  several unordered suggestions. The generator's `next` and `prev`
+  position keys are a different fact and stay with the generator.
+- **"A more advanced page" is a `next-steps` entry.** Review asked whether
+  the family needs a way to point at a deeper treatment of the same
+  topic. It already has one. There is no `advanced` or `deeper-dive` key
+  and no ordering among next-steps, because "more advanced" is a claim
+  about the reader, not about the page. It can be derived: two pages
+  share `concepts` while pointing at
+  [`personas`](/docmeta/proposals/audience/) of different levels. The same
+  reasoning removed reader `expertise` from this family, since level
+  belongs to the persona definitions a page points at. The cost: a docs
+  set with no persona definitions yet cannot derive it. That is the same
+  trade the audience vocabulary makes for teams starting out.
+- **"See also" is a label for `related-pages`.** The heading most docs
+  sites render is editorial; the key underneath it stays semantic. There
+  is no `see-also` alias, because one fact reachable by two keys is the
+  kind of second surface this family exists to prevent, and an alias is
+  permanent. If your style guide splits "See also" (same product) from
+  "Learn more" (off-site), `related-pages` already accepts URLs, so that
+  split is a rendering decision over one field.
+- **`applies-to` is flat.** Named dimensions (`product:`, `deployment:`,
+  `generation:`) were designed and then removed. An org that needs axes
+  can prefix its labels (`deploy:kubernetes`) or overlay its own schema.
+  This is a headline open question for the review.
+- **The negative exists at both levels.** `not-applicable-to` was added in
+  review round 5 for parallelism. The `kg` block's `applies-to` had a
+  page-level counterpart and its `not-applicable-to` did not, so the only
+  way to say "not the FIPS build" was to open a `kg` block for one field.
+  Checking that the two lists do not overlap is a graph-layer (SHACL)
+  check at both levels. JSON Schema cannot compare two sibling lists, so a
+  page naming the same label on both sides passes here, and the
+  contradiction surfaces at graph build. A test asserts that this passes,
+  the same way one asserts that an overdue review passes.
+- **Three fields are fallbacks for the `kg` block.** `applies-to`,
+  `not-applicable-to`, and `concepts` share names and shapes with their
+  counterparts inside the [kg vocabulary](/docmeta/proposals/kg/)'s
+  block. The rule is that the deeper declaration wins: when the `kg`
+  block sets a fact, its value is used; when the block is silent, the
+  page-level field feeds the graph. Both sides accept identical values by
+  construction (the same non-empty, duplicate-free list shape), so a
+  promoted page-level value can never produce a document the `kg` block
+  would reject.
 - **`related-pages` says what it points at.** The suffix exists because
-  `kg.related-concepts` relates *concepts*; each name now names its
-  target.
+  `kg.related-concepts` relates concepts. Each name now names its target.
 
 ## What reviewers should poke at
 
-The flat `applies-to`: is the prefix-label convention a good enough escape
-hatch for orgs that genuinely filter by dimension (product vs deployment
-vs generation), or should named axes return?
+The flat `applies-to`. Is the prefix-label convention a good enough
+escape hatch for orgs that filter by dimension (product, deployment,
+generation), or should named axes return?
