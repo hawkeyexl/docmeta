@@ -1,30 +1,30 @@
 ---
 title: "docmeta:audience:1.0.0-proposal.1"
-description: "The proposed audience vocabulary — who a page serves, which journeys it belongs to, and who may see it."
+description: "The proposed audience vocabulary: who a page serves, which journeys it belongs to, and who may see it."
 sidebar:
   order: 3
   label: "audience"
 ---
 
-:::caution[Proposed — not shipped]
+:::caution[Proposal under review]
 Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-vocabularies/),
 open for community review. Draft schema:
 [`docs/proposals/0023/schemas/audience/1.0.0-proposal.1.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/audience/1.0.0-proposal.1.json).
 :::
 
 **The question it answers: who does this page serve, and who may see it?**
-`audiences` works on day one in any repo; `personas` and `journeys` are the
-upgrade path once a content strategy exists to point into; `visibility` is
-the access switch something downstream can act on.
+`audiences` works in any repo from the start. `personas` and `journeys`
+are the upgrade once a content strategy exists to point into.
+`visibility` is the access switch that downstream tooling can act on.
 
 ## Fields
 
 | Field | Type | Notes |
 |---|---|---|
-| `audiences` | string or list | Who it is for, in your own words: `administrators`, `sre`. Plural because pages usually serve several; unenumerated because audience taxonomies are the org's own |
-| `personas` | string or list | Ids into your content-strategy documents (`persona-platform-admin`). May dangle if you keep no personas — adopt it when you do |
-| `journeys` | string or list | Ids of the user journeys (CUJs) this page belongs to — how a docs set proves coverage of its own strategy |
-| `intent` | string, non-empty | The reader's job, in one line: `deploy the operator on a running cluster`. What retrieval matches questions against |
+| `audiences` | string or list | Who it is for, in your own words: `administrators`, `sre`. Plural because pages usually serve several groups. Not enumerated, because audience taxonomies belong to the org |
+| `personas` | string or list | Ids into your content-strategy documents (`persona-platform-admin`). Adopt it once you keep personas; until then the ids would point at nothing |
+| `journeys` | string or list | Ids of the user journeys (CUJs) this page belongs to. This is how a docs set shows it covers its own strategy |
+| `intent` | string, non-empty | The reader's job, in one line: `deploy the operator on a running cluster`. Retrieval matches questions against it |
 | `visibility` | enum | `draft` → `restricted` → `confidential` → `internal` → `public` |
 
 ## Example
@@ -43,31 +43,31 @@ visibility: public
 
 ## Design decisions
 
-- **The enum asymmetry is the point.** `visibility` is enumerated because
-  something downstream *switches* on it — an unrecognized access level
-  would fail open, silently. `audiences` sits right beside it,
-  deliberately unenumerated, because audience taxonomies belong to the
-  org. One vocabulary, two opposite calls, same reason.
-- **`visibility` folds two would-be fields into one switch** — a draft
-  flag and an access level. Your generator's own `draft`/`unlisted` keys
-  remain its rendering controls and are deliberately unclaimed: a page can
-  be `visibility: public` in metadata while the generator still hides it,
-  and reconciling the two is site tooling's job, not a schema's. It is
-  also distinct from `lifecycle` (its own
-  [vocabulary](/docmeta/proposals/lifecycle/)): `lifecycle: draft` says
-  the content is unfinished; `visibility: draft` says nobody outside the
-  authors can see it. An unfinished page already visible inside the org is
-  legal and real.
+- **`visibility` is enumerated; `audiences` is not.** Something downstream
+  branches on `visibility`, and an unrecognized access level would fail
+  open without anyone noticing. Audience taxonomies belong to the org, so
+  `audiences` takes any label. The same reason produces both calls.
+- **`visibility` folds a draft flag and an access level into one
+  switch.** Your generator's own `draft` or `unlisted` keys remain its
+  rendering controls, and this vocabulary does not claim them. A page can
+  be `visibility: public` in metadata while the generator still hides it.
+  Reconciling the two is a job for site tooling, not for a schema.
+  `visibility` is also distinct from `lifecycle` (its own
+  [vocabulary](/docmeta/proposals/lifecycle/)). `lifecycle: draft` says
+  the content is unfinished. `visibility: draft` says nobody outside the
+  authors can see it. An unfinished page that is already visible inside
+  the org is a legal and common combination.
 - **There is no `expertise` field.** Reader level belongs to the persona
-  definitions a page points at — a page saying `expertise: beginner` next
-  to `personas: [persona-expert-admin]` could contradict the persona's own
-  proficiency. Facts live at their altitude.
-- **`intent` earns free text.** Most unenforceable strings were cut; this
-  one survives because machines consume it — retrieval and eval pipelines
-  match reader questions against it.
+  definitions a page points at. A page saying `expertise: beginner` next
+  to `personas: [persona-expert-admin]` could contradict the persona's
+  own proficiency. This follows the family's principle that a fact
+  belongs at the level that owns it.
+- **`intent` is free text.** Most strings that nothing could enforce were
+  cut. This one stays because machines consume it: retrieval and eval
+  pipelines match reader questions against it.
 
 ## What reviewers should poke at
 
-Whether the `visibility` ladder's five stages are the right closed set for
-most orgs, and whether keeping both `audiences` (labels) and `personas`
-(strategy ids) reads as an upgrade path or as duplication.
+Two questions. Are the five stages of the `visibility` ladder the right
+closed set for most orgs? And does keeping both `audiences` (labels) and
+`personas` (strategy ids) read as an upgrade path or as duplication?

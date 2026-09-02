@@ -1,32 +1,33 @@
 ---
 title: "docmeta:ai-context:1.0.0-proposal.1"
-description: "The proposed AI-context vocabulary — how machines made a page, and how they may use it."
+description: "The proposed AI-context vocabulary: how machines made a page, and how they may use it."
 sidebar:
   order: 6
   label: "ai-context"
 ---
 
-:::caution[Proposed — not shipped]
+:::caution[Proposal under review]
 Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-vocabularies/),
 open for community review. Draft schema:
 [`docs/proposals/0023/schemas/ai-context/1.0.0-proposal.1.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/ai-context/1.0.0-proposal.1.json).
 :::
 
-**The question it answers: how did machines make this page — and how may
-they use it?** Two production fields (`generated-by`, `provenance`) and two
-consumption fields (`risks`, `sample-questions`).
+**The question it answers: how did machines make this page, and how may
+they use it?** Two production fields (`generated-by`, `provenance`) and
+two consumption fields (`risks`, `sample-questions`).
 
 ## Fields
 
 | Field | Type | Notes |
 |---|---|---|
 | `generated-by` | string, non-empty | The model, agent, or tool that generated the page's content |
-| `provenance` | list of entries | Per-model attribution of machine-proposed *metadata*: which fields, at what confidence |
-| `risks` | string or list — open enum | Pre-flight flags for agents and reviewers. Recommended: `cost-incurring` · `destructive` · `irreversible` · `privileged` · `open-world` · `read-only` · `idempotent`; any non-empty string stays legal |
-| `sample-questions` | string or list | Questions this page should answer — the retrieval-eval hook |
+| `provenance` | list of entries | Per-model attribution of machine-proposed metadata: which fields, at what confidence |
+| `risks` | string or list; open list | Pre-flight flags for agents and reviewers. Recommended: `cost-incurring` · `destructive` · `irreversible` · `privileged` · `open-world` · `read-only` · `idempotent`. Any other non-empty string is legal |
+| `sample-questions` | string or list | Questions this page should answer. Retrieval evals use them |
 
-A provenance entry: `generated-by` (required), `fields` (which frontmatter
-keys it proposed — non-empty, unique), `confidence` (per-field, 0..1).
+A provenance entry has `generated-by` (required), `fields` (the
+frontmatter keys it proposed, non-empty and unique), and `confidence` (a
+number from 0 to 1 per field).
 
 ## Example
 
@@ -49,34 +50,35 @@ sample-questions:
 ## Design decisions
 
 - **Machines propose; humans retire the provenance.** A provenance entry
-  is the human-review trail for machine-filled metadata: a human deletes
-  the entry once its fields are reviewed, so *a surviving entry means
-  unreviewed machine metadata*. The same pattern appears in the
-  [kg](/docmeta/proposals/kg/) block and both
-  [eval](/docmeta/proposals/evals/) vocabularies — one family-wide answer
-  to "which of this metadata did a machine write, and has anyone
-  checked?"
+  is the review trail for machine-filled metadata. A human deletes the
+  entry once its fields are reviewed, so a surviving entry means machine
+  metadata nobody has checked. The same pattern appears in the
+  [kg](/docmeta/proposals/kg/) block and in both
+  [eval](/docmeta/proposals/evals/) vocabularies, so the whole family has
+  one answer to "which of this metadata did a machine write, and has
+  anyone checked?"
 - **`generated-by` attributes the content; `provenance` attributes the
-  metadata.** Different facts. Consumers also use `generated-by` for
-  self-preference-bias checks: a judge should know when it is grading its
-  own author.
-- **`risks` is the open-enum idiom.** Seven recommended flags —
-  `cost-incurring`, `destructive`, `irreversible`, `privileged` (the
-  operational four), `open-world`, `read-only`, `idempotent` (mirroring
-  MCP's tool annotations, the published prior art for agent-facing
-  hints) — and any non-empty string stays legal. An unannotated page is
-  *unassessed*, not safe, which is why the assurances are worth stating;
-  and a consumer switching on a flag should treat unknown values as
-  caution, not absence.
+  metadata.** They record different facts. Consumers also use
+  `generated-by` for self-preference-bias checks: a judge should know
+  when it is grading its own author.
+- **`risks` is an open list.** Seven flags are recommended.
+  `cost-incurring`, `destructive`, `irreversible`, and `privileged` cover
+  operations. `open-world`, `read-only`, and `idempotent` mirror MCP's
+  tool annotations, the published prior art for agent-facing hints. Any
+  other non-empty string is legal. The assurances are worth stating
+  because an unannotated page has not been assessed, which is different
+  from being safe. For the same reason, a consumer that branches on a
+  flag should treat an unknown value as a caution. Unknown does not mean
+  safe.
 - **`sample-questions` closes the retrieval loop.** Ask them against the
-  corpus and measure whether this page carries the answer. Assertion-style
-  per-page evals belong to the [evals vocabulary](/docmeta/proposals/evals/),
-  not here.
+  corpus and measure whether this page carries the answer. Per-page
+  assertions belong to the [evals vocabulary](/docmeta/proposals/evals/)
+  instead.
 
 ## What reviewers should poke at
 
-Whether `generated-by` and `provenance` belong here or in
-[core](/docmeta/proposals/core/) — the eval bias check and the kg harvest
+Two questions. Do `generated-by` and `provenance` belong here or in
+[core](/docmeta/proposals/core/)? The eval bias check and the kg harvest
 both read `generated-by`, which argues for the one vocabulary that is
-always present. Also whether `risks` is the right name for a field that
-carries assurances (`read-only`) alongside cautions.
+always present. And is `risks` the right name for a field that carries
+assurances (`read-only`) alongside cautions?

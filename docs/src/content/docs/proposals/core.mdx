@@ -1,37 +1,37 @@
 ---
 title: "docmeta:core:1.0.0-proposal.1"
-description: "The proposed descriptive floor — what the page is called, what it is for, and the shared keys every generator recognizes."
+description: "The proposed descriptive minimum: what the page is called, what it is for, and the shared keys every generator recognizes."
 sidebar:
   order: 1
   label: "core"
 ---
 
-:::caution[Proposed — not shipped]
+:::caution[Proposal under review]
 Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-vocabularies/),
 open for community review. Draft schema:
 [`docs/proposals/0023/schemas/core/1.0.0-proposal.1.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/core/1.0.0-proposal.1.json).
 :::
 
-**The question it answers: what is this page?** Core is the descriptive
-floor of the family — the vocabulary every page meets on day one, in any
-repo, with no strategy, no review process, and no tooling beyond a title
-and a sentence. The whole family is intended for docmeta's default set;
-core is the only part of it that requires anything.
+**The question it answers: what is this page?** Core is the minimum
+every page meets: a title and a sentence. It works in any repo, with no
+content strategy, no review process, and no tooling. The whole family is
+intended for docmeta's default set, and core is the only part of it that
+requires anything.
 
 ## Fields
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `title` | string, non-empty | **yes** | One string, never empty, never an array |
-| `description` | string, non-empty | **yes** | One full sentence; the search snippet and the first thing retrieval reads |
-| `id` | string, non-empty | — | Stable identifier, independent of path; what `related-pages`, `prerequisites`, `replaced-by` point at |
-| `type` | string, non-empty | — | What kind of content this is; taxonomy schemas (Diátaxis, TGDP) narrow it, `kg.type` is its iiRDS twin |
-| `keywords` | string or list of non-empty strings | — | Search words; a comma-separated string is the AsciiDoc form Antora reads |
-| `language` | string, non-empty | — | One BCP 47 tag recommended (`en`, `pt-BR`), not enforced |
+| `title` | string, non-empty | **yes** | A single non-empty string. An array is rejected |
+| `description` | string, non-empty | **yes** | One full sentence. It becomes the search snippet and is the first thing retrieval reads |
+| `id` | string, non-empty | no | A stable identifier that does not change when the file moves. `related-pages`, `prerequisites`, and `replaced-by` point at it |
+| `type` | string, non-empty | no | What kind of content this is. Taxonomy schemas (Diátaxis, TGDP) narrow it; `kg.type` holds the same fact in iiRDS terms |
+| `keywords` | string or list of non-empty strings | no | Search words. A comma-separated string is the AsciiDoc form Antora reads |
+| `language` | string, non-empty | no | One tag. BCP 47 (`en`, `pt-BR`) is recommended but not enforced |
 
 ## Examples
 
-The floor:
+The minimum:
 
 ```yaml
 ---
@@ -55,31 +55,34 @@ language: en
 
 ## Design decisions
 
-- **Weak floors teach bad habits.** Every string core claims is non-empty,
-  and `title`/`description`/`type`/`language` are single values. This is
-  deliberately stricter than the loosest schemas sharing these keys —
-  Docusaurus permits empty titles, Dublin Core repeats its elements — and
-  those are the *only* exceptions to the family's compatibility rule. Each
-  one is pinned as an expected-reject in the automated composability check,
-  so an unrecorded exception fails CI.
-- **Claim content, never rendering.** There is no `slug`, `layout`,
-  `image`, or `tags` here. Rendering keys stay with your generator; core
-  describes what the page *is*.
-- **Derivable facts stay out.** No creation `date`, no `updated` stamp —
-  git already knows both, and hand-typed copies go stale silently.
-- **People are not here.** `authors` was a core field until review round 6
-  and now sits with `owner`, `stakeholders`, and `reviewed-by` in the
-  [stewardship vocabulary](/docmeta/proposals/stewardship/). Core answers
-  *what is this page*, and who wrote it answers *is it cared for* — so
-  attribution is one adoption decision with the rest of the people, not a
-  seventh field on the floor everyone meets on day one.
+- **Every string is non-empty, and four fields take one value.** `title`,
+  `description`, `type`, and `language` are single strings, and no string
+  core defines may be empty. This is stricter than the loosest schemas
+  that share these keys: Docusaurus permits an empty title, and Dublin
+  Core allows repeated elements. These are the only exceptions to the
+  family's compatibility rule, under which a document valid under another
+  built-in schema stays valid here. The automated compatibility check
+  records each exception as an expected rejection, so an exception that is
+  not on this list fails CI.
+- **Core describes content, never rendering.** There is no `slug`,
+  `layout`, `image`, or `tags` here. Rendering keys stay with your
+  generator. Core describes what the page is.
+- **Derivable facts stay out.** There is no creation `date` and no
+  `updated` stamp. Git already knows both, and a hand-typed copy goes
+  stale without anyone noticing.
+- **People are in stewardship.** `authors` was a core field until review
+  round 6. It now sits with `owner`, `stakeholders`, and `reviewed-by` in
+  the [stewardship vocabulary](/docmeta/proposals/stewardship/). Core
+  answers what the page is. Who wrote it belongs with the question of
+  whether the page is cared for. Moving it makes attribution one adoption
+  decision together with the other people fields, instead of a seventh
+  field in the minimum every page meets.
 
 ## What reviewers should poke at
 
-Whether requiring `title` + `description` on bare runs is the right default
-nudge, whether the non-empty floor's strictness against Docusaurus's
-documented empty-title tolerance is worth the recorded exception, and whether
-moving `authors` out to stewardship matches where you would look for it —
+Three questions. Is requiring `title` and `description` on unconfigured
+runs the right default? Is the non-empty rule worth the recorded
+exception against Docusaurus's documented tolerance for empty titles? And
+does moving `authors` to stewardship match where you would look for it?
 Docusaurus and MyST both keep it next to `title`, so this is the one place
-the family deliberately reads differently from the generators it composes
-with.
+the family reads differently from the generators it composes with.
