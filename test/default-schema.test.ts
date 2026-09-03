@@ -50,14 +50,14 @@ const DRAFTS = "./docs/proposals/0023/schemas";
  *
  * Revisions are **per family**, not per set. proposal.2 of `evals`,
  * `artifact-evals` and `core` carries scoring, targeting and versioning fields
- * the other six had no part in; bumping those six alongside would announce a
- * revision none of them made and leave six pairs of byte-identical files to
- * explain. `ref()` keeps the mapping in one table, so a family's next bump is
- * still a one-line edit.
+ * the other six had no part in, and core's proposal.3 adds `locale`; bumping
+ * the others alongside would announce a revision none of them made and leave
+ * pairs of byte-identical files to explain. `ref()` keeps the mapping in one
+ * table, so a family's next bump is still a one-line edit.
  */
 const DRAFT_V = "1.0.0-proposal.1";
 const VERSIONS: Record<string, string> = {
-  core: "1.0.0-proposal.2",
+  core: "1.0.0-proposal.3",
   evals: "1.0.0-proposal.2",
   "artifact-evals": "1.0.0-proposal.2",
 };

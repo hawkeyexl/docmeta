@@ -1,5 +1,5 @@
 ---
-title: "docmeta:core:1.0.0-proposal.2"
+title: "docmeta:core:1.0.0-proposal.3"
 description: "The proposed descriptive minimum: what the page is called, what it is for, and the shared keys every generator recognizes."
 sidebar:
   order: 1
@@ -9,9 +9,10 @@ sidebar:
 :::caution[Proposal under review]
 Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-vocabularies/),
 open for community review. Draft schema:
-[`docs/proposals/0023/schemas/core/1.0.0-proposal.2.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/core/1.0.0-proposal.2.json).
+[`docs/proposals/0023/schemas/core/1.0.0-proposal.3.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/core/1.0.0-proposal.3.json).
 Review round 6 took core from `proposal.1` to `proposal.2` by moving
-`authors` to stewardship. Round 8 added `locale` beside `language`.
+`authors` to stewardship. Round 8 took it to `proposal.3` by adding
+`locale` beside `language`.
 :::
 
 **The question it answers: what is this page?** Core is the minimum
@@ -29,7 +30,7 @@ requires anything.
 | `id` | string, non-empty | no | A stable identifier that does not change when the file moves. `related-pages`, `prerequisites`, and `replaced-by` point at it |
 | `type` | string, non-empty | no | What kind of content this is. Taxonomy schemas (Diátaxis, TGDP) narrow it; `kg.type` holds the same fact in iiRDS terms |
 | `keywords` | string or list of non-empty strings | no | Search words. A comma-separated string is the AsciiDoc form Antora reads |
-| `language` | string, non-empty | no | The natural language the text is written in, as one BCP 47 tag, region and script subtags included (`pt-BR`, `zh-Hant-TW`). Recommended, not enforced. What `lang` and `dc:language` carry |
+| `language` | string, non-empty | no | The natural language the text is written in, as one BCP 47 tag, region and script subtags included (`pt-BR`, `zh-Hant-TW`). Recommended, not enforced. The same fact `lang` and `dc:language` carry |
 | `locale` | string, non-empty | no | The international preferences the content follows: how its dates, numbers, currency, calendar and sorted lists are written. One Unicode locale identifier (`en-IN`, `th-TH-u-ca-buddhist`), recommended, not enforced. Set only where it differs from what `language` implies |
 
 ## Examples
@@ -74,21 +75,21 @@ locale: en-GB
 - **`language` and `locale` are two facts, split where the W3C splits
   them.** The [Language Tags and Locale Identifiers](https://www.w3.org/TR/ltli/)
   spec defines a language tag as an identifier for a language, and a locale
-  as an identifier for a set of international preferences: the language,
+  as an identifier for a set of international preferences: a language,
   usually a region, and the calendar, numbering system and collation that
-  formatting needs. `language` is the first, what the text is written in,
-  the value `lang`, `xml:lang`, `hreflang` and `dc:language` carry. `locale`
-  is the second, the conventions the author wrote the content in: an
-  English page whose dates and amounts follow German conventions is
-  `language: en` with `locale: de-DE`, and no single tag says both. A
-  language tag can serve as a locale on its own, so `locale` is expected to
-  be absent wherever it would only repeat `language`. Rendering is still not
-  claimed. Which site tree a page renders in, its text direction, and how a
-  generator formats anything it computes stay with the generator; `locale`
-  records only what is already in the bytes. The recommended value is a
-  Unicode locale identifier, which is a BCP 47 tag with optional `-u-`
-  extension keywords, in the hyphen form. Open Graph's `og:locale` spells
-  it `en_US`, and that is that protocol's own key.
+  formatting needs. `language` is the first. It says what the text is
+  written in, the same fact that `lang`, `xml:lang`, `hreflang` and
+  `dc:language` carry. `locale` is the second. It says which conventions
+  the content follows. An English page whose dates and amounts follow
+  German conventions is `language: en` with `locale: de-DE`, and a single
+  tag cannot record both. A language tag can serve as a locale on its own,
+  so leave `locale` out wherever it would only repeat `language`. Rendering
+  is still not claimed. Which site tree a page renders in, its text
+  direction, and how a generator formats the values it computes all stay
+  with the generator. `locale` records only what is already in the text.
+  The recommended value is a Unicode locale identifier: a BCP 47 tag with
+  optional `-u-` extension keywords, in hyphen form. Open Graph's
+  `og:locale` spells it `en_US`, and that key belongs to Open Graph.
 - **Derivable facts stay out.** There is no creation `date` and no
   `updated` stamp. Git already knows both, and a hand-typed copy goes
   stale without anyone noticing.

@@ -28,11 +28,11 @@ const PROPOSED_ROOT = "docs/proposals/0023/schemas";
 // function" rather than as a failed probe.
 const DRAFT_V = "1.0.0-proposal.1";
 // Revisions are per family: evals, artifact-evals and core moved to
-// proposal.2 for the scoring, targeting and versioning fields; the other six
-// had no part in that and stay where they are. One table so the next bump is
-// still a one-line edit.
+// proposal.2 for the scoring, targeting and versioning fields, and core to
+// proposal.3 for `locale`; the other six had no part in that and stay where
+// they are. One table so the next bump is still a one-line edit.
 const VERSIONS = {
-  core: "1.0.0-proposal.2",
+  core: "1.0.0-proposal.3",
   evals: "1.0.0-proposal.2",
   "artifact-evals": "1.0.0-proposal.2",
 };

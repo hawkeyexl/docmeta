@@ -21,7 +21,7 @@ Nine metadata vocabularies, published by docmeta, designed as one family:
 
 | Id | One question it answers | Fields |
 |---|---|---|
-| `docmeta:core:1.0.0-proposal.2` | What is this page? | 7 (requires `title`, `description`) |
+| `docmeta:core:1.0.0-proposal.3` | What is this page? | 7 (requires `title`, `description`) |
 | `docmeta:stewardship:1.0.0-proposal.1` | Is it cared for? | 8 |
 | `docmeta:audience:1.0.0-proposal.1` | Who does it serve; who may see it? | 5 |
 | `docmeta:lifecycle:1.0.0-proposal.1` | Where is it in its life? | 4 (+ the deprecation rule) |
@@ -145,7 +145,7 @@ test), so stacking all six behaves like the monolith did.
 
 `*` = required. All ids are `additionalProperties: true`.
 
-**docmeta:core:1.0.0-proposal.2**: `title`\*, `description`\*, `id`, `type`,
+**docmeta:core:1.0.0-proposal.3**: `title`\*, `description`\*, `id`, `type`,
 `keywords`, `language`, `locale`. The descriptive floor, and
 the only id in the default set that requires anything. Purely descriptive
 since review round 6: who wrote the page is not part of what the page *is*,
@@ -160,10 +160,10 @@ though Dublin Core's repeatable elements permit arrays. A DCMI document using
 repeated `type`/`language` is an override case, like its repeated titles.
 The `compat-check` ladder pins every one of these as an expected-reject, so
 an exception this list does not name fails the check. Round 8 added `locale`
-beside `language`, on the W3C LTLI line: `language` is the language the text
-is written in, and `locale` is the set of international preferences its
-dates, numbers, calendar and sorted lists follow, set only where the two
-differ (`language: en`, `locale: de-DE`). Both are one non-empty string; a
+beside `language`, on the W3C LTLI line. `language` is the language the text
+is written in. `locale` is the set of international preferences its dates,
+numbers, calendar and sorted lists follow, and is set only where the two
+differ (`language: en`, `locale: de-DE`). Both are one non-empty string. A
 Unicode locale identifier is recommended for `locale` and not enforced (see
 the round-8 note below).
 
@@ -421,20 +421,22 @@ design notes (§ Review round 6); the decisions:
   ladders, and the pages. The prefix guard stands without it: an unrecognized
   `eval-*` key is rejected, whichever version wrote it.
 - **`locale` added to core in round 8, distinct from `language`.** Core's
-  `language` description had said it was the locale field and there was no
-  `locale` key, because a BCP 47 tag carries region and script. The W3C's
-  Language Tags and Locale Identifiers spec separates the two facts: a
-  language tag identifies the language of content, and a locale identifies
-  a set of international preferences (the language, a region, and the
-  calendar, numbering system and collation that formatting needs, carried
-  as `-u-` extension keywords). An English page written to German
-  conventions is `language: en` with `locale: de-DE`, which one tag cannot
-  say. `locale` is one non-empty string, a Unicode locale identifier
-  recommended and not enforced (`-u-` extensions legal, hyphen form rather
-  than the `en_US` of `og:locale`), and expected absent wherever it would
-  only repeat `language`. Rendering stays unclaimed: the key records the
-  conventions already written into the text, not which site tree renders
-  it. Core 6 → 7, family 33 → 34; still proposal.2, as round 7's change was.
+  `language` description used to say it was the locale field and that there
+  was no `locale` key, because a BCP 47 tag carries region and script. The
+  W3C's Language Tags and Locale Identifiers spec treats them as two facts.
+  A language tag identifies the language of the content. A locale identifies
+  a set of international preferences: a language, a region, and the
+  calendar, numbering system and collation that formatting needs, written
+  as `-u-` extension keywords. An English page written to German
+  conventions is `language: en` with `locale: de-DE`, and a single tag
+  cannot record both. `locale` is one non-empty string. A Unicode locale
+  identifier is recommended and not enforced: `-u-` extensions are legal,
+  and the hyphen form is preferred over the `en_US` of `og:locale`. Leave it
+  out wherever it would only repeat `language`. Rendering stays unclaimed:
+  the key records conventions already written into the text, not which site
+  tree renders it. Core goes from 6 fields to 7 and the family from 33 to
+  34. Core moves to `proposal.3`, because a new key is a shape change and
+  round 6 bumped the version for one.
 - **The `use:` form's overrides stop at the page's relationship to the
   check**: `skip`, `type`, `severity`, `options`, and `weight`. `provider`,
   `model` and `runs` say how the tool executes and stay run-wide; `target`
