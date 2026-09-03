@@ -51,6 +51,42 @@ script subtags are expected; the core review page carries the decision; and
 the one docs example that taught `locale: en`
 (`set-up/new-required-field.mdx`) now says `language: en`.
 
+**2026-09-03 ruling: `locale` joins core as its own key, on the W3C LTLI
+line.** Supersedes the 2026-09-02 ruling above, which stays as written. That
+ruling held that a BCP 47 tag already carries the locale, so a second key
+would hold one fact twice. It holds one fact twice only when the two facts
+coincide, and the W3C's Language Tags and Locale Identifiers spec
+(w3.org/TR/ltli) says they are two facts. A language tag is an identifier
+for a language, the language of the content. A locale is an identifier for
+a set of international preferences: usually the language plus a region, and
+whatever else formatting needs (calendar, numbering system, collation),
+carried as `-u-` extension keywords. An English page whose dates, amounts
+and sorted lists follow German conventions is `language: en` with
+`locale: de-DE`, and no single tag says both. So the family now has both
+keys, with the spec's line between them: `language` is what the text is
+written in, the value `lang`, `xml:lang`, `hreflang` and `dc:language`
+carry; `locale` is the conventions the author wrote the content in. Two of
+the earlier objections survive as description rather than as reasons to
+omit the key. Rendering is still not claimed: which site tree a page
+renders in, text direction, and how a generator formats what it computes
+stay with the generator, and `locale` claims only the conventions already
+in the bytes, which is a fact about the content. The `en_US`/`en-US` split
+is answered by recommending the Unicode locale identifier in hyphen form
+and naming `og:locale` as the neighbor that spells it otherwise, the way
+`language` handles its own spelling: recommended, not enforced, so the two
+keys keep one strictness. Two objections stand and cost nothing: `locale`
+has no RDF target, so kg harvests nothing from it, and no built-in claims
+a bare `locale`, so the compat ladder pins the family's own shape (one
+non-empty string; the underscore form passes) rather than another
+claimant's values. Because a language tag can stand as a locale identifier
+on its own (LTLI says so, and asks content authors to pick tags that are
+canonical Unicode locale identifiers), `locale` is optional and expected
+to be absent wherever it would only repeat `language`. Applied at core
+proposal.2 without a bump, as round 7's change was: core 6 → 7 fields,
+family 33 → 34, the test pin and compat probes updated, the core page
+carrying the decision and asking reviewers whether the hyphen form should
+be enforced.
+
 **2026-08-26 correction: the whole family is default.** All nine append to
 `DEFAULT_SCHEMAS`, superseding the core-only intent below wherever it
 appears. Bare runs require the pair, validate every family key present,
@@ -83,7 +119,7 @@ and put the full menu on bare `fill`, accepted as the teaching surface.
    story is three layers: `type` (what the page is) · `action` (what the
    reader is doing) · `intent` (the specific job).
 
-## The six house vocabularies: 33 fields, split by intent
+## The six house vocabularies: 34 fields, split by intent
 
 Designed as one large schema, then split by owner directive into six
 intent-scoped ids (superseding the earlier `docmeta:frontmatter:1.0` id
@@ -92,7 +128,7 @@ ruling; the split is why): `docmeta:core` (required pair),
 `docmeta:structure` (honoring the naming decision recorded in the
 exploration brief for the relational schema), `docmeta:ai-context`. Core is
 at `1.0.0-proposal.2` since round 6; the other five are at
-`1.0.0-proposal.1`. Disjoint by construction (33 fields, 0 collisions,
+`1.0.0-proposal.1`. Disjoint by construction (34 fields, 0 collisions,
 pinned): stacking all six behaves like the monolith, and every error is
 attributed to one intent.
 Verified: `npx vitest run test/default-schema.test.ts`, green via file refs
@@ -102,7 +138,9 @@ homes:
 - **Core (docmeta:core:1.0.0-proposal.2):** title*, description* (every
   string core claims is non-empty, with type/language single-valued even
   against DCMI: the recorded exception family), plus id, type, keywords,
-  language
+  language, locale (added 2026-09-03 on the W3C LTLI line: `language` is
+  what the text is written in, `locale` the preferences its content
+  follows, set only where the two differ)
 - **Stewardship (docmeta:stewardship:1.0.0-proposal.1):** authors (moved from
   core 2026-08-31; attribution is a fact about care, not about what the page
   is; keeps its own shape, since person objects are legal here and not in

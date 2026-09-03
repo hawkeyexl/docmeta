@@ -128,6 +128,14 @@ const probes = [
   ["type: OKF free string", { ...base, type: "concept" }, "core", false],
   ["language: DCMI repeated-element array", { ...base, language: ["en", "pt"] }, "core", true],
   ["language: DCMI single string", { ...base, language: "en" }, "core", false],
+  // No built-in claims a bare `locale` (Open Graph's is `og:locale`), so
+  // these pin the family's own shape rather than another claimant's value:
+  // one non-empty string, hyphen form recommended and not enforced.
+  ["locale: differs from language (en text, de-DE conventions)", { ...base, language: "en", locale: "de-DE" }, "core", false],
+  ["locale: Unicode -u- extension keywords", { ...base, locale: "hi-IN-u-nu-deva" }, "core", false],
+  ["locale: og:locale underscore form (not enforced)", { ...base, locale: "en_US" }, "core", false],
+  ["locale: empty string", { ...base, locale: "" }, "core", true],
+  ["locale: list", { ...base, locale: ["en-GB", "en-US"] }, "core", true],
   ["keywords: Antora comma-string", { ...base, keywords: "alpha, beta" }, "core", false],
   ["keywords: Docusaurus/Hugo array", { ...base, keywords: ["alpha", "beta"] }, "core", false],
   ["keywords: Docusaurus empty-string item", { ...base, keywords: [""] }, "core", true],

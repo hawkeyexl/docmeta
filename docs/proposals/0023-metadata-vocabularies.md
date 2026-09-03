@@ -138,7 +138,7 @@ for three reasons the split then proved:
 - **Immutability makes fat ids expensive.** Fields on different cadences
   frozen behind one version number means any movement is a new 33-field id.
 
-The six claim **disjoint** field sets (33 fields, zero collisions, pinned by
+The six claim **disjoint** field sets (34 fields, zero collisions, pinned by
 test), so stacking all six behaves like the monolith did.
 
 ## The six house vocabularies
@@ -146,7 +146,7 @@ test), so stacking all six behaves like the monolith did.
 `*` = required. All ids are `additionalProperties: true`.
 
 **docmeta:core:1.0.0-proposal.2**: `title`\*, `description`\*, `id`, `type`,
-`keywords`, `language`. The descriptive floor, and
+`keywords`, `language`, `locale`. The descriptive floor, and
 the only id in the default set that requires anything. Purely descriptive
 since review round 6: who wrote the page is not part of what the page *is*,
 so `authors` moved to stewardship with the other people (below). The shared
@@ -159,7 +159,13 @@ selection as a falsy key). And `type` and `language` are single strings even
 though Dublin Core's repeatable elements permit arrays. A DCMI document using
 repeated `type`/`language` is an override case, like its repeated titles.
 The `compat-check` ladder pins every one of these as an expected-reject, so
-an exception this list does not name fails the check.
+an exception this list does not name fails the check. Round 8 added `locale`
+beside `language`, on the W3C LTLI line: `language` is the language the text
+is written in, and `locale` is the set of international preferences its
+dates, numbers, calendar and sorted lists follow, set only where the two
+differ (`language: en`, `locale: de-DE`). Both are one non-empty string; a
+Unicode locale identifier is recommended for `locale` and not enforced (see
+the round-8 note below).
 
 **docmeta:stewardship:1.0.0-proposal.1**: `authors`, `owner`, `stakeholders`,
 `reviewed-by`, `last-reviewed`, `review-interval` (ISO 8601 duration),
@@ -414,6 +420,21 @@ design notes (§ Review round 6); the decisions:
   vocabulary's key as a typo. Round 7 removed it from both schemas, the
   ladders, and the pages. The prefix guard stands without it: an unrecognized
   `eval-*` key is rejected, whichever version wrote it.
+- **`locale` added to core in round 8, distinct from `language`.** Core's
+  `language` description had said it was the locale field and there was no
+  `locale` key, because a BCP 47 tag carries region and script. The W3C's
+  Language Tags and Locale Identifiers spec separates the two facts: a
+  language tag identifies the language of content, and a locale identifies
+  a set of international preferences (the language, a region, and the
+  calendar, numbering system and collation that formatting needs, carried
+  as `-u-` extension keywords). An English page written to German
+  conventions is `language: en` with `locale: de-DE`, which one tag cannot
+  say. `locale` is one non-empty string, a Unicode locale identifier
+  recommended and not enforced (`-u-` extensions legal, hyphen form rather
+  than the `en_US` of `og:locale`), and expected absent wherever it would
+  only repeat `language`. Rendering stays unclaimed: the key records the
+  conventions already written into the text, not which site tree renders
+  it. Core 6 → 7, family 33 → 34; still proposal.2, as round 7's change was.
 - **The `use:` form's overrides stop at the page's relationship to the
   check**: `skip`, `type`, `severity`, `options`, and `weight`. `provider`,
   `model` and `runs` say how the tool executes and stay run-wide; `target`

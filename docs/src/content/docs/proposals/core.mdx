@@ -11,7 +11,7 @@ Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-voca
 open for community review. Draft schema:
 [`docs/proposals/0023/schemas/core/1.0.0-proposal.2.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/core/1.0.0-proposal.2.json).
 Review round 6 took core from `proposal.1` to `proposal.2` by moving
-`authors` to stewardship.
+`authors` to stewardship. Round 8 added `locale` beside `language`.
 :::
 
 **The question it answers: what is this page?** Core is the minimum
@@ -29,7 +29,8 @@ requires anything.
 | `id` | string, non-empty | no | A stable identifier that does not change when the file moves. `related-pages`, `prerequisites`, and `replaced-by` point at it |
 | `type` | string, non-empty | no | What kind of content this is. Taxonomy schemas (Diátaxis, TGDP) narrow it; `kg.type` holds the same fact in iiRDS terms |
 | `keywords` | string or list of non-empty strings | no | Search words. A comma-separated string is the AsciiDoc form Antora reads |
-| `language` | string, non-empty | no | The page's natural language as one BCP 47 tag, region and script subtags included (`pt-BR`, `zh-Hant-TW`). Recommended, not enforced. This is the locale field |
+| `language` | string, non-empty | no | The natural language the text is written in, as one BCP 47 tag, region and script subtags included (`pt-BR`, `zh-Hant-TW`). Recommended, not enforced. What `lang` and `dc:language` carry |
+| `locale` | string, non-empty | no | The international preferences the content follows: how its dates, numbers, currency, calendar and sorted lists are written. One Unicode locale identifier (`en-IN`, `th-TH-u-ca-buddhist`), recommended, not enforced. Set only where it differs from what `language` implies |
 
 ## Examples
 
@@ -52,13 +53,14 @@ id: install-operator-k8s
 type: how-to
 keywords: [helm, operator, kubernetes]
 language: en
+locale: en-GB
 ---
 ```
 
 ## Design decisions
 
-- **Every string is non-empty, and four fields take one value.** `title`,
-  `description`, `type`, and `language` are single strings, and no string
+- **Every string is non-empty, and five fields take one value.** `title`,
+  `description`, `type`, `language`, and `locale` are single strings, and no string
   core defines may be empty. This is stricter than the loosest schemas
   that share these keys: Docusaurus permits an empty title, and Dublin
   Core allows repeated elements. These are the only exceptions to the
@@ -69,15 +71,24 @@ language: en
 - **Core describes content, never rendering.** There is no `slug`,
   `layout`, `image`, or `tags` here. Rendering keys stay with your
   generator. Core describes what the page is.
-- **`language` is the locale field, and there is no `locale` key.** A BCP 47
-  tag already carries region and script, so `pt-BR` says everything a
-  page-level locale can. What a locale means beyond the tag is rendering:
-  date formats, collation, text direction, and which site tree a page
-  renders in. The W3C draws the same line: a language tag identifies
-  content, and a locale identifies a reader's preferences. Starlight does
-  too. It keys locales by directory and names the content tag `lang`.
-  Calling the key `locale` would also invite the `en_US` spelling that
-  Open Graph uses and BCP 47 does not.
+- **`language` and `locale` are two facts, split where the W3C splits
+  them.** The [Language Tags and Locale Identifiers](https://www.w3.org/TR/ltli/)
+  spec defines a language tag as an identifier for a language, and a locale
+  as an identifier for a set of international preferences: the language,
+  usually a region, and the calendar, numbering system and collation that
+  formatting needs. `language` is the first, what the text is written in,
+  the value `lang`, `xml:lang`, `hreflang` and `dc:language` carry. `locale`
+  is the second, the conventions the author wrote the content in: an
+  English page whose dates and amounts follow German conventions is
+  `language: en` with `locale: de-DE`, and no single tag says both. A
+  language tag can serve as a locale on its own, so `locale` is expected to
+  be absent wherever it would only repeat `language`. Rendering is still not
+  claimed. Which site tree a page renders in, its text direction, and how a
+  generator formats anything it computes stay with the generator; `locale`
+  records only what is already in the bytes. The recommended value is a
+  Unicode locale identifier, which is a BCP 47 tag with optional `-u-`
+  extension keywords, in the hyphen form. Open Graph's `og:locale` spells
+  it `en_US`, and that is that protocol's own key.
 - **Derivable facts stay out.** There is no creation `date` and no
   `updated` stamp. Git already knows both, and a hand-typed copy goes
   stale without anyone noticing.
@@ -91,9 +102,11 @@ language: en
 
 ## What reviewers should poke at
 
-Three questions. Is requiring `title` and `description` on unconfigured
+Four questions. Is requiring `title` and `description` on unconfigured
 runs the right default? Is the non-empty rule worth the recorded
-exception against Docusaurus's documented tolerance for empty titles? And
-does moving `authors` to stewardship match where you would look for it?
+exception against Docusaurus's documented tolerance for empty titles?
+Does moving `authors` to stewardship match where you would look for it?
 Docusaurus and MyST both keep it next to `title`, so this is the one place
-the family reads differently from the generators it composes with.
+the family reads differently from the generators it composes with. And
+should `locale` enforce the hyphen form and reject `en_US`, where
+`language` enforces nothing about its value?

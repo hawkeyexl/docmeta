@@ -83,6 +83,7 @@ const FIELDS: Record<string, string[]> = {
     "id",
     "keywords",
     "language",
+    "locale",
     "title",
     "type",
   ],
@@ -166,7 +167,7 @@ describe("the six house vocabularies", () => {
         seen.set(key, ref);
       }
     }
-    expect(seen.size).toBe(33);
+    expect(seen.size).toBe(34);
   });
 
   it("spells every field in lowercase kebab-case", async () => {
@@ -239,6 +240,40 @@ describe("the six house vocabularies", () => {
     expect(r.ok).toBe(false);
     expect(r.errors[0]?.schema).toBe(STEWARDSHIP);
     expect(r.errors[0]?.instancePath).toBe("/last-reviewed");
+  });
+
+  it("accepts a locale that differs from the language, attributed to nothing", async () => {
+    // LTLI's line: `language` is what the text is written in, `locale` the
+    // international preferences the content follows. An English page whose
+    // dates and amounts are written the German way carries one of each.
+    const r = await checkStdin(
+      "title: T\ndescription: D\nlanguage: en\nlocale: de-DE",
+    );
+    expect(r.errors).toEqual([]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("accepts a locale carrying Unicode -u- extension keywords", async () => {
+    const r = await checkStdin(
+      "title: T\ndescription: D\nlanguage: hi\nlocale: hi-IN-u-nu-deva",
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  it("rejects an empty locale on core's non-empty floor, attributed to core", async () => {
+    const r = await checkStdin('title: T\ndescription: D\nlocale: ""');
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]?.schema).toBe(CORE);
+    expect(r.errors[0]?.instancePath).toBe("/locale");
+  });
+
+  it("holds locale to one string, like language", async () => {
+    const r = await checkStdin(
+      "title: T\ndescription: D\nlocale: [en-GB, en-US]",
+    );
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]?.schema).toBe(CORE);
+    expect(r.errors[0]?.instancePath).toBe("/locale");
   });
 
   it("accepts the reduced W3CDTF precisions on review dates", async () => {
