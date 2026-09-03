@@ -11,9 +11,9 @@ Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-voca
 open for community review. Draft schema:
 [`docs/proposals/0023/schemas/artifact-evals/1.0.0-proposal.2.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/artifact-evals/1.0.0-proposal.2.json).
 Review round 6 took artifact-evals from `proposal.1` to `proposal.2`: it
-added `weight`, `target`, `runs`, `model` and the nested version
-declaration, made `assertion` conditional, and moved the `eval-` prefix
-guard from prose into the schema.
+added `weight`, `target`, `runs` and `model`, made `assertion`
+conditional, and moved the `eval-` prefix guard from prose into the
+schema.
 :::
 
 **The question it answers: what must a session that used this artifact
@@ -33,7 +33,6 @@ inside `metadata` is rejected.
 | `metadata.evals` | string, or non-empty list of entries | One assertion, or the list |
 | `metadata.eval-skip` | boolean (default false) | Skip the artifact's evals. Tooling reports the skip |
 | `metadata.eval-provenance` | list of entries | The machine-proposal trail |
-| `metadata.docmeta-vocabularies` | map of family name to version string | The [core](/docmeta/proposals/core/) version declaration, nested one level down and constrained to the same shape |
 
 Entries share the page-side shape. `id` is required on the object form.
 `assertion` is required for `ai`, for `human`, and for entries with no
@@ -70,8 +69,6 @@ page side substitutes `{file}`.
 name: fix-bug
 description: Fix a reported bug, reproducing it with a failing test first.
 metadata:
-  docmeta-vocabularies:
-    artifact-evals: 1.0.0-proposal.2
   evals:
     - id: used-read
       assertion: The session read at least one source file before editing.
@@ -123,12 +120,6 @@ metadata:
   is validated by the registry at run time. The one cost, stated in the
   schema: a stale legacy grader name passes the schema and is rejected by
   the registry.
-- **The version declaration is constrained where it is nested.**
-  `metadata.docmeta-vocabularies` has the same shape as core's key. An
-  unvalidated declaration is worse than an absent one: `Evals:
-  1.0.0-proposal.2` would pass, mean nothing to any tool, and read to its
-  author as an accepted version declaration, and the version check that
-  must run before the `eval-` guard would never run.
 - **`weight`, `target`, `runs` and `model` mean what they mean on the page
   side.** See the [evals vocabulary](/docmeta/proposals/evals/) for the
   reasoning. Only the `target` members differ, because the subject is a

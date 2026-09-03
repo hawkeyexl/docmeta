@@ -83,7 +83,7 @@ and put the full menu on bare `fill`, accepted as the teaching surface.
    story is three layers: `type` (what the page is) · `action` (what the
    reader is doing) · `intent` (the specific job).
 
-## The six house vocabularies: 34 fields, split by intent
+## The six house vocabularies: 33 fields, split by intent
 
 Designed as one large schema, then split by owner directive into six
 intent-scoped ids (superseding the earlier `docmeta:frontmatter:1.0` id
@@ -92,9 +92,9 @@ ruling; the split is why): `docmeta:core` (required pair),
 `docmeta:structure` (honoring the naming decision recorded in the
 exploration brief for the relational schema), `docmeta:ai-context`. Core is
 at `1.0.0-proposal.2` since round 6; the other five are at
-`1.0.0-proposal.1`. Disjoint by construction (0 collisions, pinned; 33
-fields until round 6 added `docmeta-vocabularies` to core): stacking all
-six behaves like the monolith, and every error is attributed to one intent.
+`1.0.0-proposal.1`. Disjoint by construction (33 fields, 0 collisions,
+pinned): stacking all six behaves like the monolith, and every error is
+attributed to one intent.
 Verified: `npx vitest run test/default-schema.test.ts`, green via file refs
 into the drafts (default-set membership skipped until registration). Field
 homes:
@@ -102,8 +102,7 @@ homes:
 - **Core (docmeta:core:1.0.0-proposal.2):** title*, description* (every
   string core claims is non-empty, with type/language single-valued even
   against DCMI: the recorded exception family), plus id, type, keywords,
-  language, and docmeta-vocabularies (round 6: the per-file map of family
-  name to targeted version)
+  language
 - **Stewardship (docmeta:stewardship:1.0.0-proposal.1):** authors (moved from
   core 2026-08-31; attribution is a fact about care, not about what the page
   is; keeps its own shape, since person objects are legal here and not in
@@ -402,14 +401,14 @@ moose-tracevals, following the description faithfully, did not. Now `evals`
 carries `"^eval-(?!suite$|skip$|provenance$)": false` at the root and
 `artifact-evals` the equivalent inside `metadata`.
 
-**`docmeta-vocabularies` in `core`.** The guard above is only safe once a
-file can say which vocabulary version it targets. Without it, a key from a
-newer vocabulary is rejected as a typo, which is the diagnosis the prefix
-rule exists to prevent, one level up. It lives in `core` because all nine
-families share the gap and none could solve it alone. Absent means "assume
-the version the reading tool implements", which is today's behaviour; a
-major above what the tool implements is a distinct error naming both
-versions, checked before any unknown-key rejection.
+**`docmeta-vocabularies` in `core`: withdrawn in round 7.** Round 6 added it
+so a file could say which vocabulary version it targets, and the guard above
+could check the version before rejecting an unknown `eval-*` key as a typo.
+It was nested as `metadata.docmeta-vocabularies` on artifacts and, after a
+follow-up, constrained there to the same shape with `minProperties: 1`.
+Round 7 removed it from both schemas, the ladders, the test's field pin, and
+the pages. The guard stands without it: an unrecognized `eval-*` key is
+rejected, whichever version wrote it.
 
 **Not changed, though it looked like it should be.** `artifact-evals.grader`
 has no top-level `pattern`. It is an `anyOf` of `^(tool:)?[a-z0-9][a-z0-9-]*$`
@@ -418,29 +417,6 @@ open-kebab design and explicitly accepts the page side's `tool:` namespace
 "so one grader spelling ports across both eval vocabularies". Read
 shallowly this looks like a missing constraint. It is a documented
 decision, and it stands.
-
-### Round 6 follow-up: the declaration is constrained where it is nested
-
-`core` grew `docmeta-vocabularies`, and its description says artifacts nest
-it as `metadata.docmeta-vocabularies`. But `artifact-evals` only allowed the
-key, through `additionalProperties: true`, without constraining it. Review
-caught it, correctly.
-
-An unvalidated declaration is worse than an absent one.
-`Evals: 1.0.0-proposal.2` or `eval: 1.0.0-proposal.2` would pass, mean
-nothing to any tool, and read to its author as a version declaration that
-was accepted. The whole point of the key is to run before the `eval-` prefix
-rejection so a newer vocabulary's key is never reported as a typo. A
-silently-ignored declaration means that check never runs, on precisely the
-files whose prefix guard depends on it.
-
-`artifact-evals` now carries the same `propertyNames` pattern and
-string-valued `additionalProperties` as `core`, and the ladder gains three
-cases: the nested declaration accepted, a mis-cased family name rejected,
-and a non-string version rejected. The shape is duplicated rather than
-`$ref`'d, matching how the rest of this family's nesting works: the two
-schemas are published separately, and a cross-family `$ref` would make one
-unresolvable without the other.
 
 ### Round 6 follow-up: where the `use:` form's overrides stop
 
@@ -467,7 +443,3 @@ Two groups stay out, for different reasons:
   pages, so one name means two things in one corpus, which is the confusion
   `use:` exists to prevent. An eval that needs a different subject is a
   different eval, and defining it costs one config entry.
-
-Also from this round: `docmeta-vocabularies: {}` was valid and declared
-nothing. It now carries `minProperties: 1`, matching the `minItems: 1` floor
-the family already applies to every list.
