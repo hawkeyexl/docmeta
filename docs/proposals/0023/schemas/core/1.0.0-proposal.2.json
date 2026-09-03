@@ -44,7 +44,7 @@
     },
     "language": {
       "type": "string",
-      "description": "The language of the page, as one string. A BCP 47 tag such as `en` or `pt-BR` is the recommendation, not enforced.",
+      "description": "The natural language the page is written in, as one string. This is the family's locale field; there is no separate `locale` key. A BCP 47 tag is the recommendation, not enforced, and region and script subtags belong in it where they apply: `pt-BR` and `zh-Hant-TW` are the expected values, not `pt` and `zh`. Everything a locale means beyond the tag is a fact about rendering and stays with the generator: date and number formatting, collation, text direction, and which site tree the page renders in. Two neighbors are deliberately not this field: Open Graph's `og:locale` is that protocol's own key and takes the underscore form `en_US`, and a programming language belongs to the code sample or to a key such as Microsoft Learn's `ms.devlang`, never here. Held to one string even against Dublin Core's repeatable `language` element, a recorded exception.",
       "minLength": 1
     },
     "docmeta-vocabularies": {

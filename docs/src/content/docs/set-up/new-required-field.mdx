@@ -139,7 +139,7 @@ A required-field rule flags **every** non-compliant file, including files with n
 A baseline exists because most required fields have **per-document values
 nobody can invent in bulk** — every page's `owner` is a fact you have to go
 find. But some rollouts start from a uniform value that is simply true:
-`reviewed: pending`, `visibility: internal`, `locale: en`. For those, carrying
+`reviewed: pending`, `visibility: internal`, `language: en`. For those, carrying
 a backlog is the long way around. One `ALTER` statement adds the field to your
 schema as required **and** backfills every file, in the same write:
 

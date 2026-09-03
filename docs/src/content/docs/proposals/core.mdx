@@ -29,7 +29,7 @@ requires anything.
 | `id` | string, non-empty | no | A stable identifier that does not change when the file moves. `related-pages`, `prerequisites`, and `replaced-by` point at it |
 | `type` | string, non-empty | no | What kind of content this is. Taxonomy schemas (Diátaxis, TGDP) narrow it; `kg.type` holds the same fact in iiRDS terms |
 | `keywords` | string or list of non-empty strings | no | Search words. A comma-separated string is the AsciiDoc form Antora reads |
-| `language` | string, non-empty | no | One tag. BCP 47 (`en`, `pt-BR`) is recommended but not enforced |
+| `language` | string, non-empty | no | The page's natural language as one BCP 47 tag, region and script subtags included (`pt-BR`, `zh-Hant-TW`). Recommended, not enforced. This is the locale field |
 | `docmeta-vocabularies` | map of family name to version string | no | Which version of each docmeta vocabulary this file is written against, such as `evals: 1.0.0-proposal.2`. At least one entry. Absent means the version the reading tool implements |
 
 ## Examples
@@ -72,6 +72,15 @@ docmeta-vocabularies:
 - **Core describes content, never rendering.** There is no `slug`,
   `layout`, `image`, or `tags` here. Rendering keys stay with your
   generator. Core describes what the page is.
+- **`language` is the locale field, and there is no `locale` key.** A BCP 47
+  tag already carries region and script, so `pt-BR` says everything a
+  page-level locale can. What a locale means beyond the tag is rendering:
+  date formats, collation, text direction, and which site tree a page
+  renders in. The W3C draws the same line: a language tag identifies
+  content, and a locale identifies a reader's preferences. Starlight does
+  too. It keys locales by directory and names the content tag `lang`.
+  Calling the key `locale` would also invite the `en_US` spelling that
+  Open Graph uses and BCP 47 does not.
 - **Derivable facts stay out.** There is no creation `date` and no
   `updated` stamp. Git already knows both, and a hand-typed copy goes
   stale without anyone noticing.
