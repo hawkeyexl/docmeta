@@ -28,11 +28,11 @@ const PROPOSED_ROOT = "docs/proposals/0023/schemas";
 // function" rather than as a failed probe.
 const DRAFT_V = "1.0.0-proposal.1";
 // Revisions are per family: evals, artifact-evals and core moved to
-// proposal.2 for the scoring, targeting and versioning fields; the other six
-// had no part in that and stay where they are. One table so the next bump is
-// still a one-line edit.
+// proposal.2 for the scoring, targeting and versioning fields, and core to
+// proposal.3 for `locale`; the other six had no part in that and stay where
+// they are. One table so the next bump is still a one-line edit.
 const VERSIONS = {
-  core: "1.0.0-proposal.2",
+  core: "1.0.0-proposal.3",
   evals: "1.0.0-proposal.2",
   "artifact-evals": "1.0.0-proposal.2",
 };
@@ -128,6 +128,14 @@ const probes = [
   ["type: OKF free string", { ...base, type: "concept" }, "core", false],
   ["language: DCMI repeated-element array", { ...base, language: ["en", "pt"] }, "core", true],
   ["language: DCMI single string", { ...base, language: "en" }, "core", false],
+  // No built-in claims a bare `locale` (Open Graph's is `og:locale`), so
+  // these pin the family's own shape rather than another claimant's value:
+  // one non-empty string, hyphen form recommended and not enforced.
+  ["locale: differs from language (en text, de-DE conventions)", { ...base, language: "en", locale: "de-DE" }, "core", false],
+  ["locale: Unicode -u- extension keywords", { ...base, locale: "hi-IN-u-nu-deva" }, "core", false],
+  ["locale: og:locale underscore form (not enforced)", { ...base, locale: "en_US" }, "core", false],
+  ["locale: empty string", { ...base, locale: "" }, "core", true],
+  ["locale: list", { ...base, locale: ["en-GB", "en-US"] }, "core", true],
   ["keywords: Antora comma-string", { ...base, keywords: "alpha, beta" }, "core", false],
   ["keywords: Docusaurus/Hugo array", { ...base, keywords: ["alpha", "beta"] }, "core", false],
   ["keywords: Docusaurus empty-string item", { ...base, keywords: [""] }, "core", true],

@@ -50,14 +50,14 @@ const DRAFTS = "./docs/proposals/0023/schemas";
  *
  * Revisions are **per family**, not per set. proposal.2 of `evals`,
  * `artifact-evals` and `core` carries scoring, targeting and versioning fields
- * the other six had no part in; bumping those six alongside would announce a
- * revision none of them made and leave six pairs of byte-identical files to
- * explain. `ref()` keeps the mapping in one table, so a family's next bump is
- * still a one-line edit.
+ * the other six had no part in, and core's proposal.3 adds `locale`; bumping
+ * the others alongside would announce a revision none of them made and leave
+ * pairs of byte-identical files to explain. `ref()` keeps the mapping in one
+ * table, so a family's next bump is still a one-line edit.
  */
 const DRAFT_V = "1.0.0-proposal.1";
 const VERSIONS: Record<string, string> = {
-  core: "1.0.0-proposal.2",
+  core: "1.0.0-proposal.3",
   evals: "1.0.0-proposal.2",
   "artifact-evals": "1.0.0-proposal.2",
 };
@@ -83,6 +83,7 @@ const FIELDS: Record<string, string[]> = {
     "id",
     "keywords",
     "language",
+    "locale",
     "title",
     "type",
   ],
@@ -166,7 +167,7 @@ describe("the six house vocabularies", () => {
         seen.set(key, ref);
       }
     }
-    expect(seen.size).toBe(33);
+    expect(seen.size).toBe(34);
   });
 
   it("spells every field in lowercase kebab-case", async () => {
@@ -239,6 +240,41 @@ describe("the six house vocabularies", () => {
     expect(r.ok).toBe(false);
     expect(r.errors[0]?.schema).toBe(STEWARDSHIP);
     expect(r.errors[0]?.instancePath).toBe("/last-reviewed");
+  });
+
+  it("accepts a locale that differs from the language, attributed to nothing", async () => {
+    // LTLI's line: `language` is what the text is written in, `locale` the
+    // international preferences the content follows. An English page whose
+    // dates and amounts are written the German way carries one of each.
+    const r = await checkStdin(
+      "title: T\ndescription: D\nlanguage: en\nlocale: de-DE",
+    );
+    expect(r.errors).toEqual([]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("accepts a locale carrying Unicode -u- extension keywords", async () => {
+    const r = await checkStdin(
+      "title: T\ndescription: D\nlanguage: hi\nlocale: hi-IN-u-nu-deva",
+    );
+    expect(r.errors).toEqual([]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("rejects an empty locale on core's non-empty floor, attributed to core", async () => {
+    const r = await checkStdin('title: T\ndescription: D\nlocale: ""');
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]?.schema).toBe(CORE);
+    expect(r.errors[0]?.instancePath).toBe("/locale");
+  });
+
+  it("holds locale to one string, like language", async () => {
+    const r = await checkStdin(
+      "title: T\ndescription: D\nlocale: [en-GB, en-US]",
+    );
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]?.schema).toBe(CORE);
+    expect(r.errors[0]?.instancePath).toBe("/locale");
   });
 
   it("accepts the reduced W3CDTF precisions on review dates", async () => {
@@ -417,6 +453,8 @@ describe("the six house vocabularies", () => {
       'title: T\ndescription: D\nid: ""',
       'title: T\ndescription: D\nkeywords: ""',
       'title: T\ndescription: D\nkeywords: ["", "beta"]',
+      'title: T\ndescription: D\nlanguage: ""',
+      'title: T\ndescription: D\nlocale: ""',
     ]) {
       const r = await checkStdin(yaml, [CORE]);
       expect(r.ok, yaml).toBe(false);

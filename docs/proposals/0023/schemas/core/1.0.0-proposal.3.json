@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docmeta:core:1.0.0-proposal.3",
+  "title": "docmeta core page vocabulary (1.0.0-proposal.3)",
+  "description": "What the page is: the descriptive floor of the docmeta house vocabulary, and the only part of the default set that requires anything. Requires `title` and `description`, and holds every string it claims non-empty — an empty value is the habit a default exists to prevent, and an empty `type` reaches the tooling that switches on it (the kg type derivation, template selection) as a falsy key instead of a loud failure. Empty strings that other claimants permit are override cases, and so are Dublin Core's repeated-element arrays for type and language — the same recorded exception family as the required pair: core is deliberately stricter than the loosest claimant wherever looseness would teach a bad habit. Every other key here is a deliberately loose claim on a name other schemas share, made only where the fact is about the content and never where it is about the rendering, which stays with the generator. Facts about people are not here either: `authors` sits with `owner` and `reviewed-by` in `docmeta:stewardship:1.0.0-proposal.1`, because who made a page is a fact about its care rather than about what it is. One shape rule across the whole family: a single-valued fact is a plain string; a list-valued fact is a string or a list.",
+  "type": "object",
+  "required": [
+    "title",
+    "description"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What the page is called, as one non-empty string. Deliberately stricter than the other schemas that claim this key: Dublin Core's repeated-title array and Docusaurus's empty title are override cases here, because a default whose floor accepts an empty title teaches the habit it exists to prevent."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One full non-empty sentence saying what the page is for. Doubles as the search snippet, the link-card subtitle, and the first thing a retrieval system reads. Held to a single non-empty string for the same reason as `title`."
+    },
+    "id": {
+      "type": "string",
+      "description": "Stable identifier for this page, independent of its path. References from other pages (`related-pages`, `prerequisites`, `replaced-by`) stay valid across moves when they point at ids.",
+      "minLength": 1
+    },
+    "type": {
+      "type": "string",
+      "description": "The kind of content this page is, as one string. Pair with a taxonomy schema (`diataxis:diataxis:1.0`, `tgdp:templates:1.0`) to constrain it to a published vocabulary; `kg.type` narrows it to the iiRDS ladder, and the seven-action `action` names what the reader is doing rather than what the page is.",
+      "minLength": 1
+    },
+    "keywords": {
+      "type": [
+        "string",
+        "array"
+      ],
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Search keywords. A list of strings, or a single comma-separated string — the AsciiDoc form Antora reads. Deliberately distinct from two neighbors: `tags` (the browsable site taxonomy) is left entirely to your generator's schema, and `concepts` (docmeta:structure:1.0.0-proposal.1) holds controlled glossary terms rather than free words.",
+      "minLength": 1
+    },
+    "language": {
+      "type": "string",
+      "description": "The natural language the page is written in, as one string. A BCP 47 language tag is the recommendation, not enforced, and region and script subtags belong in it where they apply: `pt-BR` and `zh-Hant-TW` are the expected values, not `pt` and `zh`. This is what the W3C's Language Tags and Locale Identifiers spec (LTLI) calls a language tag, an identifier for the language of the content, and the same fact that `lang`, `xml:lang`, `hreflang` and `dc:language` carry. The international preferences the content follows (date and number formatting, calendar, collation) are the separate `locale` key. A language tag can stand in as a locale on its own, so `locale` is set only where the two differ. Two neighbors are deliberately not this field: Open Graph's `og:locale` is that protocol's own key and takes the underscore form `en_US`, and a programming language belongs to the code sample or to a key such as Microsoft Learn's `ms.devlang`, never here. Held to one string even against Dublin Core's repeatable `language` element, a recorded exception.",
+      "minLength": 1
+    },
+    "locale": {
+      "type": "string",
+      "description": "The international preferences the page's content follows, as one string: the conventions its dates, numbers, currency amounts, calendar and sorted lists are written in. This is what the W3C's Language Tags and Locale Identifiers spec (LTLI) calls a locale, as distinct from `language`, which identifies the language of the text. A page can be written in English and follow German conventions. That page is `language: en` with `locale: de-DE`, and a single tag cannot record both. A Unicode locale identifier is the recommendation, not enforced: a BCP 47 tag, with `-u-` extension keywords where the tag alone does not fix a preference (`en-IN`, `th-TH-u-ca-buddhist`, `hi-IN-u-nu-deva`), in hyphen form rather than the underscore form of Open Graph's `og:locale`. Set it only where it differs from what `language` already implies. A language tag can name preferences on its own, so an English page written the English way needs no `locale` at all. What a site does with the value is rendering and stays with the generator: text direction, which site tree the page renders in, and how the generator formats the values it computes. Core claims only the conventions the author already wrote into the text. Held to one string, non-empty like every string core claims.",
+      "minLength": 1
+    }
+  }
+}

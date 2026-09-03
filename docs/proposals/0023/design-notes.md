@@ -8,7 +8,8 @@ plus one dedicated page per vocabulary, nine in all (all pass the dogfood
 gate and the docs build). Nine draft schemas live unregistered under
 `docs/proposals/0023/schemas/`: the six house ids below plus evals, kg,
 and artifact-evals. Round 6 moved `core`, `evals` and `artifact-evals` to
-`1.0.0-proposal.2`; the other six stay at `1.0.0-proposal.1`.
+`1.0.0-proposal.2`, and round 8 moved `core` on to `1.0.0-proposal.3`; the
+other six stay at `1.0.0-proposal.1`.
 Spec-by-example: `test/default-schema.test.ts` (red until registration, by
 design) and the runnable ladders `docs/proposals/0023/ladders/*.cjs` (plus
 `compat-check.cjs`, the composability cross-check). `test/default-schema.test.ts`
@@ -51,6 +52,44 @@ script subtags are expected; the core review page carries the decision; and
 the one docs example that taught `locale: en`
 (`set-up/new-required-field.mdx`) now says `language: en`.
 
+**2026-09-03 ruling: `locale` joins core as its own key, on the W3C LTLI
+line.** Supersedes the 2026-09-02 ruling above, which stays as written. That
+ruling said a BCP 47 tag already carries the locale, so a second key would
+record one fact twice. That is true only when the language and the locale
+happen to match, and the W3C's Language Tags and Locale Identifiers spec
+(w3.org/TR/ltli) treats them as two facts. A language tag identifies the
+language the content is in. A locale identifies a set of international
+preferences: usually a language plus a region, plus whatever else formatting
+needs, such as the calendar, the numbering system, or the collation order,
+written as `-u-` extension keywords. Take an English page whose dates,
+amounts and sorted lists follow German conventions. It is `language: en`
+with `locale: de-DE`, and a single tag cannot record both. So the family
+now has both keys, split where the spec splits them. `language` is what the
+text is written in, the same fact that `lang`, `xml:lang`, `hreflang` and
+`dc:language` carry. `locale` is the set of conventions the content
+follows. Two of the earlier objections are still true, and are now handled
+in the field descriptions instead of being reasons to leave the key out.
+Rendering is still not claimed: which site tree a page renders in, its text
+direction, and how a generator formats the values it computes all stay with
+the generator. `locale` records only conventions that are already in the
+text, which is a fact about the content. The `en_US` versus `en-US`
+spelling split is handled the way `language` handles its own spelling. The
+description recommends a Unicode locale identifier in hyphen form and names
+`og:locale` as the neighbor that uses the underscore. Nothing is enforced,
+so the two keys are equally strict. Two more objections still hold, and
+neither costs anything. `locale` has no RDF target, so kg harvests nothing
+from it. And no built-in claims a bare `locale`, so the compat ladder pins
+the family's own shape (one non-empty string, and the underscore form
+passes) rather than another claimant's values. A language tag can stand in
+as a locale identifier on its own. LTLI says so, and asks content authors
+to pick tags that are canonical Unicode locale identifiers. So `locale` is
+optional, and should be left out wherever it would only repeat `language`.
+Shipped as core `1.0.0-proposal.3`, because a new key is a shape change and
+round 6 bumped the version for one, so proposal.2 keeps the bytes it had.
+Core goes from 6 fields to 7 and the family from 33 to 34. The test pin and
+the compat probes are updated. The core page records the decision and asks
+reviewers whether the hyphen form should be enforced.
+
 **2026-08-26 correction: the whole family is default.** All nine append to
 `DEFAULT_SCHEMAS`, superseding the core-only intent below wherever it
 appears. Bare runs require the pair, validate every family key present,
@@ -83,7 +122,7 @@ and put the full menu on bare `fill`, accepted as the teaching surface.
    story is three layers: `type` (what the page is) · `action` (what the
    reader is doing) · `intent` (the specific job).
 
-## The six house vocabularies: 33 fields, split by intent
+## The six house vocabularies: 34 fields, split by intent
 
 Designed as one large schema, then split by owner directive into six
 intent-scoped ids (superseding the earlier `docmeta:frontmatter:1.0` id
@@ -91,18 +130,20 @@ ruling; the split is why): `docmeta:core` (required pair),
 `docmeta:stewardship`, `docmeta:audience`, `docmeta:lifecycle`,
 `docmeta:structure` (honoring the naming decision recorded in the
 exploration brief for the relational schema), `docmeta:ai-context`. Core is
-at `1.0.0-proposal.2` since round 6; the other five are at
-`1.0.0-proposal.1`. Disjoint by construction (33 fields, 0 collisions,
+at `1.0.0-proposal.3` since round 8; the other five are at
+`1.0.0-proposal.1`. Disjoint by construction (34 fields, 0 collisions,
 pinned): stacking all six behaves like the monolith, and every error is
 attributed to one intent.
 Verified: `npx vitest run test/default-schema.test.ts`, green via file refs
 into the drafts (default-set membership skipped until registration). Field
 homes:
 
-- **Core (docmeta:core:1.0.0-proposal.2):** title*, description* (every
+- **Core (docmeta:core:1.0.0-proposal.3):** title*, description* (every
   string core claims is non-empty, with type/language single-valued even
   against DCMI: the recorded exception family), plus id, type, keywords,
-  language
+  language, locale (added 2026-09-03 on the W3C LTLI line: `language` is
+  what the text is written in, `locale` the preferences its content
+  follows, set only where the two differ)
 - **Stewardship (docmeta:stewardship:1.0.0-proposal.1):** authors (moved from
   core 2026-08-31; attribution is a fact about care, not about what the page
   is; keeps its own shape, since person objects are legal here and not in
