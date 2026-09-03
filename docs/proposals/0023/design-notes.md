@@ -29,6 +29,28 @@ decision and leaves core purely descriptive. Core 7 → 6 fields, stewardship
 shape rather than stewardship's `stringList`, because it must still accept
 MyST and Docusaurus person objects, which `owner` and `reviewed-by` never do.
 
+**2026-09-02 ruling: `language` stays, and there is no `locale` key.** The
+question was whether the family needs a `locale` field, or whether `language`
+should be renamed to one. Neither. A BCP 47 tag already carries region and
+script (`pt-BR`, `zh-Hant-TW`), so a second key would hold one fact twice, and
+everything a locale means beyond the tag is rendering, which core never
+claims: formatting, collation, text direction, which site tree a page renders
+in. The W3C's language-tags-and-locale-identifiers spec draws the same line
+(a language tag identifies content; a locale identifies preferences). The
+rename lost on four counts: every standard the family composes with names the
+fact `language` (`dc:language`, `inLanguage`, `lang`, `xml:lang`), and core's
+method is to share the claimant's name; `locale` reopens the `en_US`/`en-US`
+spelling split that `og:locale` already suffers; it has no RDF target where
+`language` lands on `dcterms:language`; and even Starlight keys locales by
+directory (`zh-cn`) while the content tag is `lang: zh-CN`. The strongest
+argument for the rename, that `language` is overloaded with programming
+languages in technical docs, is answered in the description rather than the
+name. Applied in place at core proposal.2 (description only, no shape
+change): the field now says it is the locale field and that region and
+script subtags are expected; the core review page carries the decision; and
+the one docs example that taught `locale: en`
+(`set-up/new-required-field.mdx`) now says `language: en`.
+
 **2026-08-26 correction: the whole family is default.** All nine append to
 `DEFAULT_SCHEMAS`, superseding the core-only intent below wherever it
 appears. Bare runs require the pair, validate every family key present,
