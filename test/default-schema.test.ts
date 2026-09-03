@@ -257,6 +257,7 @@ describe("the six house vocabularies", () => {
     const r = await checkStdin(
       "title: T\ndescription: D\nlanguage: hi\nlocale: hi-IN-u-nu-deva",
     );
+    expect(r.errors).toEqual([]);
     expect(r.ok).toBe(true);
   });
 
@@ -452,6 +453,8 @@ describe("the six house vocabularies", () => {
       'title: T\ndescription: D\nid: ""',
       'title: T\ndescription: D\nkeywords: ""',
       'title: T\ndescription: D\nkeywords: ["", "beta"]',
+      'title: T\ndescription: D\nlanguage: ""',
+      'title: T\ndescription: D\nlocale: ""',
     ]) {
       const r = await checkStdin(yaml, [CORE]);
       expect(r.ok, yaml).toBe(false);
