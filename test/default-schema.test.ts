@@ -80,7 +80,6 @@ const SIBLINGS = [ref("evals"), ref("kg"), ref("artifact-evals")];
 const FIELDS: Record<string, string[]> = {
   core: [
     "description",
-    "docmeta-vocabularies",
     "id",
     "keywords",
     "language",
@@ -167,7 +166,7 @@ describe("the six house vocabularies", () => {
         seen.set(key, ref);
       }
     }
-    expect(seen.size).toBe(34);
+    expect(seen.size).toBe(33);
   });
 
   it("spells every field in lowercase kebab-case", async () => {
@@ -205,32 +204,6 @@ describe("the six house vocabularies", () => {
     for (const e of r.errors) expect(e.schema).toBe(CORE);
     expect(r.errors[0]?.keyword).toBe("required");
     expect(r.errors[0]?.subject).toBe("description");
-  });
-
-  it("accepts a docmeta-vocabularies declaration, keyed by family", async () => {
-    const r = await checkStdin(
-      [
-        "title: T",
-        "description: D",
-        "docmeta-vocabularies:",
-        "  evals: 1.0.0-proposal.2",
-        "  structure: 1.0.0-proposal.1",
-      ].join("\n"),
-    );
-    expect(r.errors).toEqual([]);
-  });
-
-  it("rejects a docmeta-vocabularies family that is not kebab-case", async () => {
-    // The version a file targets is only useful if the family name it keys is
-    // the one tools look up; a mis-cased key would silently target nothing.
-    const r = await checkStdin(
-      ["title: T", "description: D", "docmeta-vocabularies:", "  Evals: 1.0.0"].join(
-        "\n",
-      ),
-    );
-    expect(r.ok).toBe(false);
-    expect(r.errors[0]?.schema).toBe(CORE);
-    expect(r.errors[0]?.instancePath).toBe("/docmeta-vocabularies");
   });
 
   it("rejects a lifecycle outside the four-stage ladder, attributed to lifecycle", async () => {

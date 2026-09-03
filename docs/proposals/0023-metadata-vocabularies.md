@@ -138,16 +138,15 @@ for three reasons the split then proved:
 - **Immutability makes fat ids expensive.** Fields on different cadences
   frozen behind one version number means any movement is a new 33-field id.
 
-The six claim **disjoint** field sets (34 fields since round 6 added
-`docmeta-vocabularies` to core, zero collisions, pinned by test), so
-stacking all six behaves like the monolith did.
+The six claim **disjoint** field sets (33 fields, zero collisions, pinned by
+test), so stacking all six behaves like the monolith did.
 
 ## The six house vocabularies
 
 `*` = required. All ids are `additionalProperties: true`.
 
 **docmeta:core:1.0.0-proposal.2**: `title`\*, `description`\*, `id`, `type`,
-`keywords`, `language`, `docmeta-vocabularies`. The descriptive floor, and
+`keywords`, `language`. The descriptive floor, and
 the only id in the default set that requires anything. Purely descriptive
 since review round 6: who wrote the page is not part of what the page *is*,
 so `authors` moved to stewardship with the other people (below). The shared
@@ -160,10 +159,7 @@ selection as a falsy key). And `type` and `language` are single strings even
 though Dublin Core's repeatable elements permit arrays. A DCMI document using
 repeated `type`/`language` is an override case, like its repeated titles.
 The `compat-check` ladder pins every one of these as an expected-reject, so
-an exception this list does not name fails the check. Round 6 added
-`docmeta-vocabularies`, a map from family name to the vocabulary version the
-file is written against, so a tool can tell a key from a newer vocabulary
-apart from a typo (see the round-6 section).
+an exception this list does not name fails the check.
 
 **docmeta:stewardship:1.0.0-proposal.1**: `authors`, `owner`, `stakeholders`,
 `reviewed-by`, `last-reviewed`, `review-interval` (ISO 8601 duration),
@@ -230,8 +226,7 @@ recorded for the same reason round 5's non-changes are:
   team wiring up attribution is already wiring up `owner` and `reviewed-by`,
   and `authors` arriving with them is what they expected. Field counts move
   (core 7 → 6, stewardship 7 → 8); the family total stays 33 and disjoint.
-  (Later in the same round, `docmeta-vocabularies` took core back to 7 and
-  the family to 34.) The cost is that stewardship is no longer uniform in
+  The cost is that stewardship is no longer uniform in
   shape: `authors` keeps its own type union rather than the `stringList` its
   neighbors share, because MyST and Docusaurus person objects are legal there
   and nowhere else in the schema. Rejected as the alternative: normalizing
@@ -310,8 +305,7 @@ shorthand.
 `artifact-evals-0.2`. The page-side trio one level down, because an artifact's top level is the
 host tool's contract and `metadata` is its sanctioned extension bag:
 `metadata.evals` (one assertion or the list; 0.2's `criteria` container
-dissolved), `metadata.eval-skip`, `metadata.eval-provenance`, and since round
-6 `metadata.docmeta-vocabularies`. Entries share
+dissolved), `metadata.eval-skip`, `metadata.eval-provenance`. Entries share
 the evals vocabulary: `id`\* (was optional position-derived `name`, which
 orphaned cached verdicts), `assertion`, `type`, `severity`, `evidence`,
 `examples` with string-or-list anchors, `options`, `provider`, `skip` and
@@ -413,15 +407,13 @@ design notes (§ Review round 6); the decisions:
   `"^eval-(?!suite$|skip$|provenance$)": false` at its root and
   `artifact-evals` the equivalent inside `metadata`. Asking consumers to
   implement the guard in prose meant one implementer did and one did not.
-- **`docmeta-vocabularies` in `core`**, nested as
-  `metadata.docmeta-vocabularies` on artifacts and constrained to the same
-  shape there. A map from family name to the version the file targets, with
-  at least one entry. Absent means "the version the reading tool implements",
-  which is today's behaviour. A major above what the tool implements is a
-  distinct error naming both versions, checked before any unknown-key
-  rejection, so a key from a newer vocabulary is never reported as a typo. It
-  lives in core because every family shares the gap and none could solve it
-  alone.
+- **`docmeta-vocabularies`: added in round 6, withdrawn in round 7.** Round 6
+  gave `core` a map from family name to the vocabulary version the file
+  targets, nested as `metadata.docmeta-vocabularies` on artifacts, so a tool
+  could check the declared version before the `eval-` guard rejected a newer
+  vocabulary's key as a typo. Round 7 removed it from both schemas, the
+  ladders, and the pages. The prefix guard stands without it: an unrecognized
+  `eval-*` key is rejected, whichever version wrote it.
 - **The `use:` form's overrides stop at the page's relationship to the
   check**: `skip`, `type`, `severity`, `options`, and `weight`. `provider`,
   `model` and `runs` say how the tool executes and stay run-wide; `target`
