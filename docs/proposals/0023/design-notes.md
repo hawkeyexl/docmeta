@@ -61,12 +61,11 @@ them as two facts. A language tag identifies the language the content is in. A
 locale identifies a set of international preferences. That is usually a language
 plus a region. It also covers whatever else formatting needs, such as the
 calendar, the numbering system, or the collation order, written as `-u-`
-extension keywords.
-Take an English page whose dates, amounts and sorted lists follow German
-conventions. It is `language: en` with `locale: de-DE`, and a single tag cannot
-record both. So the family now has both keys, split where the spec splits them.
-`language` is what the text is written in, the same fact that `lang`,
-`xml:lang`, `hreflang` and `dc:language` carry. `locale` is the set of
+extension keywords. Take an English page whose dates, amounts and sorted lists
+follow German conventions. It is `language: en` with `locale: de-DE`, and a
+single tag cannot record both. So the family now has both keys, split where the
+spec splits them. `language` is what the text is written in, the same fact that
+`lang`, `xml:lang`, `hreflang` and `dc:language` carry. `locale` is the set of
 conventions the content follows. Two of the earlier objections are still true,
 and are now handled in the field descriptions instead of being reasons to leave
 the key out. Rendering is still not claimed. Which site tree a page renders in,
@@ -78,9 +77,10 @@ recommends a Unicode locale identifier in hyphen form, and names `og:locale` as
 the neighbor that uses the underscore. Nothing is enforced, so the two keys are
 equally strict. Two more objections still hold, and neither costs anything.
 `locale` has no RDF target, so kg harvests nothing from it. And no built-in
-claims a bare `locale`. So the compat ladder pins the family's own shape rather than another claimant's
-values. That shape is one non-empty string, with the underscore form passing. A language tag can stand in as a locale identifier on its
-own. LTLI says so, and asks content authors to pick tags that are canonical
+claims a bare `locale`. So the compat ladder pins the family's own shape rather
+than another claimant's values. That shape is one non-empty string, with the
+underscore form passing. A language tag can stand in as a locale identifier on
+its own. LTLI says so, and asks content authors to pick tags that are canonical
 Unicode locale identifiers. So `locale` is optional, and should be left out
 wherever it would only repeat `language`. It shipped as core `1.0.0-proposal.3`,
 because a new key is a shape change and round 6 bumped the version for one. So
@@ -96,27 +96,27 @@ and put the full menu on bare `fill`, accepted as the teaching surface.
 
 ## The principles (settled through the field walk)
 
-1. **Weak floors teach bad habits.** `title` and `description` are required
-   as non-empty strings. That is a recorded exception to the composability
-   law, since Docusaurus allows empty and DCMI allows arrays, and both are
-   override cases.
-2. **One value is a string, and many values are a list.** There is no
-   per-field trivia. DCMI's repeated-element forms for `type` and `language`
-   are override cases.
-3. **Claim content, never rendering.** Cut `tags`, `slug`, `image` and
-   `layout`, and the presentation group as a concept.
-4. **Derivable facts lie.** Cut `updated`, `date`, `next-review`, and
-   `contact` as a second reach field. Git owns change dates. `last-reviewed`
-   plus `review-interval` derive the due date. Dates only a human can assert
-   stay, which are `last-reviewed` and `remove-by`.
+1. **Weak floors teach bad habits.** `title` and `description` are required as
+   non-empty strings. That is a recorded exception to the composability law,
+   since Docusaurus allows empty and DCMI allows arrays, and both are override
+   cases.
+2. **One value is a string, and many values are a list.** There is no per-field
+   trivia. DCMI's repeated-element forms for `type` and `language` are override
+   cases.
+3. **Claim content, never rendering.** Cut `tags`, `slug`, `image` and `layout`,
+   and the presentation group as a concept.
+4. **Derivable facts lie.** Cut `updated`, `date`, `next-review`, and `contact`
+   as a second reach field. Git owns change dates. `last-reviewed` plus
+   `review-interval` derive the due date. Dates only a human can assert stay,
+   which are `last-reviewed` and `remove-by`.
 5. **Facts live at their altitude.** `stakeholders` is page-level, meaning who
    to consult about THIS page. It is distinct from the project-level
-   `stakeholders` cut in the exploration brief's addendum, which was its
-   draft 0021 rather than main's query proposal. `expertise` fell because
-   level belongs to the persona definitions the page points at.
-6. **Enumerate only what is switched-on and bounded**, meaning `visibility`
-   and `lifecycle`, and **recommend openly** elsewhere. `risks` uses the
-   open-enum idiom, an `anyOf` of an enum and a free string.
+   `stakeholders` cut in the exploration brief's addendum, which was its draft
+   0021 rather than main's query proposal. `expertise` fell because level
+   belongs to the persona definitions the page points at.
+6. **Enumerate only what is switched-on and bounded**, meaning `visibility` and
+   `lifecycle`, and **recommend openly** elsewhere. `risks` uses the open-enum
+   idiom, an `anyOf` of an enum and a free string.
 7. **Compose, don't duplicate.** `action` comes from
    `passo-uno:seven-action:1.0` in the default set. `kg` from dockg and
    `metadata.evals` from moose-tracevals stay unclaimed. The classification
@@ -138,31 +138,29 @@ intent. Verified with `npx vitest run test/default-schema.test.ts`, green via
 file refs into the drafts, with default-set membership skipped until
 registration. The field homes are:
 
-- **Core (docmeta:core:1.0.0-proposal.3):** title*, description*, plus id,
-  type, keywords, language and locale. Every string core claims is
-  non-empty, and type and language are single-valued even against DCMI,
-  which is the recorded exception family. `locale` was added 2026-09-03 on
-  the W3C LTLI line. `language` is what the text is written in, and `locale`
-  the preferences its content follows, set only where the two differ.
+- **Core (docmeta:core:1.0.0-proposal.3):** title*, description*, plus id, type,
+  keywords, language and locale. Every string core claims is non-empty, and type
+  and language are single-valued even against DCMI, which is the recorded
+  exception family. `locale` was added 2026-09-03 on the W3C LTLI line.
+  `language` is what the text is written in, and `locale` the preferences its
+  content follows, set only where the two differ.
 - **Stewardship (docmeta:stewardship:1.0.0-proposal.1):** authors, owner,
-  stakeholders, reviewed-by, last-reviewed, review-interval,
-  verified-against, source-of-truth. `authors` moved from core 2026-08-31,
-  because attribution is a fact about care rather than about what the page
-  is. It keeps its own shape, since person objects are legal here and not in
-  `stringList`.
+  stakeholders, reviewed-by, last-reviewed, review-interval, verified-against,
+  source-of-truth. `authors` moved from core 2026-08-31, because attribution is
+  a fact about care rather than about what the page is. It keeps its own shape,
+  since person objects are legal here and not in `stringList`.
 - **Audience & intent (docmeta:audience:1.0.0-proposal.1):** audiences,
-  personas, journeys, intent, visibility. The `visibility` enum is
-  draft → restricted → confidential → internal → public.
+  personas, journeys, intent, visibility. The `visibility` enum is draft →
+  restricted → confidential → internal → public.
 - **Lifecycle (docmeta:lifecycle:1.0.0-proposal.1):** lifecycle, replaced-by,
   supersedes, remove-by. The `lifecycle` enum is
   draft|published|deprecated|archived, and deprecated ⇒ replaced-by or
   remove-by.
 - **Structure (docmeta:structure:1.0.0-proposal.1):** applies-to,
   not-applicable-to, concepts, prerequisites, next-steps, related-pages.
-  `not-applicable-to` was added in review round 5, for parallelism, because
-  the positive had a page-level twin and its negative did not.
-  `related-pages` was renamed in step with kg's related-concepts, so each
-  says what it points at.
+  `not-applicable-to` was added in review round 5, for parallelism, because the
+  positive had a page-level twin and its negative did not. `related-pages` was
+  renamed in step with kg's related-concepts, so each says what it points at.
 - **AI context (docmeta:ai-context:1.0.0-proposal.1):** generated-by,
   provenance, risks, sample-questions. `provenance` generalizes the
   kg.provenance pattern, and entries retire under human review. `risks` is an
@@ -211,8 +209,8 @@ translates a tool's per-finding severities (meaningful on `tool:*` only).
 - Renamed. `name`→`id`, `llm`→`ai`, `successExitCodes`→`success-exit-codes`,
   `timeoutMs`→`timeout-ms`, and
   `generated.assertionHash`→`generated-assertion-hash`
-- Removed. The object form, with `suite` and `skip` hoisted to `eval-suite`
-  and `eval-skip`. Also `generatedBy`. The top-level `generated-by` in
+- Removed. The object form, with `suite` and `skip` hoisted to `eval-suite` and
+  `eval-skip`. Also `generatedBy`. The top-level `generated-by` in
   docmeta:ai-context:1.0.0-proposal.1 owns AI provenance, and the
   self-preference-bias check reads it there
 - Added. `severity-map`, their documented-but-schema-rejected field, plus
@@ -253,51 +251,48 @@ including the 0.8 worked example translated, the fidelity proof).
 
 **Fidelity ledger vs 0.8:**
 
-- Renamed to kebab and plain language. The RDF mapping lives in
-  descriptions, where it always did, and iiRDS is kebab upstream anyway.
+- Renamed to kebab and plain language. The RDF mapping lives in descriptions,
+  where it always did, and iiRDS is kebab upstream anyway.
     The renames are prefLabel → **label**, altLabels → alt-labels, and subjects →
   **concepts**. That last one is the nominal twin of the page-level field, and
-  the same fact, with deeper winning. Then related →
-  **related-concepts**, in step with the page-level rename to
-  related-pages. Then topicType → **type**, the nominal twin of the
-  page-level `type`, where the open page value derives it and the closed
-  iiRDS enum here wins. Then appliesTo → applies-to, and
-  softwareLifecyclePhase → **about-product-lifecycle**, where the
-  about-ness is structural: what the page is ABOUT, never the page's own
-  `lifecycle`. Then softwareSubject → **about-product-aspect**, whose
-  aspects are architecture, interface and system-requirement, and which
-  pairs with about-product-lifecycle. Then notApplicableTo →
-  not-applicable-to, notSoftwareSubject → not-about-product-aspect,
-  revisionOf → revision-of, and derivedFrom → derived-from. Also the
-  provenance entries' generated-by, and the provenance `fields` enum
-  values, which are self-referential and renamed with the fields.
-  broader and narrower stay bare, and nothing collides.
+  the same fact, with deeper winning. Then related → **related-concepts**, in
+  step with the page-level rename to related-pages. Then topicType → **type**,
+  the nominal twin of the page-level `type`, where the open page value derives
+  it and the closed iiRDS enum here wins. Then appliesTo → applies-to, and
+  softwareLifecyclePhase → **about-product-lifecycle**, where the about-ness is
+  structural: what the page is ABOUT, never the page's own `lifecycle`. Then
+  softwareSubject → **about-product-aspect**, whose aspects are architecture,
+  interface and system-requirement, and which pairs with
+  about-product-lifecycle. Then notApplicableTo → not-applicable-to,
+  notSoftwareSubject → not-about-product-aspect, revisionOf → revision-of, and
+  derivedFrom → derived-from. Also the provenance entries' generated-by, and the
+  provenance `fields` enum values, which are self-referential and renamed with
+  the fields. broader and narrower stay bare, and nothing collides.
 - Removed. kg.generatedBy, because the top-level `generated-by` owns page
-  provenance. Also the deprecated single-object `provenance` shape from
-  0.2 and 0.3. The provenance ARRAY survives whole. It is per-model entries
-  of generated-by, fields and confidence, and it is fill's human-review
-  trail. No timestamp, ever, because dockg's determinism invariant forbids
-  wall-clock.
-- Widened. Every label and enum list takes single-string shorthand, and
-  every 0.8-valid document stays valid.
-- Kept. dependentRequired, where hierarchy ⇒ pref-label. All three iiRDS
-  enums stay closed, because published lists are the authority constraint 3
-  asks for. Also negative scope, sections with free slug keys, where
-  brokenSectionRef is the build-layer check, and the confidence trail.
+  provenance. Also the deprecated single-object `provenance` shape from 0.2 and
+  0.3. The provenance ARRAY survives whole. It is per-model entries of
+  generated-by, fields and confidence, and it is fill's human-review trail. No
+  timestamp, ever, because dockg's determinism invariant forbids wall-clock.
+- Widened. Every label and enum list takes single-string shorthand, and every
+  0.8-valid document stays valid.
+- Kept. dependentRequired, where hierarchy ⇒ pref-label. All three iiRDS enums
+  stay closed, because published lists are the authority constraint 3 asks for.
+  Also negative scope, sections with free slug keys, where brokenSectionRef is
+  the build-layer check, and the confidence trail.
 
 **Owner rulings, the harvest rule.** *Deeper wins, and the top level is the
 harvest fallback*, per fact rather than per page. So kg.subjects beats
-`concepts` for subjects. Everything the block doesn't speak to still harvests. That is `generated-by`,
-`supersedes` and `replaced-by` → prov:wasRevisionOf, and `prerequisites` →
-dcterms:requires. Also `related` and `next-steps` → dcterms:references,
-`applies-to` values → iirds:ProductVariant, and `concepts` → dcterms:subject and
-skos:Concept. Legacy kg.generatedBy beats top-level by the
+`concepts` for subjects. Everything the block doesn't speak to still harvests.
+That is `generated-by`, `supersedes` and `replaced-by` → prov:wasRevisionOf, and
+`prerequisites` → dcterms:requires. Also `related` and `next-steps` →
+dcterms:references, `applies-to` values → iirds:ProductVariant, and `concepts` →
+dcterms:subject and skos:Concept. Legacy kg.generatedBy beats top-level by the
 same rule. D4 is accepted, so a kg-less `topic-type` derives from the page's
 `type`. That mapping is how-to→task, tutorial→learning, explanation→concept,
 reference→reference, and troubleshooting→troubleshooting, and an explicit block
-wins. The dockg-side ledger is a superseding ADR over "never a docmeta built-in". It
-also needs a deriver that reads kebab keys, the fallback rule, the type
-derivation, and single-string normalization.
+wins. The dockg-side ledger is a superseding ADR over "never a docmeta
+built-in". It also needs a deriver that reads kebab keys, the fallback rule, the
+type derivation, and single-string normalization.
 
 ## docmeta:artifact-evals (proposal.1 revised from moose-tracevals artifact-evals-0.2; proposal.2 in round 6 below)
 
@@ -314,41 +309,41 @@ is `ladders/artifact-evals-examples.cjs`.
 
 **Fidelity ledger vs 0.2** (tracevals unshipped, so breaks are free):
 
-- Renamed. The optional position-derived `name` became a **required `id`**
-  on the object form, because position-derived ids orphan cached verdicts.
-  The string shorthand stays the id-less path. Also `llm` → `ai`.
-- Changed. The grader went from a closed enum of 8 to an **open enum**.   The recommended values are ai, human, command, tool-usage, skill-invoked,
+- Renamed. The optional position-derived `name` became a **required `id`** on
+  the object form, because position-derived ids orphan cached verdicts. The
+  string shorthand stays the id-less path. Also `llm` → `ai`.
+- Changed. The grader went from a closed enum of 8 to an **open enum**. The
+  recommended values are ai, human, command, tool-usage, skill-invoked,
   file-access, turn-count, cost, regex and json-output. The page side's tool:*
   spelling is also recommended. Any kebab name is legal, and validated by the
-  registry at run time. The grader principle across both eval schemas is *closed where
-  the schema switches on the value, open where only the runtime registry
+  registry at run time. The grader principle across both eval schemas is *closed
+  where the schema switches on the value, open where only the runtime registry
   does*. The page side's ai|command|human conditionals are the switching
-  case. The cost is that a stale `llm` passes the schema and is rejected by
-  the registry.
+  case. The cost is that a stale `llm` passes the schema and is rejected by the
+  registry.
 - Widened. `examples` pass and fail went to string-or-list, in both eval
   schemas, because the artifact side's anchor lists are real usage.
-- Added. `provider`, on ai evals. Also `metadata.eval-provenance`, the
-  family pattern, with entries keyed `evals:` like the page side. Also the
-  single-string block shorthand, `metadata.evals: <assertion>`, and the
-  `human` and `command` graders from the page side. `human` is judged per
-  session, because every trace is new, so there is no verdict caching,
-  unlike pages. `command` runs an executable over `{trace}` with the same
-  generation contract, writing back command and generated-assertion-hash.
-  This makes the two eval schemas' entry vocabularies structurally aligned.
+- Added. `provider`, on ai evals. Also `metadata.eval-provenance`, the family
+  pattern, with entries keyed `evals:` like the page side. Also the
+  single-string block shorthand, `metadata.evals: <assertion>`, and the `human`
+  and `command` graders from the page side. `human` is judged per session,
+  because every trace is new, so there is no verdict caching, unlike pages.
+  `command` runs an executable over `{trace}` with the same generation contract,
+  writing back command and generated-assertion-hash. This makes the two eval
+  schemas' entry vocabularies structurally aligned.
     One deliberate asymmetry remained in proposal.1. `assertion` was
   unconditionally required here, where every eval must be self-describing. On
   the page side it is conditional, because there a tool grader is its own check.
   Round 6 removed the asymmetry, below.
-- Unchanged. The `metadata` envelope, which is the host contract. Also type
-  and severity verbatim, evidence and options, string shorthand entries, and
-  every session-grader kind.
+- Unchanged. The `metadata` envelope, which is the host contract. Also type and
+  severity verbatim, evidence and options, string shorthand entries, and every
+  session-grader kind.
 - With id and assertion always required in proposal.1, most of the earlier
-  conditional machinery was unnecessary. The entry kept only the
-  command-family guards: command and its settings ⇒ `grader: command`, and
-  hash ⇒ command.
+  conditional machinery was unnecessary. The entry kept only the command-family
+  guards: command and its settings ⇒ `grader: command`, and hash ⇒ command.
 - The tracevals-side ledger is a superseding ADR over "never a docmeta
-  built-in". Extract, write and fill read `id` and the new spellings, and
-  the grader registry rejects unknown kinds, `llm` included.
+  built-in". Extract, write and fill read `id` and the new spellings, and the
+  grader registry rejects unknown kinds, `llm` included.
 
 ## doc-structure-lint: frontmatter fit (looked at, not a schema)
 
@@ -361,27 +356,26 @@ issue #13 already asks for template selection from frontmatter, "to lint
 multiple different kinds of documents in a single run". Today `--template` is
 required, and broadcast over every file in a directory.
 
-- **Do this.** Select the template from the page's `type` via a
-  type→template map in templates.yaml, which puts a repo-level fact at
-  repo-level altitude. CLI `-t` overrides, and there is zero new frontmatter
-  vocabulary. Do NOT use issue #13's proposed `template:` key. Starlight
-  claims `template` as an enum of doc and splash, so `template: how-to`
-  breaks stacked platform validation. If a per-page override is ever needed,
-  a kebab house-free key such as `structure-template` is the safe spelling.
-- **Don't do this.** Do not grow frontmatter-validation rules, which is a
-  README roadmap item. docmeta owns that layer. Template-conditional
-  requirements, such as "how-tos must carry intent", are already expressible
-  as if/then on `type` in an org schema. Resolve the roadmap item by
-  documented delegation, and delete the TODO.
-- Housekeeping found in passing. The frontmatter extractor is a hand-rolled
-  line splitter that shreds nested YAML. The repo already depends on `yaml`,
-  so it should parse properly. TOML `+++` frontmatter is not enabled, and
-  would inflate paragraph counts. Two latent bugs are suspected. The AJV key
-  pattern `^[A-Za-z0-9-_]+$` disagrees with the repo's own spaced section
-  keys, such as "Next steps". And a positional section-match dereferences
-  undefined, raising a TypeError rather than a finding, when a document has
-  fewer sections than its template. Both are relevant to docevals grader
-  robustness.
+- **Do this.** Select the template from the page's `type` via a type→template
+  map in templates.yaml, which puts a repo-level fact at repo-level altitude.
+  CLI `-t` overrides, and there is zero new frontmatter vocabulary. Do NOT use
+  issue #13's proposed `template:` key. Starlight claims `template` as an enum
+  of doc and splash, so `template: how-to` breaks stacked platform validation.
+  If a per-page override is ever needed, a kebab house-free key such as
+  `structure-template` is the safe spelling.
+- **Don't do this.** Do not grow frontmatter-validation rules, which is a README
+  roadmap item. docmeta owns that layer. Template-conditional requirements, such
+  as "how-tos must carry intent", are already expressible as if/then on `type`
+  in an org schema. Resolve the roadmap item by documented delegation, and
+  delete the TODO.
+- Housekeeping found in passing. The frontmatter extractor is a hand-rolled line
+  splitter that shreds nested YAML. The repo already depends on `yaml`, so it
+  should parse properly. TOML `+++` frontmatter is not enabled, and would
+  inflate paragraph counts. Two latent bugs are suspected. The AJV key pattern
+  `^[A-Za-z0-9-_]+$` disagrees with the repo's own spaced section keys, such as
+  "Next steps". And a positional section-match dereferences undefined, raising a
+  TypeError rather than a finding, when a document has fewer sections than its
+  template. Both are relevant to docevals grader robustness.
 
 ## Family walk status: COMPLETE
 
@@ -399,19 +393,18 @@ community review itself.
 Three families move to `1.0.0-proposal.2`: `evals`, `artifact-evals` and `core`.
 The other six stay at proposal.1 unchanged. Bumping them would announce a
 revision none of them made, and leave six pairs of byte-identical files to
-explain. `test/default-schema.test.ts` and `ladders/compat-check.cjs`
-each carry a per-family `VERSIONS` table so a family's next bump is still a
-one-line edit.
+explain. `test/default-schema.test.ts` and `ladders/compat-check.cjs` each carry
+a per-family `VERSIONS` table so a family's next bump is still a one-line edit.
 
 Six decisions, and the reasoning that is not already in the field
 descriptions.
 
-**`weight` (both eval families).** Positive number, default 1. It changes
-how much an outcome moves an aggregate and never the eval's own pass/fail.
-The binary outcome is what SARIF, JUnit and findings baselines consume
-downstream, and a score leaking into it would change all three at once.
-Zero is excluded on purpose. A weightless eval is a silent disable, and `skip`
-already means that loudly.
+**`weight` (both eval families).** Positive number, default 1. It changes how
+much an outcome moves an aggregate and never the eval's own pass/fail. The
+binary outcome is what SARIF, JUnit and findings baselines consume downstream,
+and a score leaking into it would change all three at once. Zero is excluded on
+purpose. A weightless eval is a silent disable, and `skip` already means that
+loudly.
 
 **`target`, not `focus` (both).** `claude plugin eval` spells this twice
 (`target` on its `regex` grader, `focus` on its `llm` grader) for the same
@@ -478,12 +471,12 @@ intentional boundary or an omission. **Omission.** `weight` went onto
 pages actually join an aggregate. It is there now, and `weight` is hoisted
 into `$defs` so the two forms cannot drift on what a weight is.
 
-Asking the question did expose where the line belongs, which was not
-written down anywhere. The `use:` form's overrides are statements about **this page's relationship to a
-check the corpus owner defined**. They say whether it applies (`skip`), what
-kind of claim it is here (`type`), and how badly failing matters (`severity`).
-They also say what it measures here (`options`), and how much it counts
-(`weight`).
+Asking the question did expose where the line belongs, which was not written
+down anywhere. The `use:` form's overrides are statements about **this page's
+relationship to a check the corpus owner defined**. They say whether it applies
+(`skip`), what kind of claim it is here (`type`), and how badly failing matters
+(`severity`). They also say what it measures here (`options`), and how much it
+counts (`weight`).
 
 Two groups stay out, for different reasons:
 

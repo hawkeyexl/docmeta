@@ -2,7 +2,8 @@
 
 - **Status:** Superseded by [0017](0017-fill-egress-and-bounds.md)
 - **Serves:** Maya · M4 (per [0011](0011-fill-in-content-strategy.md)), Devin · D1
-- **Touches:** New `docs/src/content/docs/set-up/fill-providers.mdx`, `src/commands/fill.ts` (one flag), `reference/cli.mdx`
+- **Touches:** New `docs/src/content/docs/set-up/fill-providers.mdx`,
+  `src/commands/fill.ts` (one flag), `reference/cli.mdx`
 - **Relates to:** [0008](0008-remote-schema-durability.md) (`--offline` should mean one thing tool-wide)
 
 ## Problem
@@ -187,11 +188,12 @@ Docs-first, with one code change:
    quoted per stress test 9.
 3. Link it from `retrofit.mdx` Step 6 and from `reference/cli.mdx` §fill.
 4. In `test/cli.integration.test.ts`, `fill --offline` selects a local provider
-   and makes no network call, and fails clearly when no local model is available.
+   and makes no network call, and fails clearly when no local model is
+   available.
 5. In `test/cli.integration.test.ts`, `validate --offline` and `fill --offline`
    share the flag name and the no-network guarantee, per
    [0008](0008-remote-schema-durability.md).
-6. Update `reference/cli.mdx` for `--offline` on both commands, then run
-   `npm run build && npm run docs:check-cli`.
+6. Update `reference/cli.mdx` for `--offline` on both commands, then run `npm
+   run build && npm run docs:check-cli`.
 7. Run the dogfood check before pushing:
    `node dist/cli.js validate "docs/src/content/docs/**/*.{md,mdx}" -s ./docs/doc-frontmatter.schema.json`

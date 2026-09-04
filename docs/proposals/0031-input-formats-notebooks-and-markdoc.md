@@ -3,21 +3,23 @@
 - **Status:** Proposed
 - **Serves:** Maya · M1, M4 · Sara · S1, S2
 - **Depends on:** [0020](0020-element-metadata.md), for the
-parent-is-the-namespace naming rule, and the both-channels-are-validated rule
-that forbids a precedence tiebreak. Also
-[0018](0018-write-support-shipped-for-all-three.md), where a write updates the
-location the effective value was read from; that is load-bearing the moment a
-format has two channels. Also [0014](0014-empty-input-is-not-success.md), the
-guard that turns an unreadable corpus into an error instead of a green run
+  parent-is-the-namespace naming rule, and the both-channels-are-validated rule
+  that forbids a precedence tiebreak. Also
+  [0018](0018-write-support-shipped-for-all-three.md), where a write updates the
+  location the effective value was read from; that is load-bearing the moment a
+  format has two channels. Also [0014](0014-empty-input-is-not-success.md), the
+  guard that turns an unreadable corpus into an error instead of a green run
 - **Relates to:** [0007](0007-html-xml-write-support.md), the "permanently" this
-proposal is careful not to repeat. Also [0019](0019-no-docmeta-init.md), for the
-shape of a rejection, and [0009](0009-publish-builtin-schemas.md), where docmeta
-publishes a MyST schema, which is where this gap becomes self-inflicted
+  proposal is careful not to repeat. Also [0019](0019-no-docmeta-init.md), for
+  the shape of a rejection, and [0009](0009-publish-builtin-schemas.md), where
+  docmeta publishes a MyST schema, which is where this gap becomes
+  self-inflicted
 - **Touches (planned):** new `src/extractors/{markdoc,notebook,notebook-write}.ts`,
   `src/extractors/index.ts`, `reference/{formats,platform-schemas}.mdx`,
   `CONTRIBUTING.md`, `test/{extractors,notebook-write,cli.integration}.test.ts`
-- **Verdict:** Implement `.mdoc` and `.ipynb`. **Reject** standalone `.json`/`.yaml`,
-  LaTeX, Typst, Confluence storage format and `.txt`. Defer Org-mode.
+- **Verdict:** Implement `.mdoc` and `.ipynb`. **Reject** standalone
+  `.json`/`.yaml`, LaTeX, Typst, Confluence storage format and `.txt`. Defer
+  Org-mode.
 
 ## Problem
 
@@ -30,7 +32,8 @@ they are not one bug.
 `myst:frontmatter:1.10` is the largest built-in, at 41 fields. It is published
 at a stable URL, and documented on the site's platform-schemas page. It types
 `kernelspec`, `execute` and `binder`, which are the fields a *notebook* carries.
-MyST and Jupyter Book corpora are substantially `.ipynb`. docmeta cannot open one:
+MyST and Jupyter Book corpora are substantially `.ipynb`. docmeta cannot open
+one:
 
 ```console
 $ docmeta validate notebook.ipynb
@@ -51,10 +54,11 @@ $ docmeta validate notebook.ipynb --as markdown -s myst:frontmatter:1.10
 # exit 0
 ```
 
-Green, against the MyST schema, on a notebook whose metadata was never read. The fixture carries `"title": "Fitting a curve"`, an `authors` list and a
+Green, against the MyST schema, on a notebook whose metadata was never read. The
+fixture carries `"title": "Fitting a curve"`, an `authors` list and a
 `kernelspec` in its top-level `metadata`. The markdown extractor found no fenced
-block, so `data` is `{}`, and a schema that requires nothing passes it.
-`query` says the same thing without the ambiguity:
+block, so `data` is `{}`, and a schema that requires nothing passes it. `query`
+says the same thing without the ambiguity:
 
 ```console
 $ docmeta query "SELECT * FROM docs" . --as markdown --ext .ipynb
@@ -131,8 +135,8 @@ $ docmeta get title,type dashed.yaml --as markdown -f json
 ```
 
 The second file opens with a `---` line. That is a YAML document-start marker.
-It looks like a front matter fence and is not one, because nothing closes it. Both
-report `present: false`. Unlike Markdoc there is no flag that reaches this
+It looks like a front matter fence and is not one, because nothing closes it.
+Both report `present: false`. Unlike Markdoc there is no flag that reaches this
 content. Whether that matters is § *What is rejected, and why* below.
 
 ### 4. The rest
@@ -172,13 +176,14 @@ exactly as `mdx.ts` does today. That is a dozen lines and no new mechanism, with
 
 It gets its own extractor rather than a third extension on `markdown`. That way
 `--as markdoc` exists, and `docmeta schemas` names it. A future Markdoc-specific
-read, such as `{% partial %}` front matter, then has a file to live in. That is the precedent
-`mdx.ts` set and there is no reason to break it for the second case.
+read, such as `{% partial %}` front matter, then has a file to live in. That is
+the precedent `mdx.ts` set and there is no reason to break it for the second
+case.
 
-One limitation must be documented rather than discovered: **Markdoc's `---` fence
-is format-agnostic and docmeta's fence *is* the format signal.** Markdoc's own documentation says it has no opinion about what goes between the
-dashes, whether YAML, TOML, JSON or GraphQL. It hands the raw string to the
-application.
+One limitation must be documented rather than discovered: **Markdoc's `---`
+fence is format-agnostic and docmeta's fence *is* the format signal.** Markdoc's
+own documentation says it has no opinion about what goes between the dashes,
+whether YAML, TOML, JSON or GraphQL. It hands the raw string to the application.
 docmeta reads `---` as YAML, `+++` as TOML, `;;;` as JSON. A Markdoc file with
 TOML between dashes therefore fails, loudly (§ stress test 7). Loud is the right
 outcome and it still belongs on the formats page.
@@ -197,8 +202,8 @@ mystmd:
 
 [0020](0020-element-metadata.md)'s second property settles what to do with that.
 A document carrying the same fact in two channels yields two keys, both
-validated, and neither discarded. Any precedence rule silently drops one, and the
-dropped one is the one nobody is checking.
+validated, and neither discarded. Any precedence rule silently drops one, and
+the dropped one is the one nobody is checking.
 
 So:
 
@@ -233,10 +238,9 @@ of the key set, and cell metadata is body. It is also unnameable: positionally
 reason recorded so the next person does not re-derive it.
 
 It is not *impossible*, and 0007's lesson is exactly about that difference.
-`elements:`
-config is the existing escape hatch for reaching what a convention deliberately
-misses. It would need a JSON Pointer spelling to point into a notebook. If a
-user ever needs cell tags validated, that is where it goes.
+`elements:` config is the existing escape hatch for reaching what a convention
+deliberately misses. It would need a JSON Pointer spelling to point into a
+notebook. If a user ever needs cell tags validated, that is where it goes.
 
 ### Reading it: `JSON.parse` for the value, `yaml` for the positions
 
@@ -249,10 +253,10 @@ slice at title value: "\"Fitting a curve\""
 title value linePos: {"line":17,"col":12}
 ```
 
-`yaml`'s `parseDocument`, already a direct dependency, parses `.ipynb` with
-zero errors and reports byte-exact ranges for every node, and `LineCounter`
-converts one to line/column. So `lineFor` and `colFor` are both available, which
-makes notebooks the third format after `html` and `xml` to implement the optional
+`yaml`'s `parseDocument`, already a direct dependency, parses `.ipynb` with zero
+errors and reports byte-exact ranges for every node, and `LineCounter` converts
+one to line/column. So `lineFor` and `colFor` are both available, which makes
+notebooks the third format after `html` and `xml` to implement the optional
 column half of `ExtractedMetadata`.
 
 It must not be the *parser*, though. See stress test 1.
@@ -271,18 +275,19 @@ cells untouched: true
 ```
 
 Outputs, execution counts, cell ids, the 1-space indent nbformat writes, and the
-trailing newline all survive because nothing outside the value span is rewritten.
-This matters more for notebooks than for any other format. A notebook diff that
-touches every cell because a serializer normalized it is unreviewable. And
-re-emitting outputs risks corrupting base64 image payloads.
+trailing newline all survive because nothing outside the value span is
+rewritten. This matters more for notebooks than for any other format. A notebook
+diff that touches every cell because a serializer normalized it is unreviewable.
+And re-emitting outputs risks corrupting base64 image payloads.
 
 The first-cell channel is the harder half, because the YAML block lives inside a
-JSON string array (`"source": ["---\n", "title: x\n", "---\n"]`). The write is two nested splices. Join the array, then run `applyFrontmatter` on
-the joined text, using the same comment-preserving, self-verifying writer every
-other format uses. Then re-serialize that one array, and splice it at the
-array's own byte range. Inserting a key changes the array's length. So this is the one place where
-formatting is chosen rather than preserved. It is where the byte-level assertion
-0020's stress test 3 insists on has to be aimed.
+JSON string array (`"source": ["---\n", "title: x\n", "---\n"]`). The write is
+two nested splices. Join the array, then run `applyFrontmatter` on the joined
+text, using the same comment-preserving, self-verifying writer every other
+format uses. Then re-serialize that one array, and splice it at the array's own
+byte range. Inserting a key changes the array's length. So this is the one place
+where formatting is chosen rather than preserved. It is where the byte-level
+assertion 0020's stress test 3 insists on has to be aimed.
 
 Recommended as **two landings, read first**, so the naming rule is fixed and
 tested before a writer aims at it. Not as "read-only for now": there is no
@@ -294,7 +299,8 @@ objection here of the kind 0007 raised and 0018 answered, only sequencing.
 
 docmeta's pipeline is *load → extract → resolve → validate → report*, and its
 distinguishing layer is extraction. That means pulling a metadata block out of a
-document that is mostly not metadata. A standalone data file has no such block. The whole file is the value, and extraction is `JSON.parse`. What is left is
+document that is mostly not metadata. A standalone data file has no such block.
+The whole file is the value, and extraction is `JSON.parse`. What is left is
 JSON Schema validation of a JSON file. `check-jsonschema` and `ajv-cli` already
 do that, with better error rendering for deep instance paths, and no notion of a
 "document" to get in the way. docmeta would be a worse one of those.
@@ -316,30 +322,30 @@ templates, and `docmeta.config.yaml` validating itself against the default
 document schema.
 
 That hazard *is* avoidable. Register the extractors with an empty `extensions`
-array so they are reachable by `--as json` / `--as yaml` and never by a walk. The
-registry already supports it, since `byName` gets the entry and `byExtension`
-gets
-nothing, `supportedExtensions()` flatMaps to nothing. It is a real design and it
-is not why to say no. The paragraph above it is.
+array so they are reachable by `--as json` / `--as yaml` and never by a walk.
+The registry already supports it, since `byName` gets the entry and
+`byExtension` gets nothing, `supportedExtensions()` flatMaps to nothing. It is a
+real design and it is not why to say no. The paragraph above it is.
 
 **What would reopen it**, in 0019's shape: not a request to validate a data file
 because that has a better tool. A request to bring data files into `docmeta
-query`, so
-a corpus check can join a page's `product` against a `products.yaml` the docs are
-generated from. That is a cross-file rule and there is no other tool for it. It is
-also squarely on the boundary [0021](0021-frontmatter-as-a-database.md) drew, so
-it would be a query proposal, not a format one.
+query`, so a corpus check can join a page's `product` against a `products.yaml`
+the docs are generated from. That is a cross-file rule and there is no other
+tool for it. It is also squarely on the boundary
+[0021](0021-frontmatter-as-a-database.md) drew, so it would be a query proposal,
+not a format one.
 
 ### LaTeX and Typst
 
 `\title{\ProductName{} User Guide}` has no value until `\ProductName` is
 expanded, and it may be defined in an included preamble, redefined mid-document,
 or supplied by a document class. Typst is the same shape with better syntax:
-`#set document(title: ...)` takes an arbitrary expression. A reader that returns the raw source text reports `\ProductName{} User Guide` as
-the title. That is wrong in a way that passes a `minLength` check and fails a
-human. `CONTRIBUTING.md`
-already governs this. A format whose read is lossy should stay read-only rather
-than guess. Here the read is lossy enough that read-only is still wrong.
+`#set document(title: ...)` takes an arbitrary expression. A reader that returns
+the raw source text reports `\ProductName{} User Guide` as the title. That is
+wrong in a way that passes a `minLength` check and fails a human.
+`CONTRIBUTING.md` already governs this. A format whose read is lossy should stay
+read-only rather than guess. Here the read is lossy enough that read-only is
+still wrong.
 
 Stated as a property of the format, not of anyone's effort, precisely because
 0007 taught the difference. What would change it is a real TeX/Typst evaluator in
@@ -349,34 +355,35 @@ the toolchain, not more care.
 
 Assessed and rejected on a fact rather than a difficulty. Confluence page
 metadata is held by Confluence, not by the storage-format XHTML. That covers
-labels, page properties, and the content status. A `page-properties` macro in the body is an HTML
-table rendered into a report, not a metadata block. There is nothing in the file
-for an extractor to be correct about. A Confluence integration would be an API
-client, which is a different product.
+labels, page properties, and the content status. A `page-properties` macro in
+the body is an HTML table rendered into a report, not a metadata block. There is
+nothing in the file for an extractor to be correct about. A Confluence
+integration would be an API client, which is a different product.
 
 ### `.txt`
 
-No metadata channel exists. Registering it adds every `.txt` in a walk as a document with `present: false`.
-Under a permissive schema that is a green row that means nothing. It is the same
-false green § Problem 1 opens with, manufactured deliberately.
+No metadata channel exists. Registering it adds every `.txt` in a walk as a
+document with `present: false`. Under a permissive schema that is a green row
+that means nothing. It is the same false green § Problem 1 opens with,
+manufactured deliberately.
 
 ### Org-mode: deferred, not rejected
 
-`#+TITLE:`, `#+AUTHOR:`, `#+DATE:` are a genuine, unambiguous, line-oriented header channel. They are structurally
-identical to the RST docinfo and AsciiDoc attribute readers docmeta already
-ships, and writable by line splice. There is no technical
-objection. There is also no demand. The repository has one open issue, and it is about
-SARIF severity. Unlike notebooks, there is no built-in schema making a promise
-docmeta cannot keep. Deferred on that basis alone, so that if an Org user
-turns up the answer is "nobody asked yet", not "we decided against it".
+`#+TITLE:`, `#+AUTHOR:`, `#+DATE:` are a genuine, unambiguous, line-oriented
+header channel. They are structurally identical to the RST docinfo and AsciiDoc
+attribute readers docmeta already ships, and writable by line splice. There is
+no technical objection. There is also no demand. The repository has one open
+issue, and it is about SARIF severity. Unlike notebooks, there is no built-in
+schema making a promise docmeta cannot keep. Deferred on that basis alone, so
+that if an Org user turns up the answer is "nobody asked yet", not "we decided
+against it".
 
 ## Stress test
 
 ### 1. The position parser would have accepted six notebooks Jupyter rejects
 
 `yaml`'s `parseDocument` is the obvious reader for `.ipynb`, because it gives
-the value
-*and* the offsets in one pass. Measured what else it gives:
+the value *and* the offsets in one pass. Measured what else it gives:
 
 ```
 probe "{a: 1}"        yamlErrors=0  JSON.parse=false
@@ -389,13 +396,15 @@ probe "# c\n{\"a\":1}" yamlErrors=0 JSON.parse=false
 
 YAML 1.2 is a strict superset of JSON. So a notebook with a trailing comma, a
 leading-zero integer or single-quoted keys parses clean, and docmeta reports it
-green. Meanwhile Jupyter cannot open the file at all. That is a false green whose polarity is the reverse of the one this proposal
-exists to fix. It is worse, because the fix would have introduced it.
+green. Meanwhile Jupyter cannot open the file at all. That is a false green
+whose polarity is the reverse of the one this proposal exists to fix. It is
+worse, because the fix would have introduced it.
 
-**Changed as a result:** `JSON.parse` is the authoritative reader and the gate. A
-failure there is a per-file parse error, the same as malformed YAML frontmatter.
-`parseDocument` runs afterward for positions only, and its output is never the
-source of a value. A single reader was the design until this was measured.
+**Changed as a result:** `JSON.parse` is the authoritative reader and the gate.
+A failure there is a per-file parse error, the same as malformed YAML
+frontmatter. `parseDocument` runs afterward for positions only, and its output
+is never the source of a value. A single reader was the design until this was
+measured.
 
 ### 2. `fenced` is one boolean and a notebook has two channels
 
@@ -415,10 +424,10 @@ deleting that cell would leave every `metadata.*` key standing. A DELETE that
 silently leaves keys behind is worse than one that refuses.
 
 **Changed as a result:** notebooks report `fenced: false` unconditionally, so
-DELETE refuses, and the refusal message is already correct. This is the one place
-where `ExtractedMetadata` genuinely strains: a two-channel format can only answer
-a single-channel question conservatively. It is a strain rather than a break,
-and element-backed XML already leaves `fenced` unset for the same reason.
+DELETE refuses, and the refusal message is already correct. This is the one
+place where `ExtractedMetadata` genuinely strains: a two-channel format can only
+answer a single-channel question conservatively. It is a strain rather than a
+break, and element-backed XML already leaves `fenced` unset for the same reason.
 Widening it to a per-channel answer would change an exported interface, for a
 capability nothing has asked for.
 
@@ -428,9 +437,8 @@ The first design lifted notebook `metadata` to top-level keys, so
 `myst:frontmatter:1.10` would type `kernelspec` and `authors` directly. A
 notebook with page frontmatter in cell 0 *and* a `title` in `metadata` then has
 two `title`s and one key. Whichever the merge favours, the other is discarded,
-and
-and it is the discarded one that nobody is checking. 0020 rejected exactly this
-for DITA's `<audience>` against `<othermeta name="audience">`.
+and and it is the discarded one that nobody is checking. 0020 rejected exactly
+this for DITA's `<audience>` against `<othermeta name="audience">`.
 
 **Changed as a result:** the namespaced `metadata.*` spelling above, and the
 honest consequence recorded with it. The shipped MyST schema reaches the
@@ -456,8 +464,8 @@ check against the default document schema.
 **Changed as a result:** the design moved from "register the extensions" to
 "register the extractors with an empty `extensions` array, reachable by `--as`
 only". Then the format was rejected outright, for the stronger reason in § *What
-is rejected*. Worth recording because the mitigation is sound and will be
-the right shape if the query-side reopening condition is ever met.
+is rejected*. Worth recording because the mitigation is sound and will be the
+right shape if the query-side reopening condition is ever met.
 
 The mitigation also surfaced a display defect that would ship with it:
 `listFormats()` feeds `docmeta schemas`, which joins `extensions` with `", "`, so
@@ -511,10 +519,10 @@ docmeta: Unexpected error: Invalid YAML frontmatter: root must be an object
 
 Reproduced with ordinary malformed YAML too, so it is not Markdoc-specific.
 `get` promotes a per-file parse failure to exit 2 with an "Unexpected error"
-prefix, where `validate` reports it per file and carries on. That is a `CLAUDE.md §
-Commands must have parallel behaviors` violation that predates this proposal.
-Recorded here so the Markdoc landing is not read as having introduced it, and so
-it is fixed as its own `fix(get):` change.
+prefix, where `validate` reports it per file and carries on. That is a
+`CLAUDE.md § Commands must have parallel behaviors` violation that predates this
+proposal. Recorded here so the Markdoc landing is not read as having introduced
+it, and so it is fixed as its own `fix(get):` change.
 
 ### 8. `.ipynb` is a container, and its formatting varies
 
@@ -530,9 +538,9 @@ minified title slice: "\"Fitting a curve\""
 
 Ranges are byte offsets into the original string in every case, so no indent or
 newline assumption is needed. That is the same reason 0018's XML splice survives
-CRLF, reached the same way. A BOM still needs a test. `src/core/json-text.ts § stripBom` exists because
-Windows editors write one and `JSON.parse` rejects it. Stripping it before
-measuring offsets would shift every one of them by one. The
+CRLF, reached the same way. A BOM still needs a test. `src/core/json-text.ts §
+stripBom` exists because Windows editors write one and `JSON.parse` rejects it.
+Stripping it before measuring offsets would shift every one of them by one. The
 strip must happen at parse and never upstream of the offsets.
 
 The related non-problem: Jupytext's `md:myst` notebooks are `.md` files with
@@ -540,11 +548,11 @@ ordinary front matter and are already covered. Only the JSON container is missin
 
 ### 9. Confluence was assessed before it was rejected
 
-The temptation is to treat storage format as "XHTML, so the HTML extractor nearly
-works". It parses, and it yields nothing, because Confluence keeps labels and
-page properties outside the stored body. Checked rather than assumed, on 0020's instruction not to guess a content model.
-The answer moved the verdict from "defer, needs an XHTML dialect" to "reject,
-the data is not in the file".
+The temptation is to treat storage format as "XHTML, so the HTML extractor
+nearly works". It parses, and it yields nothing, because Confluence keeps labels
+and page properties outside the stored body. Checked rather than assumed, on
+0020's instruction not to guess a content model. The answer moved the verdict
+from "defer, needs an XHTML dialect" to "reject, the data is not in the file".
 
 ## Implementation order
 
@@ -560,18 +568,19 @@ the expensive one needs it.
 2. **`notebook` read.** A `JSON.parse` gate, `parseDocument` positions,
    `LineCounter` for `lineFor`/`colFor`, both channels keyed, `fenced: false`.
    The fixtures are a notebook with only `metadata`, one with only a first-cell
-block, and one with both and a disagreeing `title`. That last is the key test:
-two keys, two values, neither dropped. Then one CRLF, one BOM'd, one minified,
-and one that is valid YAML but invalid JSON, asserting the parse error.
+   block, and one with both and a disagreeing `title`. That last is the key
+   test: two keys, two values, neither dropped. Then one CRLF, one BOM'd, one
+   minified, and one that is valid YAML but invalid JSON, asserting the parse
+   error.
 3. **`notebook` write.** `metadata.*` splice first, first-cell splice second.
    Assert bytes, not "it did not throw". 0020's stress test 3 is the entry that
-earned that instruction, and this is the same shape of edit. `test/fill.test.ts`
-   loses its notebook refusal fixture and `docmeta schemas` flips notebook to
-   `writable`.
+   earned that instruction, and this is the same shape of edit.
+   `test/fill.test.ts` loses its notebook refusal fixture and `docmeta schemas`
+   flips notebook to `writable`.
 4. **Docs.** `reference/formats.mdx` for both formats. Then
-`reference/platform-schemas.mdx`, to say which MyST channel the schema reaches
-in a notebook and which it does not. Then `CONTRIBUTING.md § Write support is
-optional`, for the notebook nested-splice case.
+   `reference/platform-schemas.mdx`, to say which MyST channel the schema
+   reaches in a notebook and which it does not. Then `CONTRIBUTING.md § Write
+   support is optional`, for the notebook nested-splice case.
 
 Steps 1 and 2 are `feat(extractors):`, and therefore each ship a demo video per
 `CLAUDE.md § Every new feature ships with a short demo video`. One is enough if
@@ -583,10 +592,10 @@ that validates as empty, then doesn't.
 No key moves, no existing document changes meaning, no schema changes verdict.
 Two extensions that were errors become documents, and a directory walk that
 skipped them stops skipping them. That can turn a passing run into a failing
-one, for a repo that had unreadable notebooks in scope. That is the same class as 0020's `additionalProperties: false` case. The run was
-passing because docmeta could not see the files, and fixing under-reporting is
-not a contract break.
-`feat:`, not `feat!:`.
+one, for a repo that had unreadable notebooks in scope. That is the same class
+as 0020's `additionalProperties: false` case. The run was passing because
+docmeta could not see the files, and fixing under-reporting is not a contract
+break. `feat:`, not `feat!:`.
 
 ## Consequences
 
@@ -596,7 +605,7 @@ not a contract break.
 - The `metadata.*` half of a notebook has no built-in schema. That is a named,
   scoped follow-on (`jupyter:nbformat:4.5`, Sara · S1), not a defect of this one.
 - Four formats carry a written rejection, so the next sweep re-derives none of
-them. One carries a deferral, with the reason stated as absence of demand rather
-than presence of an objection.
+  them. One carries a deferral, with the reason stated as absence of demand
+  rather than presence of an objection.
 - The `get`-versus-`validate` parse-error asymmetry in stress test 7 is filed as
   its own fix and is not this proposal's to make.

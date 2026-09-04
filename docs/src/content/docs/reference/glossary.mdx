@@ -9,13 +9,14 @@ reference page, the entry links to it.
 ## frontmatter
 
 A block of metadata at the very top of a document, set off from the body.
-Markdown, MDX, AsciiDoc, and reStructuredText all accept the same fenced block in
-any of three flavors: YAML (`---`), TOML (`+++`), or JSON (`;;;`). AsciiDoc and rst fall back to a native header when no fence is present, using
-AsciiDoc attributes or an RST field list. XML and HTML have no fenced form,
-because their metadata lives in element attributes or head tags. A fenced block must be the first thing in the
-file, or docmeta won't recognize it. Whichever flavor or format is used, docmeta
-reads only the frontmatter, never the body, and normalizes it to the same
-[metadata](#metadata) shape it validates. See
+Markdown, MDX, AsciiDoc, and reStructuredText all accept the same fenced block
+in any of three flavors: YAML (`---`), TOML (`+++`), or JSON (`;;;`). AsciiDoc
+and rst fall back to a native header when no fence is present, using AsciiDoc
+attributes or an RST field list. XML and HTML have no fenced form, because their
+metadata lives in element attributes or head tags. A fenced block must be the
+first thing in the file, or docmeta won't recognize it. Whichever flavor or
+format is used, docmeta reads only the frontmatter, never the body, and
+normalizes it to the same [metadata](#metadata) shape it validates. See
 [Supported formats](/docmeta/reference/formats/#frontmatter-flavors) for the
 fence flavors and where each format keeps its frontmatter.
 
@@ -31,8 +32,9 @@ the **presence and format** of metadata, never the document's prose.
 
 The format-specific component that reads metadata out of a document. docmeta has
 one extractor per input format: Markdown, MDX, AsciiDoc, reStructuredText, XML,
-and HTML. The extractor is the only part of docmeta that knows about a file's format. Once
-it produces metadata, validation and reporting work the same for every format. You can force a specific extractor with `--as`, which is required
+and HTML. The extractor is the only part of docmeta that knows about a file's
+format. Once it produces metadata, validation and reporting work the same for
+every format. You can force a specific extractor with `--as`, which is required
 when reading from stdin. See [Supported formats](/docmeta/reference/formats/).
 
 ## schema
@@ -68,11 +70,12 @@ See [Reference kinds](/docmeta/reference/schema-resolution/#reference-kinds).
 ## `$schema` (document key)
 
 A reserved key a document can put in its own metadata, to name the schema or
-schemas it should be validated against. It takes a single reference or a list. Because it's a
-docmeta directive rather than real metadata, `$schema` is **stripped before
-validation**, so a schema with `additionalProperties: false` won't flag it. In
-the [precedence chain](#override) it sits above config but below a `--schema`
-flag. See [The `$schema` key in a file](/docmeta/reference/schema-resolution/#the-schema-key-in-a-file).
+schemas it should be validated against. It takes a single reference or a list.
+Because it's a docmeta directive rather than real metadata, `$schema` is
+**stripped before validation**, so a schema with `additionalProperties: false`
+won't flag it. In the [precedence chain](#override) it sits above config but
+below a `--schema` flag. See [The `$schema` key in a
+file](/docmeta/reference/schema-resolution/#the-schema-key-in-a-file).
 
 ## `$schema` (meta-schema URI)
 
@@ -87,18 +90,20 @@ which schema validates a document.
 ## dialect
 
 A version of the JSON Schema specification: Draft 2020-12, 2019-09, draft-07,
-draft-06, or draft-04. docmeta auto-detects a schema's dialect from its [`$schema` meta-schema
-URI](#schema-meta-schema-uri), and compiles it with the matching validator. A
-missing or unrecognized URI falls back to Draft 2020-12. Schemas of
-different dialects can coexist in one run. See [Dialects](/docmeta/reference/schema-resolution/#dialects).
+draft-06, or draft-04. docmeta auto-detects a schema's dialect from its
+[`$schema` meta-schema URI](#schema-meta-schema-uri), and compiles it with the
+matching validator. A missing or unrecognized URI falls back to Draft 2020-12.
+Schemas of different dialects can coexist in one run. See
+[Dialects](/docmeta/reference/schema-resolution/#dialects).
 
 ## JSON Pointer
 
 The standard ([RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901)) syntax
-docmeta uses to name the field an error is about. A pointer like `/tags/0` means "the first item of the `tags` array". An empty
-pointer, shown as `(root)` in pretty output, means the document as a whole. That
-is most often a required field that's missing entirely. Pointers appear in error output and in the `instancePath` field
-of JSON output.
+docmeta uses to name the field an error is about. A pointer like `/tags/0` means
+"the first item of the `tags` array". An empty pointer, shown as `(root)` in
+pretty output, means the document as a whole. That is most often a required
+field that's missing entirely. Pointers appear in error output and in the
+`instancePath` field of JSON output.
 
 ## OKF
 
@@ -116,9 +121,9 @@ In docmeta, "override" has two related senses:
   different folders can use different schemas. See
   [Apply different schemas to different folders](/docmeta/set-up/different-schemas-per-folder/).
 - More broadly, schema resolution is a chain of overrides. A `--schema` flag
-overrides a document's [`$schema`](#schema-document-key). That overrides config
-`overrides`, which overrides config `schemas`, which overrides the built-in
-default. The first source that yields a schema wins. See
+  overrides a document's [`$schema`](#schema-document-key). That overrides
+  config `overrides`, which overrides config `schemas`, which overrides the
+  built-in default. The first source that yields a schema wins. See
   [Precedence](/docmeta/reference/schema-resolution/#precedence).
 
 ## validation vs. extraction

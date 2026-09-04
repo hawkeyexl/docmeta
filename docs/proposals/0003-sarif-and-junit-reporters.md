@@ -2,7 +2,10 @@
 
 - **Status:** Implemented
 - **Serves:** Devin · D3 "Feed results into our tooling", D1 (PR surfacing)
-- **Depends on:** The `FieldError` extension from [0001 § Prerequisite](0001-validation-baseline.md#prerequisite-fielderror-needs-a-machine-identity); repo-root-relative paths (see stress test 2, couples to [0004](0004-config-upward-discovery.md))
+- **Depends on:** The `FieldError` extension from [0001 §
+  Prerequisite](0001-validation-baseline.md#prerequisite-fielderror-needs-a-machine-identity);
+  repo-root-relative paths (see stress test 2, couples to
+  [0004](0004-config-upward-discovery.md))
 - **Touches:** `src/reporters/index.ts`, new `src/reporters/sarif.ts` and `src/reporters/junit.ts`, `src/cli.ts`
 
 ## Problem
@@ -20,8 +23,8 @@ every consumer writes a bespoke adapter.
 Two standard formats close this, and they serve different jobs:
 
 - **SARIF 2.1.0**, the interchange format for static analysis. GitHub code
-  scanning, GitLab, Azure DevOps, and most quality dashboards ingest it directly.
-  Findings become tracked alerts with state across commits.
+  scanning, GitLab, Azure DevOps, and most quality dashboards ingest it
+  directly. Findings become tracked alerts with state across commits.
 - **JUnit XML**, which is what CI systems parse for the "Tests" tab. Jenkins,
   GitLab, CircleCI, and Azure all render it natively, and Devin's D1 recipe list
   already names Jenkins and GitLab.
@@ -208,9 +211,8 @@ file while debugging schema resolution. Nothing to fix; flagged for the docs.
 
 ## Implementation sketch
 
-1. In `test/reporters.test.ts`, SARIF output parses, validates against the
-   SARIF 2.1.0 meta-schema (Ajv is already a dependency), and has stable key
-   order.
+1. In `test/reporters.test.ts`, SARIF output parses, validates against the SARIF
+   2.1.0 meta-schema (Ajv is already a dependency), and has stable key order.
 2. In `test/reporters.test.ts`, `ruleId` derives from `schema` + `keyword`,
    `(parse)` maps to `docmeta/parse-error`, and an unknown line omits `region`.
 3. In `test/reporters.test.ts`, `partialFingerprints` matches the fingerprint

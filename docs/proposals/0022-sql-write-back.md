@@ -2,7 +2,8 @@
 
 - **Status:** Implemented (#122)
 - **Serves:** Maya · M2, M4 · Devin · D3
-- **Depends on:** [0021](0021-frontmatter-as-a-database.md), the `docs` table this writes through. Stacked on #120.
+- **Depends on:** [0021](0021-frontmatter-as-a-database.md), the `docs` table
+  this writes through. Stacked on #120.
 - **Relates to:** [0017](0017-fill-egress-and-bounds.md) (`fill` is the other writer, and the polarity argument below is against its shape), [0020](0020-element-metadata.md) (whose write boundary this inherits), [0016](0016-flag-ownership.md)
 - **Touches (planned):** `src/commands/query.ts`, `src/reporters/query.ts`, `src/cli.ts`, `reference/cli.mdx`, `test/{query.test.ts,cli.integration.test.ts}`
 
@@ -46,9 +47,9 @@ Today that command exits 2: 0021 runs user SQL under `PRAGMA query_only`, so
 an UPDATE is refused. This proposal makes it mean something instead:
 
 - **Without `--write`**, the statement runs against the in-memory projection.
-  The report is the per-file, per-key diff it *would* make, such as
-  `docs/a.md: last_reviewed: 2026-03-01 -> 2026-08-26`, plus a closing
-  `dry run; pass --write to apply`. No file is touched. Exit 0.
+  The report is the per-file, per-key diff it *would* make, such as `docs/a.md:
+  last_reviewed: 2026-03-01 -> 2026-08-26`, plus a closing `dry run; pass
+  --write to apply`. No file is touched. Exit 0.
 - **With `--write`**, the same diff is applied in two phases. Every file's new
   content is computed and verified in memory first, then flushed with
   `writeFileAtomic`. The writer's own re-parse verification stands between the
@@ -57,10 +58,10 @@ an UPDATE is refused. This proposal makes it mean something instead:
   `{ file, key, from?, to | deleted, written }`, mirroring a SELECT's bare row
   array. `from` is omitted for a key the file never had, which keeps "absent"
   distinguishable from an explicit null.
-- **`--check` composes.** In preview, any pending change is a finding, at
-  exit 1. That turns a normalization statement into a drift gate. CI fails
-  while any file does not match the rule, and `--write` is the remedy the
-  failure message names.
+- **`--check` composes.** In preview, any pending change is a finding, at exit
+  1. That turns a normalization statement into a drift gate. CI fails while any
+     file does not match the rule, and `--write` is the remedy the failure
+     message names.
 
 This is the opposite polarity from `fill`, which writes by default and offers
 `--dry-run`. The difference is argued, not accidental. Every `fill` write has
@@ -79,8 +80,8 @@ pre-statement snapshot, keyed by `_path`:
 - **The row set changed**, meaning an INSERT or DELETE happened. The whole run
   is refused. Creating and deleting *files* is not a metadata edit, and since
   only the projection changed, refusing costs nothing.
-- **A system column changed**, one of `_path`, `_format`, `_present` or
-  `_data`. Refused the same way. Renaming files via SQL is not on offer.
+- **A system column changed**, one of `_path`, `_format`, `_present` or `_data`.
+  Refused the same way. Renaming files via SQL is not on offer.
 - **Data columns changed on existing rows.** Each changed cell becomes an entry
   in that file's `MetadataPatch`.
 
@@ -100,12 +101,12 @@ runs per file and key, with a stated precedence:
    file's extracted data, since it built the table from it. So if `draft` was a
    boolean *in this file*, `1` writes back as `true`. If `tags` was an array,
    the new JSON text is parsed and written as an array.
-2. **The column's dominant type across the corpus**, when the file had no
-   value for the key. That is the `SET draft = 0 WHERE draft IS NULL` case. If
-   `draft` is boolean in the files that have it, the new value is written as a
-   boolean. Dominant is mechanical, being the strict plurality by count of
-   files carrying the key. A tie yields *no* dominant type, and precedence
-   falls through to storage, so a heterogeneous column never guesses.
+2. **The column's dominant type across the corpus**, when the file had no value
+   for the key. That is the `SET draft = 0 WHERE draft IS NULL` case. If `draft`
+   is boolean in the files that have it, the new value is written as a boolean.
+   Dominant is mechanical, being the strict plurality by count of files carrying
+   the key. A tie yields *no* dominant type, and precedence falls through to
+   storage, so a heterogeneous column never guesses.
 3. **The SQL storage type as-is**, when neither exists.
 
 Failures refuse rather than guess, naming the file and key. That covers new JSON
@@ -144,20 +145,20 @@ shape. Any merge the writer's own re-parse verification rejects. A write that
 would touch `<stdin>`, since there is no file behind it. That last refusal
 deliberately aborts the **whole run**, path-backed rows included. Stdin in a
 write's input set means the corpus is mixed with something unwritable. Silently
-skipping it would be a scope reduction nobody asked for. The preview
-shows the stdin row, so the refusal is predictable. Finally, inheriting 0020's
-boundary, element-backed keys whose write support is read-only in that format.
-Each refusal names the file and key. A refusal anywhere aborts the run before
-any file is written, because a bulk edit that half-applied is worse than one
-that declined.
+skipping it would be a scope reduction nobody asked for. The preview shows the
+stdin row, so the refusal is predictable. Finally, inheriting 0020's boundary,
+element-backed keys whose write support is read-only in that format. Each
+refusal names the file and key. A refusal anywhere aborts the run before any
+file is written, because a bulk edit that half-applied is worse than one that
+declined.
 
 There is one honest boundary on "all-or-nothing". It is a property of the
 *refusal and verification* path, made real by the two-phase apply. Every file's
-new content exists in memory before the first byte lands. What remains is
-the flush loop itself. `writeFileAtomic` is atomic per file, not across files,
-so an OS-level kill mid-flush can leave a partial corpus. The remedy is
-convergence, not a rollback machine. Re-running the same statement in preview
-shows exactly the remainder.
+new content exists in memory before the first byte lands. What remains is the
+flush loop itself. `writeFileAtomic` is atomic per file, not across files, so an
+OS-level kill mid-flush can leave a partial corpus. The remedy is convergence,
+not a rollback machine. Re-running the same statement in preview shows exactly
+the remainder.
 
 ## The `fill` boundary
 

@@ -5,10 +5,11 @@ description: The google:okf:0.1 schema shipped with docmeta, covering its requir
 
 import { Aside } from '@astrojs/starlight/components';
 
-**`google:okf:0.1`** is the Open Knowledge Format (OKF) v0.1 frontmatter
-schema shipped with docmeta. It anchors the [default set](/docmeta/reference/schema-resolution/#precedence).
-When no `--schema`, file `$schema`, or config rule applies, docmeta validates
-against `google:okf:0.1`. It pairs that with
+**`google:okf:0.1`** is the Open Knowledge Format (OKF) v0.1 frontmatter schema
+shipped with docmeta. It anchors the [default
+set](/docmeta/reference/schema-resolution/#precedence). When no `--schema`, file
+`$schema`, or config rule applies, docmeta validates against `google:okf:0.1`.
+It pairs that with
 [`passo-uno:seven-action:1.0`](/docmeta/reference/taxonomy-schemas/), which
 constrains an optional `action` field and adds no requirements of its own. For
 the other five schemas docmeta ships, see the [built-in schema

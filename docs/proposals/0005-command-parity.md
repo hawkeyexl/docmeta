@@ -2,7 +2,9 @@
 
 - **Status:** Implemented
 - **Serves:** Every persona; enforces the project's own working agreement
-- **Touches:** `src/cli.ts`, `src/reporters/{index,fill,get}.ts`. As built, the command cores were *not* touched; see [correction 3](#correction-3-quiet-is-a-reporter-concern-not-a-core-one)
+- **Touches:** `src/cli.ts`, `src/reporters/{index,fill,get}.ts`. As built, the
+  command cores were *not* touched; see [correction
+  3](#correction-3-quiet-is-a-reporter-concern-not-a-core-one)
 - **Constraint:** `npm run docs:check-cli` compares documented args/options/defaults *and* required-vs-optional arity against `buildProgram()`. Every change here needs a matching `reference/cli.mdx` edit.
 
 ## Problem
@@ -205,14 +207,14 @@ to semantics one command has and another cannot.
 2. In `test/cli.integration.test.ts`, `get docs/a.md` yields the
    path-looks-like-a-field error, not "No files to read".
 3. In `test/cli.integration.test.ts`, `--help`, `-V`, and `<cmd> --help` still
-   exit 0 after `exitOverride()`, `--nope` exits 2, and `get` with no args
-   exits 2.
+   exit 0 after `exitOverride()`, `--nope` exits 2, and `get` with no args exits
+   2.
 4. In `test/commands.test.ts`, `runGet` / `runFill` honor `quiet`.
 5. In `test/reporters.test.ts`, `renderFill("github", …)` emits `::error` only
    for required-and-unfilled.
 6. In `test/cli.integration.test.ts`, `fill - --as markdown -f github` exits 2.
-7. In `reference/cli.mdx`, `[fields]`, `--fields`, `--quiet` on two commands, and
-   `github` in `fill`'s format list. Then `npm run build && npm run
+7. In `reference/cli.mdx`, `[fields]`, `--fields`, `--quiet` on two commands,
+   and `github` in `fill`'s format list. Then `npm run build && npm run
    docs:check-cli` must pass. It is the gate for this proposal.
 
 ## Corrections found while implementing

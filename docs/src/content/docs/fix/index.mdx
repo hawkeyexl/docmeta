@@ -5,10 +5,11 @@ description: Read a docmeta validation error, map it to the offending field and 
 
 import { Steps, Aside, LinkCard } from '@astrojs/starlight/components';
 
-Your PR's docmeta check is red and you'd like it green again. You're in the right
-place. This page decodes the error, and points you at the exact field and line to
-change. It also shows you how to confirm the fix locally before you re-push. You
-don't need to know how docmeta was set up, only what its output is telling you.
+Your PR's docmeta check is red and you'd like it green again. You're in the
+right place. This page decodes the error, and points you at the exact field and
+line to change. It also shows you how to confirm the fix locally before you
+re-push. You don't need to know how docmeta was set up, only what its output is
+telling you.
 
 <Aside type="tip" title="The fastest path">
   Find your error message in the [common failures](#common-failures) below, apply
@@ -67,7 +68,7 @@ The schema requires a field your frontmatter doesn't have. The field name is in
 the message: here, `type`. The location is `(root)` because the field is absent,
 so there's no line to point at.
 
-**Fix:** add the field to your frontmatter.
+**Fix.** Add the field to your frontmatter.
 
 ```diff lang="md" title="docs/guide.md"
   ---
@@ -106,7 +107,7 @@ timestamp: last Tuesday
 
 The `/timestamp` pointer and `(line 4)` take you straight to the offending line.
 
-**Fix:** replace the value with a properly formatted one. An ISO 8601
+**Fix.** Replace the value with a properly formatted one. An ISO 8601
 `date-time` looks like this:
 
 ```diff lang="md" title="docs/guide.md"
@@ -130,11 +131,13 @@ The message names the format or constraint that failed.
 ```
 
 A file with no frontmatter block reads as empty metadata, so it fails the same
-way a file missing a required field does. If you expected this file to have metadata, it's probably missing its opening
-`---` fence. Or the block isn't at the very top of the file.
+way a file missing a required field does. If you expected this file to have
+metadata, it's probably missing its opening `---` fence. Or the block isn't at
+the very top of the file.
 
-**Fix:** add a frontmatter block at the top of the file, between `---` fences (or
-`+++`/`;;;` for [TOML/JSON](/docmeta/reference/formats/#frontmatter-flavors)):
+**Fix.** Add a frontmatter block at the top of the file, between `---` fences
+(or `+++`/`;;;` for
+[TOML/JSON](/docmeta/reference/formats/#frontmatter-flavors)):
 
 ```diff lang="md" title="docs/guide.md"
 + ---
@@ -165,8 +168,8 @@ message names the flavor (`Invalid YAML frontmatter`, `Invalid TOML frontmatter`
 or `Invalid JSON frontmatter`), and the schema in brackets is `[(parse)]` rather
 than a real schema id, so this is a syntax problem, not a rule violation.
 
-**Fix:** correct the block's syntax for its flavor. In YAML a frequent culprit is
-a value with a colon that needs quoting:
+**Fix.** Correct the block's syntax for its flavor. In YAML a frequent culprit
+is a value with a colon that needs quoting:
 
 ```diff lang="md" title="docs/guide.md"
   ---
@@ -202,12 +205,11 @@ or:
 docmeta: Schema file not found: "./schemas/my.schema.json".
 ```
 
-Your document is not the problem here. The configuration is.
-docmeta
-couldn't load the schema it was told to use, so it can't validate anything. This
-exits with code `2` (an operational error), not `1`.
+Your document is not the problem here. The configuration is. docmeta couldn't
+load the schema it was told to use, so it can't validate anything. This exits
+with code `2` (an operational error), not `1`.
 
-**Fix:** this usually isn't yours to fix in a content PR. Check that the schema
+**Fix.** This usually isn't yours to fix in a content PR. Check that the schema
 reference (in `docmeta.config.yaml`, a `$schema` field in your file, or a
 `--schema` flag) points at a schema that exists. A misspelled built-in id, a
 wrong file path, or an unreachable URL all produce this. If you didn't change
@@ -252,9 +254,9 @@ before CI does.
 
 Sometimes the failure is a *missing* field rather than a malformed one, and
 several pages fail the same way. Then [`docmeta
-fill`](/docmeta/reference/cli/#fill) can propose the values for you. It
-reads the page, resolves the same schema the check used, and writes back the
-values it is confident about.
+fill`](/docmeta/reference/cli/#fill) can propose the values for you. It reads
+the page, resolves the same schema the check used, and writes back the values it
+is confident about.
 
 Preview first:
 
@@ -281,17 +283,18 @@ docmeta fill docs/intro.md && docmeta validate docs/intro.md
 before you commit; treat a proposed `description` as a first draft.
 </Aside>
 
-`fill` picks an LLM provider by detecting one, so it runs with whatever credentials you
-have. With none at all, it falls back to a local model it downloads on first
-use. The report's first line names what it used. On a machine with no API key, pass `--provider`, or see the [`fill`
+`fill` picks an LLM provider by detecting one, so it runs with whatever
+credentials you have. With none at all, it falls back to a local model it
+downloads on first use. The report's first line names what it used. On a machine
+with no API key, pass `--provider`, or see the [`fill`
 reference](/docmeta/reference/cli/#fill) before the first run. Then the download
 is a choice rather than a surprise.
 
 You are usually fixing someone else's repo. So it is worth knowing that `fill`
-is the one docmeta command that sends the page off your machine.
-[Run `fill` under a data-egress policy](/docmeta/set-up/fill-providers/) spells
-out what each call transmits, and what the cache keeps. `--local` is the flag
-that keeps inference on your own hardware.
+is the one docmeta command that sends the page off your machine. [Run `fill`
+under a data-egress policy](/docmeta/set-up/fill-providers/) spells out what
+each call transmits, and what the cache keeps. `--local` is the flag that keeps
+inference on your own hardware.
 
 Anything below the confidence threshold is skipped and named, so you still get a
 short list of what needs you. `fill` leaves any field that is already present and

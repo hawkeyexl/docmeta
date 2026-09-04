@@ -58,8 +58,8 @@ the commit `feat!:` / `BREAKING CHANGE:` so the release says so.
 
 Develop test-first:
 
-1. **Red.** Write or adjust tests for the new behavior and run them, and
-   confirm they fail for the right reason.
+1. **Red.** Write or adjust tests for the new behavior and run them, and confirm
+   they fail for the right reason.
 2. **Green.** Implement the minimum to make them pass.
 3. **Refactor.** Clean up with the tests as a safety net.
 

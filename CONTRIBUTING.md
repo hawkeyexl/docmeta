@@ -118,37 +118,15 @@ write metadata back. Leaving it off is a valid choice, and the absence is the
 capability check: `typeof extractor.apply === "function"`. TypeScript then makes
 every call site handle the read-only case.
 
-Only implement it if the format can round-trip without disturbing the rest of
-the document. The test is whether you can find the exact character range the
-value occupies. Fenced frontmatter passes, because the write is a splice of the
-characters between the fences (`src/extractors/frontmatter-write.ts`). HTML
-passes too, because parse5 reports a byte range for every tag and attribute
-(`src/extractors/html-write.ts`). XML needs one step more, because xmldom
-reports only where each attribute starts. `src/extractors/xml-locate.ts`
-rebuilds the range, and documents why its line index has to recognise six break
-forms rather than one. A format whose read is lossy should stay read-only rather
-than guess. `rst` and `asciidoc` write only into a fenced block that already
-exists. Their native docinfo and header syntax does not survive a round trip.
+Only implement it if the format can round-trip without disturbing the rest of the document. The test is whether you can find the exact character range the value occupies. Fenced frontmatter passes, because the write is a splice of the characters between the fences (`src/extractors/frontmatter-write.ts`). HTML passes too, because parse5 reports a byte range for every tag and attribute (`src/extractors/html-write.ts`). XML needs one step more, because xmldom reports only where each attribute starts. `src/extractors/xml-locate.ts` rebuilds the range, and documents why its line index has to recognise six break forms rather than one. A format whose read is lossy should stay read-only rather than guess. `rst` and `asciidoc` write only into a fenced block that already exists. Their native docinfo and header syntax does not survive a round trip.
 
-A writer may also need more than one strategy within a format. `xml` writes
-plain XML by setting a root attribute. It writes DITA into
-`<prolog><metadata><othermeta/></metadata></prolog>`, or `<topicmeta>` for a
-map. DITA's DTD declares which root attributes a topic may carry, and adding an
-undeclared one produces a file the user's toolchain rejects. Where a format has
-two such channels, `xml-read.ts` decides precedence once and reports it, and
-`dita-write.ts` aims at what it reports.
+A writer may also need more than one strategy within a format. `xml` writes plain XML by setting a root attribute. It writes DITA into `<prolog><metadata><othermeta/></metadata></prolog>`, or `<topicmeta>` for a map. DITA's DTD declares which root attributes a topic may carry, and adding an undeclared one produces a file the user's toolchain rejects. Where a format has two such channels, `xml-read.ts` decides precedence once and reports it, and `dita-write.ts` aims at what it reports.
 
 Two rules apply to any writer you add:
 
 - **Verify by re-parsing before returning.** A serializer bug should become a
   refusal, not a corrupted file.
-- **Write back to wherever the read took the value from.** `fill` corrects
-  values that are present but invalid, not just missing ones. So a format with
-  more than one metadata channel can otherwise gain a correction beside the
-  stale value the reader actually honors. The result is a green report on a
-  wrong page. Where precedence is decided, decide it once and share it.
-  `html-read.ts` exports a `sources` map for exactly this, and `html-write.ts`
-  aims at it rather than carrying its own copy of the rule.
+- **Write back to wherever the read took the value from.** `fill` corrects values that are present but invalid, not just missing ones. So a format with more than one metadata channel can otherwise gain a correction beside the stale value the reader actually honors. The result is a green report on a wrong page. Where precedence is decided, decide it once and share it. `html-read.ts` exports a `sources` map for exactly this, and `html-write.ts` aims at it rather than carrying its own copy of the rule.
 
 Cover fenced formats in `test/frontmatter-write.test.ts` and others in their own
 file (`test/html-write.test.ts`).

@@ -3,17 +3,16 @@
 - **Status:** Proposed. Open for community review before anything registers
 - **Serves:** Sara · S1 "Define our metadata standard as a schema" · S2 "Wire schemas to the right documents"
 - **Relates to:** An earlier, unmerged house-vocabulary exploration whose
-  briefing seeded this work. That exploration numbered its own drafts 0021
-  and 0022 on its branch. Those numbers have since been taken on `main` by
-  the `docmeta query` proposals. So references here to "the exploration's
-  0021/0022" mean the unmerged drafts, never the shipped query records
-- **Touches:** `docs/proposals/0023/`, which holds the nine draft schemas
-  under `schemas/`, the verification ladders under `ladders/`, and the
-  working design notes. Also `test/default-schema.test.ts`,
-  `test/fixtures/default-schema/` and `docs/src/content/docs/proposals/`.
-  Also `docs/astro.config.mjs`, for the published Proposals sidebar group,
-  and `.github/workflows/formats-demo.yml`, which excludes the new fixtures
-  from the demo's code-scanning feed
+  briefing seeded this work. That exploration numbered its own drafts 0021 and
+  0022 on its branch. Those numbers have since been taken on `main` by the
+  `docmeta query` proposals. So references here to "the exploration's 0021/0022"
+  mean the unmerged drafts, never the shipped query records
+- **Touches:** `docs/proposals/0023/`, which holds the nine draft schemas under
+  `schemas/`, the verification ladders under `ladders/`, and the working design
+  notes. Also `test/default-schema.test.ts`, `test/fixtures/default-schema/` and
+  `docs/src/content/docs/proposals/`. Also `docs/astro.config.mjs`, for the
+  published Proposals sidebar group, and `.github/workflows/formats-demo.yml`,
+  which excludes the new fixtures from the demo's code-scanning feed
 
 ## Summary
 
@@ -76,51 +75,49 @@ Every field decision below traces to one of these. They were derived by
 cutting, and each names what it cut.
 
 1. **Weak floors teach bad habits.** `title` and `description` are required,
-   non-empty, single strings. This is a recorded exception to the
-   composability law. Dublin Core allows arrays and Docusaurus allows empty,
-   and both are override cases. All three family repos' docs gates already
-   enforce this.
-2. **One value is a string, and many values are a list.** There is no
-   per-field trivia. Single-valued facts are plain strings, and list-valued
-   facts accept a string or a list everywhere.
+   non-empty, single strings. This is a recorded exception to the composability
+   law. Dublin Core allows arrays and Docusaurus allows empty, and both are
+   override cases. All three family repos' docs gates already enforce this.
+2. **One value is a string, and many values are a list.** There is no per-field
+   trivia. Single-valued facts are plain strings, and list-valued facts accept a
+   string or a list everywhere.
 3. **Claim content, never rendering.** Cut `tags`, `slug`, `image`, `layout`,
    and every navigation and position field. A generator-owned fact carried
    under a second name is worse than a collision, because a collision at
    least fails loudly.
 4. **Derivable facts lie.** Cut `updated`, `date`, and the stored review
-   due-date. Git owns change dates, and `last-reviewed` plus
-   `review-interval` derive the deadline. The dates that stay are the ones
-   only a human can assert, which are `last-reviewed` and `remove-by`.
-5. **Facts live at their altitude.** `stakeholders` is page-level, meaning
-   who to consult about *this* page. It is distinct from the project-level
+   due-date. Git owns change dates, and `last-reviewed` plus `review-interval`
+   derive the deadline. The dates that stay are the ones only a human can
+   assert, which are `last-reviewed` and `remove-by`.
+5. **Facts live at their altitude.** `stakeholders` is page-level, meaning who
+   to consult about *this* page. It is distinct from the project-level
    stakeholders the earlier exploration cut. Reader `expertise` fell, because
-   level belongs to the persona definitions a page points at. Style guides
-   and type-to-template mappings belong in config.
+   level belongs to the persona definitions a page points at. Style guides and
+   type-to-template mappings belong in config.
 6. **Enumerate only what is switched-on and bounded, or published.**
-   `visibility` and `lifecycle` are the only invented enums, because
-   something downstream switches on each. The iiRDS enums in `docmeta:kg`
-   stay closed because iiRDS publishes them. Everything else recommendable
-   uses the **open-enum idiom**, an `anyOf` of an advisory enum and a free
-   string. Editors and `fill` then see the recommendations while no correct
-   document is rejected. That covers `risks`, the artifact grader family, and
-   `provider`.
+   `visibility` and `lifecycle` are the only invented enums, because something
+   downstream switches on each. The iiRDS enums in `docmeta:kg` stay closed
+   because iiRDS publishes them. Everything else recommendable uses the
+   **open-enum idiom**, an `anyOf` of an advisory enum and a free string.
+   Editors and `fill` then see the recommendations while no correct document is
+   rejected. That covers `risks`, the artifact grader family, and `provider`.
 7. **Compose, don't duplicate.** `action` stays with
-   `passo-uno:seven-action:1.0` in the default set. The classification story
-   is three layers: `type` for what the page is, `action` for what the reader
-   is doing, and `intent` for the specific job. The `evals`, `kg` and
-   `metadata` namespaces are never claimed by the house ids. Each belongs to
-   its own vocabulary in the set. So a fault in an eval entry or a `kg` field
-   is attributed to that vocabulary, never to a house id.
-8. **Deeper wins, and the top level is the harvest fallback.** Some `kg`
-   block fields and page-level fields speak to the same fact: `type`,
-   `concepts`, `applies-to`, and `supersedes`/`revision-of`. There the deeper
-   declaration wins, per fact, and the page-level field feeds the graph when
-   the block is silent.
+   `passo-uno:seven-action:1.0` in the default set. The classification story is
+   three layers: `type` for what the page is, `action` for what the reader is
+   doing, and `intent` for the specific job. The `evals`, `kg` and `metadata`
+   namespaces are never claimed by the house ids. Each belongs to its own
+   vocabulary in the set. So a fault in an eval entry or a `kg` field is
+   attributed to that vocabulary, never to a house id.
+8. **Deeper wins, and the top level is the harvest fallback.** Some `kg` block
+   fields and page-level fields speak to the same fact: `type`, `concepts`,
+   `applies-to`, and `supersedes`/`revision-of`. There the deeper declaration
+   wins, per fact, and the page-level field feeds the graph when the block is
+   silent.
 9. **Machines propose, and humans retire the provenance.** The `provenance`
    pattern appears on the page as `docmeta:ai-context`, in the graph block as
    `kg.provenance`, and in both eval schemas. It is per-model entries naming
-   proposed fields and confidence, deleted by humans as they review. It is
-   one answer to "which of this metadata did a machine write, and has anyone
+   proposed fields and confidence, deleted by humans as they review. It is one
+   answer to "which of this metadata did a machine write, and has anyone
    checked?"
 
 ## Why six house ids and not one
@@ -172,12 +169,12 @@ behind one adoption decision. `authors` is attribution and `owner` is
 answerability, and the two part company the moment an author moves on. `authors`
 is the one field here claimed at the loosest lawful definition, up to MyST and
 Docusaurus person objects and nothing looser. List members are strings or
-objects, and never bare numbers. It is therefore the one field here that is not a
-`stringList`. No claimant asks `owner` or `reviewed-by` to be anything but plain
-names. The review dates are records, not freshness gates. JSON Schema cannot
-compare a date to today, and the overdue-review case is pinned as *passing*. A
-freshness grader reads the same `last-reviewed` field, and is the thing that
-owns the clock.
+objects, and never bare numbers. It is therefore the one field here that is not
+a `stringList`. No claimant asks `owner` or `reviewed-by` to be anything but
+plain names. The review dates are records, not freshness gates. JSON Schema
+cannot compare a date to today, and the overdue-review case is pinned as
+*passing*. A freshness grader reads the same `last-reviewed` field, and is the
+thing that owns the clock.
 
 **docmeta:audience:1.0.0-proposal.1**: `audiences`, `personas`, `journeys`, `intent`,
 `visibility` (enum `draft → restricted → confidential → internal → public`,
@@ -214,30 +211,29 @@ change" is only a useful verdict if the reasoning is written down:
   the same work that cut reader `expertise`. The cost: a docs set with no
   persona definitions cannot derive it.
 - **"See also" is the rendered label for `related-pages`.** The heading is
-  editorial and the key is semantic, and there is no `see-also` alias. One
-  fact reachable by two keys is the second surface this family exists to
-  prevent. `related-pages` already accepts URLs. So a style guide that splits
-  "See also" from an off-site "Learn more" is making a rendering decision over
-  one field. It does not need two.
+  editorial and the key is semantic, and there is no `see-also` alias. One fact
+  reachable by two keys is the second surface this family exists to prevent.
+  `related-pages` already accepts URLs. So a style guide that splits "See also"
+  from an off-site "Learn more" is making a rendering decision over one field.
+  It does not need two.
 
 Round 6 moved one field between two of these ids, and the reasoning is
 recorded for the same reason round 5's non-changes are:
 
 - **`authors` moved from core to stewardship.** Core answers *what is this
   page*. Who wrote it answers *is it cared for*, which is the question
-  stewardship already asks. The split now falls where principle 5, facts live
-  at their altitude, puts it. Core is description, and stewardship is the
-  people and the dates. The concrete gain is one adoption decision instead of
-  two. A team wiring up attribution is already wiring up `owner` and
-  `reviewed-by`, and `authors` arriving with them is what they expected.
-  Field counts move, with core going 7 → 6 and stewardship 7 → 8. The family
-  total stays 33 and disjoint. The cost is that stewardship is no longer
-  uniform in shape. `authors` keeps its own type union rather than the
-  `stringList` its neighbors share. MyST and Docusaurus person objects are
-  legal there, and nowhere else in the schema. One alternative was
-  rejected: normalizing `authors` down to `stringList` for tidiness. That
-  would break the compatibility rule against two documented claimants, to make
-  one schema look neater.
+  stewardship already asks. The split now falls where principle 5, facts live at
+  their altitude, puts it. Core is description, and stewardship is the people
+  and the dates. The concrete gain is one adoption decision instead of two. A
+  team wiring up attribution is already wiring up `owner` and `reviewed-by`, and
+  `authors` arriving with them is what they expected. Field counts move, with
+  core going 7 → 6 and stewardship 7 → 8. The family total stays 33 and
+  disjoint. The cost is that stewardship is no longer uniform in shape.
+  `authors` keeps its own type union rather than the `stringList` its neighbors
+  share. MyST and Docusaurus person objects are legal there, and nowhere else in
+  the schema. One alternative was rejected: normalizing `authors` down to
+  `stringList` for tidiness. That would break the compatibility rule against two
+  documented claimants, to make one schema look neater.
 
 **docmeta:ai-context:1.0.0-proposal.1**: `generated-by`, `provenance`, `risks`
 and `sample-questions`. The recommended `risks` flags are `cost-incurring ·
@@ -282,9 +278,9 @@ false`. Grader kinds `ai | command | human | tool:*` stay closed-plus-namespace,
 because schema conditionals switch on them. `command` without a `command` is the
 generation contract. The docevals-side ledger is a superseding ADR, plus a
 resolver that reads the new spellings and the top-level provenance. It also has
-a **reserved `eval-` prefix** that rejects unrecognized `eval-*` keys. That restores the
-closed block's loud-typo property at the open page root. Round 6, as
-`proposal.2`, added `weight`, `target`, `runs` and `model` to entries, and
+a **reserved `eval-` prefix** that rejects unrecognized `eval-*` keys. That
+restores the closed block's loud-typo property at the open page root. Round 6,
+as `proposal.2`, added `weight`, `target`, `runs` and `model` to entries, and
 `weight` to the `use:` form. It also moved the prefix guard from prose into the
 schema. See the round-6 section.
 
@@ -307,26 +303,26 @@ applies the deeper-wins fallback, derives `type`, and normalizes the shorthand.
 **docmeta:artifact-evals:1.0.0-proposal.2** is the ledger against
 moose-tracevals' draft `artifact-evals-0.2`. It is the page-side trio one level
 down. An artifact's top level is the host tool's contract, and `metadata` is its
-sanctioned extension bag. So it claims `metadata.evals`, which is one
-assertion or the list, with 0.2's `criteria` container dissolved. It also claims
+sanctioned extension bag. So it claims `metadata.evals`, which is one assertion
+or the list, with 0.2's `criteria` container dissolved. It also claims
 `metadata.eval-skip` and `metadata.eval-provenance`. Entries share the evals
 vocabulary: `id`\*, `assertion`, `type`, `severity`, `evidence`, and `examples`
 with string-or-list anchors. `id` was an optional position-derived `name`, which
-orphaned cached verdicts. Then `options`, `provider`, `skip` and
-`severity-map`, plus the `command` family with `{trace}` substitution and the
-same guard rails as the page side. So one entry vocabulary genuinely ports.
-`proposal.1` kept one asymmetry, with `assertion` unconditional here where the
-page side lets a tool grader be its own check. Round 6 removed it, and
-`proposal.2` ports the page side's conditional block verbatim. The grader is a
-full open enum. Recommended values are `ai · human · command · tool-usage ·
-skill-invoked · file-access · turn-count · cost · regex · json-output`, plus the
-page side's `tool:*` spelling, so one grader name ports across both
-vocabularies. Any kebab name is legal and registry-validated. In `proposal.1` no
-schema conditional switched on the grader at all. In `proposal.2` the assertion
-rule branches on `ai`, `human` and `command`, and the enum stays open because an
-unknown name matches none of those branches. `human` here is judged per session.
-Every trace is new, so there is no verdict caching. The 0.2 defaults, `severity:
-error` and skip `false`, are restored.
+orphaned cached verdicts. Then `options`, `provider`, `skip` and `severity-map`,
+plus the `command` family with `{trace}` substitution and the same guard rails
+as the page side. So one entry vocabulary genuinely ports. `proposal.1` kept one
+asymmetry, with `assertion` unconditional here where the page side lets a tool
+grader be its own check. Round 6 removed it, and `proposal.2` ports the page
+side's conditional block verbatim. The grader is a full open enum. Recommended
+values are `ai · human · command · tool-usage · skill-invoked · file-access ·
+turn-count · cost · regex · json-output`, plus the page side's `tool:*`
+spelling, so one grader name ports across both vocabularies. Any kebab name is
+legal and registry-validated. In `proposal.1` no schema conditional switched on
+the grader at all. In `proposal.2` the assertion rule branches on `ai`, `human`
+and `command`, and the enum stays open because an unknown name matches none of
+those branches. `human` here is judged per session. Every trace is new, so there
+is no verdict caching. The 0.2 defaults, `severity: error` and skip `false`, are
+restored.
 
 **doc-structure-lint** was looked at, and is not a schema. Improve it by
 **selection, not validation**. Pick the template from the page's `type` via a
@@ -357,11 +353,11 @@ What each segment means for a *schema*, so that a bump states a fact:
 The third segment is forced by `check-builtin-schemas.mjs`. A published schema's
 bytes may never change, and adding an entry is free. So the only lawful way to
 fix a typo in a field `description` is to publish a new version. On these ids
-the descriptions substantially *are* the deliverable. With two segments the
-only move is `1.1`, which announces new fields when none were added. `1.0.1`
-says what actually happened. PATCH is also the one bump that can be *proved*
-rather than asserted. Run the ladders against both versions, and require an
-identical verdict on every case.
+the descriptions substantially *are* the deliverable. With two segments the only
+move is `1.1`, which announces new fields when none were added. `1.0.1` says
+what actually happened. PATCH is also the one bump that can be *proved* rather
+than asserted. Run the ladders against both versions, and require an identical
+verdict on every case.
 
 While the family is under review the drafts carry a semver **prerelease**
 tag, not build metadata: `1.0.0-proposal.1`, and `1.0.0-proposal.2` for the
@@ -377,95 +373,93 @@ silently invert the ordering.
 Round 6 revised three families to `1.0.0-proposal.2`. Those are `evals`,
 `artifact-evals` and `core`. The other six stay at `proposal.1`. A bump would
 announce a revision none of them made, and leave six pairs of byte-identical
-files to explain. `test/default-schema.test.ts` and
-`ladders/compat-check.cjs` each carry a per-family `VERSIONS` table, so a
-family's next bump is still a one-line edit. The full reasoning is in the design
-notes, at § Review round 6. The decisions were these:
+files to explain. `test/default-schema.test.ts` and `ladders/compat-check.cjs`
+each carry a per-family `VERSIONS` table, so a family's next bump is still a
+one-line edit. The full reasoning is in the design notes, at § Review round 6.
+The decisions were these:
 
-- **`weight`**, in both eval families, on the inline and the `use:` forms. It
-  is a positive number, default 1. It changes how much an outcome moves an
-  aggregate score, and never the eval's own pass or fail. The binary outcome
-  is what SARIF, JUnit and findings baselines consume downstream.
-  Zero is excluded, because a weightless eval is a silent disable, and `skip`
-  already means that loudly.
+- **`weight`**, in both eval families, on the inline and the `use:` forms. It is
+  a positive number, default 1. It changes how much an outcome moves an
+  aggregate score, and never the eval's own pass or fail. The binary outcome is
+  what SARIF, JUnit and findings baselines consume downstream. Zero is excluded,
+  because a weightless eval is a silent disable, and `skip` already means that
+  loudly.
 - **`target`**, in both. It is what the grader receives. For a page that is
   `body` (default), `raw`, or `frontmatter`. For a session it is `transcript`
-  (default), `last-message`, `files`, or `artifact`. Either side also accepts
-  a `{source: file, path}` object naming a companion file. It is distinct
-  from `evidence`, which hints where to look inside what is graded. `target`
-  selects the bytes, so deterministic graders honour it too. It is named
-  `target` rather than `focus` because it selects data, must serve graders
-  that have no focus, and does not collide with `evidence`.
+  (default), `last-message`, `files`, or `artifact`. Either side also accepts a
+  `{source: file, path}` object naming a companion file. It is distinct from
+  `evidence`, which hints where to look inside what is graded. `target` selects
+  the bytes, so deterministic graders honour it too. It is named `target` rather
+  than `focus` because it selects data, must serve graders that have no focus,
+  and does not collide with `evidence`.
 - **`runs` and `model`**, in both. `runs` is a per-eval ensemble count, from 1
   to 50, capped because runs multiply cost directly. `model` is the judging
   model. Both, with the pre-existing `provider`, are constrained to `ai` evals
-  by a conditional. `model` also lets an eval name a judge other than the
-  model that wrote what it grades. That turns the self-preference warning
+  by a conditional. `model` also lets an eval name a judge other than the model
+  that wrote what it grades. That turns the self-preference warning
   `generated-by` enables into something a tool can act on.
-- **`assertion` became conditional in `artifact-evals`.** The page side's
-  block is ported verbatim. `ai`, `human` and a bare entry require an
-  assertion, and `command` requires an assertion or a command. A `tool-usage`
-  criterion says everything in `options`, so the old unconditional
-  requirement forced authors to write a sentence no grader reads.
+- **`assertion` became conditional in `artifact-evals`.** The page side's block
+  is ported verbatim. `ai`, `human` and a bare entry require an assertion, and
+  `command` requires an assertion or a command. A `tool-usage` criterion says
+  everything in `options`, so the old unconditional requirement forced authors
+  to write a sentence no grader reads.
 - **The `eval-` prefix guard is encoded, not described.** `evals` carries
   `"^eval-(?!suite$|skip$|provenance$)": false` at its root and
   `artifact-evals` the equivalent inside `metadata`. Asking consumers to
   implement the guard in prose meant one implementer did and one did not.
 - **`docmeta-vocabularies` was added in round 6 and withdrawn in round 7.**
-  Round 6 gave `core` a map from family name to the vocabulary version the
-  file targets, nested as `metadata.docmeta-vocabularies` on artifacts. A tool
-  could then check the declared version before the `eval-` guard rejected a
-  newer vocabulary's key as a typo. Round 7 removed it from both schemas, the
-  ladders, and the pages. The prefix guard stands without it. An unrecognized
-  `eval-*` key is rejected, whichever version wrote it.
+  Round 6 gave `core` a map from family name to the vocabulary version the file
+  targets, nested as `metadata.docmeta-vocabularies` on artifacts. A tool could
+  then check the declared version before the `eval-` guard rejected a newer
+  vocabulary's key as a typo. Round 7 removed it from both schemas, the ladders,
+  and the pages. The prefix guard stands without it. An unrecognized `eval-*`
+  key is rejected, whichever version wrote it.
 - **`locale` added to core in round 8, distinct from `language`.** Core's
-  `language` description used to say it was the locale field, and that there
-  was no `locale` key. The reason given was that a BCP 47 tag carries region
-  and script. The
-  W3C's Language Tags and Locale Identifiers spec treats them as two facts.
-  A language tag identifies the language of the content. A locale identifies
-  a set of international preferences. Those are a language, a region, and the
-  calendar, numbering system and collation that formatting needs, written as
-  `-u-` extension keywords. An English page written to German conventions is
-  `language: en` with `locale: de-DE`, and a single tag cannot record both.
-  `locale` is one non-empty string. A Unicode locale identifier is
-  recommended and not enforced. `-u-` extensions are legal, and the hyphen
-  form is preferred over the `en_US` of `og:locale`. Leave it out wherever it
-  would only repeat `language`. Rendering stays unclaimed, because the key
-  records conventions already written into the text, not which site tree
-  renders it. Core goes from 6 fields to 7, and the family from 33 to 34.
-  Core moves to `proposal.3`, because a new key is a shape change and round 6
-  bumped the version for one.
-- **The `use:` form's overrides stop at the page's relationship to the
-  check.** Those are `skip`, `type`, `severity`, `options` and `weight`.
-  `provider`, `model` and `runs` say how the tool executes, and stay
-  run-wide. `target` would let one name read different bytes on different
-  pages, which is the confusion `use:` exists to prevent.
+  `language` description used to say it was the locale field, and that there was
+  no `locale` key. The reason given was that a BCP 47 tag carries region and
+  script. The W3C's Language Tags and Locale Identifiers spec treats them as two
+  facts. A language tag identifies the language of the content. A locale
+  identifies a set of international preferences. Those are a language, a region,
+  and the calendar, numbering system and collation that formatting needs,
+  written as `-u-` extension keywords. An English page written to German
+  conventions is `language: en` with `locale: de-DE`, and a single tag cannot
+  record both. `locale` is one non-empty string. A Unicode locale identifier is
+  recommended and not enforced. `-u-` extensions are legal, and the hyphen form
+  is preferred over the `en_US` of `og:locale`. Leave it out wherever it would
+  only repeat `language`. Rendering stays unclaimed, because the key records
+  conventions already written into the text, not which site tree renders it.
+  Core goes from 6 fields to 7, and the family from 33 to 34. Core moves to
+  `proposal.3`, because a new key is a shape change and round 6 bumped the
+  version for one.
+- **The `use:` form's overrides stop at the page's relationship to the check.**
+  Those are `skip`, `type`, `severity`, `options` and `weight`. `provider`,
+  `model` and `runs` say how the tool executes, and stay run-wide. `target`
+  would let one name read different bytes on different pages, which is the
+  confusion `use:` exists to prevent.
 - **Not changed, though it looked like it should be.** `artifact-evals.grader`
-  keeps its open `anyOf`, a kebab pattern plus the recommended enum, rather
-  than a top-level `pattern`. Read shallowly this looks like a missing
-  constraint. It is a documented decision.
+  keeps its open `anyOf`, a kebab pattern plus the recommended enum, rather than
+  a top-level `pattern`. Read shallowly this looks like a missing constraint. It
+  is a documented decision.
 
 ## Placement intent (decided in design, applied only after review)
 
-- **All nine append to `DEFAULT_SCHEMAS`.** Corrected 2026-08-26 from
-  core-only, because the family is the default rather than a recommended
-  add-on. A bare run then requires `title` and `description`. That is a
-  deliberate breaking change, marked `feat!:`, which enforces the floor every
-  docs gate in this family already enforces. It also validates every other
-  family key a page carries: the invented enums, the deprecation rule, the
-  `kg` block's closure, and the eval entry shapes. It ships with the demo
-  video the house rules require of a feature. Beyond the required pair, a
-  bare run newly rejects three things. First, empty strings on core's keys.
-  Second, the DCMI array form of `language`; array `type` already fails bare
-  runs today, since okf types it string. Third, malformed values under any
-  key the other eight claim. So `lifecycle: experimental`, a typo'd `kg`
-  field, or a malformed eval entry fails bare where it silently passed
-  before. The eight require nothing, so a page valid on the required pair
-  alone stays valid.
+- **All nine append to `DEFAULT_SCHEMAS`.** Corrected 2026-08-26 from core-only,
+  because the family is the default rather than a recommended add-on. A bare run
+  then requires `title` and `description`. That is a deliberate breaking change,
+  marked `feat!:`, which enforces the floor every docs gate in this family
+  already enforces. It also validates every other family key a page carries: the
+  invented enums, the deprecation rule, the `kg` block's closure, and the eval
+  entry shapes. It ships with the demo video the house rules require of a
+  feature. Beyond the required pair, a bare run newly rejects three things.
+  First, empty strings on core's keys. Second, the DCMI array form of
+  `language`; array `type` already fails bare runs today, since okf types it
+  string. Third, malformed values under any key the other eight claim. So
+  `lifecycle: experimental`, a typo'd `kg` field, or a malformed eval entry
+  fails bare where it silently passed before. The eight require nothing, so a
+  page valid on the required pair alone stays valid.
 - The whole family therefore lands on a bare `docmeta fill` menu. That is
-  accepted on purpose, because the default set is the teaching surface for
-  what frontmatter should contain.
+  accepted on purpose, because the default set is the teaching surface for what
+  frontmatter should contain.
 - Registration mechanics (imports, `BUILTINS`, `PUBLISHED_ALIAS`,
   `schemas:sync`, docs counts, reference pages) are the follow-up PR's work,
   after this review round.
@@ -494,9 +488,9 @@ anything else. It is the reproducible evidence behind principles 1 and 7.
 
 ## Open questions for the review
 
-1. **`applies-to` flattened to labels.** The context-engineering model this
-   grew from used named dimensions: product, deployment, generation. The
-   family simplified to flat labels, with a prefix convention such as
+1. **`applies-to` flattened to labels.** The context-engineering model this grew
+   from used named dimensions: product, deployment, generation. The family
+   simplified to flat labels, with a prefix convention such as
    `deploy:kubernetes` as the escape hatch. The model's author should get a
    direct look.
 2. **The `lifecycle` enum's ladder cost.** Typo-catching and an airtight
@@ -507,39 +501,38 @@ anything else. It is the reproducible evidence behind principles 1 and 7.
    absence means unassessed. Does the name survive review?
 4. **`stakeholders` against the earlier project-level cut.** This field is
    page-scoped, meaning who to consult about *this* page, and it inherits the
-   SME evidence. The earlier exploration cut a project-level field of the
-   same name. The distinction must hold up.
-5. **Default-on placement of the whole family.** All nine ship in the
-   default set. Requiring the pair is the one hard nudge. Every other family
-   key a page carries gets validated on bare runs, and the full menu appears
-   on a bare `fill`. Is family-wide default the right aggressiveness?
+   SME evidence. The earlier exploration cut a project-level field of the same
+   name. The distinction must hold up.
+5. **Default-on placement of the whole family.** All nine ship in the default
+   set. Requiring the pair is the one hard nudge. Every other family key a page
+   carries gets validated on bare runs, and the full menu appears on a bare
+   `fill`. Is family-wide default the right aggressiveness?
 6. **Runtime vocabularies.** Grader `options` names (`maxUsd`, `maxAgeDays`)
    remain camelCase. Whether kebab-case reaches into runtime contracts is
    each tool's call.
-7. **Where machine-production fields live.** `generated-by` and `provenance`
-   sit in `docmeta:ai-context:1.0.0-proposal.1`. Yet the evals
-   self-preference-bias check and the kg harvest both read `generated-by`,
-   and the provenance trail describes fills across every stacked schema.
-   That is an argument they belong in core instead. With the whole family
-   default-on, the practical difference shrinks to override cases. The
-   attribution question still stands.
+7. **Where machine-production fields live.** `generated-by` and `provenance` sit
+   in `docmeta:ai-context:1.0.0-proposal.1`. Yet the evals self-preference-bias
+   check and the kg harvest both read `generated-by`, and the provenance trail
+   describes fills across every stacked schema. That is an argument they belong
+   in core instead. With the whole family default-on, the practical difference
+   shrinks to override cases. The attribution question still stands.
 8. **TOML frontmatter and the date fields.** `smol-toml` yields native date
    objects. So the W3CDTF string fields validate only for YAML and JSON
    frontmatter. That holds until the TOML date normalization in the in-flight
-   platform schemas PR (#117) lands. This is a sequencing dependency, not a design
-   choice.
-9. **What users pin, now that patch bumps are real.** Three-segment semver
-   makes a documentation fix a new id, and pinning `docmeta:core:1.0.0`
-   everywhere means every such fix churns every config. The usual answer is
-   a second, *moving* reference, with `docmeta:core:1` resolving to the
-   latest `1.x`. But that cuts against `PUBLISHED_ALIAS`.    That is an exact-string table with no prefix rule, on purpose. A URL naming a
-   version that does not exist then stays a 404, instead of resolving to
-   something else
-   ([`schema-registry.ts:105`](../../src/core/schema-registry.ts)). A
-   moving alias also cannot be byte-pinned, so `check-published-schemas.mjs`
-   would have to assert it resolves to *some* known exact version rather
-   than to a fixed hash. Deferred to the registration PR, but it is the
-   question the version scheme creates.
+   platform schemas PR (#117) lands. This is a sequencing dependency, not a
+   design choice.
+9. **What users pin, now that patch bumps are real.** Three-segment semver makes
+   a documentation fix a new id, and pinning `docmeta:core:1.0.0` everywhere
+   means every such fix churns every config. The usual answer is a second,
+   *moving* reference, with `docmeta:core:1` resolving to the latest `1.x`. But
+   that cuts against `PUBLISHED_ALIAS`. That is an exact-string table with no
+   prefix rule, on purpose. A URL naming a version that does not exist then
+   stays a 404, instead of resolving to something else
+   ([`schema-registry.ts:105`](../../src/core/schema-registry.ts)). A moving
+   alias also cannot be byte-pinned, so `check-published-schemas.mjs` would have
+   to assert it resolves to *some* known exact version rather than to a fixed
+   hash. Deferred to the registration PR, but it is the question the version
+   scheme creates.
 
 ## Stress test
 
@@ -551,17 +544,17 @@ What was tried against this design during the walk, and what it changed:
    intent came out of that attack, and the disjointness test exists so the
    split cannot silently regress into overlap.
 2. **The composability law was probed mechanically, not asserted.** The
-   compat-check ladder throws the other claimants' most extreme legal values
-   at every shared key. It caught the law's real perimeter. The exceptions
-   are core's non-empty floor, and its single-valued `type` and `language`
-   against DCMI's repeatable elements. Both are recorded above and pinned as
+   compat-check ladder throws the other claimants' most extreme legal values at
+   every shared key. It caught the law's real perimeter. The exceptions are
+   core's non-empty floor, and its single-valued `type` and `language` against
+   DCMI's repeatable elements. Both are recorded above and pinned as
    expected-rejects.
 3. **`grader: script` was added and then removed.** Splitting the generation
-   contract out of `command` gave every grader one clean requirement, and
-   cost a grader kind. The owner chose fewer kinds. The two-state `command`
-   lifecycle is now stated in the schema as contract, rather than discovered
-   as magic. `command` ⇒ `grader: command` closes the payload-on-an-ai-eval
-   hole the review found.
+   contract out of `command` gave every grader one clean requirement, and cost a
+   grader kind. The owner chose fewer kinds. The two-state `command` lifecycle
+   is now stated in the schema as contract, rather than discovered as magic.
+   `command` ⇒ `grader: command` closes the payload-on-an-ai-eval hole the
+   review found.
 4. **The kg camelCase-mirrors-SKOS defense collapsed under its own
    evidence.** iiRDS spells its properties kebab upstream, so half of 0.8's
    camelCase was already a translation. The rename went through, and the RDF

@@ -64,31 +64,34 @@ related-pages: [operator-architecture]
   belongs to the persona definitions a page points at. The cost: a docs
   set with no persona definitions yet cannot derive it. That is the same
   trade the audience vocabulary makes for teams starting out.
-- **"See also" is a label for `related-pages`.** The heading most docs
-  sites render is editorial; the key underneath it stays semantic. There is no `see-also` alias. One fact reachable by two keys is the kind of
-second surface this family exists to prevent, and an alias is permanent. Your style guide might split "See also", for the same product, from "Learn
-more", off-site. `related-pages` already accepts URLs, so that split is a
-rendering decision over one field.
+- **"See also" is a label for `related-pages`.** The heading most docs sites
+  render is editorial; the key underneath it stays semantic. There is no
+  `see-also` alias. One fact reachable by two keys is the kind of second surface
+  this family exists to prevent, and an alias is permanent. Your style guide
+  might split "See also", for the same product, from "Learn more", off-site.
+  `related-pages` already accepts URLs, so that split is a rendering decision
+  over one field.
 - **`applies-to` is flat.** Named dimensions (`product:`, `deployment:`,
   `generation:`) were designed and then removed. An org that needs axes
   can prefix its labels (`deploy:kubernetes`) or overlay its own schema.
   This is a headline open question for the review.
-- **The negative exists at both levels.** `not-applicable-to` was added in review
-round 5 for parallelism. The `kg` block's `applies-to` had a page-level
-counterpart, and its `not-applicable-to` did not. So the only way to say "not
-the FIPS build" was to open a `kg` block for one field.
-  Checking that the two lists do not overlap is a graph-layer (SHACL)
-  check at both levels. JSON Schema cannot compare two sibling lists. So a page naming the same label on
-both sides passes here, and the contradiction surfaces at graph build. A test asserts that this passes,
-  the same way one asserts that an overdue review passes.
+- **The negative exists at both levels.** `not-applicable-to` was added in
+  review round 5 for parallelism. The `kg` block's `applies-to` had a page-level
+  counterpart, and its `not-applicable-to` did not. So the only way to say "not
+  the FIPS build" was to open a `kg` block for one field. Checking that the two
+  lists do not overlap is a graph-layer (SHACL) check at both levels. JSON
+  Schema cannot compare two sibling lists. So a page naming the same label on
+  both sides passes here, and the contradiction surfaces at graph build. A test
+  asserts that this passes, the same way one asserts that an overdue review
+  passes.
 - **Three fields are fallbacks for the `kg` block.** `applies-to`,
   `not-applicable-to`, and `concepts` share names and shapes with their
-  counterparts inside the [kg vocabulary](/docmeta/proposals/kg/)'s
-  block. The rule is that the deeper declaration wins. When the `kg` block sets a fact,
-its value is used. When the block is silent, the page-level field feeds the
-graph. Both sides accept identical values by construction, using the same non-empty,
-duplicate-free list shape. So a promoted page-level value can never produce a
-document the `kg` block would reject.
+  counterparts inside the [kg vocabulary](/docmeta/proposals/kg/)'s block. The
+  rule is that the deeper declaration wins. When the `kg` block sets a fact, its
+  value is used. When the block is silent, the page-level field feeds the graph.
+  Both sides accept identical values by construction, using the same non-empty,
+  duplicate-free list shape. So a promoted page-level value can never produce a
+  document the `kg` block would reject.
 - **`related-pages` says what it points at.** The suffix exists because
   `kg.related-concepts` relates concepts. Each name now names its target.
 

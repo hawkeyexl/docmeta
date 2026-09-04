@@ -1,6 +1,7 @@
 # 0010 — `docmeta init` and `docmeta schemas infer`
 
-- **Status:** Partly shipped. `schemas infer` landed; `init` rejected by [0019](0019-no-docmeta-init.md)
+- **Status:** Partly shipped. `schemas infer` landed; `init` rejected by
+  [0019](0019-no-docmeta-init.md)
 - **Serves:** Maya · M1 (the on-ramp), Sara · S1 (the missing first step)
 - **Relates to:** [0001](0001-validation-baseline.md) (infer → baseline → ratchet is the retrofit path), [0014](0014-empty-input-is-not-success.md)
 - **Touches:** `src/commands/schemas.ts`, `src/reporters/infer.ts`, `src/cli.ts`
@@ -20,9 +21,8 @@ each is covered by a test:
   `globalThis.fetch` with one that records and rejects, and asserts nothing was
   attempted. `infer` resolves no schema, so a document naming a remote `$schema`
   still costs no request.
-- **Stress test 3.** Dominant type, with the distribution reported as
-  `string ×900, number ×4` and each outlier named by file and line via
-  `lineFor`.
+- **Stress test 3.** Dominant type, with the distribution reported as `string
+  ×900, number ×4` and each outlier named by file and line via `lineFor`.
 - **Stress test 4.** `enum` needs ≤ 20 distinct **and** ≤ 5% of files scanned.
   There are three tests. One proposes at 7 distinct in 140 files. One refuses at
   30 distinct in 30 files, which is the absolute half. One refuses at 7 distinct
@@ -37,18 +37,18 @@ each is covered by a test:
 
 Two things the proposal did not anticipate:
 
-- **`runGet` was not reusable.** It is a projection: `values` is built by looping
-  over `opts.fields`, and the full `extracted.data` is discarded. So the core
-  calls `extractorForExtension(...).extract(...)` and reads `data` whole.
-- **The `schemas` group swallowed `-f`.** commander binds an option declared on a
-  parent wherever it appears in the argv. So `docmeta schemas infer -f json` set
-  the *parent's* format, and the run answered in `pretty`, silently, at exit 0.
-  That is the same false green `schemas -f github` was fixed for. `formatFor` in
-  `src/cli.ts` reads `getOptionValueSource` on both commands, and prefers
-  whichever was typed. **`schemas vendor` still has the latent version of this**,
-  where `-f` on a vendor run is accepted and ignored. It is harmless today
-  because `vendor` has no format to choose, but it is worth closing when that
-  changes.
+- **`runGet` was not reusable.** It is a projection: `values` is built by
+  looping over `opts.fields`, and the full `extracted.data` is discarded. So the
+  core calls `extractorForExtension(...).extract(...)` and reads `data` whole.
+- **The `schemas` group swallowed `-f`.** commander binds an option declared on
+  a parent wherever it appears in the argv. So `docmeta schemas infer -f json`
+  set the *parent's* format, and the run answered in `pretty`, silently, at exit
+  0. That is the same false green `schemas -f github` was fixed for. `formatFor`
+     in `src/cli.ts` reads `getOptionValueSource` on both commands, and prefers
+     whichever was typed. **`schemas vendor` still has the latent version of
+     this**, where `-f` on a vendor run is accepted and ignored. It is harmless
+     today because `vendor` has no format to choose, but it is worth closing
+     when that changes.
 
 Two deliberate limits, chosen rather than discovered:
 

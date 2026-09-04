@@ -233,20 +233,18 @@ kind of detail that produces a cache that never expires.
    when fresh, and bypassed when stale (mtime-based), and `ttlHours: 0` disables
    it.
 3. In `test/schema-registry.test.ts`, one retry on 5xx and on network error and
-   none on 404, asserting the request count via
-   `test/helpers/schema-server.ts`.
+   none on 404, asserting the request count via `test/helpers/schema-server.ts`.
 4. In `test/cli.integration.test.ts`, `--offline` with a cold cache fails naming
    the URL, and `--offline` against the default built-in set succeeds.
-5. In `test/config.test.ts`, `schemas:` accepts both a string and
-   `{ ref, source, integrity }`, and a bad `integrity` fails with a clear
-   message.
+5. In `test/config.test.ts`, `schemas:` accepts both a string and `{ ref,
+   source, integrity }`, and a bad `integrity` fails with a clear message.
 6. In `test/commands.test.ts`, `schemas vendor` writes the file, records the
    hash, rewrites config, and **refuses** a gitignored target directory.
 7. For docs, `reference/schema-resolution.mdx` (cache, offline, integrity),
-   `reference/cli.mdx` (`--offline` and `schemas vendor`, which
-   `docs:check-cli` enforces), `reference/configuration.mdx` (`schemaCache`,
-   object form of `schemas`), and `ci/govern-shared-schema.mdx`, which should be
-   rewritten to lead with vendoring rather than a bare URL.
+   `reference/cli.mdx` (`--offline` and `schemas vendor`, which `docs:check-cli`
+   enforces), `reference/configuration.mdx` (`schemaCache`, object form of
+   `schemas`), and `ci/govern-shared-schema.mdx`, which should be rewritten to
+   lead with vendoring rather than a bare URL.
 
 ## What shipped, and what changed on the way
 

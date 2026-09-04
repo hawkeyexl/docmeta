@@ -140,7 +140,8 @@ tarballs, `npm pack` contents, and some Docker build contexts all hit this. The
 implementation must treat a non-zero *setup* failure as "no filtering" and
 continue, not as an error.
 
-Critically, `git check-ignore` **exits 1 when nothing matched**, as verified here:
+Critically, `git check-ignore` **exits 1 when nothing matched**, as verified
+here:
 
 ```
 none-ignored -> exit 1

@@ -49,12 +49,13 @@ sample-questions:
 
 ## Design decisions
 
-- **Machines propose; humans retire the provenance.** A provenance entry
-  is the review trail for machine-filled metadata. A human deletes the
-  entry once its fields are reviewed, so a surviving entry means machine
-  metadata nobody has checked. The same pattern appears in the [kg](/docmeta/proposals/kg/) block, and in both
-[eval](/docmeta/proposals/evals/) vocabularies. So the whole family has one
-answer to "which of this metadata did a machine write, and has anyone checked?"
+- **Machines propose; humans retire the provenance.** A provenance entry is the
+  review trail for machine-filled metadata. A human deletes the entry once its
+  fields are reviewed, so a surviving entry means machine metadata nobody has
+  checked. The same pattern appears in the [kg](/docmeta/proposals/kg/) block,
+  and in both [eval](/docmeta/proposals/evals/) vocabularies. So the whole
+  family has one answer to "which of this metadata did a machine write, and has
+  anyone checked?"
 - **`generated-by` attributes the content; `provenance` attributes the
   metadata.** They record different facts. Consumers also use
   `generated-by` for self-preference-bias checks: a judge should know

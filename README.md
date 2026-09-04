@@ -7,7 +7,21 @@ Validate the **presence and format** of document metadata against **JSON Schema*
 [![node](https://img.shields.io/node/v/docmeta?color=5fa04e&logo=node.js&logoColor=white)](https://nodejs.org)
 [![license](https://img.shields.io/npm/l/docmeta?color=blue)](LICENSE)
 
-`docmeta` checks the metadata in your documents (Markdown frontmatter and more) against one or more JSON Schemas. It verifies that required fields are present and correctly formatted: a `type`, an ISO 8601 `timestamp`, a URI `resource`. It does not judge prose quality. It ships with 23 [built-in schemas](https://hawkeyexl.github.io/docmeta/reference/built-in-schemas/). They cover content vocabularies such as the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md), [Diátaxis](https://diataxis.fr/), [The Good Docs Project](https://www.thegooddocsproject.dev/template), and the [Seven-Action model](https://passo.uno/seven-action-model/). They also cover the front matter contracts of site generators such as [Docusaurus](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-docs#markdown-front-matter) 3.10, Hugo, Jekyll, and MkDocs Material. Run `docmeta schemas` for the full list. It follows [clig.dev](https://clig.dev) conventions and returns a nonzero exit code (plus optional GitHub annotations) when validation fails.
+`docmeta` checks the metadata in your documents (Markdown frontmatter and more)
+against one or more JSON Schemas. It verifies that required fields are present
+and correctly formatted: a `type`, an ISO 8601 `timestamp`, a URI `resource`. It
+does not judge prose quality. It ships with 23 [built-in
+schemas](https://hawkeyexl.github.io/docmeta/reference/built-in-schemas/). They
+cover content vocabularies such as the [Open Knowledge Format
+(OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md),
+[Diátaxis](https://diataxis.fr/), [The Good Docs
+Project](https://www.thegooddocsproject.dev/template), and the [Seven-Action
+model](https://passo.uno/seven-action-model/). They also cover the front matter
+contracts of site generators such as
+[Docusaurus](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-docs#markdown-front-matter)
+3.10, Hugo, Jekyll, and MkDocs Material. Run `docmeta schemas` for the full
+list. It follows [clig.dev](https://clig.dev) conventions and returns a nonzero
+exit code (plus optional GitHub annotations) when validation fails.
 
 It can also **fill in** the metadata that is missing, so adopting a standard on an existing docset is not a data-entry project.
 
@@ -51,9 +65,10 @@ defaults to inline PR annotations:
     paths: "docs/**/*.md"
 ```
 
-Every input is in the [Action reference](https://hawkeyexl.github.io/docmeta/reference/action/).
-Other platforms run the CLI directly. The
-[CI recipes](https://hawkeyexl.github.io/docmeta/ci/recipes/) cover GitLab CI,
+Every input is in the [Action
+reference](https://hawkeyexl.github.io/docmeta/reference/action/). Other
+platforms run the CLI directly. The [CI
+recipes](https://hawkeyexl.github.io/docmeta/ci/recipes/) cover GitLab CI,
 Jenkins, and the rest.
 
 To catch problems before they reach CI, docmeta publishes a
@@ -107,9 +122,9 @@ model, and downloads it rather than failing the build.
 
 Pass `--local` when the document must not leave the machine. It runs inference
 on-device and **refuses every hosted provider**, a signed-in `claude` CLI
-included. That CLI runs locally, but its inference does not. See the
-[`fill` reference](https://hawkeyexl.github.io/docmeta/reference/cli/#fill) for
-every flag and for what the local fallback costs.
+included. That CLI runs locally, but its inference does not. See the [`fill`
+reference](https://hawkeyexl.github.io/docmeta/reference/cli/#fill) for every
+flag and for what the local fallback costs.
 
 ## Supported formats
 

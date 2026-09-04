@@ -3,7 +3,11 @@
 - **Status:** Implemented (#120)
 - **Serves:** Devin · D1, D3 · Maya · M2
 - **Touches:** `src/commands/query.ts`, `src/reporters/query.ts`, `src/cli.ts`, `src/index.ts`, `reference/{cli,api}.mdx`, `test/fixtures/query/`
-- **Relates to:** [0005](0005-command-parity.md), the surface it must match. [0016](0016-flag-ownership.md), the flag rules it must not break. [0010](0010-init-and-schema-inference.md), where `schemas infer` is the only existing cross-file scan. [0014](0014-empty-input-is-not-success.md), for what an empty input set means here
+- **Relates to:** [0005](0005-command-parity.md), the surface it must match.
+  [0016](0016-flag-ownership.md), the flag rules it must not break.
+  [0010](0010-init-and-schema-inference.md), where `schemas infer` is the only
+  existing cross-file scan. [0014](0014-empty-input-is-not-success.md), for what
+  an empty input set means here
 
 ## Problem
 
@@ -34,15 +38,17 @@ Querying frontmatter as data is a proven want, not a speculative one:
 - [Obsidian Dataview](https://github.com/blacksmithgu/obsidian-dataview), and
   its successor Datacore. A data index and query language over frontmatter, with
   enormous adoption. Editor-bound, with nothing for CI.
-- [MarkdownDB](https://markdowndb.com/), a markdown → SQLite index with a JS API.
+- [MarkdownDB](https://markdowndb.com/), a markdown → SQLite index with a JS
+  API.
 - [mdquery](https://github.com/eristoddle/mdquery), in Python. Markdown →
   SQLite, with SQL joins over files, links and tags tables.
 - [frontmatter-mcp](https://github.com/kzmshx/frontmatter-mcp), which serves
   DuckDB SQL over frontmatter through MCP.
-- DuckDB's community [`markdown`](https://duckdb.org/community_extensions/extensions/markdown)
-  and [`yaml`](https://duckdb.org/community_extensions/extensions/yaml)
-  extensions. `SELECT title FROM read_yaml_frontmatter('posts/*.md')` works in
-  the `duckdb` shell today.
+- DuckDB's community
+  [`markdown`](https://duckdb.org/community_extensions/extensions/markdown) and
+  [`yaml`](https://duckdb.org/community_extensions/extensions/yaml) extensions.
+  `SELECT title FROM read_yaml_frontmatter('posts/*.md')` works in the `duckdb`
+  shell today.
 
 Every one of them is markdown-only, none validates anything, and none is built
 to gate a CI run. docmeta already owns the three pieces they lack. Those are
@@ -97,9 +103,9 @@ enough to force the Datacore rewrite is the cautionary tale. Rejected.
 **B. A sibling project consuming docmeta as a library.** It would re-import
 docmeta for extraction and config, as dockg does. It would re-implement the 0005
 surface to feel consistent. And it would still lack the standing to gate CI the
-way the tool already wired into CI can. That is a second npm package and docs site for
-one command's worth of code. A future full dockg query makes the third tool's
-territory smaller still. Rejected.
+way the tool already wired into CI can. That is a second npm package and docs
+site for one command's worth of code. A future full dockg query makes the third
+tool's territory smaller still. Rejected.
 
 **C. `docmeta query`, running SQL over an in-memory SQLite database built per
 run from extracted metadata.** Node ≥ 24 is already the engines floor, so

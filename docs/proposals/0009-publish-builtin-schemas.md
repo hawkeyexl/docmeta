@@ -2,8 +2,12 @@
 
 - **Status:** Implemented
 - **Serves:** Sara · S1 "Define our metadata standard as a schema"; external consumers
-- **Depends on:** URL→built-in aliasing (stress test 1). Without it this proposal is a regression
-- **Touches:** New `docs/public/schemas/**`, `src/core/schema-registry.ts`, `src/core/resolve-schema.ts`, `src/core/validator.ts`, `src/schemas/manifest.json`, `scripts/sync-builtin-schemas.mjs`, `scripts/check-builtin-schemas.mjs`, `.github/workflows/ci.yml`
+- **Depends on:** URL→built-in aliasing (stress test 1). Without it this
+  proposal is a regression
+- **Touches:** New `docs/public/schemas/**`, `src/core/schema-registry.ts`,
+  `src/core/resolve-schema.ts`, `src/core/validator.ts`,
+  `src/schemas/manifest.json`, `scripts/sync-builtin-schemas.mjs`,
+  `scripts/check-builtin-schemas.mjs`, `.github/workflows/ci.yml`
 
 ## What shipped, and where it diverged
 
@@ -37,10 +41,10 @@ exist and must stay an ordinary remote ref.
 inspects git state. `scripts/check-builtin-schemas.mjs` copies the actual idiom
 instead. That means pure Node stdlib, parsing both sides, and accumulating and
 sorting a `problems[]` array. Every line is prefixed with the npm script name.
-It exits 0, 1 or 2, and ends with a remedy line naming the command to re-run. The
-writer, `npm run schemas:sync`, is deliberately **additive**. It adds manifest
-entries and refreshes the copies. But it never rewrites a hash it has already
-recorded, so re-running it cannot paper the immutability check over.
+It exits 0, 1 or 2, and ends with a remedy line naming the command to re-run.
+The writer, `npm run schemas:sync`, is deliberately **additive**. It adds
+manifest entries and refreshes the copies. But it never rewrites a hash it has
+already recorded, so re-running it cannot paper the immutability check over.
 
 **Stress test 7's "copy at docs-build time" would not have worked.** The `build`
 job in `.github/workflows/docs.yml` is a separate checkout that runs `npm ci`
@@ -215,10 +219,9 @@ the script and fails on a dirty tree. That is the same pattern as
 
 Note this repo has already edited built-ins in place. `f7e611b fix(schemas):
 require type on the Diataxis vocabulary` changed `diataxis:diataxis:1.0`, and
-shipped as a **major** version bump of docmeta. That
-was defensible for a bundled schema. Once the URL is public it would break
-consumers who never upgraded docmeta at all. The manifest check is what makes the
-new rule stick.
+shipped as a **major** version bump of docmeta. That was defensible for a
+bundled schema. Once the URL is public it would break consumers who never
+upgraded docmeta at all. The manifest check is what makes the new rule stick.
 
 ### 4. Editor autocomplete, the weakest of the claimed benefits, stated honestly
 
@@ -304,8 +307,8 @@ louder.
    `<dir>/<version>.json` matches its recorded hash.
 4. In `test/builtin-schemas.test.ts`, `docs/public/schemas/**` is byte-identical
    to `src/schemas/**`.
-5. In `test/validator.test.ts`, a user schema `$ref`-ing a published built-in URL
-   compiles offline. That is stress test 5.
+5. In `test/validator.test.ts`, a user schema `$ref`-ing a published built-in
+   URL compiles offline. That is stress test 5.
 6. In `test/cli.integration.test.ts`, `--offline` validates a document whose
    `$schema` is a published URL.
 7. For docs, `reference/built-in-schemas.mdx` gains a URL column, the

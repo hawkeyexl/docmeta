@@ -3,7 +3,9 @@
 - **Status:** Implemented
 - **Serves:** Correctness and maintainability; no CUJ directly
 - **Touches:** `src/extractors/stub.ts`, `src/extractors/{html,xml}.ts`, `src/types.ts`, `test/extractors.test.ts`, `CONTRIBUTING.md`
-- **Note:** The exit-code item is **owned by [0005](0005-command-parity.md)**; it is described here for completeness because it belongs to the same defect class.
+- **Note:** The exit-code item is **owned by [0005](0005-command-parity.md)**;
+  it is described here for completeness because it belongs to the same defect
+  class.
 
 Three small items. None is urgent. Each is the kind of thing that quietly costs
 credibility, because it makes the codebase's declared surface bigger than its
@@ -196,14 +198,14 @@ Independent, in any order. Items 1 and 2 are each a single small PR.
 1. **Item 1.** Delete `src/extractors/stub.ts` and the self-referential test,
    keep `implemented`, and reword `CONTRIBUTING.md § Adding a new input format`.
    Decide explicitly whether to keep the unreachable `planned` branch in
-   `src/cli.ts:357`. Recommend keeping it: one line, and it becomes reachable the
-   moment anyone sets `implemented: false`.
+   `src/cli.ts:357`. Recommend keeping it: one line, and it becomes reachable
+   the moment anyone sets `implemented: false`.
 2. **Item 2, red first.** `test/extractors.test.ts` asserts `col` for an `html`
-   `<meta>` violation and an `xml` root-attribute violation, and asserts `col` is
-   `undefined` for a `required` violation. `test/reporters.test.ts` asserts `col=`
-   appears in `github` output only when set. Then populate from parse5's
-   `startCol` and xmldom's `columnNumber`. Update the `consume-results.mdx` aside
-   and `content-strategy/README.md`, which uses `col` as its example of a
+   `<meta>` violation and an `xml` root-attribute violation, and asserts `col`
+   is `undefined` for a `required` violation. `test/reporters.test.ts` asserts
+   `col=` appears in `github` output only when set. Then populate from parse5's
+   `startCol` and xmldom's `columnNumber`. Update the `consume-results.mdx`
+   aside and `content-strategy/README.md`, which uses `col` as its example of a
    declared-but-unpopulated field. That example needs replacing once it is no
    longer true.
 3. **Item 3.** See [0005](0005-command-parity.md).

@@ -3,7 +3,8 @@
 - **Status:** Superseded by [0018](0018-write-support-shipped-for-all-three.md)
 - **Serves:** Maya · M1 (the retrofit tail), Theo · T1
 - **Touches:** `src/extractors/html.ts`, new `src/extractors/html-write.ts`, `CONTRIBUTING.md`
-- **Verdict:** Implement HTML. Keep XML and DITA read-only, for a reason stronger than the current one.
+- **Verdict:** Implement HTML. Keep XML and DITA read-only, for a reason
+  stronger than the current one.
 
 ## Problem
 
@@ -165,8 +166,8 @@ values). Semantically it is a guess:
 - A schema asking for `description` gets `<document description="…">`, when in
   most real XML vocabularies prose belongs in a child element, not an attribute.
 - Generic XML has no convention for where document metadata lives. docmeta reads
-  root attributes because that is the one place it can read *something* without a
-  vocabulary. That is a reasonable read heuristic and an unreasonable write
+  root attributes because that is the one place it can read *something* without
+  a vocabulary. That is a reasonable read heuristic and an unreasonable write
   target.
 
 Reading a heuristic location is harmless. Writing to it invents markup the
@@ -230,6 +231,7 @@ After this proposal the reasons differ per format, and the docs should say so.
 6. In `test/fill.test.ts`, replace `test/fixtures/fill/unsupported.html` with a
    writable fixture, and add `unsupported.dita` asserting the refusal *and* its
    message.
-7. In `CONTRIBUTING.md § Write support is optional`, update the XML/HTML sentence
-   to the per-format reasoning above. It is currently the canonical statement of
-   a decision this proposal changes for one format and hardens for two.
+7. In `CONTRIBUTING.md § Write support is optional`, update the XML/HTML
+   sentence to the per-format reasoning above. It is currently the canonical
+   statement of a decision this proposal changes for one format and hardens for
+   two.

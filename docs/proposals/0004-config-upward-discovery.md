@@ -244,8 +244,8 @@ neither subsumes the other.
    directory. This reproduces defect 2B.
 5. In `test/cli.integration.test.ts`, the subdirectory false-green from defect 1
    now exits 1, and the "Using …" line appears.
-6. For fixtures, `test/fixtures/nested-config/` with a root config, a nested doc,
-   and a local schema referenced relatively.
+6. For fixtures, `test/fixtures/nested-config/` with a root config, a nested
+   doc, and a local schema referenced relatively.
 
 Then `reference/configuration.mdx` (discovery order and the resolution base) and
 `reference/cli.mdx` for `--no-config` (`npm run docs:check-cli` enforces).

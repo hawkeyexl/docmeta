@@ -6,9 +6,10 @@ description: The diataxis, tgdp, and seven-action schemas shipped with docmeta, 
 import { Aside } from '@astrojs/starlight/components';
 
 docmeta ships three **taxonomy** schemas: closed vocabularies that constrain a
-classification field to a published set of values. They exist because [`google:okf:0.1`](/docmeta/reference/okf-schema/) requires a
-`type` but accepts any non-empty string for it. It cannot stop a docs set from
-drifting into `how-to`, `howto`, and `guide` all meaning the same thing.
+classification field to a published set of values. They exist because
+[`google:okf:0.1`](/docmeta/reference/okf-schema/) requires a `type` but accepts
+any non-empty string for it. It cannot stop a docs set from drifting into
+`how-to`, `howto`, and `guide` all meaning the same thing.
 
 | Id | Key | Key required? | Framework | JSON |
 |---|---|---|---|---|
@@ -23,8 +24,7 @@ references](/docmeta/reference/schema-resolution/#reference-kinds).
 Each **JSON** link is the schema itself, at a [permanent, version-pinned
 URL](/docmeta/reference/built-in-schemas/#the-published-urls). That is useful
 for reading the exact vocabulary, or for `$ref`-ing one from a schema of your
-own.
-Inside docmeta the URL and the id are interchangeable, and neither makes a
+own. Inside docmeta the URL and the id are interchangeable, and neither makes a
 network call.
 
 The two keyed on `type` are alternatives to each other. See [Which ones
@@ -52,8 +52,9 @@ other OKF fields, not for `type`:
 docmeta validate docs/ -s diataxis:diataxis:1.0 -s google:okf:0.1
 ```
 
-`passo-uno:seven-action:1.0` is the exception. It checks `action` only *if one is present*. That is what makes it safe to layer
-onto an existing setup, and safe to carry in the [default
+`passo-uno:seven-action:1.0` is the exception. It checks `action` only *if one
+is present*. That is what makes it safe to layer onto an existing setup, and
+safe to carry in the [default
 set](/docmeta/reference/schema-resolution/#precedence).
 
 <Aside type="caution" title="Both `type` schemas require the key, so retrofit with `--dry-run` first">
@@ -62,9 +63,10 @@ reports every untyped page at once. Run [`docmeta fill
 --dry-run`](/docmeta/reference/cli/#fill) to see what would be proposed before
 writing anything.
 
-Schema order does not matter, here or anywhere else. Both schemas define `type`, and [`fill`](/docmeta/reference/cli/#fill) infers
-against the two rules combined. The vocabulary's enum reaches the model
-whichever `-s` comes first, so the proposal can only be one of the four. `validate` likewise always runs every
+Schema order does not matter, here or anywhere else. Both schemas define `type`,
+and [`fill`](/docmeta/reference/cli/#fill) infers against the two rules
+combined. The vocabulary's enum reaches the model whichever `-s` comes first, so
+the proposal can only be one of the four. `validate` likewise always runs every
 schema in the set.
 </Aside>
 
@@ -94,9 +96,10 @@ using Diátaxis. Opt in with `-s` or a `schemas:` entry in config.
 ## `tgdp:templates:1.0`
 
 Requires `type` and constrains it to the template slugs published by [The Good
-Docs Project](https://www.thegooddocsproject.dev/template). Where Diátaxis names four abstract forms, TGDP names 25 concrete deliverables.
-That suits a docs set that thinks in deliverables rather than quadrants. Such a
-set says "we owe this product an installation guide and a changelog".
+Docs Project](https://www.thegooddocsproject.dev/template). Where Diátaxis names
+four abstract forms, TGDP names 25 concrete deliverables. That suits a docs set
+that thinks in deliverables rather than quadrants. Such a set says "we owe this
+product an installation guide and a changelog".
 
 The values are the template directory slugs from the upstream
 [templates repo](https://gitlab.com/tgdp/templates), grouped here by the pack
@@ -125,12 +128,12 @@ repo that had not opted in.
 The upstream templates are body-structure templates. They open at a heading and
 carry no YAML block. The only metadata TGDP publishes is `index.json`, which
 describes the *templates* (`name`, `summary`, `last_updated`, `contributors`,
-`packs`), not documents written from them. So the vocabulary here is lifted from the template set, not an implementation of
-a TGDP metadata spec. Requiring `type` is docmeta's choice rather than an
-upstream rule. It is the same choice docmeta makes for Diátaxis, which likewise
-publishes no frontmatter spec. Pair it with
-[`google:okf:0.1`](/docmeta/reference/okf-schema/) for the fields TGDP leaves
-unspecified.
+`packs`), not documents written from them. So the vocabulary here is lifted from
+the template set, not an implementation of a TGDP metadata spec. Requiring
+`type` is docmeta's choice rather than an upstream rule. It is the same choice
+docmeta makes for Diátaxis, which likewise publishes no frontmatter spec. Pair
+it with [`google:okf:0.1`](/docmeta/reference/okf-schema/) for the fields TGDP
+leaves unspecified.
 </Aside>
 
 ## `passo-uno:seven-action:1.0`
@@ -158,8 +161,9 @@ title: Work through the tutorial
 ---
 ```
 
-This schema **is** in the default set, alongside OKF. It can be, because it constrains a key that documents do not otherwise carry and
-does not require it. So it fails nothing that passed before.
+This schema **is** in the default set, alongside OKF. It can be, because it
+constrains a key that documents do not otherwise carry and does not require it.
+So it fails nothing that passed before.
 
 <Aside type="caution" title="If you already use an `action` key">
 `action` is a generic field name. If your frontmatter already uses it for

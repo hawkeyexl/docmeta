@@ -275,8 +275,8 @@ tell a wired core from an unwired one.
 Everything else landed as written. Three stress tests each have a test standing
 on them. Those are 5, `--schema` unfiltered in every mode; 2, a built-in
 `$schema` passing under `local`; and 6, Ajv raising `MissingRefError` rather
-than chasing a remote `$ref`. Stress tests 1 and 3 are the redirect limit of `hosts:` and
-the version floor. Both are documented at
+than chasing a remote `$ref`. Stress tests 1 and 3 are the redirect limit of
+`hosts:` and the version floor. Both are documented at
 `reference/configuration.mdx#schema-trust`, which is what they asked for.
 
 The note this proposal was reserved by, in `LoadSchemaOptions.offline`, is

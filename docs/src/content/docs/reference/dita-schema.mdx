@@ -7,8 +7,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 `oasis:dita-metadata:1.3` describes the typed metadata elements OASIS defines
 for a DITA topic or map. Those are the `<prolog>` and `<topicmeta>` contents
-that docmeta
-reads through the [element metadata
+that docmeta reads through the [element metadata
 rule](/docmeta/reference/element-metadata/).
 
 It is named `dita-metadata` rather than `dita-prolog` because it constrains
@@ -49,8 +48,7 @@ Not a quirk of docmeta. The OASIS content model makes `<audience>`,
 names where the value actually is, so it follows the document.
 
 The practical consequence is that a schema that wants "the author of this file"
-names
-**both** `prolog.author` and `topicmeta.author`. `critdates.created` needs
+names **both** `prolog.author` and `topicmeta.author`. `critdates.created` needs
 naming only once, because the containing element is the same in both.
 </Aside>
 
@@ -94,9 +92,9 @@ docmeta fill docs/**/*.dita -s oasis:dita-metadata:1.3
 - **An element that exists** has its text or attribute value replaced. That
   cannot change whether the topic is valid, because it changes content and not
   shape.
-- **An element that is missing is created**, along with any containers it needs, at
-the position the content model requires. So `<critdates>` goes after `<author>`
-and before `</prolog>`, rather than merely appended.
+- **An element that is missing is created**, along with any containers it needs,
+  at the position the content model requires. So `<critdates>` goes after
+  `<author>` and before `</prolog>`, rather than merely appended.
 - **A key with no place in the content model** still goes to an `<othermeta>`,
   which is where a key the DTD has no home for belongs.
 - **Adding or removing a repeated element is refused.** Writing three authors
@@ -104,9 +102,9 @@ and before `</prolog>`, rather than merely appended.
   do on your behalf.
 
 <Aside type="note" title="Why `<vrm>` is keyed for itself and not its container">
-`<vrm>` is EMPTY and carries three separate facts, so
-`version="2" release="1" modification="0"`. Keying it `vrmlist.vrm` would have
-to pick one and discard two.
+`<vrm>` is EMPTY and carries three separate facts, so `version="2" release="1"
+modification="0"`. Keying it `vrmlist.vrm` would have to pick one and discard
+two.
 
 The naming rule does not change to accommodate that; it applies one level down.
 For an *attribute* the containing thing is the element, so the keys are
@@ -138,6 +136,7 @@ The models are transcribed by hand from the specification in the test suite.
 They are deliberately **not** imported from the table the writer writes from.
 Checking one against the other would prove only that it is self-consistent.
 
-It does not cover attribute value types, required attributes, entity
-resolution, or specialization `@class` ancestry. No DITA DTD validator exists in this toolchain. Vendoring the OASIS grammar is
-about a megabyte of DTD modules, to check element order in a handful of files.
+It does not cover attribute value types, required attributes, entity resolution,
+or specialization `@class` ancestry. No DITA DTD validator exists in this
+toolchain. Vendoring the OASIS grammar is about a megabyte of DTD modules, to
+check element order in a handful of files.

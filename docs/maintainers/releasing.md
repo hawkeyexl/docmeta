@@ -1,7 +1,8 @@
 # Releasing
 
-Releases are automated by [semantic-release](https://semantic-release.gitbook.io/)
-via [`.github/workflows/release.yml`](../../.github/workflows/release.yml). On a
+Releases are automated by
+[semantic-release](https://semantic-release.gitbook.io/) via
+[`.github/workflows/release.yml`](../../.github/workflows/release.yml). On a
 push to a release branch it reads the conventional commits since the last tag
 and computes the next version. It then updates `CHANGELOG.md`/`package.json`,
 tags, creates a GitHub Release, and publishes to npm.
@@ -33,9 +34,9 @@ Configured on npmjs.com under the package's **Settings → Trusted Publisher**:
 The workflow bakes in four requirements. It needs a GitHub-hosted runner, npm
 CLI ≥ 11.5.1 (Node 24 bundles a new enough npm), and `@semantic-release/npm` ≥
 13. It also needs `repository.url` in `package.json` to match the repo. Do
-**not** add `registry-url` to `setup-node`, or any
-`NPM_TOKEN`/`NODE_AUTH_TOKEN`. A written-out auth token in `.npmrc` shadows OIDC
-and breaks the publish.
+    **not** add `registry-url` to `setup-node`, or any
+    `NPM_TOKEN`/`NODE_AUTH_TOKEN`. A written-out auth token in `.npmrc` shadows
+    OIDC and breaks the publish.
 
 ## The moving major tag
 
@@ -90,12 +91,13 @@ a **GitHub App** that is the sole bypass actor on the ruleset.
 
 4. **Add repository secrets** (repo Settings → Secrets and variables → Actions):
    - `RELEASE_APP_ID` holds the App ID from step 2.
-   - `RELEASE_APP_PRIVATE_KEY` holds the full contents of the `.pem` private key.
+   - `RELEASE_APP_PRIVATE_KEY` holds the full contents of the `.pem` private
+     key.
 
-5. **Add the App as a bypass actor** on the `main` ruleset
-   (repo Settings → Rules → Rulesets → `main` → **Bypass list** → Add bypass →
-   select the App). Set its bypass mode to **Always**, because the release
-   pushes directly rather than through a PR.
+5. **Add the App as a bypass actor** on the `main` ruleset (repo Settings →
+   Rules → Rulesets → `main` → **Bypass list** → Add bypass → select the App).
+   Set its bypass mode to **Always**, because the release pushes directly rather
+   than through a PR.
 
    Equivalent via the API (replace `<APP_ID>`):
 

@@ -2,7 +2,9 @@
 
 - **Status:** Implemented
 - **Serves:** Maya · M2 "Tighten the standard without breaking the build"
-- **Depends on:** The `FieldError` extension below (shared with [0003](0003-sarif-and-junit-reporters.md)); path resolution from [0004](0004-config-upward-discovery.md)
+- **Depends on:** The `FieldError` extension below (shared with
+  [0003](0003-sarif-and-junit-reporters.md)); path resolution from
+  [0004](0004-config-upward-discovery.md)
 - **Touches:** `src/core/validator.ts`, `src/commands/validate.ts`, `src/cli.ts`, `src/core/config.ts`, new `src/core/baseline.ts`
 
 ## Problem
@@ -301,8 +303,9 @@ Red/green order:
 
 1. In `test/validator.test.ts`, `FieldError` carries `keyword`, and `subject` is
    set for `required`, `additionalProperties`, and `format`.
-2. In `test/baseline.test.ts`, fingerprint stability. The same violation across a
-   line shift hashes identically, and the keyword pair above hashes differently.
+2. In `test/baseline.test.ts`, fingerprint stability. The same violation across
+   a line shift hashes identically, and the keyword pair above hashes
+   differently.
 3. In `test/baseline.test.ts`, a parse and serialize round-trip, rejecting
    `version != 1` with a `DocmetaError` naming the remedy.
 4. In `test/commands.test.ts`, `runValidate` with a baseline. A new finding

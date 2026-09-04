@@ -237,9 +237,9 @@ rule. It is not a return to reading a fraction of the file.
 
 So two runs with different chunk budgets produce the same key and different
 answers. The second one silently gets the first one's cached result. The retry
-path in change 1 makes this concrete rather than hypothetical. A run that
-halved its budget on an overflow writes a cache entry indistinguishable from one
-that did not.
+path in change 1 makes this concrete rather than hypothetical. A run that halved
+its budget on an overflow writes a cache entry indistinguishable from one that
+did not.
 
 The key must therefore carry the chunk budget. `FILL_PROMPT_VERSION` must also
 be bumped, so existing entries produced by the truncating prompt do not survive
@@ -352,5 +352,5 @@ slower" is answered by this line rather than investigated.
    `claude --version` correction at `:307`, the bound at `:315`, the two new
    flags, and the removed one. Then `npm run build && npm run docs:check-cli`.
 8. In `reference/configuration.mdx`, drop `maxCostUsd`.
-9. Run the dogfood check before pushing:
-   `node dist/cli.js validate "docs/src/content/docs/**/*.{md,mdx}" -s ./docs/doc-frontmatter.schema.json`
+9. Run the dogfood check before pushing: `node dist/cli.js validate
+   "docs/src/content/docs/**/*.{md,mdx}" -s ./docs/doc-frontmatter.schema.json`

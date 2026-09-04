@@ -3,9 +3,9 @@
 - **Status:** Implemented
 - **Serves:** Devin · D4 · Maya · M2
 - **Supersedes:** The polarity decision of [0022](0022-sql-write-back.md) § "The
-shape, which previews by default and applies with `--write`". Everything else in
-0022 stands unchanged: effect judgment, typed restoration, two-phase
-all-or-nothing, and `--check` as the drift gate.
+  shape, which previews by default and applies with `--write`". Everything else
+  in 0022 stands unchanged: effect judgment, typed restoration, two-phase
+  all-or-nothing, and `--check` as the drift gate.
 - **Relates to:** [0016](0016-flag-ownership.md) (one meaning per flag name across commands), [0024](0024-standard-sql-vocabulary.md) (the vocabulary this surface carries)
 - **Touches:** `src/cli.ts`, `src/commands/query.ts`, `src/reporters/query.ts`, `scripts/query-ui.mjs`, `reference/cli.mdx`, the three query journey pages, `test/{query,query-ddl,cli.integration}.test.ts`
 
@@ -42,10 +42,10 @@ convention beats two rationales.** The maintainer's call, 2026-08-26.
 Shipped as a `fix:` (patch) at the maintainer's explicit direction, 2026-08-26.
 It is recorded here because the mechanical reading of the change would
 ordinarily spell a major. That reading is a flag removed and a default inverted,
-days after `--write` shipped in 4.3.0. The judgment was that the surface was days old, and
-that the correction is to the convention the project already promised. `--check`
-pipelines are the documented CI integration, and they behave identically before
-and after.
+days after `--write` shipped in 4.3.0. The judgment was that the surface was
+days old, and that the correction is to the convention the project already
+promised. `--check` pipelines are the documented CI integration, and they behave
+identically before and after.
 
 ## Stress test
 

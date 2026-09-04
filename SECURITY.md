@@ -37,8 +37,8 @@ docmeta is maintained by one person, so these are real numbers rather than
 aspirational ones:
 
 - **Acknowledgement** within 5 business days.
-- **An assessment** within 10 business days: whether it is in scope, and a
-  rough severity.
+- **An assessment** within 10 business days: whether it is in scope, and a rough
+  severity.
 - **A fix**, for anything confirmed, released as soon as it is ready, with a
   published advisory naming the affected versions.
 
@@ -57,9 +57,9 @@ A document's own `$schema` can name a built-in id, a path, or a URL. It sits
 *above* config in the resolution chain. So on a repo that accepts outside pull
 requests, one line of frontmatter can otherwise choose the contract that
 document is judged against. That is what the `schemaTrust:` config key exists to
-close. See
-[proposal 0015](docs/proposals/0015-schema-trust-boundary.md) and
-[the configuration reference](https://hawkeyexl.github.io/docmeta/reference/configuration/#schema-trust).
+close. See [proposal 0015](docs/proposals/0015-schema-trust-boundary.md) and
+[the configuration
+reference](https://hawkeyexl.github.io/docmeta/reference/configuration/#schema-trust).
 
 The following are **known and accepted**, documented where the key is
 documented, and not vulnerabilities:
@@ -78,8 +78,8 @@ The following **are** in scope:
 
 - Any way past `documentRefs: local` or `documentRefs: none`.
 - A document-supplied local path escaping the containment root.
-- Ajv resolving a remote `$ref` from inside a fetched schema. A remote `$ref`
-  is asserted to be a hard `MissingRefError`, and the whole resolver chokepoint
+- Ajv resolving a remote `$ref` from inside a fetched schema. A remote `$ref` is
+  asserted to be a hard `MissingRefError`, and the whole resolver chokepoint
   design rests on that.
 - Getting past the 10 s fetch timeout or the 5 MB response cap into resource
   exhaustion.
@@ -88,11 +88,11 @@ The following **are** in scope:
 ### What `docmeta fill` sends
 
 `fill` sends document content to an LLM provider. **That** it does so is
-documented, intended, and not a report.
-[Proposal 0017](docs/proposals/0017-fill-egress-and-bounds.md) and the
-[`fill` reference](https://hawkeyexl.github.io/docmeta/reference/cli/#fill)
-enumerate exactly what leaves the machine. That includes the file path and the
-full `$defs` of every resolved schema. They also cover what the on-disk cache
+documented, intended, and not a report. [Proposal
+0017](docs/proposals/0017-fill-egress-and-bounds.md) and the [`fill`
+reference](https://hawkeyexl.github.io/docmeta/reference/cli/#fill) enumerate
+exactly what leaves the machine. That includes the file path and the full
+`$defs` of every resolved schema. They also cover what the on-disk cache
 retains, which is the proposal set *before* confidence gating.
 
 Note that provider auto-detection is deliberately permissive: a stray

@@ -1,8 +1,11 @@
 # 0002 — Packaged Action, pre-commit hook, container
 
-- **Status:** Implemented (#104). Action and pre-commit hook; the container image was declined
+- **Status:** Implemented (#104). Action and pre-commit hook; the container
+  image was declined
 - **Serves:** Devin · D1 "Add the gate to our CI platform"
-- **Touches:** New `action.yml`, new `.pre-commit-hooks.yaml`, `.github/workflows/release.yml`, `docs/src/content/docs/ci/recipes.mdx`, `docs/maintainers/releasing.md`
+- **Touches:** New `action.yml`, new `.pre-commit-hooks.yaml`,
+  `.github/workflows/release.yml`, `docs/src/content/docs/ci/recipes.mdx`,
+  `docs/maintainers/releasing.md`
 
 ## Problem
 
@@ -112,8 +115,8 @@ consuming repo, on first use. Mitigations, in preference order:
 1. Guard the script with `"prepare": "husky || true"`. One character of slack,
    no new files. Loses the loud failure when husky is genuinely broken for
    contributors.
-2. `"prepare": "node -e \"if(!process.env.CI && require('fs').existsSync('.git')) …\""`,
-   which is precise but ugly.
+2. `"prepare": "node -e \"if(!process.env.CI &&
+   require('fs').existsSync('.git')) …\""`, which is precise but ugly.
 3. Ship the hook from a separate minimal repo, which defeats the point.
 
 Recommend (1) plus an integration test that actually runs `pre-commit try-repo`
@@ -177,8 +180,8 @@ supported way to reach anything else.
 
 A composite step that exits non-zero fails the job, which is usually right. But
 [0003](0003-sarif-and-junit-reporters.md) needs the *opposite*: run docmeta,
-capture SARIF, upload it, **then** fail. With a composite action the consumer must
-add `continue-on-error: true` themselves, because the action cannot express
+capture SARIF, upload it, **then** fail. With a composite action the consumer
+must add `continue-on-error: true` themselves, because the action cannot express
 "fail after my caller's later steps". Document it. Do not try to solve it with a
 `fail-on` input. That would make the action's exit semantics differ from the
 documented exit-code contract of the CLI.

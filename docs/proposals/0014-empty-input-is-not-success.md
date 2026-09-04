@@ -224,7 +224,8 @@ are the population most likely to be surprised.
 ## Implementation sketch
 
 1. In `test/load-files.test.ts`, `resolveTargets` reports a literal input that
-   does not exist, and distinguishes literal from pattern via `picomatch.scan()`.
+   does not exist, and distinguishes literal from pattern via
+   `picomatch.scan()`.
 2. In `test/commands.test.ts`, zero resolved files throws `DocmetaError`,
    stdin-only does not, and `allowEmpty` suppresses.
 3. In `test/cli.integration.test.ts`, the three reproductions above exit 2, the
@@ -232,8 +233,8 @@ are the population most likely to be surprised.
 4. In `test/cli.integration.test.ts`, `docmeta valdiate docs/` exits 2 with a
    suggestion, `docmeta docs/` still validates `docs/`, and a real directory
    named `fil` is treated as a path.
-5. Apply to all three of `validate`, `get`, and `fill`. The shared input model is
-   a stated working agreement, so the check belongs next to it, not in one
+5. Apply to all three of `validate`, `get`, and `fill`. The shared input model
+   is a stated working agreement, so the check belongs next to it, not in one
    command.
 
 Then `reference/output-and-exit-codes.mdx` (the `get` row and a new "no files

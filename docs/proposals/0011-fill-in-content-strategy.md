@@ -1,9 +1,11 @@
 # 0011 — Reconcile the content strategy with `fill`
 
 - **Status:** Implemented
-- **Serves:** The writing process itself. `content-strategy/` is the mandated input to every docs task
+- **Serves:** The writing process itself. `content-strategy/` is the mandated
+  input to every docs task
 - **Touches:** `docs/content-strategy/cujs.md`, `docs/content-strategy/information-architecture.md`, `docs/content-strategy/personas.md`
-- **Scope note:** This is a **strategy-record** fix, not a docs-content fix. See "What is actually missing".
+- **Scope note:** This is a **strategy-record** fix, not a docs-content fix. See
+  "What is actually missing".
 
 ## Problem
 
@@ -16,16 +18,16 @@ updated.
 Concretely:
 
 - **`cujs.md` has no fill CUJ.** It has two addendum paragraphs bolted onto the
-  ends of M1 and T1. One opens "On an existing docset the journey does not end at
-  a green gate…". The other opens "Theo's failure is usually a *missing*
+  ends of M1 and T1. One opens "On an existing docset the journey does not end
+  at a green gate…". The other opens "Theo's failure is usually a *missing*
   field…". That is useful prose, but no numbered journey. So nothing in the CUJ
   list names the outcome "retrofit metadata onto a docset that never had it".
 - **`information-architecture.md`'s content-set tables list no fill page.** Not in
   Get started, Set up, CI, Schemas, Fix, or Reference. The nav tree has no mention.
 - **The source-of-truth table *does* have a row** for "`fill` command &
   confidence gate" → `src/commands/fill.ts`, `fill-prompt.ts`, `fill-types.ts`.
-  That row points at no page in the content set. It is the one place the strategy
-  acknowledges fill, and it is dangling.
+  That row points at no page in the content set. It is the one place the
+  strategy acknowledges fill, and it is dangling.
 
 `CLAUDE.md` and `content-strategy/README.md` both mandate consulting these files
 **before** any writing task. They say "Identify the persona… Find the matching

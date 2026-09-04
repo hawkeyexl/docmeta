@@ -1,9 +1,11 @@
 # 0016 — Which command owns a flag, and where it may be written
 
 - **Status:** Accepted
-- **Serves:** Every persona; it is the rule behind `CONTRIBUTING.md § Keeping commands consistent`
+- **Serves:** Every persona; it is the rule behind `CONTRIBUTING.md § Keeping
+  commands consistent`
 - **Touches:** `src/cli.ts` (the rule's one implementation), any future subcommand
-- **Prompted by:** Two real defects found while shipping [0010](0010-init-and-schema-inference.md)
+- **Prompted by:** Two real defects found while shipping
+  [0010](0010-init-and-schema-inference.md)
 
 ## Problem
 
@@ -103,9 +105,9 @@ child's not at all, so the child gets `json`. Someone could argue the user meant
 to format the *listing* and then asked for an inference instead.
 
 They could, but there is no listing in that invocation. The subcommand ran. One
-format was typed, one command produced output, and it used the typed format.
-The alternative is to error on a combination that has exactly one sensible
-reading, which trades a working invocation for a lecture.
+format was typed, one command produced output, and it used the typed format. The
+alternative is to error on a combination that has exactly one sensible reading,
+which trades a working invocation for a lecture.
 
 ### 2. The rule is stated in terms of `getOptionValueSource`, which is commander's
 

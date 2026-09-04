@@ -26,9 +26,9 @@ defaults to inline PR annotations:
 ```
 
 `paths`, `schema` and `args` each accept one item per line as well as a single
-space-separated line. Use lines whenever a value contains a space. Shell quoting is not interpreted,
-so `args: --exclude "*.draft.md"` would hand docmeta a pattern with the quote
-marks still in it:
+space-separated line. Use lines whenever a value contains a space. Shell quoting
+is not interpreted, so `args: --exclude "*.draft.md"` would hand docmeta a
+pattern with the quote marks still in it:
 
 ```yaml
 - uses: hawkeyexl/docmeta@v4
@@ -51,15 +51,16 @@ is the same thing written out by hand, for when you want to own the steps.
 docmeta is built to behave well in CI. Two properties carry the whole
 integration:
 
-- **Exit codes drive the gate.** docmeta exits `0` when every file is valid, and `1` when one or more files fail
-validation. It exits `2` on an operational or usage error, such as no inputs and
-no config. GitHub Actions treats any non-zero exit from a step as a failed step, so the
-metadata gate is enforced for free. There is no separate "if failures, then
-fail" wiring to maintain.
+- **Exit codes drive the gate.** docmeta exits `0` when every file is valid, and
+  `1` when one or more files fail validation. It exits `2` on an operational or
+  usage error, such as no inputs and no config. GitHub Actions treats any
+  non-zero exit from a step as a failed step, so the metadata gate is enforced
+  for free. There is no separate "if failures, then fail" wiring to maintain.
 - **`--format github` produces inline annotations.** Instead of pretty console
   output, the `github` format emits one GitHub Actions workflow command per
-  error (`::error file=...,line=...,col=...::...`). GitHub turns each line into an annotation, pinned to the offending file and line
-in the pull request. Reviewers then see exactly what failed without opening the job log.
+  error (`::error file=...,line=...,col=...::...`). GitHub turns each line into
+  an annotation, pinned to the offending file and line in the pull request.
+  Reviewers then see exactly what failed without opening the job log.
 
 For the full contract, see
 [Exit codes & PR annotations](/docmeta/ci/exit-codes-and-annotations/).
