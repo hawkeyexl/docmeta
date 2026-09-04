@@ -71,13 +71,16 @@ Not rejected, but deferred, and the case for it got weaker on inspection. What
 it saves is typing a four-line `docmeta.config.yaml`.
 [Retrofit](../src/content/docs/set-up/retrofit.mdx) and [the config
 reference](../src/content/docs/reference/configuration.mdx) already hand the
-reader that in full, copy-pasteable. What it costs is stress tests 5 through 8,
-all of which are real: - refusing to overwrite an existing config; - warning
-about an **ancestor** config that [0004](0004-config-upward-discovery.md)'s
-upward walk would let a new one silently shadow; - sequencing detection so it
-never writes a config that [0014](0014-empty-input-is-not-success.md) then makes
-exit 2; - choosing among several plausible `paths:` candidates without guessing
-quietly.
+reader that in full. What it costs is stress tests 5 through 8, all of which are
+real:
+
+- refusing to overwrite an existing config;
+- warning about an **ancestor** config that
+  [0004](0004-config-upward-discovery.md)'s upward walk would let a new one
+  silently shadow;
+- sequencing detection so it never writes a config that
+  [0014](0014-empty-input-is-not-success.md) then makes exit 2;
+- choosing among several plausible `paths:` candidates without guessing quietly.
 
 That is four hazards, each with a failure mode measured in confused hours, for a
 saving measured in seconds of typing. `schemas infer` was the half of this
