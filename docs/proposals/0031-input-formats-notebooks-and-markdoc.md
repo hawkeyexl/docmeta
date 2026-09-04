@@ -437,7 +437,7 @@ The first design lifted notebook `metadata` to top-level keys, so
 `myst:frontmatter:1.10` would type `kernelspec` and `authors` directly. A
 notebook with page frontmatter in cell 0 *and* a `title` in `metadata` then has
 two `title`s and one key. Whichever the merge favours, the other is discarded,
-and and it is the discarded one that nobody is checking. 0020 rejected exactly
+and it is the discarded one that nobody is checking. 0020 rejected exactly
 this for DITA's `<audience>` against `<othermeta name="audience">`.
 
 **Changed as a result:** the namespaced `metadata.*` spelling above, and the
