@@ -109,9 +109,9 @@ Verified on `node:sqlite` (Node 24.11.0), the two failure directions are asymmet
 
 - an **extra** parameter throws, with `Unknown named parameter 'x'`, so the typo
   guard exists in the engine;
-- a parameter the SQL **references with nothing bound is silently NULL**. `WHERE
-  status = $status` with the `--param` forgotten matches nothing, and returns
-  zero rows. And a zero-row `--check` is a **passing CI gate**.
+- a parameter the SQL **references with nothing bound is silently NULL**.
+  `WHERE status = $status` with the `--param` forgotten matches nothing, and
+  returns zero rows. And a zero-row `--check` is a **passing CI gate**.
 
 docmeta closes the second direction itself. The statement is scanned for
 parameter tokens outside string literals, using the quote-aware scanner that
@@ -154,15 +154,16 @@ light from a typo. The same probe confirms the opposite direction throws
 `title: "2026"` is a YAML string, the string-default rule matches it and `:=` binds the
 number that does not. The footgun from Options B, nailed down as behavior.
 
-**3. Splitting on the first separator, `:=` checked before `=`.** `--param
-msg=a=b` binds `a=b`. The typed-string spelling needs its shell quoting stated
-exactly, because review caught the trap. Written bare, `--param v:="5"` has its
-double quotes eaten by the shell. The program then receives `v:=5` and binds the
-**number**, which is the precise inversion this mechanism exists to prevent. The
-reference therefore teaches `--param 'v:="5"'`, with outer single quotes
-protecting the JSON string literal. That binds the string `5`, which is how you
-spell "a string that looks like a number, typed deliberately". The pinning test
-asserts both spellings: quoted binds the string, and unquoted binds the number.
+**3. Splitting on the first separator, `:=` checked before `=`.**
+`--param msg=a=b` binds `a=b`. The typed-string spelling needs its shell quoting
+stated exactly, because review caught the trap. Written bare, `--param v:="5"`
+has its double quotes eaten by the shell. The program then receives `v:=5` and
+binds the **number**, which is the precise inversion this mechanism exists to
+prevent. The reference therefore teaches `--param 'v:="5"'`, with outer single
+quotes protecting the JSON string literal. That binds the string `5`, which is
+how you spell "a string that looks like a number, typed deliberately". The
+pinning test asserts both spellings: quoted binds the string, and unquoted binds
+the number.
 
 **4. A zero-row CSV is the header alone.** Distinguishable from empty output (an
 operational failure printed nothing to stdout) and cheap for a script to test. Pinned in
@@ -174,10 +175,10 @@ emitted bytes parse back to the same cells under an RFC 4180 reader. That proves
 the escaping rather than string-matching it.
 
 **6. The reference and the format-list string move in the same PR.** The CLI
-reference is machine-compared against the real commander surface, by `npm run
-docs:check-cli`. And the shared helper that renders "pretty or json" renders
-longer lists with commas. Both are named here so the implementation PR treats
-them as expected fallout, not surprises.
+reference is machine-compared against the real commander surface, by
+`npm run docs:check-cli`. And the shared helper that renders "pretty or json"
+renders longer lists with commas. Both are named here so the implementation PR
+treats them as expected fallout, not surprises.
 
 ## Not breaking
 

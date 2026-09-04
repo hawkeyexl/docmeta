@@ -60,14 +60,15 @@ owns. Those facts are ownership, review, audience, applicability, lifecycle,
 relationships, AI provenance and guidance, and per-document quality contracts.
 
 The evidence base has four parts. First, a context-engineering model for
-AI-ready documentation. That is the maturity ladder `id · type · description ·
-owner` → typed applicability → eval-instrumented → drift-monitored, with
-`intent`, `source-of-truth`, `risks`, and per-page sample questions. Second, a
-survey of 225 writing skills' entry criteria as a metadata demand signal. Third,
-the registry's own key space, at 19 built-ins and 220 distinct keys once the
-in-flight platform schemas land. Fourth, a design walk through the in-progress
-metadata contracts of three tools in the same family: docevals, dockg, and
-moose-tracevals. The common vocabularies below replace those.
+AI-ready documentation. That is the maturity ladder
+`id · type · description · owner` → typed applicability → eval-instrumented →
+drift-monitored, with `intent`, `source-of-truth`, `risks`, and per-page sample
+questions. Second, a survey of 225 writing skills' entry criteria as a metadata
+demand signal. Third, the registry's own key space, at 19 built-ins and 220
+distinct keys once the in-flight platform schemas land. Fourth, a design walk
+through the in-progress metadata contracts of three tools in the same family:
+docevals, dockg, and moose-tracevals. The common vocabularies below replace
+those.
 
 ## The principles
 
@@ -236,8 +237,8 @@ recorded for the same reason round 5's non-changes are:
   documented claimants, to make one schema look neater.
 
 **docmeta:ai-context:1.0.0-proposal.1**: `generated-by`, `provenance`, `risks`
-and `sample-questions`. The recommended `risks` flags are `cost-incurring ·
-destructive · irreversible · privileged · open-world · read-only · idempotent`.
+and `sample-questions`. The recommended `risks` flags are
+`cost-incurring · destructive · irreversible · privileged · open-world · read-only · idempotent`.
 The first four come from the context-engineering model, and the last three
 mirror MCP's tool annotations.
 
@@ -314,15 +315,15 @@ as the page side. So one entry vocabulary genuinely ports. `proposal.1` kept one
 asymmetry, with `assertion` unconditional here where the page side lets a tool
 grader be its own check. Round 6 removed it, and `proposal.2` ports the page
 side's conditional block verbatim. The grader is a full open enum. Recommended
-values are `ai · human · command · tool-usage · skill-invoked · file-access ·
-turn-count · cost · regex · json-output`, plus the page side's `tool:*`
-spelling, so one grader name ports across both vocabularies. Any kebab name is
-legal and registry-validated. In `proposal.1` no schema conditional switched on
-the grader at all. In `proposal.2` the assertion rule branches on `ai`, `human`
-and `command`, and the enum stays open because an unknown name matches none of
-those branches. `human` here is judged per session. Every trace is new, so there
-is no verdict caching. The 0.2 defaults, `severity: error` and skip `false`, are
-restored.
+values are
+`ai · human · command · tool-usage · skill-invoked · file-access · turn-count · cost · regex · json-output`,
+plus the page side's `tool:*` spelling, so one grader name ports across both
+vocabularies. Any kebab name is legal and registry-validated. In `proposal.1` no
+schema conditional switched on the grader at all. In `proposal.2` the assertion
+rule branches on `ai`, `human` and `command`, and the enum stays open because an
+unknown name matches none of those branches. `human` here is judged per session.
+Every trace is new, so there is no verdict caching. The 0.2 defaults,
+`severity: error` and skip `false`, are restored.
 
 **doc-structure-lint** was looked at, and is not a schema. Improve it by
 **selection, not validation**. Pick the template from the page's `type` via a

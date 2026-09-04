@@ -102,9 +102,9 @@ docmeta fill docs/**/*.dita -s oasis:dita-metadata:1.3
   do on your behalf.
 
 <Aside type="note" title="Why `<vrm>` is keyed for itself and not its container">
-`<vrm>` is EMPTY and carries three separate facts, so `version="2" release="1"
-modification="0"`. Keying it `vrmlist.vrm` would have to pick one and discard
-two.
+`<vrm>` is EMPTY and carries three separate facts, so
+`version="2" release="1" modification="0"`. Keying it `vrmlist.vrm` would have
+to pick one and discard two.
 
 The naming rule does not change to accommodate that; it applies one level down.
 For an *attribute* the containing thing is the element, so the keys are

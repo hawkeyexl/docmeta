@@ -22,9 +22,9 @@ with a non-empty `schemaTrust.hosts` rejects a host the operator did not list.
 Aliasing inside `loadSchema` does not help, because both refusals happen
 earlier, in `resolveSchemaSet`. That is the last place that still knows a ref
 came from a document. So a published URL is exempted in
-`assertDocumentRefAllowed` alongside built-in ids, **above** the `kind ===
-"url"` block. Putting it inside that block would clear the host check and leave
-`local` broken. The predicate `isPublishedBuiltinUrl` is exported from
+`assertDocumentRefAllowed` alongside built-in ids, **above** the
+`kind === "url"` block. Putting it inside that block would clear the host check
+and leave `local` broken. The predicate `isPublishedBuiltinUrl` is exported from
 `schema-registry.ts` and shared, so there is one table rather than two.
 
 **Stress test 1's premise "the mapping needs no table" was wrong.** The path
@@ -217,11 +217,12 @@ A regenerate script, `npm run schemas:manifest`, writes it. The CI check runs
 the script and fails on a dirty tree. That is the same pattern as
 `docs:check-cli`, so there is one idiom in the repo rather than two.
 
-Note this repo has already edited built-ins in place. `f7e611b fix(schemas):
-require type on the Diataxis vocabulary` changed `diataxis:diataxis:1.0`, and
-shipped as a **major** version bump of docmeta. That was defensible for a
-bundled schema. Once the URL is public it would break consumers who never
-upgraded docmeta at all. The manifest check is what makes the new rule stick.
+Note this repo has already edited built-ins in place.
+`f7e611b fix(schemas): require type on the Diataxis vocabulary` changed
+`diataxis:diataxis:1.0`, and shipped as a **major** version bump of docmeta.
+That was defensible for a bundled schema. Once the URL is public it would break
+consumers who never upgraded docmeta at all. The manifest check is what makes
+the new rule stick.
 
 ### 4. Editor autocomplete, the weakest of the claimed benefits, stated honestly
 

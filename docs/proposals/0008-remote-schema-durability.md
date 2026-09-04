@@ -155,12 +155,12 @@ caching.
 The current code also checks `res.ok` but not `content-type`. A captive-portal
 or proxy HTML page can parse as nothing at all, so `res.json()` throws and the
 error says "Failed to fetch schema". That is acceptable, and an HTML page is not
-valid JSON. The real hazard is a JSON error envelope such as `{"error":"not
-found"}` served with 200. It compiles as an empty schema and **passes every
-document**. That is a false green, and it is worth an explicit check. A fetched
-schema must be an object, and must contain at least one of `$schema`, `$id`,
-`type`, `properties`, `required`, or `allOf`. Cheap, and it turns a silent pass
-into a clear error.
+valid JSON. The real hazard is a JSON error envelope such as
+`{"error":"not found"}` served with 200. It compiles as an empty schema and
+**passes every document**. That is a false green, and it is worth an explicit
+check. A fetched schema must be an object, and must contain at least one of
+`$schema`, `$id`, `type`, `properties`, `required`, or `allOf`. Cheap, and it
+turns a silent pass into a clear error.
 
 ### 4. No retry, so add one narrowly
 
@@ -205,9 +205,9 @@ remove the comment and replace it with the real guard.
 committed**. Defaulting `--dir` to `.docmeta/schemas` would put them in an
 ignored directory, and the user would discover on the next CI run that the file
 is not there. Default to `./schema/`, which is unignored, and make the command
-refuse to write into a gitignored path. That is checkable with the same `git
-check-ignore` machinery [0006](0006-gitignore-aware-discovery.md) introduces.
-Nice reuse, and also a genuine foot-gun if missed.
+refuse to write into a gitignored path. That is checkable with the same
+`git check-ignore` machinery [0006](0006-gitignore-aware-discovery.md)
+introduces. Nice reuse, and also a genuine foot-gun if missed.
 
 ### 8. Concurrency, verified already correct
 
@@ -236,8 +236,9 @@ kind of detail that produces a cache that never expires.
    none on 404, asserting the request count via `test/helpers/schema-server.ts`.
 4. In `test/cli.integration.test.ts`, `--offline` with a cold cache fails naming
    the URL, and `--offline` against the default built-in set succeeds.
-5. In `test/config.test.ts`, `schemas:` accepts both a string and `{ ref,
-   source, integrity }`, and a bad `integrity` fails with a clear message.
+5. In `test/config.test.ts`, `schemas:` accepts both a string and
+   `{ ref, source, integrity }`, and a bad `integrity` fails with a clear
+   message.
 6. In `test/commands.test.ts`, `schemas vendor` writes the file, records the
    hash, rewrites config, and **refuses** a gitignored target directory.
 7. For docs, `reference/schema-resolution.mdx` (cache, offline, integrity),
@@ -255,8 +256,8 @@ integrity pins, and `docmeta schemas vendor`.
 Design changes, each against the stress test that produced it:
 
 - **§7 (where vendored schemas live) was followed, and enforced rather than
-  documented.** `--dir` defaults to `./schema`, and the command asks `git
-  check-ignore` about the target *before* it downloads anything, exiting 2
+  documented.** `--dir` defaults to `./schema`, and the command asks
+  `git check-ignore` about the target *before* it downloads anything, exiting 2
   without writing. Two spellings are checked, the file and its directory. A
   directory-only pattern such as `vendor/` does not match the bare path while
   the directory does not yet exist. So git can only answer for the file

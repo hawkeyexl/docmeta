@@ -225,18 +225,18 @@ Item 1 shipped as **Option C**, as recommended. `src/extractors/stub.ts` and its
 self-referential test are gone, `implemented` stays on `MetadataExtractor` and
 on `getSchemasInfo()`, and the `planned` render branch in `src/cli.ts` stays
 with it. Three comments described the deleted facility as present: the registry
-docstring, the `implemented` doc comment, and validate's `// operational
-(stub/unsupported)`. All three were corrected rather than left behind, and
-`CONTRIBUTING.md` now points at the field instead of the helper.
+docstring, the `implemented` doc comment, and validate's
+`// operational (stub/unsupported)`. All three were corrected rather than left
+behind, and `CONTRIBUTING.md` now points at the field instead of the helper.
 
 ### Item 2 was wider than "one property away"
 
 The proposal calls `col` "one property away" for both formats. That reading
-misses that `ExtractedMetadata.lineFor` and `Validator.validate(data, refs,
-lineFor)` are **both public**. Widening either one is a consumer break, whether
-by a returned position pair or a required third argument. It breaks anyone
-implementing `MetadataExtractor` or calling the validator outside this
-repository.
+misses that `ExtractedMetadata.lineFor` and
+`Validator.validate(data, refs, lineFor)` are **both public**. Widening either
+one is a consumer break, whether by a returned position pair or a required third
+argument. It breaks anyone implementing `MetadataExtractor` or calling the
+validator outside this repository.
 
 So the scope changed, and the shape is **additive**: an optional
 `colFor?(pointer)` joins `ExtractedMetadata`, and `Validator.validate` takes an

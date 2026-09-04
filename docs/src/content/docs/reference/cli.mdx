@@ -105,13 +105,14 @@ document, so it diffs and merges legibly:
 
 Commit it. Reviewers should see it grow or shrink in a diff.
 
-A fingerprint is 16 hex characters of `sha256(schema + NUL + instancePath + NUL
-+ keyword + NUL + subject)`, the four [machine-stable
-  fields](/docmeta/reference/output-and-exit-codes/#output-formats) of a
-  violation. It deliberately excludes three things. The **line number**, so
-  editing a document does not invalidate it. The **message prose**, so an Ajv
-  upgrade that rewords a message does not invalidate every entry at once. And
-  the **file path**, which is already the key.
+A fingerprint is 16 hex characters of
+`sha256(schema + NUL + instancePath + NUL + keyword + NUL + subject)`, the four
+[machine-stable
+fields](/docmeta/reference/output-and-exit-codes/#output-formats) of a
+violation. It deliberately excludes three things. The **line number**, so
+editing a document does not invalidate it. The **message prose**, so an Ajv
+upgrade that rewords a message does not invalidate every entry at once. And the
+**file path**, which is already the key.
 
 Three things do change a fingerprint, and each is recovered with one
 `--write-baseline`:
@@ -683,9 +684,10 @@ docmeta schemas [options]
 
 In `pretty` format, `schemas` lists each built-in schema by id and title. It
 then lists each input format with its extensions, whether it is implemented, and
-whether [`fill`](#fill) can write to it. In `json` format it prints `{ builtins,
-formats }`, where `builtins` is an array of `{ id, title, description }` and
-`formats` is an array of `{ name, extensions, implemented, writable }`.
+whether [`fill`](#fill) can write to it. In `json` format it prints
+`{ builtins, formats }`, where `builtins` is an array of
+`{ id, title, description }` and `formats` is an array of
+`{ name, extensions, implemented, writable }`.
 
 ```sh
 docmeta schemas
@@ -878,11 +880,11 @@ Two cases, both exit 2:
 | A named path that does not exist, as in `docmeta validate docs/typo.md` | `File not found: "docs/typo.md".` |
 | Everything resolved, but nothing matched, as in `docmeta validate "docs/**/*.nomatch"` | `No files matched. Patterns tried: …` |
 
-A named path is reported even when other inputs did match, so `docmeta validate
-good.md typo.md` is an error rather than a partial success. `--ext` and
-`--exclude` filters are named in the message when they were in play. "No files
-matched" is baffling when the glob plainly matches files on disk. So is
-[`.gitignore`](#gitignore), which is the one filter you never wrote on the
+A named path is reported even when other inputs did match, so
+`docmeta validate good.md typo.md` is an error rather than a partial success.
+`--ext` and `--exclude` filters are named in the message when they were in play.
+"No files matched" is baffling when the glob plainly matches files on disk. So
+is [`.gitignore`](#gitignore), which is the one filter you never wrote on the
 command line:
 
 ```
@@ -893,17 +895,18 @@ Filters applied — .gitignore skipped 12 (pass --no-gitignore to check them).
 Reading stdin with `-` is one input, so an empty piped document still produces a
 verdict and is unaffected.
 
-Pass `--allow-empty` (or set [`allowEmpty:
-true`](/docmeta/reference/configuration/#keys)) when matching nothing is
-expected. That covers a shared CI template running across repos that may have no
-docs yet. It also covers a pre-commit hook whose file list can be empty.
+Pass `--allow-empty` (or set
+[`allowEmpty: true`](/docmeta/reference/configuration/#keys)) when matching
+nothing is expected. That covers a shared CI template running across repos that
+may have no docs yet. It also covers a pre-commit hook whose file list can be
+empty.
 
 <Aside type="note">
 Because `validate` is the default command, a misspelled subcommand parses as a
-path. `docmeta valdiate docs/` exits 2 with `Unknown command "valdiate". Did you
-mean "validate"?`. The suggestion only fires on a token that is not a path, has
-no separator, extension, or glob character, and does not exist on disk. So
-`docmeta docs/` keeps working.
+path. `docmeta valdiate docs/` exits 2 with
+`Unknown command "valdiate". Did you mean "validate"?`. The suggestion only
+fires on a token that is not a path, has no separator, extension, or glob
+character, and does not exist on disk. So `docmeta docs/` keeps working.
 </Aside>
 
 ### Default ignores
@@ -940,9 +943,9 @@ Four things bound it:
 - **Explicitly named files are never filtered.** `docmeta validate
   build/generated.md` validates that file. Filtering applies only to directory
   and glob expansion, exactly like the extension filter.
-- **The count is reported.** A run that skipped something says so: `1 file
-  checked, 1 passed, 0 failed, 0 errors, 1 skipped by .gitignore`, and `json`
-  output carries
+- **The count is reported.** A run that skipped something says so:
+  `1 file checked, 1 passed, 0 failed, 0 errors, 1 skipped by .gitignore`, and
+  `json` output carries
   [`summary.gitignoreSkipped`](/docmeta/reference/output-and-exit-codes/#output-formats).
   The count covers only files that passed the extension filter, so it answers
   "how many candidate documents did `.gitignore` take away". `--exclude`

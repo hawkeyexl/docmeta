@@ -78,9 +78,9 @@ jobs:
 
 <Aside type="caution" title="continue-on-error is not optional here">
 This is the trap the recipe exists to avoid. `validate` exits `1` when it finds
-anything. Without `continue-on-error: true` on the docmeta step and `if:
-always()` on the upload, the job stops at the first finding. **The Security tab
-then stays empty forever**, and the failing case is exactly the case with
+anything. Without `continue-on-error: true` on the docmeta step and
+`if: always()` on the upload, the job stops at the first finding. **The Security
+tab then stays empty forever**, and the failing case is exactly the case with
 something to upload.
 </Aside>
 

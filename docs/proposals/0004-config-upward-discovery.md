@@ -21,10 +21,10 @@ return null;   // nothing found -> fall back to DEFAULT_SCHEMAS
 
 ### Defect 1. Running from a subdirectory silently changes the contract
 
-In the sandbox, `docmeta.config.yaml` at the root pins `schemas:
-[./strict.schema.json]`, which requires `owner`. The document has `type: guide,
-title: Hi`. It satisfies the built-in default set, and violates the configured
-one.
+In the sandbox, `docmeta.config.yaml` at the root pins
+`schemas: [./strict.schema.json]`, which requires `owner`. The document has
+`type: guide, title: Hi`. It satisfies the built-in default set, and violates
+the configured one.
 
 ```console
 $ cd $SB && docmeta validate "docs/**/*.md"
@@ -167,12 +167,12 @@ branch's config. That is a new instance of exactly the bug CLAUDE.md already
 documents for `node_modules` resolution in worktrees. The check must be
 `existsSync(join(dir, ".git"))`, accepting both a directory and a gitfile.
 
-No OS-specific branching is needed. A Windows gitfile holds an absolute `gitdir:
-C:\path\to\...\worktrees\<name>`. But boundary detection only asks whether
-`.git` **exists**, never what it points at. So `existsSync` is true either way,
-and one line covers Windows, Linux, submodules, and worktrees alike. Stated
-explicitly so an implementer does not go hunting for a platform special case
-that is not required.
+No OS-specific branching is needed. A Windows gitfile holds an absolute
+`gitdir: C:\path\to\...\worktrees\<name>`. But boundary detection only asks
+whether `.git` **exists**, never what it points at. So `existsSync` is true
+either way, and one line covers Windows, Linux, submodules, and worktrees alike.
+Stated explicitly so an implementer does not go hunting for a platform special
+case that is not required.
 
 ### 3. Merging ancestor configs (rejected)
 

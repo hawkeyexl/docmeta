@@ -164,10 +164,10 @@ the very top of the file.
 ```
 
 The frontmatter block exists but isn't valid, so docmeta can't read it. The
-message names the flavor: `Invalid YAML frontmatter`, `Invalid TOML
-frontmatter`, or `Invalid JSON frontmatter`. The schema in brackets is
-`[(parse)]` rather than a real schema id, so this is a syntax problem rather
-than a rule violation.
+message names the flavor: `Invalid YAML frontmatter`,
+`Invalid TOML frontmatter`, or `Invalid JSON frontmatter`. The schema in
+brackets is `[(parse)]` rather than a real schema id, so this is a syntax
+problem rather than a rule violation.
 
 **Fix.** Correct the block's syntax for its flavor. In YAML a frequent culprit
 is a value with a colon that needs quoting:
@@ -254,10 +254,10 @@ before CI does.
 ## Let docmeta draft the fix
 
 Sometimes the failure is a *missing* field rather than a malformed one, and
-several pages fail the same way. Then [`docmeta
-fill`](/docmeta/reference/cli/#fill) can propose the values for you. It reads
-the page, resolves the same schema the check used, and writes back the values it
-is confident about.
+several pages fail the same way. Then
+[`docmeta fill`](/docmeta/reference/cli/#fill) can propose the values for you.
+It reads the page, resolves the same schema the check used, and writes back the
+values it is confident about.
 
 Preview first:
 

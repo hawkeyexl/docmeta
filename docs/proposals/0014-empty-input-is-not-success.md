@@ -120,10 +120,10 @@ edit distance to a known command name is ≤ 2, fail with a suggestion:
 docmeta: Unknown command "valdiate". Did you mean "validate"?
 ```
 
-The narrow guard matters. `docmeta docs` must keep working as `docmeta validate
-docs`, and `docs` is not within edit distance 2 of any command name. Commander's
-`showSuggestionAfterError` does not help here, because with a default command
-there is no parse error to hang a suggestion on.
+The narrow guard matters. `docmeta docs` must keep working as
+`docmeta validate docs`, and `docs` is not within edit distance 2 of any command
+name. Commander's `showSuggestionAfterError` does not help here, because with a
+default command there is no parse error to hang a suggestion on.
 
 ## Stress test
 
@@ -191,9 +191,9 @@ character, no extension, and is not one of the four. It would emit a generic
 Declined, on precision rather than cost. That predicate is true of **every**
 mistyped path that happens to be a bare word. So `docmeta myproject`, a real
 directory renamed last week, would answer "did you mean
-validate/get/fill/schemas?". That is both wrong and less informative than `File
-not found: "myproject"`. Edit distance is the only thing separating "this is
-plausibly a misspelled command" from "this is some other mistake", and that
+validate/get/fill/schemas?". That is both wrong and less informative than
+`File not found: "myproject"`. Edit distance is the only thing separating "this
+is plausibly a misspelled command" from "this is some other mistake", and that
 distinction *is* the feature. The cost being avoided is four comparisons of ≤
 7-character strings, once per invocation, on a token that has already failed a
 `stat`.
@@ -208,10 +208,10 @@ docmeta: File not found: "valdiate".
 ```
 
 So the suggestion is purely a message upgrade on an already-correct failure.
-That raises the bar for precision rather than lowering it. A targeted `Unknown
-command "valdiate". Did you mean "validate"?` earns its keep. A scattershot
-four-way suggestion attached to every mistyped directory name is strictly worse
-than the plain not-found message it would replace.
+That raises the bar for precision rather than lowering it. A targeted
+`Unknown command "valdiate". Did you mean "validate"?` earns its keep. A
+scattershot four-way suggestion attached to every mistyped directory name is
+strictly worse than the plain not-found message it would replace.
 
 ### 9. Monorepo template runs, the legitimate case, handled
 

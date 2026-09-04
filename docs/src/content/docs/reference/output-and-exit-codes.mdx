@@ -225,9 +225,9 @@ consumer can resolve, and a location pointing at one would be dropped anyway.
 GitHub resolves `artifactLocation.uri` **against the repository root**, and
 silently drops results that do not resolve. A wrong path means the upload
 *succeeds* with zero alerts, which reads as a clean scan. So docmeta rebases
-every path onto the nearest git repository root. `docmeta validate api.md -f
-sarif` run from inside `docs/` reports `docs/api.md`, exactly as a run from the
-repository root does.
+every path onto the nearest git repository root.
+`docmeta validate api.md -f sarif` run from inside `docs/` reports
+`docs/api.md`, exactly as a run from the repository root does.
 
 When there is no git repository above the working directory, paths stay relative
 to that directory and docmeta says so on stderr. A file **outside** the
@@ -422,8 +422,8 @@ documents still need work, not that docmeta malfunctioned.
   **stdout**.
 - **Diagnostics** are operational errors that cause exit 2, and go to
   **stderr**, prefixed with `docmeta: `. Usage errors the argument parser
-  rejects also go to stderr, prefixed with `error: ` and followed by `(add
-  --help for usage)`.
+  rejects also go to stderr, prefixed with `error: ` and followed by
+  `(add --help for usage)`.
 
 This separation lets you capture machine-readable output cleanly:
 

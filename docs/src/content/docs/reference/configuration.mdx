@@ -339,9 +339,9 @@ configured.
 
 An override carrying `name:` becomes a **view** over the `docs` table wherever
 SQL runs, in [`docmeta query`](/docmeta/reference/query/) and the
-[`checks:`](#checks) list alike. A cross-file rule can then say `FROM docs d
-LEFT JOIN authors a` instead of duplicating the config's glob as a SQL `GLOB`
-pattern:
+[`checks:`](#checks) list alike. A cross-file rule can then say
+`FROM docs d LEFT JOIN authors a` instead of duplicating the config's glob as a
+SQL `GLOB` pattern:
 
 ```yaml
 overrides:
@@ -367,18 +367,18 @@ chain](/docmeta/reference/schema-resolution/#precedence):
   prepare was swallowed and retried. That path is a collection reference the
   eager trigger cannot see in the SQL text. A `query` statement that never
   touches a collection resolves nothing and prints no membership notice.
-- Trust settings move membership. Under [`schemaTrust.documentRefs:
-  none`](#schema-trust) the document's `$schema` is ignored, the override wins
-  the file back, and the view grows. A per-file trust *refusal* (a `$schema` URL
-  the settings reject) demotes the file to member of no view. It never turns a
-  working `SELECT` into exit 2. `validate` is where that refusal is reported as
-  a finding.
+- Trust settings move membership. Under
+  [`schemaTrust.documentRefs: none`](#schema-trust) the document's `$schema` is
+  ignored, the override wins the file back, and the view grows. A per-file trust
+  *refusal* (a `$schema` URL the settings reject) demotes the file to member of
+  no view. It never turns a working `SELECT` into exit 2. `validate` is where
+  that refusal is reported as a finding.
 
 Views are **read-only**, and an `UPDATE` through one refuses with the remedy,
-write through `docs`, scoped by the view (`UPDATE docs … WHERE _path IN (SELECT
-_path FROM "authors")`). They ride into a [`--db`
-export](/docmeta/reference/query/#exporting-the-database) as ordinary `CREATE
-VIEW` rows, and the effect gate never sees them.
+write through `docs`, scoped by the view
+(`UPDATE docs … WHERE _path IN (SELECT _path FROM "authors")`). They ride into a
+[`--db` export](/docmeta/reference/query/#exporting-the-database) as ordinary
+`CREATE VIEW` rows, and the effect gate never sees them.
 
 Any string is a legal name, because view names are quoted identifiers.
 `parseConfig` refuses five up front. A **duplicate** name. The name **`docs`**,
@@ -392,12 +392,13 @@ config is read. That is the standard new-key caveat.
 ### Checks
 
 `checks` is a list of named cross-file rules. Each is one SQL statement run over
-the same `docs` projection [`docmeta
-query`](/docmeta/reference/query/#the-docs-table) builds, with one row per file
-and one column per top-level metadata key. Every row the statement returns is
-reported as a **finding**, exactly as a schema violation is. It renders in every
-[output format](/docmeta/reference/output-and-exit-codes/), counts toward exit
-1, and rides the [baseline ratchet](/docmeta/reference/cli/#baselines).
+the same `docs` projection
+[`docmeta query`](/docmeta/reference/query/#the-docs-table) builds, with one row
+per file and one column per top-level metadata key. Every row the statement
+returns is reported as a **finding**, exactly as a schema violation is. It
+renders in every [output format](/docmeta/reference/output-and-exit-codes/),
+counts toward exit 1, and rides the [baseline
+ratchet](/docmeta/reference/cli/#baselines).
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -448,12 +449,13 @@ of the input set disqualifies the run: positional paths, stdin, `--as`, `--ext`,
 `--exclude`, and `--no-gitignore`. So does `-s/--schema`, even though the file
 set is unchanged. A schema override reshapes the corpus contract. It outranks
 every override group, so all [collection](#named-collections) views would be
-empty by construction. A scoped run prints one stderr notice (`corpus checks
-skipped: run is scoped`) and validates as usual. Config-level `exclude:` and
-`respectGitignore:` do **not** disqualify, because they *define* the corpus; the
-CLI flags redefine the run. [`--no-checks`](/docmeta/reference/cli/#validate)
-opts out explicitly for one run, mirroring `--no-baseline`. Checks resolve no
-schemas and make no network requests, so `--offline` does not affect them.
+empty by construction. A scoped run prints one stderr notice
+(`corpus checks skipped: run is scoped`) and validates as usual. Config-level
+`exclude:` and `respectGitignore:` do **not** disqualify, because they *define*
+the corpus; the CLI flags redefine the run.
+[`--no-checks`](/docmeta/reference/cli/#validate) opts out explicitly for one
+run, mirroring `--no-baseline`. Checks resolve no schemas and make no network
+requests, so `--offline` does not affect them.
 
 ## Example
 

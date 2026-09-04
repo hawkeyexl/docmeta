@@ -230,11 +230,11 @@ array. The exit code, not the envelope, carries the verdict.
 ## Stress test
 
 **1. JS booleans do not bind, and the spike caught the loader's first bug before
-it existed.** `node:sqlite` on 24.11, with SQLite 3.50.4, throws `Provided value
-cannot be bound` for `true`. So `draft: true` coerces to `1` or `0` at insert,
-by rule, and the rule is documented. Write `WHERE draft = 1`, not `WHERE draft =
-true`. SQLite accepts `true` as a literal for `1`, so both spellings work
-anyway.
+it existed.** `node:sqlite` on 24.11, with SQLite 3.50.4, throws
+`Provided value cannot be bound` for `true`. So `draft: true` coerces to `1` or
+`0` at insert, by rule, and the rule is documented. Write `WHERE draft = 1`, not
+`WHERE draft = true`. SQLite accepts `true` as a literal for `1`, so both
+spellings work anyway.
 
 **2. Node 24 prints an `ExperimentalWarning` for `node:sqlite` on first use.**
 Verified live. On the engines floor, every `docmeta query` would open with a
@@ -261,9 +261,9 @@ is the cost of keeping today's rule narrow.
 **5. Key names SQL identifiers cannot hold.** Doubling internal quotes makes any
 key a legal quoted identifier, except the empty string, which YAML allows as
 `"": x`. That one stays in `_data` only. Element-derived keys with dots, such as
-`prolog.author` from 0020, are ordinary quoted columns, written `SELECT
-"prolog.author"`. They have no pointer semantics to collide with, because SQL
-never parses identifiers as paths.
+`prolog.author` from 0020, are ordinary quoted columns, written
+`SELECT "prolog.author"`. They have no pointer semantics to collide with,
+because SQL never parses identifiers as paths.
 
 **6. Is rebuilding per run too slow to be a database?** Measured, not guessed.
 2,020 rows insert in 4.2 ms, the referential-integrity `LEFT JOIN … GLOB` over

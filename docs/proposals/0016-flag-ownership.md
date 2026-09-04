@@ -1,8 +1,8 @@
 # 0016: Which command owns a flag, and where it may be written
 
 - **Status:** Accepted
-- **Serves:** Every persona; it is the rule behind `CONTRIBUTING.md § Keeping
-  commands consistent`
+- **Serves:** Every persona; it is the rule behind
+  `CONTRIBUTING.md § Keeping commands consistent`
 - **Touches:** `src/cli.ts` (the rule's one implementation), any future subcommand
 - **Prompted by:** Two real defects found while shipping
   [0010](0010-init-and-schema-inference.md)

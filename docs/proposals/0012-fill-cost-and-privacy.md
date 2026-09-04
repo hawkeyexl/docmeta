@@ -131,9 +131,9 @@ inferred for a long reference page may miss its own conclusion.
 The strongest privacy fix is not documentation. It is to make `auto` refuse to
 use a hosted provider unless explicitly allowed, so an incidental
 `OPENAI_API_KEY` cannot cause egress. That would be a **breaking behavioral
-change**. The detection order was a deliberate, recent decision, in `2f60978
-feat(fill): detect an inference provider instead of assuming anthropic`. It was
-taken so that `fill` works with whatever credentials the user has.
+change**. The detection order was a deliberate, recent decision, in
+`2f60978 feat(fill): detect an inference provider instead of assuming anthropic`.
+It was taken so that `fill` works with whatever credentials the user has.
 
 Out of scope for a docs proposal, and it deserves its own. The argument is
 recorded because it is the real fix, and this proposal is the mitigation.
@@ -193,7 +193,7 @@ Docs-first, with one code change:
 5. In `test/cli.integration.test.ts`, `validate --offline` and `fill --offline`
    share the flag name and the no-network guarantee, per
    [0008](0008-remote-schema-durability.md).
-6. Update `reference/cli.mdx` for `--offline` on both commands, then run `npm
-   run build && npm run docs:check-cli`.
+6. Update `reference/cli.mdx` for `--offline` on both commands, then run
+   `npm run build && npm run docs:check-cli`.
 7. Run the dogfood check before pushing:
    `node dist/cli.js validate "docs/src/content/docs/**/*.{md,mdx}" -s ./docs/doc-frontmatter.schema.json`

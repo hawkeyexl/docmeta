@@ -328,10 +328,10 @@ The registry already supports it, since `byName` gets the entry and
 real design and it is not why to say no. The paragraph above it is.
 
 **What would reopen it**, in 0019's shape: not a request to validate a data file
-because that has a better tool. A request to bring data files into `docmeta
-query`, so a corpus check can join a page's `product` against a `products.yaml`
-the docs are generated from. That is a cross-file rule and there is no other
-tool for it. It is also squarely on the boundary
+because that has a better tool. A request to bring data files into
+`docmeta query`, so a corpus check can join a page's `product` against a
+`products.yaml` the docs are generated from. That is a cross-file rule and there
+is no other tool for it. It is also squarely on the boundary
 [0021](0021-frontmatter-as-a-database.md) drew, so it would be a query proposal,
 not a format one.
 
@@ -437,8 +437,8 @@ The first design lifted notebook `metadata` to top-level keys, so
 `myst:frontmatter:1.10` would type `kernelspec` and `authors` directly. A
 notebook with page frontmatter in cell 0 *and* a `title` in `metadata` then has
 two `title`s and one key. Whichever the merge favours, the other is discarded,
-and it is the discarded one that nobody is checking. 0020 rejected exactly
-this for DITA's `<audience>` against `<othermeta name="audience">`.
+and it is the discarded one that nobody is checking. 0020 rejected exactly this
+for DITA's `<audience>` against `<othermeta name="audience">`.
 
 **Changed as a result:** the namespaced `metadata.*` spelling above, and the
 honest consequence recorded with it. The shipped MyST schema reaches the
@@ -538,10 +538,11 @@ minified title slice: "\"Fitting a curve\""
 
 Ranges are byte offsets into the original string in every case, so no indent or
 newline assumption is needed. That is the same reason 0018's XML splice survives
-CRLF, reached the same way. A BOM still needs a test. `src/core/json-text.ts §
-stripBom` exists because Windows editors write one and `JSON.parse` rejects it.
-Stripping it before measuring offsets would shift every one of them by one. The
-strip must happen at parse and never upstream of the offsets.
+CRLF, reached the same way. A BOM still needs a test.
+`src/core/json-text.ts § stripBom` exists because Windows editors write one and
+`JSON.parse` rejects it. Stripping it before measuring offsets would shift every
+one of them by one. The strip must happen at parse and never upstream of the
+offsets.
 
 The related non-problem: Jupytext's `md:myst` notebooks are `.md` files with
 ordinary front matter and are already covered. Only the JSON container is missing.
@@ -579,8 +580,9 @@ the expensive one needs it.
    flips notebook to `writable`.
 4. **Docs.** `reference/formats.mdx` for both formats. Then
    `reference/platform-schemas.mdx`, to say which MyST channel the schema
-   reaches in a notebook and which it does not. Then `CONTRIBUTING.md § Write
-   support is optional`, for the notebook nested-splice case.
+   reaches in a notebook and which it does not. Then
+   `CONTRIBUTING.md § Write support is optional`, for the notebook nested-splice
+   case.
 
 Steps 1 and 2 are `feat(extractors):`, and therefore each ship a demo video per
 `CLAUDE.md § Every new feature ships with a short demo video`. One is enough if

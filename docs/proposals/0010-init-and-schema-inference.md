@@ -21,8 +21,9 @@ each is covered by a test:
   `globalThis.fetch` with one that records and rejects, and asserts nothing was
   attempted. `infer` resolves no schema, so a document naming a remote `$schema`
   still costs no request.
-- **Stress test 3.** Dominant type, with the distribution reported as `string
-  ×900, number ×4` and each outlier named by file and line via `lineFor`.
+- **Stress test 3.** Dominant type, with the distribution reported as
+  `string ×900, number ×4` and each outlier named by file and line via
+  `lineFor`.
 - **Stress test 4.** `enum` needs ≤ 20 distinct **and** ≤ 5% of files scanned.
   There are three tests. One proposes at 7 distinct in 140 files. One refuses at
   30 distinct in 30 files, which is the absolute half. One refuses at 7 distinct

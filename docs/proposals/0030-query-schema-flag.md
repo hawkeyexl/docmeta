@@ -89,9 +89,9 @@ names it too, retiring the phantom-flag pin.
 `-s` speaks only to the DDL planner. A `SELECT` under `-s`, or an `UPDATE`,
 would leave the flag silently meaning nothing. 0029's export-only `--param` fix
 established the rule: such a flag refuses, at exit 2, naming its meaning. The
-refusal says "produced no schema-evolving effects", not "ran no DDL". A `CREATE
-INDEX` into a `--db` export is DDL, just none the planner maps to a schema. Two
-placements, both load-bearing:
+refusal says "produced no schema-evolving effects", not "ran no DDL". A
+`CREATE INDEX` into a `--db` export is DDL, just none the planner maps to a
+schema. Two placements, both load-bearing:
 
 - **Export-only runs** (`--db` with no SQL) refuse at the CLI gate beside `--param`'s,
   before any file is read.
@@ -137,12 +137,12 @@ fetches. An inert `-s` would mask a real semantic difference with `validate`'s
 `-s` and leave the user believing they had scoped something. Where the flag has
 no meaning, it refuses; where it has one, it acts.
 
-**C. An in-statement spelling**, such as a qualified table name (`ALTER TABLE
-house.docs …`) or a comment directive. Rejected twice over. Non-standard
-vocabulary is exactly what 0024 exists to remove. And comments-as-directives
-would break the scanners' comments-are-skipped contract. The SET, CHECK and
-paren scans all skip comments by design, and a comment that *means* something
-would fork that rule.
+**C. An in-statement spelling**, such as a qualified table name
+(`ALTER TABLE house.docs …`) or a comment directive. Rejected twice over.
+Non-standard vocabulary is exactly what 0024 exists to remove. And
+comments-as-directives would break the scanners' comments-are-skipped contract.
+The SET, CHECK and paren scans all skip comments by design, and a comment that
+*means* something would fork that rule.
 
 **D. Status quo.** Rejected. The remedies are real but indirect. Override
 scoping reshapes the input set to say something about the schema, and in-file
@@ -166,11 +166,12 @@ no DDL" is false for planner-invisible DDL, since a `CREATE INDEX` into the
 export is legal and *is* DDL. So the wording is "produced no schema-evolving
 effects". Both wordings are pinned by test.
 
-**2. Stress 14 stands: `-s` names the contract, not the outcome.** `-s a.json -s
-b.json` where both constrain `title`, then `DROP COLUMN title`, still gives
-"constrained by 2 schemas … evolve them separately". The unanimity `-s` buys is
-about *which set*, not about ownership inside it. A bypass here would recreate
-the corpus-fails-after-a-successful-write bug that stress test found.
+**2. Stress 14 stands: `-s` names the contract, not the outcome.**
+`-s a.json -s b.json` where both constrain `title`, then `DROP COLUMN title`,
+still gives "constrained by 2 schemas … evolve them separately". The unanimity
+`-s` buys is about *which set*, not about ownership inside it. A bypass here
+would recreate the corpus-fails-after-a-successful-write bug that stress test
+found.
 
 **3. One machinery, verified at the three edges, and the fork must stay
 resolvable.** `-s` refs flow through the same loader as resolved sets. A URL ref
@@ -191,10 +192,10 @@ orphan nothing ever resolves. So the statement refuses with "add the schema to
 the config (or the files' `$schema`) first", instead of reporting a success that
 changed no contract.
 
-**4. The export-only gate is the CLI's, mirroring `--param`.** `docmeta query -s
-x --db out.db docs/` runs no statement, so nothing can classify. The refusal
-lives beside `--param`'s export-only gate, before any file is read. Same rule,
-same seam.
+**4. The export-only gate is the CLI's, mirroring `--param`.**
+`docmeta query -s x --db out.db docs/` runs no statement, so nothing can
+classify. The refusal lives beside `--param`'s export-only gate, before any file
+is read. Same rule, same seam.
 
 **5. The split fixture proceeds under `-s`, and the refusal without it names the
 flag.** The 0024 split test's own fixture, an override sending one file to a

@@ -15,8 +15,8 @@
 ## Problem
 
 The write surface that 0022 built uses vocabulary nobody else speaks.
-`drop_key()` is a docmeta invention; `DELETE` and `INSERT` are refused; `ALTER
-TABLE` edits *data*, which is not what ALTER means anywhere else. And the
+`drop_key()` is a docmeta invention; `DELETE` and `INSERT` are refused;
+`ALTER TABLE` edits *data*, which is not what ALTER means anywhere else. And the
 model's most valuable consequence is still unrealized: schema evolution and
 corpus migration are two hand-synchronized changes. Sara ships a stricter
 schema, then someone migrates the files, and CI is red for exactly the gap
@@ -108,8 +108,8 @@ docs engineer, "set it to nothing" means "it is not set". The corpus then reads
 back the way the statement left it, so `WHERE k IS NULL` now matches. The
 literal `k: null` keeps a spelling, `explicit_null()`, the same per-run sentinel
 mechanics `drop_key()` used. `drop_key()` itself is removed outright: nothing
-has released, and a softened alias is a permanent second surface (`CLAUDE.md §
-parallel behaviors`).
+has released, and a softened alias is a permanent second surface
+(`CLAUDE.md § parallel behaviors`).
 
 **`DELETE FROM docs WHERE …` strips the block.** Removed rows become `cleared`
 changes. A new writer primitive, `stripFrontmatter(content)`, removes the fences
@@ -137,8 +137,8 @@ extractor owns the file), and a target that exists refuses.
 side has no type history, so an array value would restore from its projection as
 a JSON *string*. The pairing pre-pass carries the original file value verbatim,
 with no SQL round-trip. It is a per-file delete of `a` and create of `b` whose
-SQL values match `bindValue(original)`. The same pre-pass serves `ALTER RENAME
-COLUMN` and any UPDATE that moves a value across columns.
+SQL values match `bindValue(original)`. The same pre-pass serves
+`ALTER RENAME COLUMN` and any UPDATE that moves a value across columns.
 
 `QueryChange` grows matching variants, each specified for `json` and `pretty`
 output. Those are `cleared` with the removed data, `created` with the new data,
@@ -176,9 +176,9 @@ The pre-pass carries the original value and never round-trips it.
 **2. `DROP TABLE` is the accident-shaped spelling and stays refused.** It is one
 keystroke of intent away from `DELETE FROM docs`. But "delete the table
 definition" would mean "delete the schema", and the destructive reading of an
-ambiguous statement is the wrong default. The refusal message names `DELETE FROM
-docs WHERE …` for the strip and `ALTER TABLE docs DROP COLUMN` for the schema
-side.
+ambiguous statement is the wrong default. The refusal message names
+`DELETE FROM docs WHERE …` for the strip and `ALTER TABLE docs DROP COLUMN` for
+the schema side.
 
 **3. A strip is not an empty block.** Deleting every key through the writer
 leaves `---`/`---` with nothing between, so `_present` is still 1 and `validate`
@@ -224,10 +224,11 @@ an open-block there, which surfaces the writer's existing refusal. Element
 formats have no block to create. The refusal names the format and the reason.
 
 **11. The schema spread resurrected `required`, found by the DROP test.**
-Building the mutated schema as `{ ...schema, properties, ...(required.length ? {
-required } : {}) }` quietly carried the *original* `required` back in whenever
-the new list was empty, and masked removals otherwise. The mutation now sets or
-removes the member explicitly. Recorded because it is the exact shape of bug a
+Building the mutated schema as
+`{ ...schema, properties, ...(required.length ? { required } : {}) }` quietly
+carried the *original* `required` back in whenever the new list was empty, and
+masked removals otherwise. The mutation now sets or removes the member
+explicitly. Recorded because it is the exact shape of bug a
 spread-with-conditional idiom invites.
 
 **12. ALTER on a schemaless corpus refuses, and the semantic consequence is

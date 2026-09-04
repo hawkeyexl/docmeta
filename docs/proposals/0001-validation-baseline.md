@@ -204,8 +204,9 @@ no hint that the fix is a re-record.
 Nothing forces the baseline to shrink. A repo can baseline everything and never
 improve. Two remedies were considered and deferred: a `baselineMaxAge`, and a
 CI-visible count trend. Both need history that docmeta does not have. The honest
-minimum is the stale-entry report plus the count in the summary, as `3 baselined
-findings`. It keeps the debt visible on every run instead of hiding it.
+minimum is the stale-entry report plus the count in the summary, as
+`3 baselined findings`. It keeps the debt visible on every run instead of hiding
+it.
 
 ### 7. Schema ref string is part of the identity, a documented sharp edge
 
@@ -217,11 +218,11 @@ out on the reference page, with `--write-baseline` as the remedy.
 **Found during implementation, and fixed rather than documented.** The same
 property makes the fingerprint depend on the *working directory*. 0004's
 `rebaseConfigSchemaRefs` rewrites a config's local file refs to absolute paths
-whenever the config directory is not `cwd`. A repo with `schemas:
-["./schemas/doc.json"]` therefore produced one fingerprint set from the repo
-root, and a different, machine-specific one from `docs/`. CI stayed green while
-a developer in a subdirectory saw the entire baselined backlog as new.
-`src/core/baseline.ts` now canonicalizes a **local file** ref to its path
+whenever the config directory is not `cwd`. A repo with
+`schemas: ["./schemas/doc.json"]` therefore produced one fingerprint set from
+the repo root, and a different, machine-specific one from `docs/`. CI stayed
+green while a developer in a subdirectory saw the entire baselined backlog as
+new. `src/core/baseline.ts` now canonicalizes a **local file** ref to its path
 relative to the config directory, with posix separators, before hashing.
 Built-in ids and URLs pass through untouched. Only the fingerprint input is
 canonicalized, and reports and schema loading still use the ref exactly as

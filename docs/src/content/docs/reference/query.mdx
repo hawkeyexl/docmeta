@@ -329,11 +329,11 @@ parallel list, so a formats upgrade widens it for free. It currently holds
 the backfill writes real booleans into the files. The `1`/`0` encoding is a
 bind-layer detail, not a file-layer one.
 
-A `CHECK` becomes an `enum`, in exactly one shape: `CHECK (<the-new-column> IN
-(<literals>))`, with the literals all strings or all numbers, agreeing with the
-declared type. A mixed list, an expression, another column, an `AND`, or a
-second `CHECK` refuses, and names the hand edit to the schema file instead. A
-constraint silently dropped from a schema would be worse.
+A `CHECK` becomes an `enum`, in exactly one shape:
+`CHECK (<the-new-column> IN (<literals>))`, with the literals all strings or all
+numbers, agreeing with the declared type. A mixed list, an expression, another
+column, an `AND`, or a second `CHECK` refuses, and names the hand edit to the
+schema file instead. A constraint silently dropped from a schema would be worse.
 
 The preview always prints the whole property the schema will gain, so a
 near-miss is visible before anything is written:
@@ -410,8 +410,8 @@ produced changes rather than rows.
 <Aside type="tip">
 `query --check` with a findings format is the **ad-hoc** spelling. The named
 home for a rule your team keeps is a config
-[`checks:`](/docmeta/reference/configuration/#checks) entry. A bare `docmeta
-validate` runs it alongside the per-file schemas, and the [baseline
+[`checks:`](/docmeta/reference/configuration/#checks) entry. A bare
+`docmeta validate` runs it alongside the per-file schemas, and the [baseline
 ratchet](/docmeta/reference/cli/#baselines) covers it.
 </Aside>
 

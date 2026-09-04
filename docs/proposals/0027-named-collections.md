@@ -91,14 +91,15 @@ the view records the verdict.
 
 The split-set DDL refusal can finally say something actionable. Today it ends
 "Scope the run to one override group", with no way to name one. With named
-overrides it lists the groups it found, as `the run spans authors (authors/**)
-and docs (docs/**); re-run over one group's files`. That turns the remedy from a
-concept into a copy-pastable next step. That message change is this proposal's
-whole delivery on the 0024 gap. Scoping itself stays what it is today, which is
-running over that group's paths. A `--collection <name>` input flag that scopes
-a run by name is the natural follow-up. It is recorded here rather than designed
-here. It is an input-surface change, and 0005's parity rules say every command
-would then need to answer for it.
+overrides it lists the groups it found, as
+`the run spans authors (authors/**) and docs (docs/**); re-run over one group's files`.
+That turns the remedy from a concept into a copy-pastable next step. That
+message change is this proposal's whole delivery on the 0024 gap. Scoping itself
+stays what it is today, which is running over that group's paths. A
+`--collection <name>` input flag that scopes a run by name is the natural
+follow-up. It is recorded here rather than designed here. It is an input-surface
+change, and 0005's parity rules say every command would then need to answer for
+it.
 
 ### Labeling, never a gate
 
@@ -112,10 +113,10 @@ row, and every existing query is untouched.
 ### What a view is not
 
 Writing through a view refuses. That is SQLite's own error, which docmeta
-catches and completes with the remedy: `cannot modify authors because it is a
-view; write through docs: UPDATE docs … WHERE _path IN (SELECT _path FROM
-"authors")`. The write-back machinery is untouched: effect judgment snapshots
-the `docs` table, and views live outside it.
+catches and completes with the remedy:
+`cannot modify authors because it is a view; write through docs: UPDATE docs … WHERE _path IN (SELECT _path FROM "authors")`.
+The write-back machinery is untouched: effect judgment snapshots the `docs`
+table, and views live outside it.
 
 ## Options
 
@@ -176,10 +177,10 @@ regenerable artifact statements may add objects to.
 
 **6. The effect gate never sees them.** Verified live on `node:sqlite`, Node
 24.11.0. Views appear in `sqlite_master` as `type: view`, and `SELECT` through
-them works. `UPDATE` through them fails with `cannot modify <name> because it is
-a view`. And `PRAGMA table_info(docs)` and `SELECT * FROM docs`, the two
-snapshots effect judgment diffs, are byte-identical before and after `CREATE
-VIEW`.
+them works. `UPDATE` through them fails with
+`cannot modify <name> because it is a view`. And `PRAGMA table_info(docs)` and
+`SELECT * FROM docs`, the two snapshots effect judgment diffs, are
+byte-identical before and after `CREATE VIEW`.
 
 ## Not breaking
 

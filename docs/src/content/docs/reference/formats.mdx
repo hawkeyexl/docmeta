@@ -315,11 +315,11 @@ schemas to expect the coerced types.
 </Aside>
 
 <Aside type="caution" title="TOML dates are not strings">
-TOML has a **native** date-time type: an *unquoted* `published =
-2024-01-15T10:00:00Z` parses as a date value, not a string. JSON Schema's
-`format: date-time` only constrains `type: string`. A field typed `{"type":
-"string", "format": "date-time"}` **fails** on a TOML native date, with `must be
-string`. The same value written as a quoted string in JSON, YAML, or TOML
-passes. If your schema expects a string date, quote it in TOML: `published =
-"2024-01-15T10:00:00Z"`.
+TOML has a **native** date-time type: an *unquoted*
+`published = 2024-01-15T10:00:00Z` parses as a date value, not a string. JSON
+Schema's `format: date-time` only constrains `type: string`. A field typed
+`{"type": "string", "format": "date-time"}` **fails** on a TOML native date,
+with `must be string`. The same value written as a quoted string in JSON, YAML,
+or TOML passes. If your schema expects a string date, quote it in TOML:
+`published = "2024-01-15T10:00:00Z"`.
 </Aside>

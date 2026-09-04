@@ -99,16 +99,17 @@ never consult it.
 fails the schema it just gained. Two findings against this design, one free and one not:
 
 - **Enums come free from the engine.** SQLite itself refuses an ADD whose
-  DEFAULT violates its own CHECK, verified with and without NOT NULL (`ADD
-  COLUMN sev TEXT DEFAULT 'bogus' CHECK (sev IN ('low','high'))` → `CHECK
-  constraint failed`).
+  DEFAULT violates its own CHECK, verified with and without NOT NULL
+  (`ADD COLUMN sev TEXT DEFAULT 'bogus' CHECK (sev IN ('low','high'))` →
+  `CHECK constraint failed`).
 - **Formats do not.** `ADD COLUMN published DATE DEFAULT 'yesterday'` sails
   through the engine, and through today's guard, which compares broad types
-  only. It would backfill every file with a non-date, while writing `format:
-  date` into a schema ajv-formats enforces. `assertDefaultsMatchDeclaredTypes`
-  therefore validates the backfill value against the mapped format before any
-  plan exists. It uses the same ajv-formats machinery `validate` already uses,
-  so there is no new dependency, and no second opinion about what a `date` is.
+  only. It would backfill every file with a non-date, while writing
+  `format: date` into a schema ajv-formats enforces.
+  `assertDefaultsMatchDeclaredTypes` therefore validates the backfill value
+  against the mapped format before any plan exists. It uses the same ajv-formats
+  machinery `validate` already uses, so there is no new dependency, and no
+  second opinion about what a `date` is.
 
 ### The read side stays untyped, closing 0021's dangling line
 
@@ -153,12 +154,13 @@ eliminate.
 ## Stress test
 
 **1. `PRAGMA table_info` cannot see a CHECK, verified before designing.** Probe
-on `node:sqlite`, at Node 24.11.0, the engines floor. `ALTER TABLE docs ADD
-COLUMN status TEXT CHECK (status IN ('draft','review','final'))` is accepted on
-a non-empty table, and enforced on later writes (`UPDATE … SET status='nope'` →
-`CHECK constraint failed`), while table_info reports `{name: "status", type:
-"TEXT", notnull: 0, dflt: null}`, with no constraint. The catalog consult is not
-an implementation choice; it is the only channel.
+on `node:sqlite`, at Node 24.11.0, the engines floor.
+`ALTER TABLE docs ADD COLUMN status TEXT CHECK (status IN ('draft','review','final'))`
+is accepted on a non-empty table, and enforced on later writes
+(`UPDATE … SET status='nope'` → `CHECK constraint failed`), while table_info
+reports `{name: "status", type: "TEXT", notnull: 0, dflt: null}`, with no
+constraint. The catalog consult is not an implementation choice; it is the only
+channel.
 
 **2. The catalog consult is the second syntax exception, and it is scoped to
 stay small.** The stored `CREATE TABLE` text after an ADD is docmeta's own text
@@ -190,9 +192,9 @@ says). A test pins both directions.
 record carries `{type, required}` only; a rename that *rebuilds* the schema
 property from the op would strip an existing `enum`/`format`/`description` from
 a hand-written schema. 0024 already moves the property object for renames. The
-test added here pins that an enum property survives `ALTER TABLE docs RENAME
-COLUMN status TO stage` intact. So the op record's thinness can never become the
-property's.
+test added here pins that an enum property survives
+`ALTER TABLE docs RENAME COLUMN status TO stage` intact. So the op record's
+thinness can never become the property's.
 
 **6. Quoted type names survive the whole path.** Verified at the engine, where
 `"date-time"` dequotes in table_info. Also verified by reading the statement
@@ -200,11 +202,11 @@ scanner, where quoted tokens are skipped so the hyphen never splits a statement.
 The integration test runs the quoted spelling through the built binary, which is
 where 0021 stress 10 taught that bundler-layer surprises live.
 
-**7. A numeric enum with an INTEGER declared type maps consistently.** `ADD
-COLUMN priority INTEGER CHECK (priority IN (1,2,3))` → `{ type: "integer", enum:
-[1, 2, 3] }`; the literals' JSON types must agree with the declared type, or the
-statement refuses. That is the same reconciliation rule as the DEFAULT guard,
-applied to the enum members.
+**7. A numeric enum with an INTEGER declared type maps consistently.**
+`ADD COLUMN priority INTEGER CHECK (priority IN (1,2,3))` →
+`{ type: "integer", enum: [1, 2, 3] }`; the literals' JSON types must agree with
+the declared type, or the statement refuses. That is the same reconciliation
+rule as the DEFAULT guard, applied to the enum members.
 
 ## Not breaking
 

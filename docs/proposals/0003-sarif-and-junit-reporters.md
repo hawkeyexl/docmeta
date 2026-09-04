@@ -162,12 +162,13 @@ rather than assumed.
 
 ### 6. XML escaping, which is the injection surface
 
-Violation messages contain schema-authored text (`must match pattern
-"^[a-z]+$"`), and file paths can contain `&`. Ajv messages can carry `<` and `>`
-from a schema's own `pattern`. Escape `& < > " '` in every attribute value and
-text node. This is the single most likely bug in a hand-rolled XML writer. So it
-gets its own test, with a fixture whose schema `pattern` contains `<`, `&`, and
-a quote. No XML library dependency for ~30 lines of writer.
+Violation messages contain schema-authored text
+(`must match pattern "^[a-z]+$"`), and file paths can contain `&`. Ajv messages
+can carry `<` and `>` from a schema's own `pattern`. Escape `& < > " '` in every
+attribute value and text node. This is the single most likely bug in a
+hand-rolled XML writer. So it gets its own test, with a fixture whose schema
+`pattern` contains `<`, `&`, and a quote. No XML library dependency for ~30
+lines of writer.
 
 ### 7. `--format sarif` plus a failing exit code (a documentation trap)
 

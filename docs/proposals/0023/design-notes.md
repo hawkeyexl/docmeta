@@ -43,9 +43,9 @@ with names the fact `language`, through `dc:language`, `inLanguage`, `lang` and
 `xml:lang`, and core's method is to share the claimant's name. `locale` reopens
 the `en_US` versus `en-US` spelling split that `og:locale` already suffers. It
 has no RDF target, where `language` lands on `dcterms:language`. And even
-Starlight keys locales by directory, as `zh-cn`, while the content tag is `lang:
-zh-CN`. The strongest argument for the rename is that `language` is overloaded
-with programming languages in technical docs. That is answered in the
+Starlight keys locales by directory, as `zh-cn`, while the content tag is
+`lang: zh-CN`. The strongest argument for the rename is that `language` is
+overloaded with programming languages in technical docs. That is answered in the
 description rather than the name. It was applied in place at core proposal.2, as
 a description change only with no shape change. The field now says it is the
 locale field, and that region and script subtags are expected. The core review

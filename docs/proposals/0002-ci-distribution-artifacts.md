@@ -115,8 +115,8 @@ consuming repo, on first use. Mitigations, in preference order:
 1. Guard the script with `"prepare": "husky || true"`. One character of slack,
    no new files. Loses the loud failure when husky is genuinely broken for
    contributors.
-2. `"prepare": "node -e \"if(!process.env.CI &&
-   require('fs').existsSync('.git')) …\""`, which is precise but ugly.
+2. `"prepare": "node -e \"if(!process.env.CI && require('fs').existsSync('.git')) …\""`,
+   which is precise but ugly.
 3. Ship the hook from a separate minimal repo, which defeats the point.
 
 Recommend (1) plus an integration test that actually runs `pre-commit try-repo`

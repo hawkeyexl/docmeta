@@ -116,8 +116,8 @@ hand**, and diffed against `origin/main`.
 
 That cost is payable, but it buys strictly less than the probe option. `ignore`
 still needs docmeta to find, read, and correctly stack every nested
-`.gitignore`, plus `.git/info/exclude` and the global excludes file. `git
-check-ignore` does all of that by construction.
+`.gitignore`, plus `.git/info/exclude` and the global excludes file.
+`git check-ignore` does all of that by construction.
 
 ### 3. Performance of a subprocess, measured and acceptable
 
@@ -206,12 +206,12 @@ gitfile explicitly because it does *not* delegate to git.
 
 ### 10. Windows path separators, which must be normalized before the pipe
 
-`resolveTargets` already normalizes to posix via `toPosix()`, and `git
-check-ignore` wants forward slashes. Feed it the already-normalized relative
-paths. Paths are also relative to the git root, not `cwd`. So the subprocess
-must run with `cwd` set to the invocation directory, and receive `cwd`-relative
-paths, which git resolves correctly. Needs an explicit test from a subdirectory,
-since that is where this class of bug lives (see 0004).
+`resolveTargets` already normalizes to posix via `toPosix()`, and
+`git check-ignore` wants forward slashes. Feed it the already-normalized
+relative paths. Paths are also relative to the git root, not `cwd`. So the
+subprocess must run with `cwd` set to the invocation directory, and receive
+`cwd`-relative paths, which git resolves correctly. Needs an explicit test from
+a subdirectory, since that is where this class of bug lives (see 0004).
 
 ### 11. NUL-delimited input for hostile filenames (required)
 

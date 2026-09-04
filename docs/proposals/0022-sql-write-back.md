@@ -47,9 +47,9 @@ Today that command exits 2: 0021 runs user SQL under `PRAGMA query_only`, so
 an UPDATE is refused. This proposal makes it mean something instead:
 
 - **Without `--write`**, the statement runs against the in-memory projection.
-  The report is the per-file, per-key diff it *would* make, such as `docs/a.md:
-  last_reviewed: 2026-03-01 -> 2026-08-26`, plus a closing `dry run; pass
-  --write to apply`. No file is touched. Exit 0.
+  The report is the per-file, per-key diff it *would* make, such as
+  `docs/a.md: last_reviewed: 2026-03-01 -> 2026-08-26`, plus a closing
+  `dry run; pass --write to apply`. No file is touched. Exit 0.
 - **With `--write`**, the same diff is applied in two phases. Every file's new
   content is computed and verified in memory first, then flushed with
   `writeFileAtomic`. The writer's own re-parse verification stands between the
@@ -111,8 +111,8 @@ runs per file and key, with a stated precedence:
 
 Failures refuse rather than guess, naming the file and key. That covers new JSON
 text that does not parse, or parses to a different shape than the key had (array
-→ scalar). It also covers a value outside the restored type's domain, as in `SET
-draft = 2` where `draft` is boolean everywhere.
+→ scalar). It also covers a value outside the restored type's domain, as in
+`SET draft = 2` where `draft` is boolean everywhere.
 
 `SET x = NULL` writes an explicit `x: null`. It cannot *delete* the key.
 `MetadataPatch` ignores `undefined` by contract, per `src/types.ts`, so deletion
@@ -225,12 +225,12 @@ above is where that boundary surfaces, per file, rather than being re-litigated
 here.
 
 **6. `--check` in write mode needed a meaning, and drift-gate fell out.** In
-preview, pending changes are findings at exit 1. That makes `query --check
-"UPDATE …"` a normalization ratchet CI can hold, on the same 0/1/2 contract as
-everything else, with no new flag. With `--write`, `--check` is redundant and
-accepted, because the applied changes were the findings and success exits 0.
-That matches `--allow-empty`'s tolerance for combinations that are harmless
-rather than wrong.
+preview, pending changes are findings at exit 1. That makes
+`query --check "UPDATE …"` a normalization ratchet CI can hold, on the same
+0/1/2 contract as everything else, with no new flag. With `--write`, `--check`
+is redundant and accepted, because the applied changes were the findings and
+success exits 0. That matches `--allow-empty`'s tolerance for combinations that
+are harmless rather than wrong.
 
 **7. Why refusal aborts the whole run instead of skipping the bad file.** A
 half-applied bulk edit leaves the corpus in a state no statement describes. That
@@ -290,8 +290,9 @@ reasoning above stays as written.)*
 
 ## Not breaking
 
-`UPDATE` without `--write` changes from exit 2, with `SQL error: attempt to
-write a readonly database`, to a dry-run report with exit 0. That is an error
-becoming a useful answer, which is the 0020 "fixing under-reporting" shape
-rather than a contract break. Every SELECT behaves exactly as 0021 shipped it.
-Ships as `feat(query):` with the house demo video.
+`UPDATE` without `--write` changes from exit 2, with
+`SQL error: attempt to write a readonly database`, to a dry-run report with exit
+0. That is an error becoming a useful answer, which is the 0020 "fixing
+   under-reporting" shape rather than a contract break. Every SELECT behaves
+   exactly as 0021 shipped it. Ships as `feat(query):` with the house demo
+   video.

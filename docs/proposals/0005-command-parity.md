@@ -214,8 +214,9 @@ to semantics one command has and another cannot.
    for required-and-unfilled.
 6. In `test/cli.integration.test.ts`, `fill - --as markdown -f github` exits 2.
 7. In `reference/cli.mdx`, `[fields]`, `--fields`, `--quiet` on two commands,
-   and `github` in `fill`'s format list. Then `npm run build && npm run
-   docs:check-cli` must pass. It is the gate for this proposal.
+   and `github` in `fill`'s format list. Then
+   `npm run build && npm run docs:check-cli` must pass. It is the gate for this
+   proposal.
 
 ## Corrections found while implementing
 
@@ -301,9 +302,9 @@ anchors it to line 1. The reference page says so.
   `ci/exit-codes-and-annotations.mdx` asserted `docmeta get` reports "missing
   required argument", which stops being true the moment `[fields]` is optional.
   Both were replaced with steps that exercise the new behavior.
-- **Any doc step or test that *runs* `fill` needs `--provider mock --dry-run
-  --no-cache`.** The stale `-f github` step above stopped failing at the format
-  check. It then ran a real fill against `test/fixtures/valid.md`, and wrote
-  `action: understand` into the committed fixture. That made two unrelated
-  provider tests fail, since a fully-filled fixture has no candidates left to
-  propose.
+- **Any doc step or test that *runs* `fill` needs
+  `--provider mock --dry-run --no-cache`.** The stale `-f github` step above
+  stopped failing at the format check. It then ran a real fill against
+  `test/fixtures/valid.md`, and wrote `action: understand` into the committed
+  fixture. That made two unrelated provider tests fail, since a fully-filled
+  fixture has no candidates left to propose.

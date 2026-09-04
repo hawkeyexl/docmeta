@@ -155,10 +155,10 @@ when detection would have chosen one.
 `--local` means `llama-cpp` only. **`claude-cli` does not qualify.** It is the
 one provider where "local" is true of the process and false of the thing that
 matters. The binary runs on your machine, and the inference does not. The probe
-is also weaker than the docs imply. `@hawkeyexl/inference` runs `claude
---version` and accepts exit code 0, checking nothing about authentication. So
-`cli.mdx:307`'s "a signed-in `claude` CLI" is wrong twice over, and change 4
-fixes the wording.
+is also weaker than the docs imply. `@hawkeyexl/inference` runs
+`claude --version` and accepts exit code 0, checking nothing about
+authentication. So `cli.mdx:307`'s "a signed-in `claude` CLI" is wrong twice
+over, and change 4 fixes the wording.
 
 This closes the stray-key hole 0012 identified: an unrelated `OPENAI_API_KEY` in
 a developer's environment silently redirecting internal documentation to
@@ -194,11 +194,12 @@ and it checks no authentication.
 
 That is the stronger fix, and it is not taken here.
 
-The detection order was a deliberate decision in `2f60978 feat(fill): detect an
-inference provider instead of assuming anthropic`. It was taken so `fill` works
-with whatever credentials the user already has. Inverting it is a breaking
-behavioral change to a reasoned position. It deserves its own proposal arguing
-against that reasoning, rather than a paragraph inside this one.
+The detection order was a deliberate decision in
+`2f60978 feat(fill): detect an inference provider instead of assuming anthropic`.
+It was taken so `fill` works with whatever credentials the user already has.
+Inverting it is a breaking behavioral change to a reasoned position. It deserves
+its own proposal arguing against that reasoning, rather than a paragraph inside
+this one.
 
 `--local` gets the same protection for anyone who asks for it.
 
@@ -352,5 +353,5 @@ slower" is answered by this line rather than investigated.
    `claude --version` correction at `:307`, the bound at `:315`, the two new
    flags, and the removed one. Then `npm run build && npm run docs:check-cli`.
 8. In `reference/configuration.mdx`, drop `maxCostUsd`.
-9. Run the dogfood check before pushing: `node dist/cli.js validate
-   "docs/src/content/docs/**/*.{md,mdx}" -s ./docs/doc-frontmatter.schema.json`
+9. Run the dogfood check before pushing:
+   `node dist/cli.js validate "docs/src/content/docs/**/*.{md,mdx}" -s ./docs/doc-frontmatter.schema.json`
