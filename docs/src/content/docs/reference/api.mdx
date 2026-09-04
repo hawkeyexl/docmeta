@@ -1,6 +1,6 @@
 ---
 title: TypeScript API reference
-description: Every symbol docmeta publishes from its programmatic entry point — command cores, schema resolution, config, cache, reporters, extractors, and result types.
+description: Every symbol docmeta publishes from its programmatic entry point, covering command cores, schema resolution, config, cache, reporters, extractors, and result types.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -10,11 +10,7 @@ import { Aside } from '@astrojs/starlight/components';
     enforced in CI. Every published symbol must appear in an `Export` cell;
     purposes are free-form. */}
 
-docmeta publishes a programmatic entry point alongside the CLI, so a Node.js or
-TypeScript tool can call the same cores the CLI is built on without spawning a
-process or parsing stdout. [Consume docmeta
-results](/docmeta/ci/consume-results/) shows the worked example; this page is
-the exhaustive list.
+docmeta publishes a programmatic entry point alongside the CLI. A Node.js or TypeScript tool can call the same cores the CLI is built on. There is no process to spawn and no stdout to parse. [Consume docmeta results](/docmeta/ci/consume-results/) shows the worked example; this page is the exhaustive list.
 
 ```ts
 import { runValidate } from "docmeta";
@@ -40,13 +36,13 @@ exit code is the caller's.
 | `runValidate` | Run the validation pipeline over the resolved inputs. Backs `docmeta validate`. |
 | `ValidateOptions` (type) | Input to `runValidate`. Mirrors the CLI: `inputs`, `cliSchemas`, `exts`, `exclude`, `as`, `configPath`, `stdinContent`, baseline and offline settings. |
 | `ValidateRun` (type) | What `runValidate` resolves to: `results`, `summary`, and the `frame` describing where the run stood. |
-| `runGet` | Read named metadata fields from each input. Backs `docmeta get`. Always returns every file it saw — `--quiet` filtering lives in the reporter. |
+| `runGet` | Read named metadata fields from each input. Backs `docmeta get`. Always returns every file it saw, since `--quiet` filtering lives in the reporter. |
 | `GetOptions` (type) | Input to `runGet`: the same input model plus the `fields` to read. |
-| `GetFileResult` (type) | One `runGet` result: the file, whether metadata was `present`, the resolved `values`, and an optional `error` when the metadata block could not be read at all. |
-| `runQuery` | Run one SQL statement over an in-memory table built from every input's metadata. Backs `docmeta query`. Returns every row — the `--check` verdict is the CLI's exit code, not the result's. |
-| `QueryOptions` (type) | Input to `runQuery`: the same input model plus the `sql` to run, optional named-parameter `params` (values encoded like stored cells: booleans as `1`/`0`, arrays and objects as JSON text), optional `schemas` naming the set a DDL statement evolves (the CLI's `-s`; a run that produces no schema-evolving effects then refuses, export-only runs included), and an optional `db` export path (which makes `sql` optional). |
-| `QueryRun` (type) | What `runQuery` resolves to: result `columns` (present even for zero rows), `rows`, a mutating statement's `changes`, the `frame` describing where the run stood (what SARIF and JUnit rendering need), and — when `db` was written — its path and size. |
-| `QueryChange` (type) | One thing a mutating statement changed, as a union of kinds: a cell set (`key`/`from`/`to`), a key deletion (`deleted`), a key rename (`renamedFrom`), a stripped block (`cleared`), a created file (`created`), a file move (`renamed`), a schema edit (`schema`, with the op, the type/`format`/`enum`/required intent — 0028's fields included — and any `forkedFrom`), or a DDL side effect on the governing config (`config`: a fork's `schemas:` repoint, a refreshed `integrity:` pin) — plus whether it was `written` or previewed. |
+| `GetFileResult` (type) | One `runGet` result. The file, whether metadata was `present`, the resolved `values`, and an optional `error` when the metadata block could not be read at all. |
+| `runQuery` | Run one SQL statement over an in-memory table built from every input's metadata. Backs `docmeta query`. Returns every row. The `--check` verdict is the CLI's exit code, not the result's. |
+| `QueryOptions` (type) | Input to `runQuery`. The same input model plus the `sql` to run. Optional named-parameter `params`, with values encoded like stored cells: booleans as `1`/`0`, arrays and objects as JSON text. Optional `schemas` naming the set a DDL statement evolves (the CLI's `-s`). A run that produces no schema-evolving effects then refuses, export-only runs included. An optional `db` export path makes `sql` optional. |
+| `QueryRun` (type) | What `runQuery` resolves to. Result `columns` (present even for zero rows), `rows`, and a mutating statement's `changes`. The `frame` describing where the run stood, which is what SARIF and JUnit rendering need. When `db` was written, its path and size. |
+| `QueryChange` (type) | One thing a mutating statement changed, as a union of kinds. A cell set (`key`/`from`/`to`), a key deletion (`deleted`), or a key rename (`renamedFrom`). A stripped block (`cleared`), a created file (`created`), or a file move (`renamed`). A schema edit (`schema`) carries the op, the type/`format`/`enum`/required intent, 0028's fields included, and any `forkedFrom`. A DDL side effect on the governing config (`config`) carries a fork's `schemas:` repoint and a refreshed `integrity:` pin. Every kind records whether it was `written` or previewed. |
 | `runFill` | Propose and write missing metadata with an inference provider. Backs `docmeta fill`. |
 | `FillOptions` (type) | Input to `runFill`: provider, model, confidence threshold, cost ceiling, concurrency, and whether to write. |
 | `FillRun` (type) | What `runFill` resolves to: per-file results plus the run summary. |
@@ -57,16 +53,12 @@ exit code is the caller's.
 | `getSchemasInfo` | The built-in schema registry and the supported input formats, as data. Backs `docmeta schemas`. |
 | `runVendorSchema` | Fetch a remote schema, write it into the repository, and record its integrity pin. Backs `docmeta schemas vendor`. |
 | `VendorOptions` (type) | Input to `runVendorSchema`: the URL, the destination directory, and whether to update the config. |
-| `VendorResult` (type) | What was written: the file path, the integrity digest, and the config edit that was made. |
+| `VendorResult` (type) | What was written. The file path, the integrity digest, and the config edit that was made. |
 | `vendorFileName` | The file name `schemas vendor` derives from a schema URL. |
 | `DEFAULT_VENDOR_DIR` | The default destination directory for vendored schemas (`./schema`). |
 
 <Aside type="caution" title="Operational failures throw DocmetaError">
-The cores throw a [`DocmetaError`](#errors) for operational problems: no inputs
-and no config, an unknown `--as` format, an unreadable config, an unresolvable
-schema. That is the same condition the CLI maps to [exit
-`2`](/docmeta/reference/output-and-exit-codes/#exit-codes). A validation
-*failure* is not thrown — it comes back as a result with `ok: false`.
+The cores throw a [`DocmetaError`](#errors) for operational problems: no inputs and no config, an unknown `--as` format, an unreadable config, an unresolvable schema. That is the same condition the CLI maps to [exit `2`](/docmeta/reference/output-and-exit-codes/#exit-codes). A validation *failure* is not thrown. It comes back as a result with `ok: false`.
 </Aside>
 
 ## Validation engine and results
@@ -78,9 +70,9 @@ caller and a subprocess caller are reading the same data model.
 |---|---|
 | `Validator` | The Ajv-backed engine. Validate already-extracted metadata against a schema set without going through the file pipeline. |
 | `ValidationResult` (type) | One file's outcome: the file label, `ok`, the schemas applied, the `errors`, and how many findings a baseline suppressed. |
-| `FieldError` (type) | One violation: the JSON Pointer, the message, the failing keyword, and the schema that produced it. |
-| `RunSummary` (type) | Aggregate counts for a run: files, passed, failed, errors, plus optional `gitignoreSkipped` and `baseline` blocks. |
-| `BaselineSummary` (type) | How a baseline shaped the run: its path, whether it was written, and the recorded, suppressed, and stale counts. |
+| `FieldError` (type) | One violation. The JSON Pointer, the message, the failing keyword, and the schema that produced it. |
+| `RunSummary` (type) | Aggregate counts for a run. Files, passed, failed, errors, plus optional `gitignoreSkipped` and `baseline` blocks. |
+| `BaselineSummary` (type) | How a baseline shaped the run. Its path, whether it was written, and the recorded, suppressed, and stale counts. |
 | `FingerprintContext` (type) | The `frame` a `ValidateRun` returns: the working directory, the directory canonical paths are measured from, and the directory result labels are relative to. Pass it back into `render` for SARIF. |
 
 ## Schema resolution
@@ -94,7 +86,7 @@ implement.
 | `resolveSchemaSet` | Resolve the schema set for one file from CLI refs, the document's `$schema`, config overrides, and the defaults. |
 | `DEFAULT_SCHEMAS` | The built-in default schema set, used when nothing else selects one. |
 | `collectSchemaPins` | Gather the integrity pins a config declares, keyed by schema reference. |
-| `schemaEntryRef` | Narrow a config `schemas:` entry — a bare string or an object — to its reference string. |
+| `schemaEntryRef` | Narrow a config `schemas:` entry, either a bare string or an object, to its reference string. |
 | `rebaseConfigSchemaRefs` | Rewrite a config's relative file refs so they resolve against the config's own directory rather than the process working directory. |
 
 ## Schema loading and integrity
@@ -106,9 +98,9 @@ implement.
 | `loadSchema` | Resolve any reference to a parsed JSON Schema object, going through the cache and integrity check. |
 | `fetchSchemaBytes` | The lower-level fetch: the raw bytes plus their provenance, for callers that need the exact payload (integrity pinning does). |
 | `FetchedSchema` (type) | What `fetchSchemaBytes` returns: the bytes, the resolved URL, and whether the cache served them. |
-| `schemaLoadOptions` | Build a `LoadSchemaOptions` from run-level settings — trust, pins, offline, cache — so every call site derives them the same way. |
-| `LoadSchemaOptions` (type) | Loader settings: pins, trust policy, cache behavior, and offline mode. |
-| `SchemaPin` (type) | An integrity pin: the reference and the digest it must hash to. |
+| `schemaLoadOptions` | Build a `LoadSchemaOptions` from run-level settings (trust, pins, offline, cache), so every call site derives them the same way. |
+| `LoadSchemaOptions` (type) | Loader settings. Pins, trust policy, cache behavior, and offline mode. |
+| `SchemaPin` (type) | An integrity pin. The reference and the digest it must hash to. |
 | `integrityOf` | The `sha256-…` digest of a byte payload, in the form a pin records. |
 | `isIntegrity` | Whether a string is a well-formed integrity digest. |
 | `INTEGRITY_SHAPE` | The human-readable description of that form, for error messages. |
@@ -120,8 +112,8 @@ The on-disk cache for schemas fetched over `http(s)`, shared across runs.
 | Export | Purpose |
 |---|---|
 | `SchemaCache` | Read and write cached remote schemas. Freshness is measured on file mtime, not an embedded timestamp. |
-| `ReadOptions` (type) | Per-read cache behavior, notably `ignoreTtl` — what `--offline` needs when no re-fetch is available. |
-| `SchemaCacheEntry` (type) | One cache record: version, source URL, fetch time, and the parsed schema. |
+| `ReadOptions` (type) | Per-read cache behavior, notably `ignoreTtl`, which is what `--offline` needs when no re-fetch is available. |
+| `SchemaCacheEntry` (type) | One cache record. Version, source URL, fetch time, and the parsed schema. |
 | `schemaCacheDir` | The cache directory for a given project root. |
 | `SCHEMA_CACHE_DIR` | The cache path relative to the root (`.docmeta/schema-cache`). |
 | `SCHEMA_CACHE_VERSION` | The entry-format version; a mismatch invalidates an entry. |
@@ -140,21 +132,19 @@ reference](/docmeta/reference/configuration/) for what each key means.
 | `DocmetaConfig` (type) | The config document itself: `paths`, `exclude`, `schemas`, `overrides`, `fill`, `schemaTrust`, `schemaCache`, and the rest. |
 | `resolveRunConfig` | Merge config with the run's inputs and flags into the settings a core actually uses. This is the precedence chain, in one place. |
 | `RunConfigOptions` (type) | Input to `resolveRunConfig`: cwd, `configPath`, `noConfig`, the positional `inputs`, and a load callback. |
-| `RunConfig` (type) | The merged result: the rebased config, the effective inputs, and the resolved run settings. |
+| `RunConfig` (type) | The merged result. The rebased config, the effective inputs, and the resolved run settings. |
 | `ConfigNotice` (type) | Told to the caller once when a run turns out to be governed by a config: its path and directory. |
-| `SchemaEntry` (type) | A `schemas:` entry — either a bare reference string or a `SchemaRefEntry`. |
-| `SchemaRefEntry` (type) | The object form: a reference plus its integrity pin. |
+| `SchemaEntry` (type) | A `schemas:` entry, either a bare reference string or a `SchemaRefEntry`. |
+| `SchemaRefEntry` (type) | The object form. A reference plus its integrity pin. |
 | `SchemaTrustConfig` (type) | How far a document is trusted to choose its own contract: `documentRefs` and the optional host allowlist. |
 | `DocumentRefTrust` (type) | The three trust levels: `any`, `local`, `none`. |
 | `FillConfig` (type) | Config defaults for `fill`: provider, model, confidence threshold, cost ceiling, concurrency. |
 | `SchemaCacheConfig` (type) | Config for the remote-schema cache, currently `ttlHours`. |
-| `CheckConfig` (type) | One named [corpus check](/docmeta/reference/configuration/#checks): its `name` (the durable half of its findings' identity) and the SQL `query`. |
+| `CheckConfig` (type) | One named [corpus check](/docmeta/reference/configuration/#checks). Its `name` (the durable half of its findings' identity) and the SQL `query`. |
 
 ## Reporters
 
-Pure formatting: a reporter turns a core's result into text and never writes it
-anywhere. `--quiet` lives here rather than in the cores, so a programmatic
-caller can never mistake a filtered run for an empty one.
+Pure formatting. A reporter turns a core's result into text and never writes it anywhere. `--quiet` lives here rather than in the cores, so a programmatic caller can never mistake a filtered run for an empty one.
 
 | Export | Purpose |
 |---|---|
@@ -166,7 +156,7 @@ caller can never mistake a filtered run for an empty one.
 | `isReportFormat` | Type guard for a user-supplied format string. |
 | `ReportOptions` (type) | Options passed to `render`: color, and everything `SarifOptions` and `JunitOptions` carry. |
 | `SarifOptions` (type) | SARIF-specific options, notably the `frame` used to build repository-relative URIs. |
-| `JunitOptions` (type) | JUnit-specific options: the `frame`, and the `classname` each testcase carries — `docmeta.validate` by default; `query --check` findings ship as `docmeta.query`. |
+| `JunitOptions` (type) | JUnit-specific options: the `frame`, and the `classname` each testcase carries. That is `docmeta.validate` by default; `query --check` findings ship as `docmeta.query`. |
 | `QUERY_FORMATS` | The formats `query` accepts: `pretty`, `json`, `csv`, plus the findings formats `github`, `sarif`, `junit` (legal only with `--check`). |
 | `QueryFormat` (type) | The union of those names. |
 | `isQueryFormat` | Type guard for a user-supplied query format string. |
@@ -176,11 +166,11 @@ caller can never mistake a filtered run for an empty one.
 | `renderGet` | The reporter behind `docmeta get`. |
 | `GetReportOptions` (type) | `color` and `quiet` for `renderGet`. |
 | `renderQuery` | The reporter behind `docmeta query`: the aligned table, the row count, and the `--check` verdict line. |
-| `renderQueryCsv` | The `-f csv` fork of the query reporter: result rows as CSV — header always, LF endings, RFC 4180 quoting, SQL `NULL` as an empty field. |
+| `renderQueryCsv` | The `-f csv` fork of the query reporter, giving result rows as CSV. Header always, LF endings, RFC 4180 quoting, and SQL `NULL` as an empty field. |
 | `QueryReportOptions` (type) | `color` and `check` for `renderQuery`. |
 | `stringifyValue` | How a single field value is spelled: `(unset)` when missing, JSON for anything that is not a string. |
 | `renderFill` | The reporter behind `docmeta fill`, across the fill formats. |
-| `renderFillGithub` | GitHub Actions annotations for the work `fill` could not do — one `::error` per unfilled required property. |
+| `renderFillGithub` | GitHub Actions annotations for the work `fill` could not do, as one `::error` per unfilled required property. |
 | `FILL_FORMATS` | The formats `fill` accepts: `pretty`, `json`, `github`. |
 | `FillReportFormat` (type) | The union of those names. |
 | `isFillFormat` | Type guard for a user-supplied fill format string. |
@@ -196,10 +186,10 @@ formats](/docmeta/reference/formats/).
 | Export | Purpose |
 |---|---|
 | `extractorForExtension` | The implemented extractor for a file extension (including the dot), or `undefined`. |
-| `supportedExtensions` | Every extension an implemented extractor handles — the default set for directory and glob walks. |
-| `MetadataExtractor` (type) | The extractor interface: name, extensions, and the read and write entry points. |
+| `supportedExtensions` | Every extension an implemented extractor handles, which is the default set for directory and glob walks. |
+| `MetadataExtractor` (type) | The extractor interface. Name, extensions, and the read and write entry points. |
 | `ExtractedMetadata` (type) | The format-independent result of extraction: whether metadata was present, the parsed data, and any parse error. |
-| `ExtractOptions` (type) | Per-run inputs to extraction beyond the document itself — currently the `elements:` paths, which lift metadata held in elements rather than attributes. Pass the same value to `apply`, or a writer re-reads without them and cannot find the key it just wrote. |
+| `ExtractOptions` (type) | Per-run inputs to extraction beyond the document itself, currently the `elements:` paths, which lift metadata held in elements rather than attributes. Pass the same value to `apply`, or a writer re-reads without them and cannot find the key it just wrote. |
 
 ### Frontmatter
 
@@ -209,11 +199,11 @@ and reStructuredText.
 | Export | Purpose |
 |---|---|
 | `extractFrontmatter` | Read a leading fenced block into `ExtractedMetadata`, detecting the flavor from the fence. |
-| `locateFrontmatter` | Locate the block without parsing it: its fence style and the character offsets it spans. |
+| `locateFrontmatter` | Locate the block without parsing it. Its fence style and the character offsets it spans. |
 | `frontmatterInnerText` | The block's inner text for a located block, LF-normalized with the final terminator removed. |
 | `FrontmatterLocation` (type) | What `locateFrontmatter` returns: the flavor and the offsets. |
 | `FrontmatterFlavor` (type) | The three interchangeable fence flavors: `yaml`, `toml`, `json`. |
-| `applyFrontmatter` | Merge a patch into a document's leading block and return the new content. Pure — the input string is returned unchanged for a no-op patch. |
+| `applyFrontmatter` | Merge a patch into a document's leading block and return the new content. Pure, so the input string is returned unchanged for a no-op patch. |
 | `MetadataPatch` (type) | Top-level keys to set. Keys whose value is `undefined` are ignored. |
 | `ApplyOptions` (type) | Options for `applyFrontmatter`, currently the flavor used when creating a block from scratch. |
 

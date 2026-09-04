@@ -24,23 +24,23 @@ should say. That makes them safe to stack under any vocabulary.
 
 ## What a platform schema requires
 
-The rule across every platform built-in is: **require exactly what the generator
-refuses to build without.** What one demands is therefore a fact about the tool,
-not a judgement docmeta made on your behalf.
+The rule across every platform built-in is to **require exactly what the
+generator refuses to build without**. What one demands is therefore a fact about
+the tool, not a judgement docmeta made on your behalf.
 
 Docusaurus and Sphinx mark no field as mandatory, so their schemas require
-nothing and can only ever fail a page on the *shape* of a value it already
+nothing. They can only ever fail a page on the *shape* of a value it already
 carries. Starlight and Antora both error without a page title, so both schemas
-demand `title` — a page failing that check was already broken, and docmeta is
+demand `title`. A page failing that check was already broken, and docmeta is
 telling you at review time instead of at build time. MyST requires nothing
 because it will lift a missing `title` from the first heading in the document.
 
-Hugo, Jekyll, VitePress and MkDocs require nothing either, and for the plainest
-reason of the lot: all four render a page that has no front matter at all. Hugo
-falls back to a title derived from the file name, MkDocs works down a list of
-four title sources and stops at the first that answers, VitePress has a default
-for every option, and in Jekyll it is the *presence* of the `---` block, not its
-contents, that marks a file for processing — an empty one is valid. That makes
+Hugo, Jekyll, VitePress and MkDocs require nothing either, for the plainest
+reason of the lot. All four render a page that has no front matter at all. Hugo
+falls back to a title derived from the file name. MkDocs works down a list of
+four title sources and stops at the first that answers. VitePress has a default
+for every option. In Jekyll it is the *presence* of the `---` block, not its
+contents, that marks a file for processing. An empty one is valid. That makes
 all four pure shape checks, which is where their value is. The mistakes they
 catch are the ones the generator accepts without complaint and then acts on
 wrongly.
@@ -75,16 +75,16 @@ the wrong line.
 <Aside type="caution" title="Starlight is pre-1.0, so this pin moves faster than the others">
 `docusaurus:docs:3.10` has been accurate for a year. Starlight ships a minor
 every few weeks, and each one can add a field. `astro:starlight:0.41` describes
-0.41 and will not be edited once published — a later line ships as a new id.
+0.41 and will not be edited once published. A later line ships as a new id.
 Because the schema tolerates unknown keys, running 0.41 against a newer
-Starlight under-checks rather than false-fails: fields added after 0.41 pass
+Starlight under-checks rather than false-fails. Fields added after 0.41 pass
 unexamined.
 </Aside>
 
 ## `antora:page:3.1`
 
-Antora page metadata lives in the AsciiDoc document header, not in front matter,
-and docmeta reads the `= Title` line plus every `:name: value` attribute entry
+Antora page metadata lives in the AsciiDoc document header, not in front matter.
+The reader takes the `= Title` line plus every `:name: value` attribute entry
 above the first blank line.
 
 | Attribute | Type | Notes |
@@ -110,9 +110,9 @@ around both:
   `true`, and the unset form `:!page-partial:` is `false`. Numbers are typed too,
   so `:page-toclevels: 3` is the number 3 and not `"3"`.
 
-Antora defines only three predefined page attributes — `page-aliases`,
-`page-layout`, `page-partial`. The rest of the `page-*` namespace is yours, and
-custom attributes pass unchecked.
+Antora defines only three predefined page attributes: `page-aliases`,
+`page-layout` and `page-partial`. The rest of the `page-*` namespace is yours,
+and custom attributes pass unchecked.
 
 ## `sphinx:docinfo:9.1`
 
@@ -127,9 +127,9 @@ Every field is optional, and flag fields are written bare.
 | `no-search` | boolean | Excludes the page from full-text search. |
 | `nosearch` | boolean | Deprecated spelling of `no-search`. |
 
-The set is small on purpose: Sphinx parses every docinfo value as a string, so a
-field list cannot carry a list or a mapping, and anything richer belongs
-somewhere else.
+The set is small on purpose. Sphinx parses every docinfo value as a string, so a
+field list cannot carry a list or a mapping. Anything richer belongs somewhere
+else.
 
 <Aside type="note" title="`nosearch` is annotated, not rejected">
 Sphinx renamed `nosearch` to `no-search` in 7.3 and still accepts the old
@@ -149,33 +149,33 @@ real document trips.
 | `title`, `subtitle`, `description`, `label` | 500 characters |
 | `short_title`, `subject` | 40 characters |
 
-Beyond those, the schema types the identity and publication fields
-(`authors`, `editors`, `reviewers`, `affiliations`, `doi`, `arxiv`, `pmid`,
-`pmcid`, `license`, `open_access`, `venue`, `volume`, `issue`, `funding`), the
-source links (`github`, `edit_url`, `source_url`, `binder`), and the execution
-blocks (`kernelspec`, `execute`). `pmcid` is checked against `PMC` followed by
-digits.
+Beyond those, the schema types the identity and publication fields. Those are
+`authors`, `editors`, `reviewers`, `affiliations`, `doi`, `arxiv`, `pmid`,
+`pmcid`, `license`, `open_access`, `venue`, `volume`, `issue` and `funding`. It
+also types the source links `github`, `edit_url`, `source_url` and `binder`, and
+the execution blocks `kernelspec` and `execute`. `pmcid` is checked against
+`PMC` followed by digits.
 
-Project-level keys that belong in `myst.yml` rather than a page — `bibliography`,
-`references`, `requirements`, `social` — are not described, and pass as unknown
-keys.
+Project-level keys that belong in `myst.yml` rather than a page are not
+described, and pass as unknown keys. Those are `bibliography`, `references`,
+`requirements` and `social`.
 
 <Aside type="note" title="Controlled vocabularies are checked for shape, not membership">
 MyST documents 14 CRediT contributor roles plus aliases. They are **not**
 transcribed into the schema, so `roles` is checked as a list of strings and
 nothing more. The same discipline applies to
 [`ms.topic`](/docmeta/reference/metadata-vocabularies/) and to Dublin Core's
-`type`: docmeta enumerates a vocabulary only where the published list is
-authoritative and complete, because an enum assembled from examples rejects
-correct documents.
+`type`. A vocabulary is enumerated only where the published list is
+authoritative and complete. An enum assembled from examples rejects correct
+documents.
 </Aside>
 
 ## `hugo:page:0.165`
 
-The 28 fields Hugo itself defines. Everything else you see in a Hugo site —
-`tags`, `categories`, `series`, and whatever your theme reads — is a
+The 28 fields Hugo itself defines. Everything else you see in a Hugo site is a
 user-configured taxonomy or a custom parameter rather than something Hugo
-defines, so it passes as an unknown key.
+defines. It passes as an unknown key. That covers `tags`, `categories`,
+`series`, and whatever your theme reads.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -194,20 +194,20 @@ defines, so it passes as an unknown key.
 
 The two checks that pay for this schema are `weight` and `draft`. Both are
 routinely written quoted, both are accepted by Hugo without a word, and both
-then behave wrongly: a string `weight` sorts lexically, so `"10"` lands before
-`"9"`, and `draft: "false"` is a non-empty string, which is truthy, so the page
+then behave wrongly. A string `weight` sorts lexically, so `"10"` lands before
+`"9"`. And `draft: "false"` is a non-empty string, which is truthy, so the page
 does not publish.
 
 <Aside type="note" title="Hugo's dates are typed but not format-checked">
 `date` and its siblings are `string` with no `format`. Hugo parses several
-layouts — a full timestamp, a bare `2026-06-25`, a bare year, a Unix timestamp —
-so pinning one format here would fail input Hugo accepts, and asserting
+layouts, including a full timestamp, a bare `2026-06-25`, a bare year, and a
+Unix timestamp. Pinning one format here would fail input Hugo accepts. Asserting
 something untrue about the tool is the thing a platform schema must not do.
 
 TOML is worth a note of its own. Hugo's `+++` fence has a real date type, so
-`date = 2026-06-25` parses to a date rather than a string; docmeta normalizes it
-back to the spelling it was written as before validating, so the same schema
-fits both fences and a local date does not silently become a timestamp.
+`date = 2026-06-25` parses to a date rather than a string. Before validating,
+docmeta normalizes it back to the spelling it was written as. The same schema
+then fits both fences, and a local date does not silently become a timestamp.
 </Aside>
 
 ## `jekyll:page:4.4`
@@ -252,19 +252,19 @@ page-level toggles.
 | `pageClass` | string | |
 
 `outline` is the field this schema exists for. It takes four different shapes,
-and VitePress ignores a value it does not recognise rather than complaining — so
+and VitePress ignores a value it does not recognise rather than complaining. So
 `outline: 9` silently gives you the default rather than a deep outline.
 
 <Aside type="note" title="`sidebar: false` hides the sidebar; it does not configure one">
 The page-level `sidebar` is a boolean toggle. A VitePress sidebar's *contents*
-are configured in `.vitepress/config.ts`, not in front matter, so a page that
-sets `sidebar:` to an object is doing something VitePress will not read. This
-schema types it as a boolean, which reports that.
+are configured in `.vitepress/config.ts`, not in front matter. A page that sets
+`sidebar:` to an object is doing something VitePress will not read. This schema
+types it as a boolean, which reports that.
 </Aside>
 
 <Aside type="caution" title="Pinned to 1.6 while 2.0 is in alpha">
 VitePress 1.6 is the stable line. 2.0 was still in alpha when this schema was
-written, so it is deliberately not described — a pin to a moving alpha would
+written, so it is deliberately not described. A pin to a moving alpha would
 promise a contract that is still changing. A 2.0 line will ship as a new id.
 </Aside>
 
@@ -272,8 +272,8 @@ promise a contract that is still changing. A 2.0 line will ship as a new id.
 
 The two keys MkDocs itself defines, plus the seventeen Material for MkDocs adds
 on top of them. Material is the theme the overwhelming majority of MkDocs sites
-run, and it is where nearly all of the front matter surface lives — core MkDocs
-reads `title` and `template` and nothing else — so one id covers both, the way
+run. It is where nearly all of the front matter surface lives. Core MkDocs reads
+`title` and `template` and nothing else. So one id covers both, the way
 `vitepress:page:1.6` covers VitePress and its default theme in one.
 
 | Field | Type | Notes |
@@ -297,7 +297,7 @@ reads `title` and `template` and nothing else — so one id covers both, the way
 | `links` | array | A post's sidebar links, in `nav` shape. |
 
 `hide` is the field this schema exists for. Material decides what to hide by
-testing membership of the list — `"navigation" in page.meta.hide` — and says
+testing membership of the list, with `"navigation" in page.meta.hide`. It says
 nothing at all about an entry it does not recognise, so `hide: [sidebar]` builds
 cleanly and hides nothing. The six values are transcribed from the templates
 that test them, not from a documentation page, so the list is what the theme
@@ -305,20 +305,20 @@ actually honours.
 
 The rest of the value is in the typing. `readtime`, `draft` and `pin` go through
 the blog plugin's own configuration validation, which refuses a quoted number or
-a quoted boolean outright; `tags` reaches a search plugin that checks
-`isinstance(tags, list)` and skips a bare string without a word; and `boost` is
+a quoted boolean outright. `tags` reaches a search plugin that checks
+`isinstance(tags, list)` and skips a bare string without a word. `boost` is
 copied into the search index exactly as written, so a quoted one ranks nothing.
 
 <Aside type="caution" title="The blog plugin requires `date`, and this schema cannot">
-A post under the blog plugin *must* carry `date` — "the build fails when it's
-not set" — and a `date` written as a mapping must carry `created`. That is the
+A post under the blog plugin *must* carry `date`, because "the build fails when
+it's not set". A `date` written as a mapping must carry `created`. That is the
 one thing in the MkDocs toolchain that refuses to build over missing front
-matter, and it is deliberately not in `required` here, because this schema fits
-any Material page and the overwhelming majority of them are not posts. Requiring
-`date` would fail every ordinary page in the docs tree.
+matter. It is deliberately not in `required` here. This schema fits any Material
+page, and the overwhelming majority of them are not posts. Requiring `date`
+would fail every ordinary page in the docs tree.
 
-The shape is still checked: a `date` mapping with no `created` fails. To demand
-the key itself, point a schema of your own at the posts directory:
+The shape is still checked, and a `date` mapping with no `created` fails. To
+demand the key itself, point a schema of your own at the posts directory:
 
 ```json title="blog-post.schema.json"
 {
@@ -339,32 +339,32 @@ overrides:
 <Aside type="note" title="Dates are typed but not format-checked">
 `date`, and every value inside the mapping form, is a plain `string`. MkDocs
 parses front matter with PyYAML, which resolves both `2026-06-25` and
-`2026-06-25T12:00:00` to a real date, and docmeta's YAML reader hands the
+`2026-06-25T12:00:00` to a real date. The docmeta YAML reader hands the
 validator the spelling that was authored. Pinning one format here would fail
-input the plugin accepts — the same reasoning as Hugo's dates above.
+input the plugin accepts, on the same reasoning as Hugo's dates above.
 
-One failure mode this cannot see: a *quoted* date. PyYAML leaves it a string,
-which the plugin rejects, but by the time a schema sees the value the quotes are
-gone and it is indistinguishable from the unquoted spelling.
+One failure mode this cannot see is a *quoted* date. PyYAML leaves it a string,
+which the plugin rejects. But by the time a schema sees the value the quotes are
+gone, and it is indistinguishable from the unquoted spelling.
 </Aside>
 
 <Aside type="caution" title="Pinned to Material 9.7, which is the end of the line">
 Material 9.7.0 was announced as the last release of Material for MkDocs to
-receive new features, with the team moving on to a separate generator. That
-makes this pin unusually stable for a platform schema: unlike
-`astro:starlight:0.41`, which describes a pre-1.0 line that adds fields every
-few weeks, `mkdocs:material:9.7` describes a front matter surface that is not
-expected to grow. Everything that was Insiders-only, including navigation paths
-and custom social card layouts, is in 9.7 and so is described here.
+receive new features. The team is moving on to a separate generator. That makes
+this pin unusually stable for a platform schema. `astro:starlight:0.41`
+describes a pre-1.0 line that adds fields every few weeks. `mkdocs:material:9.7`
+describes a front matter surface that is not expected to grow. Everything that
+was Insiders-only, including navigation paths and custom social card layouts, is
+in 9.7 and so is described here.
 </Aside>
 
 <Aside type="note" title="Your plugin's keys are not MkDocs'">
-`git_revision_date_localized`, `glightbox`, `nav_order`, `comments` — most of
-what appears in a real MkDocs site's front matter comes from a third-party
-plugin or from a template override you wrote, not from MkDocs or Material. None
-are described here and all pass as unknown keys. The `.meta.yml` files the meta
-plugin merges into a directory's pages are not Markdown, so docmeta does not
-read them either.
+Most of what appears in a real MkDocs site's front matter comes from a
+third-party plugin, or from a template override you wrote. It does not come from
+MkDocs or Material. `git_revision_date_localized`, `glightbox`, `nav_order` and
+`comments` are examples. None are described here and all pass as unknown keys.
+The `.meta.yml` files the meta plugin merges into a directory's pages are not
+Markdown, so docmeta does not read them either.
 </Aside>
 
 ## Composing with a vocabulary
