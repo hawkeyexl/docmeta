@@ -15,10 +15,9 @@ schemas, one per content plugin:
 | `docusaurus:pages:3.10` | `@docusaurus/plugin-content-pages` | 9 | [Pages front matter](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-pages#markdown-front-matter) | [`docusaurus-pages/3.10.json`](/docmeta/schemas/docusaurus-pages/3.10.json) |
 
 Each **JSON** link is the schema itself, at a [permanent, version-pinned
-URL](/docmeta/reference/built-in-schemas/#the-published-urls). Because a
-Docusaurus site's front matter contract is the thing most likely to be checked
-by something other than docmeta, these are the three worth handing to another
-tool directly.
+URL](/docmeta/reference/built-in-schemas/#the-published-urls). A Docusaurus
+site's front matter contract is the thing most likely to be checked by something
+other than docmeta. These are the three worth handing to another tool directly.
 
 | Property | Value |
 |---|---|
@@ -26,7 +25,7 @@ tool directly.
 | Additional properties | Allowed (`additionalProperties: true`) |
 | Required fields | None, in any of the three |
 | Reference kind | [builtin](/docmeta/reference/schema-resolution/#reference-kinds) |
-| On by default | No — see [turning one on](#wire-them-up) |
+| On by default | No; see [turning one on](#wire-them-up) |
 
 ## Format checks, not presence checks
 
@@ -37,8 +36,8 @@ none of them.
 
 That makes them the opposite of the [taxonomy
 schemas](/docmeta/reference/taxonomy-schemas/), which require their key. Turning
-a Docusaurus schema on cannot fail a page that was already building — it can
-only catch a value your site would have rejected, or silently mishandled, later.
+a Docusaurus schema on cannot fail a page that was already building. It can only
+catch a value your site would have rejected, or silently mishandled, later.
 
 ## Why check what Docusaurus already validates
 
@@ -49,15 +48,15 @@ not a substitute for it. They earn their place three ways:
   bad file. `docmeta validate` reports every offending page in the docs set in
   one run, with a line number for each.
 - **Before a build, not during one.** Validation needs no site config, no
-  install of Docusaurus, and no build step, so it runs in seconds on a pull
-  request that touches ten files.
+  install of Docusaurus, and no build step. It runs in seconds on a pull request
+  that touches ten files.
 - **Alongside your own standard.** These schemas claim neither `type` nor
   `action`, so they compose with any of the [taxonomy
   vocabularies](/docmeta/reference/taxonomy-schemas/). One command holds a page
   to the generator's contract *and* your docs set's conventions, attributing
   each failure to the schema that raised it. (Stacking with
-  [`google:okf:0.1`](/docmeta/reference/okf-schema/) is the one exception —
-  both define `tags`, and [their definitions
+  [`google:okf:0.1`](/docmeta/reference/okf-schema/) is the one exception. Both
+  define `tags`, and [their definitions
   disagree](/docmeta/reference/built-in-schemas/#two-kinds-of-built-in).)
 
 ## Fields
@@ -67,26 +66,26 @@ not a substitute for it. They earn their place three ways:
 
 | Field | Type | Constraint |
 |---|---|---|
-| `id` | string | — |
+| `id` | string | n/a |
 | `title` | string | may be empty |
 | `description` | string | may be empty |
-| `slug` | string | — |
-| `sidebar_label` | string | — |
-| `sidebar_position` | number | — |
-| `sidebar_class_name` | string | — |
-| `sidebar_key` | string | — |
-| `sidebar_custom_props` | object | — |
-| `displayed_sidebar` | string or null | — |
-| `pagination_label` | string | — |
-| `pagination_next` | string or null | — |
-| `pagination_prev` | string or null | — |
-| `hide_title` | boolean | — |
-| `hide_table_of_contents` | boolean | — |
+| `slug` | string | n/a |
+| `sidebar_label` | string | n/a |
+| `sidebar_position` | number | n/a |
+| `sidebar_class_name` | string | n/a |
+| `sidebar_key` | string | n/a |
+| `sidebar_custom_props` | object | n/a |
+| `displayed_sidebar` | string or null | n/a |
+| `pagination_label` | string | n/a |
+| `pagination_next` | string or null | n/a |
+| `pagination_prev` | string or null | n/a |
+| `hide_title` | boolean | n/a |
+| `hide_table_of_contents` | boolean | n/a |
 | `toc_min_heading_level` | number | 2–6 |
 | `toc_max_heading_level` | number | 2–6 |
-| `parse_number_prefixes` | boolean | — |
+| `parse_number_prefixes` | boolean | n/a |
 | `custom_edit_url` | string or null | `uri-reference` |
-| `keywords` | array of string | — |
+| `keywords` | array of string | n/a |
 | `image` | string | `uri-reference` |
 | `tags` | array | string, or object with `label` **and** `permalink` |
 | `draft` | boolean | not both with `unlisted` |
@@ -103,18 +102,18 @@ not a substitute for it. They earn their place three ways:
 | `author_url` | string | `uri-reference`, deprecated |
 | `author_image_url` | string | `uri-reference`, deprecated |
 | `author_title` | string | deprecated |
-| `title` | string | — |
-| `title_meta` | string | — |
-| `sidebar_label` | string | — |
-| `date` | string | — |
+| `title` | string | n/a |
+| `title_meta` | string | n/a |
+| `sidebar_label` | string | n/a |
+| `date` | string | n/a |
 | `description` | string | may be empty |
-| `slug` | string | — |
-| `keywords` | array of string | — |
+| `slug` | string | n/a |
+| `keywords` | array of string | n/a |
 | `image` | string | `uri-reference` |
 | `tags` | array | string, or object with `label` **and** `permalink` |
 | `draft` | boolean | not both with `unlisted` |
 | `unlisted` | boolean | not both with `draft` |
-| `hide_table_of_contents` | boolean | — |
+| `hide_table_of_contents` | boolean | n/a |
 | `toc_min_heading_level` | number | 2–6 |
 | `toc_max_heading_level` | number | 2–6 |
 | `last_update` | object | `author` and/or `date`, at least one, nothing else |
@@ -126,11 +125,11 @@ not a substitute for it. They earn their place three ways:
 |---|---|---|
 | `title` | string | may be empty |
 | `description` | string | may be empty |
-| `keywords` | array of string | — |
+| `keywords` | array of string | n/a |
 | `image` | string | `uri-reference` |
-| `slug` | string | — |
-| `wrapperClassName` | string | — |
-| `hide_table_of_contents` | boolean | — |
+| `slug` | string | n/a |
+| `wrapperClassName` | string | n/a |
+| `hide_table_of_contents` | boolean | n/a |
 | `draft` | boolean | not both with `unlisted` |
 | `unlisted` | boolean | not both with `draft` |
 
@@ -153,7 +152,7 @@ rejects it. This is the most common front matter mistake these schemas catch:
 **`draft` and `unlisted` are mutually exclusive.** Setting both to `true` is the
 one cross-field rule Docusaurus enforces, and the schemas encode it. Either flag
 on its own is fine. Because JSON Schema expresses this as a conditional, it
-reports twice — once on the field to change, once on the rule as a whole:
+reports twice. Once on the field to change, and once on the rule as a whole:
 
 ```text
 ✗ docs/install.md
@@ -161,14 +160,14 @@ reports twice — once on the field to change, once on the rule as a whole:
     (root)     must match "then" schema      (line 1)  [docusaurus:docs:3.10]
 ```
 
-Read the first line: drop `unlisted` (or `draft`) and both clear.
+Read the first line, then drop `unlisted` (or `draft`) and both clear.
 
-**`last_update` takes `author`, `date`, or both — and nothing else.** It is the
+**`last_update` takes `author`, `date`, or both, and nothing else.** It is the
 only place the schemas forbid unknown keys, because a misspelled `autor` there
 is silently dropped rather than reported.
 
 **`image` and `custom_edit_url` are URI *references*.** A site-root path like
-`/img/social/card.png` is legal, so these use `uri-reference` rather than `uri`,
+`/img/social/card.png` is legal. These use `uri-reference` rather than `uri`,
 which would wrongly reject every relative path.
 
 **Tag objects need both halves.** A tag is either a plain string or an object
@@ -189,7 +188,7 @@ carrying `label` *and* `permalink`. Half an object fails.
 
 <Aside type="tip" title="Catching front matter typos">
 Since unknown keys are allowed, a misspelled `sidebar_positon` passes both
-docmeta and Docusaurus — it is simply ignored, and the page lands wherever the
+docmeta and Docusaurus. It is simply ignored, and the page lands wherever the
 default ordering puts it. If your docs set has no plugin-specific front matter,
 stack a strict local schema alongside the built-in to close that gap:
 
@@ -211,7 +210,7 @@ stack a strict local schema alongside the built-in to close that gap:
 }
 ```
 
-The empty `{}` schemas accept any value — typing is the built-in's job, and this
+The empty `{}` schemas accept any value. Typing is the built-in's job, and this
 file only polices the key names.
 
 Because it closes the door on everything unlisted, it also closes it on the
@@ -261,11 +260,11 @@ widen the glob to `**/docs/**`.
 <Aside type="danger" title="Always pass `--fields` when you run `fill` against these">
 [`docmeta fill`](/docmeta/reference/cli/#fill) offers every *absent* property to
 the model, not only the required ones. That suits a descriptive schema, but most
-Docusaurus fields are **structural**: a model reading page content cannot know
+Docusaurus fields are **structural**. A model reading page content cannot know
 the right `sidebar_position`, `pagination_next`, `displayed_sidebar`, `slug`, or
 `custom_edit_url`. Left unrestricted, `fill` will ask about all 24 of them, and
-any proposal clearing the confidence gate is written to the file — silently
-reordering your sidebar, rewiring next/previous links, or changing a page's URL.
+any proposal clearing the confidence gate is written to the file. That silently
+reorders your sidebar, rewires next/previous links, or changes a page's URL.
 
 Restrict it to the fields that actually follow from the prose:
 
@@ -280,7 +279,7 @@ proposal will not be caught by a later `validate` run.
 ## Versioning
 
 The version segment is the Docusaurus **minor** release the contract was
-transcribed from, because that is where fields are added — `sidebar_key` is a
+transcribed from, because that is where fields are added. `sidebar_key` is a
 recent arrival. A new minor arrives as a new id rather than a change to
 `docusaurus:docs:3.10`, so upgrading docmeta never retightens a check you
 already passed. Pin the id matching the Docusaurus you run, and move it when you
