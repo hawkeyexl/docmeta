@@ -20,3 +20,6 @@ media/
 # Baseline written by the Doc Detective steps in set-up/new-required-field.mdx.
 # Run output, not a source file.
 .dd-baseline.json
+
+# Vale styles are fetched by `vale sync`, not committed
+.vale/styles/
