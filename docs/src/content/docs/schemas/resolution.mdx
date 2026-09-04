@@ -8,9 +8,9 @@ sidebar:
 
 import { Steps, Tabs, TabItem, Card, CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
 
-A schema is only useful once docmeta knows *which* schema applies to *which* file. In a real repo, several signals compete to answer that question: a flag on the command line, a `$schema` key inside the document, a directory rule in your config, a repo-wide default. docmeta settles the competition with a fixed precedence order, and once you know that order, wiring schemas to documents becomes predictable instead of mysterious.
+A schema is only useful once docmeta knows *which* schema applies to *which* file. In a real repo, several signals compete to answer that question. A flag on the command line and a `$schema` key inside the document both have a claim. So do a directory rule in your config and a repo-wide default. docmeta settles the competition with a fixed precedence order, and once you know that order, wiring schemas to documents becomes predictable instead of mysterious.
 
-This page documents the precedence chain, the three kinds of schema reference you can use anywhere a schema is named, and how docmeta detects a schema's JSON Schema dialect.
+This page documents the precedence chain and the three kinds of schema reference you can use anywhere a schema is named. It also covers how docmeta detects a schema's JSON Schema dialect.
 
 ## The precedence chain
 
@@ -39,7 +39,7 @@ Here is the same chain as a quick-reference table:
 | Order | Source | Scope | Notes |
 |------:|--------|-------|-------|
 | 1 | CLI `-s`/`--schema` | All files in the run | Repeatable; overrides everything below. |
-| 2 | File `$schema` key | That one file | String or list of strings. Reserved key — stripped before validation. |
+| 2 | File `$schema` key | That one file | String or list of strings. A reserved key, stripped before validation. |
 | 3 | Config `overrides` | Files matching a glob | First matching entry wins; later entries ignored. |
 | 4 | Config `schemas` | All files (repo default) | Used when no override matched. |
 | 5 | Built-in default set | All files (last resort) | `google:okf:0.1` + `passo-uno:seven-action:1.0`. |
@@ -73,7 +73,7 @@ With the config above, a repo-wide default of `google:okf:0.1` (level 4) and an 
 
 When a document names its own schema with a `$schema` key, that key is a *directive to docmeta*, not part of the document's metadata. docmeta strips `$schema` out of the metadata before handing it to the validator.
 
-This matters for one specific case: a schema with `"additionalProperties": false` rejects any field it doesn't declare. Without special handling, a document carrying `$schema:` would fail against such a schema, because `$schema` isn't one of the schema's declared properties. Because docmeta removes `$schema` first, that never happens. You never need to add `$schema` to your schema's `properties`, and a self-describing document validates cleanly against even the strictest schema.
+This matters for one specific case. A schema with `"additionalProperties": false` rejects any field it doesn't declare. Without special handling, a document carrying `$schema:` would fail against such a schema, because `$schema` isn't one of the schema's declared properties. Because docmeta removes `$schema` first, that never happens. You never need to add `$schema` to your schema's `properties`, and a self-describing document validates cleanly against even the strictest schema.
 
 The `$schema` value can be a single reference or a list:
 
@@ -107,14 +107,14 @@ The file is validated against *both* schemas; see [below](#validating-against-mo
 </Tabs>
 
 <Aside type="caution" title="$schema must be a string or a list of strings">
-A `$schema` value that is anything else (a number, an object, a list with non-string entries) is a configuration error, and docmeta reports it rather than guessing. Keep it to a single reference or a flat list of references.
+A `$schema` value that is anything else is a configuration error, and docmeta reports it rather than guessing. That covers a number, an object, and a list with non-string entries. Keep it to a single reference or a flat list of references.
 </Aside>
 
-Level 2 beating config is what makes a document self-describing, and it is also the one level a repository can narrow. A repo taking pull requests from outside can say that documents may name a built-in id or a repository file but not a URL — or that their `$schema` is ignored entirely — with [`schemaTrust`](/docmeta/reference/configuration/#schema-trust). Left unset, level 2 behaves exactly as described here.
+Level 2 beating config is what makes a document self-describing, and it is also the one level a repository can narrow. A repo taking pull requests from outside can narrow it with [`schemaTrust`](/docmeta/reference/configuration/#schema-trust). It can say that documents may name a built-in id or a repository file but not a URL. It can also ignore their `$schema` entirely. Left unset, level 2 behaves exactly as described here.
 
 ## The three reference kinds
 
-Everywhere a schema is named (a `--schema` flag, a `$schema` key, a config entry), the value is a **reference**, and docmeta classifies it into one of three kinds by its shape. You don't declare the kind; docmeta infers it.
+Everywhere a schema is named, the value is a **reference**. That covers a `--schema` flag, a `$schema` key, and a config entry. docmeta classifies each reference into one of three kinds by its shape. You don't declare the kind; docmeta infers it.
 
 <CardGrid>
   <Card title="Built-in" icon="seti:json">
@@ -136,23 +136,23 @@ Everywhere a schema is named (a `--schema` flag, a `$schema` key, a config entry
 
   Example: `https://example.com/schemas/okf-1.0.json`
 
-  Fetched over the network with a **10-second timeout** and **cached for the run**, so the same URL is downloaded only once even across thousands of files.
+  Fetched over the network with a **10-second timeout** and **cached for the run**. The same URL is downloaded only once, even across thousands of files.
   </Card>
 </CardGrid>
 
 <Aside type="note" title="How the kind is decided">
-The classification is purely structural, applied in this order: a value starting with `http(s)://` is a **URL**; otherwise a value with no slash or backslash, not ending in `.json`, and shaped like `vendor:name:version` is a **built-in**; everything else is a **file**. That last rule is why a Windows path like `C:\schemas\my.schema.json` is correctly treated as a file rather than mistaken for a built-in id.
+The classification is purely structural, and it is applied in this order. A value starting with `http(s)://` is a **URL**. Otherwise a value with no slash or backslash, not ending in `.json`, and shaped like `vendor:name:version` is a **built-in**. Everything else is a **file**. That last rule is why a Windows path like `C:\schemas\my.schema.json` is correctly treated as a file rather than mistaken for a built-in id.
 </Aside>
 
 <Aside type="caution" title="A schema that can't be loaded is a hard error">
-If a reference can't be resolved, docmeta stops with an operational error (exit code 2) rather than skipping the file or falling back to the default. This applies to an unknown built-in id, a missing schema file, and a URL that 404s or times out after the 10-second limit. Treat the schema reference as load-bearing: a broken one fails the run, which is what you want in CI.
+If a reference can't be resolved, docmeta stops with an operational error (exit code 2). It does not skip the file or fall back to the default. This applies to an unknown built-in id, a missing schema file, and a URL that 404s or times out after the 10-second limit. Treat the schema reference as load-bearing: a broken one fails the run, which is what you want in CI.
 </Aside>
 
 URL references are one way to govern a single schema across many repos: a central, versioned schema URL that every consumer points at. Vendoring that URL into each consumer is the other, and the more durable one. Both, with the fetch timeout and caching behavior in depth, are covered in [Govern a shared schema across repos](/docmeta/ci/govern-shared-schema/).
 
 ## Validating against more than one schema
 
-When a file's schema set contains more than one reference, docmeta validates the file against **every schema in the set** and reports the union of all violations, each tagged with the schema that produced it. A file passes only if it satisfies all of them.
+When a file's schema set contains more than one reference, docmeta validates the file against **every schema in the set**. It reports the union of all violations, each tagged with the schema that produced it. A file passes only if it satisfies all of them.
 
 A multi-schema set is what you get when you name several schemas at a single precedence level:
 
@@ -166,7 +166,7 @@ Because the file must satisfy *every* schema in the set, the strictest member go
 
 ## Dialects are detected automatically
 
-JSON Schema has evolved through several versions, called *dialects* (draft-04, draft-06, draft-07, 2019-09, 2020-12). A schema written for one dialect can fail to compile under another, so docmeta reads each schema's **own `$schema` line**, the URI at the top of the schema file that points at the dialect's *meta-schema* (the schema that defines the dialect itself), and selects the matching validation engine.
+JSON Schema has evolved through several versions, called *dialects* (draft-04, draft-06, draft-07, 2019-09, 2020-12). A schema written for one dialect can fail to compile under another. So docmeta reads each schema's **own `$schema` line** and selects the matching validation engine. That line is the URI at the top of the schema file. It points at the dialect's *meta-schema*, the schema that defines the dialect itself.
 
 docmeta supports these dialects:
 
@@ -178,7 +178,7 @@ docmeta supports these dialects:
 | draft-06 | `draft-06` or `draft/6` (shares the draft-07 engine) |
 | draft-04 | `draft-04` or `draft/4` |
 
-If a schema omits its `$schema` line or uses an unrecognized one, docmeta falls back to **2020-12**, the dialect of the built-in schemas. This auto-detection is why a schema you fetch from a remote URL that targets draft-07 validates correctly alongside a local 2020-12 schema in the same run.
+If a schema omits its `$schema` line or uses an unrecognized one, docmeta falls back to **2020-12**, the dialect of the built-in schemas. Because of that auto-detection, a schema you fetch from a remote URL can target draft-07. It still validates correctly alongside a local 2020-12 schema in the same run.
 
 <Aside type="tip" title="Always declare your dialect">
 Relying on the fallback works, but stating the dialect explicitly removes ambiguity for both docmeta and the humans reading your schema. Keep a `"$schema"` line at the top of every schema file:

@@ -5,10 +5,9 @@ description: Every input and output of the hawkeyexl/docmeta GitHub Action, with
 
 import { Aside } from '@astrojs/starlight/components';
 
-The packaged Action runs the same npm package the CLI does — it sets up Node,
-fetches `docmeta`, and shells out to `docmeta validate`. Nothing it does is
-unavailable from the CLI; it exists so the invocation lives in one place instead
-of being copy-pasted into every repository that wants it.
+The packaged Action runs the same npm package the CLI does. It sets up Node,
+fetches `docmeta`, and shells out to `docmeta validate`. Nothing it does is unavailable from the CLI. It exists so the invocation lives
+in one place, instead of being copy-pasted into every repository that wants it.
 
 ```yaml
 - uses: actions/checkout@v4
@@ -20,24 +19,23 @@ of being copy-pasted into every repository that wants it.
 ## Inputs
 
 Every input is optional. An input left unset contributes nothing to the command
-line — it does not become an empty flag.
+line, and it does not become an empty flag.
 
 | Input | Default | Maps to |
 |---|---|---|
-| `paths` | — | Positional paths. Files, directories, or globs. Falls back to `paths:` in your config when unset. |
-| `schema` | — | One `-s` per entry. |
-| `config` | — | `-c` |
+| `paths` | none | Positional paths. Files, directories, or globs. Falls back to `paths:` in your config when unset. |
+| `schema` | none | One `-s` per entry. |
+| `config` | none | `-c` |
 | `format` | `github` | `--format`. One of `pretty`, `json`, `github`, `sarif`, `junit`. |
 | `version` | `4` | The npm version range fetched, as `docmeta@<version>`. Also accepts a path or tarball. |
-| `args` | — | Appended verbatim after everything else, for anything the inputs above do not cover. |
+| `args` | none | Appended verbatim after everything else, for anything the inputs above do not cover. |
 | `node-version` | `24` | Passed to `actions/setup-node`. docmeta needs 24 or newer. |
 
 <Aside type="caution" title="Quotes are not shell-processed">
 `paths` and `args` accept several values either space-separated on one line or
-**one per line**. On a single line the value is split on whitespace only —
-shell quoting is not interpreted, so `args: --exclude "*.draft.md"` reaches
-docmeta with the quote marks still inside the pattern, and the exclusion
-silently matches nothing.
+**one per line**. On a single line the value is split on whitespace only, and shell quoting is not
+interpreted. So `args: --exclude "*.draft.md"` reaches docmeta with the quote
+marks still inside the pattern, and the exclusion silently matches nothing.
 
 Use one item per line whenever a value contains a space. The Action emits a
 workflow warning if it sees a quote character in a single-line value.
@@ -56,18 +54,18 @@ workflow warning if it sees a quote character in a single-line value.
 
 ### Globs reach docmeta unexpanded
 
-A `paths` value like `docs/**/*.md` is passed through as that string. The Action
-disables shell globbing deliberately: docmeta applies its own extension
-filtering and [gitignore rules](/docmeta/reference/cli/#shared-input-model), and
-letting the runner expand the pattern first would substitute the shell's view of
-the tree for docmeta's — silently, and differently depending on the working
-directory.
+A `paths` value like `docs/**/*.md` is passed through as that string. The Action disables shell globbing deliberately. docmeta applies its own
+extension filtering and [gitignore
+rules](/docmeta/reference/cli/#shared-input-model). Letting the runner expand the pattern first would substitute the shell's view of
+the tree for docmeta's. It would do so silently, and differently depending on
+the working directory.
 
 ## Outputs
 
 | Output | Value |
 |---|---|
-| `exit-code` | docmeta's exit code — `0` clean, `1` validation failures, `2` operational or usage error. |
+| `exit-code` | docmeta's exit code. `0` clean, `1` validation failures, `2`
+operational or usage error. |
 
 `exit-code` is only observable with `continue-on-error: true`. Without it a
 non-zero code has already failed the step, so there is nothing left to read:
@@ -94,7 +92,8 @@ Action itself.
 
 `@v4` is a moving tag that tracks the newest 4.x release; it is force-updated by
 the release job on each stable release. Pin `@v4.1.2` instead when you want an
-immutable reference — the usual trade between getting fixes automatically and
+immutable reference. That is the usual trade between getting fixes automatically
+and
 knowing exactly what runs.
 
 The `version` input is separate, and controls which npm version the Action
@@ -116,7 +115,7 @@ shows:
 ```
 
 Use the hand-written form on a runner that cannot use a composite action, or when
-you need to control the Node setup yourself. Everything else — the pin, the
-`--format github` default, the Node version — moves inside the Action, so
-changing the recommended invocation is a tag move rather than an edit in every
+you need to control the Node setup yourself. Everything else moves inside the Action, including the pin, the `--format
+github` default, and the Node version. So
+changing the recommended invocation is a tag move, rather than an edit in every
 repository.
