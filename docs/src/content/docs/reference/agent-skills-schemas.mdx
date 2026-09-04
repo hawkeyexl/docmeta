@@ -144,8 +144,8 @@ user-invocable: TRUE            # the boolean true
 ```
 
 All three work in Claude Code, so the schema accepts all three types rather than
-`boolean` alone. A `pattern` constrains the string form, a `0`–`1` range
-constrains the integer one, and booleans are left as they are. A word that is
+`boolean` alone. A `pattern` constrains only the string form, a `0`–`1` range
+constrains only the integer one, and booleans are left as they are. A word that is
 not one of the spellings still fails:
 
 ```text

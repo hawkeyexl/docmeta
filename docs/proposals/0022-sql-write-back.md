@@ -58,10 +58,10 @@ an UPDATE is refused. This proposal makes it mean something instead:
   `{ file, key, from?, to | deleted, written }`, mirroring a SELECT's bare row
   array. `from` is omitted for a key the file never had, which keeps "absent"
   distinguishable from an explicit null.
-- **`--check` composes.** In preview, any pending change is a finding, at exit
-  1. That turns a normalization statement into a drift gate. CI fails while any
-     file does not match the rule, and `--write` is the remedy the failure
-     message names.
+- **`--check` composes.** In preview, any pending change is a finding, at
+  exit 1. That turns a normalization statement into a drift gate. CI fails while
+  any file does not match the rule, and `--write` is the remedy the failure
+  message names.
 
 This is the opposite polarity from `fill`, which writes by default and offers
 `--dry-run`. The difference is argued, not accidental. Every `fill` write has
@@ -291,8 +291,7 @@ reasoning above stays as written.)*
 ## Not breaking
 
 `UPDATE` without `--write` changes from exit 2, with
-`SQL error: attempt to write a readonly database`, to a dry-run report with exit
-0. That is an error becoming a useful answer, which is the 0020 "fixing
-   under-reporting" shape rather than a contract break. Every SELECT behaves
-   exactly as 0021 shipped it. Ships as `feat(query):` with the house demo
-   video.
+`SQL error: attempt to write a readonly database`, to a dry-run report at exit 0.
+That is an error becoming a useful answer, which is the 0020 "fixing
+under-reporting" shape rather than a contract break. Every SELECT behaves exactly
+as 0021 shipped it. Ships as `feat(query):` with the house demo video.

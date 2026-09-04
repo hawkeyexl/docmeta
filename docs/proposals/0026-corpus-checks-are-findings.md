@@ -175,8 +175,8 @@ Recommended.
 for.** The finding's `schema` field carries `check:<name>`, and the baseline
 canonicalizes that field through `classifyRef` before fingerprinting.
 `check:unique-slugs` matches `BUILTIN_ID`, which is `seg(:seg)+` over
-`[a-z0-9._-]`, with no separators and not ending `.json`.
-`src/core/schema-registry.ts:207-220`) and passes through untouched. But
+`[a-z0-9._-]`, with no separators and not ending `.json`
+(`src/core/schema-registry.ts:207-220`), and passes through untouched. But
 `check:my rules`, `check:a/b`, or `check:slugs.json` classify as **file paths**,
 and get resolved cwd-relative. That is a fingerprint that changes with the
 directory you run from, which is the exact bug `canonicalSchemaRef` exists to

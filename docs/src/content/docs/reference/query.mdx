@@ -485,8 +485,9 @@ An edit's `json` output is an array of change objects. Every object carries
 - A moved file (`renamed`).
 - A schema edit (`schema`, `op`, `key`, and the mapped
   `type`/`format`/`enum`/`required`).
-- A config side effect (`config`, `key`, `from`, `to`). `from` is omitted when
-  the file had no previous value.
+- A config side effect (`config`, `key`, `from`, `to`).
+
+In any of these, `from` is omitted when the file had no previous value.
 
 ```json
 [

@@ -233,7 +233,7 @@ carries no column even in a format that can supply one:
 `%25`, a carriage return `%0D`, and a newline `%0A`. GitHub decodes them when it
 renders the annotation. Without it, a schema `pattern` containing `%` would
 corrupt the annotation, because Ajv quotes the regex into the message verbatim.
-A multi-line message would truncate at the first newline. Do not decode these
+Without it a multi-line message would truncate at the first newline. Do not decode these
 yourself if you post-process the lines; treat the message as
 percent-escaped-on-those-three.
 

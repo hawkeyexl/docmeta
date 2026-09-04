@@ -127,8 +127,8 @@ the recorded integrity if the change was intended.
 ```
 
 That is the cost, stated plainly. An edit to the vendored file that does not go
-through `schemas vendor` breaks the build. The pin has to be updated first. That
-includes a well-meant local tweak. In exchange, no copy of the shared standard
+through `schemas vendor`, a well-meant local tweak included, breaks the build
+until the pin is updated. In exchange, no copy of the shared standard
 can drift without a reviewer seeing it. If you want the local file without the
 pin, delete the `integrity:` line; `ref` and `source` keep working on their own.
 
@@ -148,10 +148,12 @@ as changed contents.
 ## When the URL form is enough
 
 A plain URL reference is one line and needs no command. For some setups that is
-the right trade. - An **internal repo on the same infrastructure** as the schema
-host, where the host being down already means nobody is working. - A **prototype
-or spike** where a broken build costs nothing. - **Checking a candidate schema**
-for one run, with `-s`:
+the right trade.
+
+- An **internal repo on the same infrastructure** as the schema host, where the
+  host being down already means nobody is working.
+- A **prototype or spike** where a broken build costs nothing.
+- **Checking a candidate schema** for one run, with `-s`:
 
   ```sh
   npx -y docmeta validate "docs/**/*.md" -s https://schemas.example.com/house/3.0.json

@@ -380,14 +380,14 @@ write through `docs`, scoped by the view
 [`--db` export](/docmeta/reference/query/#exporting-the-database) as ordinary
 `CREATE VIEW` rows, and the effect gate never sees them.
 
-Any string is a legal name, because view names are quoted identifiers.
-`parseConfig` refuses five up front. A **duplicate** name. The name **`docs`**,
-in any casing, since it is the table every query reads. An **empty or blank**
-name. A name starting **`sqlite_`**, because SQLite reserves the prefix. And a
-`name:` on an override with **no `schemas:`**, since a schema-less override
-never wins resolution, so its view would always be empty. A config using `name:`
-requires a docmeta at or above the version that introduced it, everywhere the
-config is read. That is the standard new-key caveat.
+Any string is a legal name, because view names are quoted identifiers. Five are
+the exception, and `parseConfig` refuses them up front. A **duplicate** name.
+The name **`docs`**, in any casing, since it is the table every query reads. An
+**empty or blank** name. A name starting **`sqlite_`**, because SQLite reserves
+the prefix. And a `name:` on an override with **no `schemas:`**, since a
+schema-less override never wins resolution, so its view would always be empty.
+A config using `name:` requires a docmeta at or above the version that
+introduced it, everywhere the config is read. That is the standard new-key caveat.
 
 ### Checks
 

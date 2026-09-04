@@ -253,7 +253,7 @@ including the 0.8 worked example translated, the fidelity proof).
 
 - Renamed to kebab and plain language. The RDF mapping lives in descriptions,
   where it always did, and iiRDS is kebab upstream anyway.
-    The renames are prefLabel → **label**, altLabels → alt-labels, and subjects →
+  The renames are prefLabel → **label**, altLabels → alt-labels, and subjects →
   **concepts**. That last one is the nominal twin of the page-level field, and
   the same fact, with deeper winning. Then related → **related-concepts**, in
   step with the page-level rename to related-pages. Then topicType → **type**,
@@ -331,7 +331,7 @@ is `ladders/artifact-evals-examples.cjs`.
   `command` runs an executable over `{trace}` with the same generation contract,
   writing back command and generated-assertion-hash. This makes the two eval
   schemas' entry vocabularies structurally aligned.
-    One deliberate asymmetry remained in proposal.1. `assertion` was
+  One deliberate asymmetry remained in proposal.1. `assertion` was
   unconditionally required here, where every eval must be self-describing. On
   the page side it is conditional, because there a tool grader is its own check.
   Round 6 removed the asymmetry, below.

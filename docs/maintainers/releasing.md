@@ -32,11 +32,11 @@ Configured on npmjs.com under the package's **Settings → Trusted Publisher**:
 - Workflow filename: **`release.yml`** (exact, case-sensitive)
 
 The workflow bakes in four requirements. It needs a GitHub-hosted runner, npm
-CLI ≥ 11.5.1 (Node 24 bundles a new enough npm), and `@semantic-release/npm` ≥
-13. It also needs `repository.url` in `package.json` to match the repo. Do
-    **not** add `registry-url` to `setup-node`, or any
-    `NPM_TOKEN`/`NODE_AUTH_TOKEN`. A written-out auth token in `.npmrc` shadows
-    OIDC and breaks the publish.
+CLI ≥ 11.5.1 (Node 24 bundles a new enough npm), and `@semantic-release/npm`
+≥ 13. It also needs `repository.url` in `package.json` to match the repo.
+Do **not** add `registry-url` to `setup-node`, or any
+`NPM_TOKEN`/`NODE_AUTH_TOKEN`. A written-out auth token in `.npmrc` shadows OIDC
+and breaks the publish.
 
 ## The moving major tag
 
@@ -120,5 +120,8 @@ The workflow mints a short-lived token from this App
 `GITHUB_TOKEN`, so the release commit is pushed by the App and bypasses the
 ruleset. (The token controls which actor authenticates the push, not the git
 `author`/`committer` fields, which semantic-release sets independently.) The
-release commit message ends with `[skip ci]`, so it doesn't re-trigger the
-workflow.
+release job skips its own release commit with a job-level `if:` that matches the
+`chore(release):` subject prefix, so it doesn't re-trigger. It deliberately does
+not use `[skip ci]`. GitHub honours that marker anywhere in a pushed message,
+and a squash merge concatenates a branch's commits. Prerelease markers therefore
+rode into `main` and skipped Release and Docs both.

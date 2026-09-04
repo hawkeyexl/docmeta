@@ -55,21 +55,21 @@ docmeta [paths...] [options]
 
 | Option | Argument | Default | Description |
 |---|---|---|---|
-| `-s, --schema` | `<ref>` | - | Schema to validate against. Repeatable. When given, it overrides `$schema` and config for every file. See [reference kinds](/docmeta/reference/schema-resolution/#reference-kinds). |
+| `-s, --schema` | `<ref>` | n/a | Schema to validate against. Repeatable. When given, it overrides `$schema` and config for every file. See [reference kinds](/docmeta/reference/schema-resolution/#reference-kinds). |
 | `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
-| `--exclude` | `<glob>` | - | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
-| `--as` | `<format>` | - | Force an input [format](/docmeta/reference/formats/) (extractor name, e.g. `markdown`). Required when reading from stdin. |
+| `--exclude` | `<glob>` | n/a | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
+| `--as` | `<format>` | n/a | Force an input [format](/docmeta/reference/formats/) (extractor name, e.g. `markdown`). Required when reading from stdin. |
 | `-f, --format` | `<pretty\|json\|github\|sarif\|junit>` | `pretty` | [Output format](/docmeta/reference/output-and-exit-codes/). An unknown value is an error (exit 2). |
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). When set, the file must exist or docmeta exits 2. |
-| `--no-config` | - | off | Ignore any discovered config file and run on the [built-in default schema set](/docmeta/reference/schema-resolution/#precedence). `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
-| `-q, --quiet` | - | off | In `pretty` output, hide passing files. Has no effect on `json`, `github`, `sarif`, or `junit`. |
-| `--allow-empty` | - | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
-| `--no-gitignore` | - | on | Validate files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
-| `--offline` | - | off | Never fetch a remote schema. A `url` reference is served from the [schema cache](/docmeta/reference/schema-resolution/#the-cross-run-cache); one that is not cached is an error (exit 2) naming the URL. Built-in and local-file references are unaffected. Overrides config `offline:`. |
+| `--no-config` | n/a | off | Ignore any discovered config file and run on the [built-in default schema set](/docmeta/reference/schema-resolution/#precedence). `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
+| `-q, --quiet` | n/a | off | In `pretty` output, hide passing files. Has no effect on `json`, `github`, `sarif`, or `junit`. |
+| `--allow-empty` | n/a | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
+| `--no-gitignore` | n/a | on | Validate files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
+| `--offline` | n/a | off | Never fetch a remote schema. A `url` reference is served from the [schema cache](/docmeta/reference/schema-resolution/#the-cross-run-cache); one that is not cached is an error (exit 2) naming the URL. Built-in and local-file references are unaffected. Overrides config `offline:`. |
 | `--baseline` | `[path]` | config `baseline:`, else `.docmeta-baseline.json` | Compare findings against a recorded [baseline](#baselines) and fail only on new ones. The value is optional, and omitting it means *this project's* baseline. That is the configured `baseline:` path when there is one, resolved against the config file, and otherwise `.docmeta-baseline.json`. Config `baseline:` turns this on for every run. A named file that does not exist is an error (exit 2). |
 | `--write-baseline` | `[path]` | config `baseline:`, else `.docmeta-baseline.json` | Record this run's findings as the baseline, then exit 0. The value is optional. Wins over `--baseline`. Findings from `-` (stdin) are the one exception: they cannot be recorded, so they still fail the run. |
-| `--no-baseline` | - | off | Ignore a baseline supplied by config `baseline:` for this run. `--baseline` and `--no-baseline` set the same option, so the one written later on the command line wins. |
-| `--no-checks` | - | off | Skip the [corpus checks](/docmeta/reference/configuration/#checks) supplied by config `checks:` for this run. Checks already run only when the resolved file set is the config-resolved corpus. A run scoped by positional paths, stdin, `--as`, `--ext`, `--exclude`, or `--no-gitignore` skips them with a stderr notice. This flag opts out explicitly. |
+| `--no-baseline` | n/a | off | Ignore a baseline supplied by config `baseline:` for this run. `--baseline` and `--no-baseline` set the same option, so the one written later on the command line wins. |
+| `--no-checks` | n/a | off | Skip the [corpus checks](/docmeta/reference/configuration/#checks) supplied by config `checks:` for this run. Checks already run only when the resolved file set is the config-resolved corpus. A run scoped by positional paths, stdin, `--as`, `--ext`, `--exclude`, or `--no-gitignore` skips them with a stderr notice. This flag opts out explicitly. |
 
 <Aside type="note">
 Repeatable flags (`-s/--schema`, `--exclude`) accumulate; pass the flag once per
@@ -123,7 +123,7 @@ Three things do change a fingerprint, and each is recovered with one
   regression, is what happened.
 - **Re-pointing a schema.** The schema reference is part of the identity, so
   switching `google:okf:0.1` to a URL serving the same schema changes every
-  fingerprint. Nothing can tell it is the same contract.
+  fingerprint. docmeta cannot tell it is the same contract.
 - **Editing a `pattern`, `enum`, or `minLength` rule.** Those keywords have no
   stable `subject`, so a violation of the edited rule keeps its fingerprint. A
   violation that moves to a *different* keyword does not.
@@ -221,7 +221,7 @@ exit=2
 A token is read as a path when it exists on disk, is a glob, ends in a
 [supported extension](/docmeta/reference/formats/), or contains a path
 separator. A comma-separated list and a leading-slash JSON Pointer are
-recognized as fields, so a normal field list is never mistaken for a path.
+recognized as fields, so a normal field list is not mistaken for a path.
 "Exists on disk" is checked first, though, so a pointer that happens to match a
 real absolute file is read as a path. `--fields` is the unambiguous spelling
 whenever the guess would be wrong.
@@ -254,15 +254,15 @@ unaffected.
 |---|---|---|---|
 | `--fields` | `<list>` | the `[fields]` positional | Comma-separated fields to print. When given, **every** positional is a path. See [naming the fields](#naming-the-fields). |
 | `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
-| `--exclude` | `<glob>` | - | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
-| `--as` | `<format>` | - | Force an input [format](/docmeta/reference/formats/) (extractor name). Required when reading from stdin. |
+| `--exclude` | `<glob>` | n/a | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
+| `--as` | `<format>` | n/a | Force an input [format](/docmeta/reference/formats/) (extractor name). Required when reading from stdin. |
 | `-f, --format` | `<pretty\|json>` | `pretty` | Output format. `sarif` and `junit` are `validate`-only, and `github` is available on `validate` and [`fill`](#fill). An unknown value is an error (exit 2). |
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). When set, the file must exist or docmeta exits 2. |
-| `--no-config` | - | off | Ignore any discovered config file and run on the [built-in default schema set](/docmeta/reference/schema-resolution/#precedence). `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
-| `-q, --quiet` | - | off | In `pretty` output, hide files where **every** requested field is unset. A file with any value present still prints, `(unset)` included, because quiet hides files and never values. Has no effect on `json`. |
-| `--allow-empty` | - | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
-| `--no-gitignore` | - | on | Read files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
-| `--offline` | - | off | Accepted for parity with `validate` and `fill`. It has no effect here: `get` prints extracted values and never loads a schema, so it makes no network requests to suppress. |
+| `--no-config` | n/a | off | Ignore any discovered config file and run on the [built-in default schema set](/docmeta/reference/schema-resolution/#precedence). `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
+| `-q, --quiet` | n/a | off | In `pretty` output, hide files where **every** requested field is unset. A file with any value present still prints, `(unset)` included, because quiet hides files and never values. Has no effect on `json`. |
+| `--allow-empty` | n/a | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
+| `--no-gitignore` | n/a | on | Read files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
+| `--offline` | n/a | off | Accepted for parity with `validate` and `fill`. It has no effect here: `get` prints extracted values and never loads a schema, so it makes no network requests to suppress. |
 
 ### Output
 
@@ -354,19 +354,19 @@ table](/docmeta/reference/query/#the-docs-table).
 |---|---|---|---|
 | `--query` | `<sql>` | the `[sql]` positional | The SQL statement. When given, **every** positional is a path. |
 | `-s, --schema` | `<ref>` | resolved per file | The schema set a DDL statement evolves; repeatable. CLI precedence applies to the **DDL planner only**. The per-file resolution walk is skipped and the deduped refs are the set, with every DDL guard unchanged inside it. Collection views and plain reads are untouched. A statement that produces no schema-evolving effects under `-s` is an error (exit 2), refused before any file or schema write. A `--db` export target, written before the statement runs, persists and reflects the statement. See [writing back](#writing-back). |
-| `--check` | - | off | Treat returned rows as findings, so exit 1 if the query returns any and 0 if it returns none. The `pretty` verdict line shows ✓/✗. |
-| `--param` | `<name=value>` | - | Bind a named SQL parameter (`$name`, `:name`, or `@name`) as a **string**; `name:=value` parses the value as JSON for a typed bind. Repeatable. See [bound parameters](#bound-parameters). |
-| `--db` | `<path>` | - | Also write the built database to this file, and the SQL is then optional. The file is a regenerated artifact, so an existing SQLite database at the path is overwritten and anything else is refused. See [exporting the database](#exporting-the-database). |
-| `--dry-run` | - | off | Preview a mutating statement instead of applying it, so you see the per-file diff it would make with nothing touched. `--check` implies it, because a check judges and never mutates. See [writing back](#writing-back). |
+| `--check` | n/a | off | Treat returned rows as findings, so exit 1 if the query returns any and 0 if it returns none. The `pretty` verdict line shows ✓/✗. |
+| `--param` | `<name=value>` | n/a | Bind a named SQL parameter (`$name`, `:name`, or `@name`) as a **string**; `name:=value` parses the value as JSON for a typed bind. Repeatable. See [bound parameters](#bound-parameters). |
+| `--db` | `<path>` | n/a | Also write the built database to this file, and the SQL is then optional. The file is a regenerated artifact, so an existing SQLite database at the path is overwritten and anything else is refused. See [exporting the database](#exporting-the-database). |
+| `--dry-run` | n/a | off | Preview a mutating statement instead of applying it, so you see the per-file diff it would make with nothing touched. `--check` implies it, because a check judges and never mutates. See [writing back](#writing-back). |
 | `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
-| `--exclude` | `<glob>` | - | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
-| `--as` | `<format>` | - | Force an input [format](/docmeta/reference/formats/) (extractor name). Required when reading from stdin. |
+| `--exclude` | `<glob>` | n/a | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
+| `--as` | `<format>` | n/a | Force an input [format](/docmeta/reference/formats/) (extractor name). Required when reading from stdin. |
 | `-f, --format` | `<pretty\|json\|csv\|github\|sarif\|junit>` | `pretty` | Output format. `pretty`, `json`, and `csv` render result rows unconditionally ([CSV output](#csv-output) describes the dialect). `github`, `sarif`, and `junit` render findings, so they are legal only with `--check` and only when the result carries a `path` column. See [rows as findings](#rows-as-findings). An unknown value, a findings format without `--check`, or a `--check` result without `path` is an error (exit 2). |
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). When set, the file must exist or docmeta exits 2. |
-| `--no-config` | - | off | Ignore any discovered config file. `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
-| `--allow-empty` | - | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
-| `--no-gitignore` | - | on | Load files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
-| `--offline` | - | off | Accepted for parity with the other commands. It has no effect here. Reads and DML load no schema, and DDL resolves its set from disk and the bundled built-ins only. A URL ref refuses with "vendor it first" before anything could fetch, so there is no network request to suppress. |
+| `--no-config` | n/a | off | Ignore any discovered config file. `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
+| `--allow-empty` | n/a | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
+| `--no-gitignore` | n/a | on | Load files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
+| `--offline` | n/a | off | Accepted for parity with the other commands. It has no effect here. Reads and DML load no schema, and DDL resolves its set from disk and the bundled built-ins only. A URL ref refuses with "vendor it first" before anything could fetch, so there is no network request to suppress. |
 
 There is no `-q/--quiet`. `get` uses it to hide files and `validate` to hide
 passes, and a query result has no analogous noise. The rows are exactly what was
@@ -552,27 +552,27 @@ used, in both output formats.
 
 | Option | Argument | Default | Description |
 |---|---|---|---|
-| `-s, --schema` | `<ref>` | - | Schema to fill against. Repeatable. When given, it overrides `$schema` and config for every file. |
+| `-s, --schema` | `<ref>` | n/a | Schema to fill against. Repeatable. When given, it overrides `$schema` and config for every file. |
 | `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
-| `--exclude` | `<glob>` | - | Glob to exclude from directory and glob walks. Repeatable. |
-| `--as` | `<format>` | - | Force an input [format](/docmeta/reference/formats/). Required when reading from stdin. |
+| `--exclude` | `<glob>` | n/a | Glob to exclude from directory and glob walks. Repeatable. |
+| `--as` | `<format>` | n/a | Force an input [format](/docmeta/reference/formats/). Required when reading from stdin. |
 | `--fields` | `<list>` | all candidates | Comma-separated top-level fields to fill. Everything else is left alone. |
 | `--confidence` | `<n>` | `0.7` | Minimum self-reported confidence, from 0 to 1, needed to write a value. A non-numeric or out-of-range value is an error (exit 2). |
-| `--dry-run` | - | off | Report proposals without writing them. |
+| `--dry-run` | n/a | off | Report proposals without writing them. |
 | `--provider` | `<name>` | `auto` | Inference provider: `auto`, `anthropic`, `openai`, `claude-cli`, `llama-cpp`, or `mock`. `auto` detects one; see [above](#fill). An unknown name is an error (exit 2). |
 | `--model` | `<model>` | provider default | Model override. **Needs a named provider**, from either `--provider` or config `fill.provider`. A model name does not say which provider owns it, so pairing it with `auto` (including the default) is an error (exit 2). |
-| `--no-cache` | - | cache on | Bypass the proposal cache in `.docmeta/cache`. |
-| `--local` | - | off | Run inference on this machine. Refuses a hosted provider even when `auto` would have picked one, `claude-cli` included, whose binary is local but whose inference is not. Errors (exit 2) if no local model is available. |
-| `--max-turns` | `<n>` | - | Stop after this many inference calls. Counts **calls, not files**: a document too long for one call is split across several. |
+| `--no-cache` | n/a | cache on | Bypass the proposal cache in `.docmeta/cache`. |
+| `--local` | n/a | off | Run inference on this machine. Refuses a hosted provider even when `auto` would have picked one, `claude-cli` included, whose binary is local but whose inference is not. Errors (exit 2) if no local model is available. |
+| `--max-turns` | `<n>` | n/a | Stop after this many inference calls. Counts **calls, not files**: a document too long for one call is split across several. |
 | `--chunk-chars` | `<n>` | `12000` | Characters of document sent per call. The whole file is always sent; this decides how many calls that takes. |
 | `--concurrency` | `<n>` | `4` | Files inferred in parallel. |
 | `-f, --format` | `<pretty\|json\|github>` | `pretty` | Output format. `github` emits [one annotation per required property that could not be filled](#github-annotations). `sarif` and `junit` stay `validate`-only: they describe *findings in files*, and a skipped optional property is a proposal with a confidence score, not a finding. An unknown value is an error (exit 2). |
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). |
-| `--no-config` | - | off | Ignore any discovered config file and run on the [built-in default schema set](/docmeta/reference/schema-resolution/#precedence). `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
-| `-q, --quiet` | - | off | In `pretty` output, hide files with nothing written **and** nothing left undone. A file whose required property could not be filled, or that errored, always prints. Those are the files that make the run exit 1. Has no effect on `json` or `github`. |
-| `--allow-empty` | - | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
-| `--no-gitignore` | - | on | Fill files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
-| `--offline` | - | off | Never fetch a remote schema, exactly as on [`validate`](#validate). It governs schema loading only, because the inference provider is a separate network dependency. Pass [`--local`](#fill) to keep document content on this machine; the two flags bound different boundaries and are usually wanted together. Overrides config `offline:`. |
+| `--no-config` | n/a | off | Ignore any discovered config file and run on the [built-in default schema set](/docmeta/reference/schema-resolution/#precedence). `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
+| `-q, --quiet` | n/a | off | In `pretty` output, hide files with nothing written **and** nothing left undone. A file whose required property could not be filled, or that errored, always prints. Those are the files that make the run exit 1. Has no effect on `json` or `github`. |
+| `--allow-empty` | n/a | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
+| `--no-gitignore` | n/a | on | Fill files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
+| `--offline` | n/a | off | Never fetch a remote schema, exactly as on [`validate`](#validate). It governs schema loading only, because the inference provider is a separate network dependency. Pass [`--local`](#fill) to keep document content on this machine; the two flags bound different boundaries and are usually wanted together. Overrides config `offline:`. |
 
 ### Which properties get filled
 
@@ -714,17 +714,17 @@ docmeta schemas infer [paths...] [options]
 
 | Option | Argument | Default | Description |
 |---|---|---|---|
-| `--out` | `<path>` | - | Write the draft schema to this file. Refuses to overwrite an existing file, and refuses a path `.gitignore` covers; see below. |
+| `--out` | `<path>` | n/a | Write the draft schema to this file. Refuses to overwrite an existing file, and refuses a path `.gitignore` covers; see below. |
 | `--min-coverage` | `<pct>` | `0` | Hide keys below this coverage percentage. The default shows everything, deliberately: the long tail is where "one team's convention" hides. |
 | `--ext` | `<list>` | supported extensions | Comma-separated extensions used when expanding directories and globs. |
-| `--exclude` | `<glob>` | - | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
-| `--as` | `<format>` | - | Force an input [format](/docmeta/reference/formats/) (extractor name, e.g. `markdown`). Required when reading from stdin. |
+| `--exclude` | `<glob>` | n/a | Glob to exclude from directory and glob walks. Repeatable. Merged with config `exclude:` and the [default ignores](#default-ignores). |
+| `--as` | `<format>` | n/a | Force an input [format](/docmeta/reference/formats/) (extractor name, e.g. `markdown`). Required when reading from stdin. |
 | `-f, --format` | `<pretty\|json>` | `pretty` | Output format. Anything else is a usage error (exit `2`). |
 | `-c, --config` | `<path>` | discovered | Path to a [config file](/docmeta/reference/configuration/). When set, the file must exist or docmeta exits 2. |
-| `--no-config` | - | off | Ignore any discovered config file. `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
-| `--allow-empty` | - | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
-| `--no-gitignore` | - | on | Scan files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
-| `--offline` | - | off | Accepted and ignored, so one flag set covers every command. `infer` resolves no schema and contacts no provider, so it is already offline and there is nothing for the flag to suppress. |
+| `--no-config` | n/a | off | Ignore any discovered config file. `-c` and `--no-config` set the same option, so the one written later on the command line wins. |
+| `--allow-empty` | n/a | off | Treat zero matched files as success instead of an error (exit 2). See [empty input sets](#empty-input-sets). |
+| `--no-gitignore` | n/a | on | Scan files `.gitignore` covers as well. Filtering is on by default; see [default ignores](#default-ignores). Overrides config `respectGitignore:`. |
+| `--offline` | n/a | off | Accepted and ignored, so one flag set covers every command. `infer` resolves no schema and contacts no provider, so it is already offline and there is nothing for the flag to suppress. |
 
 ### Reading the report
 
@@ -858,9 +858,9 @@ which is the failure vendoring exists to remove.
 - **No input and no config is an error.** With no paths and no config `paths:`,
   docmeta exits 2 with an operational error. Empty output is never produced
   silently.
-- **Matching no files is also an error.** A named path that does not exist exits
-  2. So does an input set resolving to zero files. Pass `--allow-empty` to
-     change that. See [empty input sets](#empty-input-sets).
+- **Matching no files is also an error.** A named path that does not exist
+  exits 2, and so does an input set resolving to zero files. `--allow-empty`
+  suppresses both. See [empty input sets](#empty-input-sets).
 
 <Aside type="caution">
 `--as` forces one extractor for every input in the run. Use it for stdin, or to

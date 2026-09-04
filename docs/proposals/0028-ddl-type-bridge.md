@@ -43,7 +43,7 @@ ALTER TABLE docs ADD COLUMN status TEXT CHECK (status IN ('draft','review','fina
 
 SQLite accepts any word as a column type and reports it back verbatim through
 `PRAGMA table_info`, with quoted names dequoted. Verified: `DATE` → `DATE`,
-`"date-time"` → `date-time`, `URI` → `URI`). So the mapping rule is: a declared
+`"date-time"` → `date-time`, `URI` → `URI`. So the mapping rule is: a declared
 type that case-insensitively equals a format name **the run's validator
 enforces** maps to `{ type: "string", format: <name> }`. The name set is derived
 from the ajv-formats registration docmeta already ships, not hand-copied into a
@@ -79,7 +79,7 @@ constraint exists in exactly one place. That is `sqlite_master`, the catalog of
 stored `CREATE TABLE` text. There `ADD COLUMN` appends the new column's
 definition **verbatim to text docmeta itself authored**. Verified: the stored
 SQL is the original `CREATE TABLE docs (…)` plus the appended defs, character
-for character).
+for character.
 
 So the run snapshots the catalog text alongside the column snapshot, and
 consults it **only when the effect diff shows a column add**. The appended

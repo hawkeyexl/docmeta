@@ -43,13 +43,13 @@ Two things the proposal did not anticipate:
   core calls `extractorForExtension(...).extract(...)` and reads `data` whole.
 - **The `schemas` group swallowed `-f`.** commander binds an option declared on
   a parent wherever it appears in the argv. So `docmeta schemas infer -f json`
-  set the *parent's* format, and the run answered in `pretty`, silently, at exit
-  0. That is the same false green `schemas -f github` was fixed for. `formatFor`
-     in `src/cli.ts` reads `getOptionValueSource` on both commands, and prefers
-     whichever was typed. **`schemas vendor` still has the latent version of
-     this**, where `-f` on a vendor run is accepted and ignored. It is harmless
-     today because `vendor` has no format to choose, but it is worth closing
-     when that changes.
+  set the *parent's* format, and the run answered in `pretty`, silently, at
+  exit 0. That is the same false green `schemas -f github` was fixed for.
+  `formatFor` in `src/cli.ts` reads `getOptionValueSource` on both commands, and
+  prefers whichever was typed. **`schemas vendor` still has the latent version
+  of this**, where `-f` on a vendor run is accepted and ignored. It is harmless
+  today because `vendor` has no format to choose, but it is worth closing when
+  that changes.
 
 Two deliberate limits, chosen rather than discovered:
 

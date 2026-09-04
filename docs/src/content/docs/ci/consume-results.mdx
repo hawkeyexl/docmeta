@@ -127,8 +127,9 @@ npx -y docmeta validate "docs/**/*.md" --format json | jq '.summary'
 <Aside type="tip" title="Preserve the exit code through a pipe">
 Piping into `jq` replaces docmeta's exit code with `jq`'s. You may need both the
 parsed output and the gate to fail on validation errors. Then write the report
-to a file with `tee` first, as `docmeta validate ...
---format json | tee report.json`. Then run `jq` over `report.json` in a later step. See the
+to a file with `tee` first, as
+`docmeta validate ... --format json | tee report.json`. Then run `jq` over
+`report.json` in a later step. See the
 [CI recipes](/docmeta/ci/recipes/) for capturing JSON as a build artifact.
 </Aside>
 
@@ -222,7 +223,7 @@ does **not** accept `--format github`, `sarif`, or `junit`: `get` reports
 `validate`-only. Passing an unsupported format is a usage error and exits `2`.
 
 Add `-q` or `--quiet` to drop the files where every requested field is unset.
-That is a file with any of them set still prints, `(unset)` included.
+A file with any of them set still prints, `(unset)` included.
 </Aside>
 
 </TabItem>
