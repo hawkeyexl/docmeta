@@ -6,23 +6,22 @@ description: Use docmeta query to run SQL over your corpus's metadata, turn cros
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
 Schema validation judges one file at a time, and some of your rules don't live
-in one file. A page that credits an author nobody has, two pages claiming the
-same slug, a tag that appears exactly once — each document involved is
+in one file. A page that credits an author nobody has. Two pages claiming the
+same slug. A tag that appears exactly once. Each document involved is
 individually valid, so `validate` waves them all through. Catching them takes a
-**join**, and that is what `docmeta query` is for: every file's metadata
-becomes one row in a SQL table, and any query that returns rows can fail the
-build.
+**join**, and that is what `docmeta query` is for. Every file's metadata becomes
+one row in a SQL table, and any query that returns rows can fail the build.
 
 Nothing new is installed for this. The engine is `node:sqlite`, which ships in
 the Node.js your runner already has.
 
 ## One file, one row
 
-`query` builds an in-memory table named `docs` from the files you point it at:
-one row per file, one column per top-level metadata key, plus four system
-columns — `_path` (the file), `_format`, `_present` (did the file carry
-metadata at all), and `_data` (the whole block as JSON, for reaching into
-nested values with `->>` and `json_each`). The [CLI
+`query` builds an in-memory table named `docs` from the files you point it at.
+There is one row per file, one column per top-level metadata key, and four
+system columns. Those are `_path` (the file), `_format`, `_present` (did the
+file carry metadata at all), and `_data`. `_data` holds the whole block as JSON,
+for reaching into nested values with `->>` and `json_each`. The [CLI
 reference](/docmeta/reference/query/#the-docs-table) has the full contract.
 
 Retrieval is plain SQL. A tag census over a corpus:
@@ -44,13 +43,13 @@ intro  1
 ## Turn a join into a gate
 
 `--check` makes rows mean findings: any result row exits `1`, an empty result
-exits `0`. That is the whole contract — the query itself is the rule, so
-anything you can phrase as "SELECT the violations" is now a CI gate.
+exits `0`. That is the whole contract. The query itself is the rule, so anything
+you can phrase as "SELECT the violations" is now a CI gate.
 
-The dangling-reference classic — docs credit authors by slug, and one cited
+The dangling-reference classic. Docs credit authors by slug, and one cited
 author has no page. If your config already maps the author pages to their
 schema, give that override a
-[`name:`](/docmeta/reference/configuration/#named-collections) and the group
+[`name:`](/docmeta/reference/configuration/#named-collections). The group
 becomes a **view** the rule can join directly:
 
 ```yaml title="docmeta.config.yaml"
@@ -73,11 +72,11 @@ docs/guide.md  ghost
 ✗ 1 row — check failed
 ```
 
-`FROM authors` means "the files the author schema judges" — membership comes
-from schema resolution, not from re-spelling the glob in SQL — so moving the
-directory means updating one config line, and the rule follows. With **no
-config** to name the group, the same rule spells the author set inline as a
-path self-join over bare inputs:
+`FROM authors` means "the files the author schema judges". Membership comes from
+schema resolution, not from re-spelling the glob in SQL. So moving the directory
+means updating one config line, and the rule follows. With **no config** to name
+the group, the same rule spells the author set inline as a path self-join over
+bare inputs:
 
 ```bash
 npx docmeta query --check "SELECT d._path, d.author
@@ -94,9 +93,10 @@ npx docmeta query --check "SELECT slug, count(*) n
   FROM docs GROUP BY slug HAVING n > 1" docs/
 ```
 
-In CI it is one more step beside the `validate` gate, and the exit codes mean
-the same things they mean everywhere in docmeta — `0` clean, `1` findings, `2`
-operational error ([the contract](/docmeta/reference/output-and-exit-codes/)):
+In CI it is one more step beside the `validate` gate. The exit codes mean the
+same things they mean everywhere in docmeta. That is `0` clean, `1` findings,
+and `2` operational error ([the
+contract](/docmeta/reference/output-and-exit-codes/)):
 
 ```yaml title=".github/workflows/docs.yml"
 - name: Cross-file metadata rules
@@ -106,39 +106,38 @@ operational error ([the contract](/docmeta/reference/output-and-exit-codes/)):
       "docs/**/*.md"
 ```
 
-A gate that takes a runtime value — this release's version, the team being
-audited — should **bind** it rather than splice it into the SQL string, where
-one apostrophe in the value breaks the statement. `--param name=value` binds a
-named parameter the statement refers to as `:name` (or `$name`/`@name` — `:`
-is the shell-friendliest spelling):
+A gate that takes a runtime value should **bind** it rather than splice it into
+the SQL string. One apostrophe in the value would otherwise break the statement.
+Think of this release's version, or the team being audited. `--param name=value`
+binds a named parameter the statement refers to as `:name`, or `$name`/`@name`.
+`:` is the shell-friendliest spelling:
 
 ```bash
 npx docmeta query --check --param author=ghost \
   "SELECT _path FROM docs WHERE author = :author" docs/
 ```
 
-Values bind as strings, which is what metadata mostly is; `name:=value`
-parses the value as JSON when you deliberately mean a number or boolean. A
-parameter the SQL references but nothing binds is refused (exit 2) rather
-than silently matching nothing — an unbound parameter would otherwise read as
-a passing gate. The [bound parameters
-reference](/docmeta/reference/query/#bound-parameters) has the full contract,
-shell-quoting pitfalls included.
+Values bind as strings, which is what metadata mostly is; `name:=value` parses
+the value as JSON when you deliberately mean a number or boolean. A parameter
+the SQL references but nothing binds is refused (exit 2) rather than silently
+matching nothing. An unbound parameter would otherwise read as a passing gate.
+The [bound parameters reference](/docmeta/reference/query/#bound-parameters) has
+the full contract, shell-quoting pitfalls included.
 
 <Aside type="tip" title="Where do the queries live?">
-A gate is a rule your team agreed on, so keep the SQL where rules live: in
-`docmeta.config.yaml`, as a named entry in
-[`checks:`](/docmeta/reference/configuration/#checks) — the next section
-migrates this exact workflow step there. A one-off question or a rule you are
-still drafting is fine inline in the workflow.
+A gate is a rule your team agreed on, so keep the SQL where rules live. That
+means `docmeta.config.yaml`, as a named entry in
+[`checks:`](/docmeta/reference/configuration/#checks). The next section migrates
+this exact workflow step there. A one-off question or a rule you are still
+drafting is fine inline in the workflow.
 </Aside>
 
 ## Name the gate in config
 
-A workflow-file gate works, but the rule lives in the wrong place: every other
-rule this repo enforces is named in `docmeta.config.yaml`, and a raw `query`
-step reports a result table — no line, no `::error` annotation on the PR, no
-ramp for existing violations. Moving the SQL into a named
+A workflow-file gate works, but the rule lives in the wrong place. Every other
+rule this repo enforces is named in `docmeta.config.yaml`. A raw `query` step
+reports a result table. There is no line, no `::error` annotation on the PR, and
+no ramp for existing violations. Moving the SQL into a named
 [`checks:`](/docmeta/reference/configuration/#checks) entry fixes all three at
 once. The workflow step above becomes config:
 
@@ -155,51 +154,46 @@ checks:
         (SELECT slug FROM docs GROUP BY slug HAVING count(*) > 1)
 ```
 
-and the CI step becomes the one you already have — a bare `npx docmeta
-validate` runs the checks after the per-file schemas, so one command and one
-exit code cover both. Each row a check returns is now an ordinary finding:
-`path` names the file, `key` the field, `lineFor(path, key)` the source line,
-so `-f github` annotates the offending line of the offending file, and SARIF
-and JUnit consumers see it like any schema violation. The [column
+and the CI step becomes the one you already have. A bare `npx docmeta validate`
+runs the checks after the per-file schemas. One command and one exit code cover
+both. Each row a check returns is now an ordinary finding. `path` names the
+file, `key` the field, and `lineFor(path, key)` the source line. So `-f github`
+annotates the offending line of the offending file. SARIF and JUnit consumers
+see it like any schema violation. The [column
 convention](/docmeta/reference/configuration/#the-column-convention) is the
 whole contract.
 
 Two behaviors to know about, both there to keep the answers honest:
 
-- **A scoped run skips checks.** `docmeta validate docs/intro.md` (or any run
-  reshaped by positional paths, stdin, `--as`, `--ext`, `--exclude`, or
-  `--no-gitignore`) computes over less than the corpus, and a duplicate-slug
-  rule over half a corpus answers wrongly — so checks run only on the
-  config-resolved corpus, with a stderr notice when skipped. `--no-checks`
-  opts out explicitly.
+- **A scoped run skips checks.** `docmeta validate docs/intro.md` computes over
+  less than the corpus. So does any run reshaped by positional paths, stdin,
+  `--as`, `--ext`, `--exclude`, or `--no-gitignore`. A duplicate-slug rule over
+  half a corpus answers wrongly. So checks run only on the config-resolved
+  corpus, with a stderr notice when skipped. `--no-checks` opts out explicitly.
 - **Findings baseline.** Because check findings ride the same pipeline, the
-  [baseline ratchet](/docmeta/reference/cli/#baselines) covers them: turn a
-  new check on, `--write-baseline` the existing debt, and the gate goes red
-  only on *new* violations — the same adoption ramp a stricter schema gets,
-  which is what lets a corpus rule turn on before the backlog is fixed.
+  [baseline ratchet](/docmeta/reference/cli/#baselines) covers them. Turn a new
+  check on, `--write-baseline` the existing debt, and the gate goes red only on
+  *new* violations. That is the same adoption ramp a stricter schema gets. It
+  lets a corpus rule turn on before the backlog is fixed.
 
-The ad-hoc spelling stays available: `query --check` now takes
-`-f github|sarif|junit` too ([rows as
-findings](/docmeta/reference/query/#rows-as-findings)), for a rule you are
-still drafting or a one-off audit — same column convention, findings named
-`check:query`.
+The ad-hoc spelling stays available. `query --check` now takes `-f github|sarif|junit` too ([rows as findings](/docmeta/reference/query/#rows-as-findings)). That suits a rule you are still drafting, or a one-off audit, with the same column convention and findings named `check:query`.
 
 ## Feed the same table to your tooling
 
-`--format json` prints the bare result array — rows for a read, change objects
-for an edit — for the same subprocess-and-parse pipelines that consume
-[validation results](/docmeta/ci/consume-results/):
+`--format json` prints the bare result array, with rows for a read and change
+objects for an edit. It suits the same subprocess-and-parse pipelines that
+consume [validation results](/docmeta/ci/consume-results/):
 
 ```bash
 npx docmeta query "SELECT _path, title FROM docs WHERE draft = 1" docs/ -f json
 ```
 
-`--format csv` prints the same rows as CSV for the spreadsheet hop — "which
-pages are stale, by team" straight into Sheets or `pandas.read_csv`, no `jq`
-in between. The header row is always there, so a zero-row result (the header
-alone) stays distinguishable from a step that failed and printed nothing; the
-dialect details, including the deliberate LF-not-CRLF line endings, are in
-[the reference](/docmeta/reference/query/#the-csv-dialect):
+`--format csv` prints the same rows as CSV for the spreadsheet hop. "Which pages
+are stale, by team" goes straight into Sheets or `pandas.read_csv`, with no `jq`
+in between. The header row is always there. A zero-row result (the header alone)
+stays distinguishable from a step that failed and printed nothing. The dialect
+details, including the deliberate LF-not-CRLF line endings, are in [the
+reference](/docmeta/reference/query/#the-csv-dialect):
 
 ```bash
 npx docmeta query -f csv "SELECT _path, title, last_reviewed
@@ -210,7 +204,7 @@ npx docmeta query -f csv "SELECT _path, title, last_reviewed
 the rows land in an artifact a reviewer can open.
 
 `--db <path>` also writes the built table to a SQLite file, so anything that
-speaks SQLite can browse it — `sqlite3`, Datasette, DuckDB:
+speaks SQLite can browse it: `sqlite3`, Datasette, DuckDB.
 
 ```bash
 npx docmeta query --db docs.db docs/    # export only; SQL is optional
@@ -219,18 +213,18 @@ npx docmeta query --db docs.db docs/    # export only; SQL is optional
 The export is a regenerated artifact of your corpus: rebuild it whenever you
 like, and don't edit it expecting the files to notice. If you work from a
 checkout of the docmeta repo itself, `node scripts/query-ui.mjs` serves that
-export into Datasette Lite in your browser, write panel included — it is repo
+export into Datasette Lite in your browser, write panel included. It is repo
 tooling, not part of the published package.
 
 ## Writes exist, and `--dry-run` previews them
 
-The same table accepts standard DML — `UPDATE` sets keys (`SET k = NULL`
-removes them), `INSERT` creates files, `DELETE` strips a metadata block, and
-`ALTER TABLE` evolves the governing schema itself. A mutating statement
-applies by default, the same convention `fill` uses; `--dry-run` shows the
-exact diff without touching a file, and `--check` **implies** the dry run
-while counting pending changes as findings — which turns any backfill into a
-read-only drift gate:
+The same table accepts standard DML. `UPDATE` sets keys, and `SET k = NULL`
+removes them. `INSERT` creates files, `DELETE` strips a metadata block, and
+`ALTER TABLE` evolves the governing schema itself. A mutating statement applies
+by default, the same convention `fill` uses. `--dry-run` shows the exact diff
+without touching a file. `--check` **implies** the dry run while counting
+pending changes as findings, which turns any backfill into a read-only drift
+gate:
 
 ```bash
 npx docmeta query --dry-run "UPDATE docs SET reviewed = 'todo'
@@ -244,12 +238,11 @@ docs/gamma.md: reviewed: (unset) -> todo
 3 changes across 3 files — dry run; run again without --dry-run to apply
 ```
 
-Statements that could write outside the corpus refuse by name — `ATTACH`,
-`VACUUM`, `DROP TABLE`, multi-statement input — and the refusal says what to
-run instead. The [vocabulary table](/docmeta/reference/query/#the-sql-vocabulary) is the
-complete list of what each statement means in file terms; the schema-editing
-half of it (`ALTER`) is the one-statement ratchet covered in the journeys
-below.
+Statements that could write outside the corpus refuse by name: `ATTACH`,
+`VACUUM`, `DROP TABLE`, and multi-statement input. The refusal says what to run
+instead. The [vocabulary table](/docmeta/reference/query/#the-sql-vocabulary) is
+the complete list of what each statement means in file terms. The schema-editing
+half of it (`ALTER`) is the one-statement ratchet covered in the journeys below.
 
 <CardGrid>
   <LinkCard
@@ -269,7 +262,7 @@ below.
   />
   <LinkCard
     title="Consume results programmatically"
-    description="The json output contract, get for field extraction, and the TypeScript API — runQuery included."
+    description="The json output contract, get for field extraction, and the TypeScript API, runQuery included."
     href="/docmeta/ci/consume-results/"
   />
 </CardGrid>
@@ -280,7 +273,7 @@ below.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"query-gates","description":"SQL over the metadata corpus: retrieval, --check gates, --dry-run previews, and the refusal posture."} */}
 {/* step {"description":"A tag census: json_each reaches into array values, plain SQL aggregates.","runShell":{"command":"npx docmeta query \"SELECT t.value tag, count(*) n FROM docs, json_each(docs.tags) t GROUP BY tag ORDER BY n DESC, tag\" test/fixtures/query/docs","exitCodes":[0],"stdio":"/guide  2[\\s\\S]*3 rows/"}} */}
-{/* step {"description":"With a named override, the dangling-author rule joins FROM authors — the view of the files the author schema judges — and --check turns the row into exit 1.","runShell":{"command":"npx docmeta query -c test/fixtures/collections/docmeta.config.yaml --check \"SELECT d._path, d.author FROM docs d LEFT JOIN authors a ON a.slug = d.author WHERE d.author IS NOT NULL AND a._path IS NULL\"","exitCodes":[1],"stdio":"/ghost[\\s\\S]*check failed/"}} */}
+{/* step {"description":"With a named override, the dangling-author rule joins FROM authors, the view of the files the author schema judges, and --check turns the row into exit 1.","runShell":{"command":"npx docmeta query -c test/fixtures/collections/docmeta.config.yaml --check \"SELECT d._path, d.author FROM docs d LEFT JOIN authors a ON a.slug = d.author WHERE d.author IS NOT NULL AND a._path IS NULL\"","exitCodes":[1],"stdio":"/ghost[\\s\\S]*check failed/"}} */}
 {/* step {"description":"The no-config fallback: the same rule as a path self-join over bare inputs.","runShell":{"command":"npx docmeta query --check \"SELECT d._path, d.author FROM docs d LEFT JOIN docs a ON a.slug = d.author AND a._path LIKE '%authors%' WHERE d._path LIKE '%query/docs%' AND d.author IS NOT NULL AND a._path IS NULL\" test/fixtures/query/docs test/fixtures/query/authors","exitCodes":[1],"stdio":"/ghost[\\s\\S]*check failed/"}} */}
 {/* step {"description":"Duplicate slugs, the GROUP BY ... HAVING shape of the same gate.","runShell":{"command":"npx docmeta query --check \"SELECT slug, count(*) n FROM docs GROUP BY slug HAVING n > 1\" test/fixtures/query/docs","exitCodes":[1],"stdio":"/alpha  2[\\s\\S]*check failed/"}} */}
 {/* step {"description":"--dry-run previews a mutating statement: the exact diff, files untouched, exit 0.","runShell":{"command":"npx docmeta query --dry-run \"UPDATE docs SET reviewed = 'todo' WHERE reviewed IS NULL AND _present = 1\" test/fixtures/query/docs","exitCodes":[0],"stdio":"/reviewed: \\(unset\\) -> todo[\\s\\S]*dry run; run again without --dry-run to apply/"}} */}
