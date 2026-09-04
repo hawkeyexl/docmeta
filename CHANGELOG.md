@@ -1,3 +1,10 @@
+## [4.13.1](https://github.com/hawkeyexl/docmeta/compare/v4.13.0...v4.13.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* **docs:** keep rewritten frontmatter descriptions on one line ([485f7a9](https://github.com/hawkeyexl/docmeta/commit/485f7a9bdea1803fa9f4e1ae30d6cbfa09e50e57))
+
 # [4.13.0](https://github.com/hawkeyexl/docmeta/compare/v4.12.0...v4.13.0) (2026-09-01)
 
 
