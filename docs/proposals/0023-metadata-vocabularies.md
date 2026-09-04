@@ -532,10 +532,9 @@ anything else. It is the reproducible evidence behind principles 1 and 7.
    makes a documentation fix a new id, and pinning `docmeta:core:1.0.0`
    everywhere means every such fix churns every config. The usual answer is
    a second, *moving* reference, with `docmeta:core:1` resolving to the
-   latest `1.x`. But that cuts against `PUBLISHED_ALIAS`. That is an
-   exact-string table with no prefix rule, on purpose, so that a URL naming a
-   version that does not exist stays a 404 instead of resolving to something
-   else
+   latest `1.x`. But that cuts against `PUBLISHED_ALIAS`.    That is an exact-string table with no prefix rule, on purpose. A URL naming a
+   version that does not exist then stays a 404, instead of resolving to
+   something else
    ([`schema-registry.ts:105`](../../src/core/schema-registry.ts)). A
    moving alias also cannot be byte-pinned, so `check-published-schemas.mjs`
    would have to assert it resolves to *some* known exact version rather
