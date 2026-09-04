@@ -9,7 +9,7 @@
       `fix:` → patch, `feat:` → minor, `feat!:` or a `BREAKING CHANGE:` footer → major.
 - [ ] `npm run typecheck` passes.
 - [ ] `npm test` passes. Run `npm run build` first if the CLI integration tests
-      are affected — they run against `dist/`.
+      are affected. They run against `dist/`.
 - [ ] Tests were written or adjusted first, and failed for the right reason
       before the fix made them pass.
 - [ ] `npm run docs:check-cli` passes, if this touches the CLI surface.
@@ -17,11 +17,11 @@
 
 ## For a `feat:` change: the demo video
 
-Every feature ships with a short demo video — 20–45 seconds of terminal
-session, captioned, suitable for posting. Not a nice-to-have; it is part of the
-change. `fix:`, `refactor:`, `docs:`, and `chore:` do not need one.
+Every feature ships with a short demo video. Aim for 20–45 seconds of terminal
+session, captioned and suitable for posting. It is part of the change rather
+than a nice-to-have. `fix:`, `refactor:`, `docs:`, and `chore:` do not need one.
 
 - [ ] Video recorded, following `docs/content-strategy/design.md`.
-- [ ] Written to `media/` (gitignored) and **attached to this PR** — video and
+- [ ] Written to `media/` (gitignored) and **attached to this PR**. Video and
       GIF binaries are never committed.
 - [ ] Not applicable; this is not a `feat:`.

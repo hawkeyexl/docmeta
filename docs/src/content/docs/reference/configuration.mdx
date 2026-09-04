@@ -19,25 +19,26 @@ the command line.
 | `exclude` | `string[]` | none | Globs to exclude from directory and glob walks. Merged with `--exclude` and the [default ignores](/docmeta/reference/cli/#default-ignores). |
 | `schemas` | `(string \| {ref, source?, integrity?})[]` | none | Default [schema set](/docmeta/reference/schema-resolution/) applied to every file that no higher-precedence rule matches. See [Schemas](#schemas). |
 | `overrides` | `Override[]` | none | Per-glob schema overrides. The first matching entry wins. See [Overrides](#overrides). |
-| `checks` | `Check[]` | none | Named cross-file rules — SQL over the corpus's metadata table — that `validate` runs after the per-file schemas, with rows reported as findings. See [Checks](#checks). |
+| `checks` | `Check[]` | none | Named cross-file rules, written as SQL over the corpus's metadata table, that `validate` runs after the per-file schemas, with rows reported as findings. See [Checks](#checks). |
 | `baseline` | `string` | none | Path to a [validation baseline](/docmeta/reference/cli/#baselines). Setting it turns on `--baseline` for every run; `--no-baseline` suppresses it for one. A bare `--write-baseline` records into this same file. |
 | `allowEmpty` | `boolean` | `false` | Treat an input set that resolves to zero files as success instead of an error (exit 2). Equivalent to `--allow-empty`. See [empty input sets](/docmeta/reference/cli/#empty-input-sets). |
 | `respectGitignore` | `boolean` | `true` | Skip files `.gitignore` covers when expanding directories and globs. `--no-gitignore` overrides it for one run. See [`.gitignore`](/docmeta/reference/cli/#gitignore). |
 | `offline` | `boolean` | `false` | Never fetch a remote schema. `--offline` turns it on for one run. See [Offline](#offline). |
 | `schemaCache` | `SchemaCache` | none | Settings for the [cross-run schema cache](/docmeta/reference/schema-resolution/#the-cross-run-cache). See [Schema cache](#schema-cache). |
-| `schemaTrust` | `SchemaTrust` | none | How far a document's own `$schema` is trusted. Absent means `any` — every reference kind, as docmeta has always behaved. See [Schema trust](#schema-trust). |
+| `schemaTrust` | `SchemaTrust` | none | How far a document's own `$schema` is trusted. Absent means `any`, which is every reference kind, as docmeta has always behaved. See [Schema trust](#schema-trust). |
 | `fill` | `Fill` | none | Defaults for [`docmeta fill`](/docmeta/reference/cli/#fill). See [Fill](#fill). |
 
 The top level must be a YAML mapping. `paths` and `exclude` must be lists of
-strings; a non-list or a list containing a non-string value is an error
-(exit 2). `schemas` takes [two forms](#schemas). `allowEmpty` and
-`respectGitignore` must be booleans — a quoted `"false"` is a string, and
-accepting it would turn a setting **on** for someone who wrote it off.
+strings; a non-list or a list containing a non-string value is an error (exit
+2). `schemas` takes [two forms](#schemas). `allowEmpty` and `respectGitignore`
+must be booleans. A quoted `"false"` is a string, and accepting it would turn a
+setting **on** for someone who wrote it off.
 
 <Aside type="caution">
 `allowEmpty: true` disables the check that stops a glob which stopped matching
 from reporting a permanently green result. Set it only where matching nothing is
-genuinely expected — a repo in a shared CI template that may have no docs yet.
+genuinely expected, such as a repo in a shared CI template that may have no docs
+yet.
 </Aside>
 
 ### Unknown keys are errors
@@ -48,16 +49,16 @@ inside every nested mapping: `schemas[]` entries, `checks[]` entries,
 `schemaCache`, `schemaTrust`, and `fill`.
 
 This is what makes a typo visible. A dropped `schemaTust:` leaves a repository
-that reads as guarded and is not; a dropped `intergrity:` leaves a schema that
+that reads as guarded and is not. A dropped `intergrity:` leaves a schema that
 reads as pinned and is not. Neither produces a diagnostic at any verbosity, so
-the config file itself is the only evidence — and it looks correct.
+the config file itself is the only evidence, and it looks correct.
 
 <Aside type="caution" title="A key from a newer docmeta will now fail here">
 The cost of the rule is the mirror of its benefit. A config written for a newer
 docmeta, carrying a key this version does not know, is rejected outright rather
 than partly honored. If you share one config across environments, move them to
-the same version, or the same version floor, before adding a key that only the
-newer one understands.
+the same version, or to the same version floor. Do that before adding a key that
+only the newer one understands.
 </Aside>
 
 ### Schemas
@@ -75,59 +76,60 @@ schemas:
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `ref` | `string` | yes | What is loaded: a built-in id, a local `.json` path, or a URL. Identical in meaning to the string form. |
+| `ref` | `string` | yes | What is loaded, whether a built-in id, a local `.json` path, or a URL. Identical in meaning to the string form. |
 | `source` | `string` | no | Where `ref` came from. Recorded by [`schemas vendor`](/docmeta/reference/cli/#schemas-vendor) so a re-vendor knows the URL, and so an error about the file can name it. |
 | `integrity` | `string` | no | `sha256-<64 hex characters>` over the file's bytes. A mismatch is an operational error (exit 2). |
 
-The two forms mean exactly the same thing to schema resolution: the `ref` string
+The two forms mean exactly the same thing to schema resolution. The `ref` string
 is what appears in reports, in [baseline
 fingerprints](/docmeta/reference/cli/#baselines), and in `json` output's
 `schemas` array. `source` and `integrity` change nothing about *which* schema is
-used — only what happens when the file on disk is not the one that was recorded.
+used. They change what happens when the file on disk is not the one that was
+recorded.
 
 Rules, all of them exit 2 when broken:
 
-- An unknown key in the mapping is an error rather than being ignored, because
-  a typo such as `intergrity:` would otherwise leave a config that reads as
-  pinned and is not.
+- An unknown key in the mapping is an error rather than being ignored. A typo
+  such as `intergrity:` would otherwise leave a config that reads as pinned and
+  is not.
 - `integrity` must match `sha256-<64 hex characters>`. There is one algorithm
   and one encoding; write them with [`schemas
   vendor`](/docmeta/reference/cli/#schemas-vendor) rather than by hand.
 - `integrity` is only accepted on a **local file** reference. A built-in has no
-  bytes to check, and a URL may be served from the [schema
-  cache](#schema-cache), which stores the parsed schema rather than what the
-  server sent — so a pin on either could never be verified.
+  bytes to check. A URL may be served from the [schema cache](#schema-cache),
+  which stores the parsed schema rather than what the server sent. So a pin on
+  either could never be verified.
 
 `overrides[].schemas` takes the string form only. Pins live in one place, and an
 override that matched a pinned `ref` still gets that pin, because pins are keyed
 on the reference.
 
 <Aside type="note">
-A local `ref` — and a `source` that is itself a local path — is resolved
-relative to **the config file**, exactly like a plain string ref. See [what
-relative paths are relative to](#what-relative-paths-are-relative-to).
+A local `ref`, and a `source` that is itself a local path, is resolved relative
+to **the config file**, exactly like a plain string ref. See [what relative
+paths are relative to](#what-relative-paths-are-relative-to).
 </Aside>
 
 ### `respectGitignore`
 
-Set it to `false` for a repository whose ignored files should still be checked —
+Set it to `false` for a repository whose ignored files should still be checked,
 a vendored docset, or a generated tree you deliberately validate:
 
 ```yaml title="docmeta.config.yaml"
 respectGitignore: false
 ```
 
-Setting it to `true` says the same thing as the default, with one addition: it
-records that you *asked*, so a run where git could not answer — no repository,
-or no `git` on `PATH` — prints one line to stderr instead of silently checking
-everything. Worth doing in a CI image you do not control.
+Setting it to `true` says the same thing as the default, with one addition. It
+records that you *asked*. A run where git could not answer then prints one line
+to stderr, instead of silently checking everything. That is a run with no
+repository, or no `git` on `PATH`. Worth doing in a CI image you do not control.
 
 ### Offline
 
 `offline: true` stops docmeta fetching a schema over the network at all. A `url`
 reference is served from the [schema cache](#schema-cache); one that is not
 cached is an operational error (exit 2) naming the URL. Built-in ids and local
-`.json` files are unaffected — neither touches the network — so an air-gapped
+`.json` files are unaffected, because neither touches the network. An air-gapped
 build against the default schema set works with nothing else configured.
 
 ```yaml title="docmeta.config.yaml"
@@ -152,13 +154,13 @@ schemaCache:
   ttlHours: 1
 ```
 
-`ttlHours` must be a number between 0 and 8760 (one year); a negative value, a
-non-number, YAML's `1e999`, or anything past the upper bound is an error
-(exit 2). Both bounds are rejected rather than clamped, and for symmetric
-reasons: a negative TTL makes every entry read as stale, while a value large
-enough to overflow the internal millisecond arithmetic makes no entry ever read
-as stale. Each gives a cache that silently stops doing its job — in opposite
-directions — which is the failure this key exists to prevent.
+`ttlHours` must be a number between 0 and 8760 (one year). A negative value, a
+non-number, YAML's `1e999`, or anything past the upper bound is an error (exit
+2). Both bounds are rejected rather than clamped, and for symmetric reasons. A
+negative TTL makes every entry read as stale. A value large enough to overflow
+the internal millisecond arithmetic makes no entry ever read as stale. Each
+gives a cache that silently stops doing its job, in opposite directions. That is
+the failure this key exists to prevent.
 
 <Aside type="note">
 The cache lives in `.docmeta/schema-cache/`, alongside the proposal cache
@@ -170,9 +172,9 @@ directory should be committed.
 
 `schemaTrust` decides how far a **document** is trusted to choose the schema it
 is judged against. A file's own `$schema` sits above config in the [precedence
-chain](/docmeta/reference/schema-resolution/#precedence), which is the feature
-that makes a document self-describing — and, in a repository that takes outside
-pull requests, the thing a contributor can use to opt out of the standard.
+chain](/docmeta/reference/schema-resolution/#precedence). That is the feature
+which makes a document self-describing. In a repository that takes outside pull
+requests, it is also the thing a contributor can use to opt out of the standard.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -186,35 +188,35 @@ schemaTrust:
 
 | `documentRefs` | A document's `$schema` may name | A document's `$schema` may not |
 |---|---|---|
-| `any` (default) | A built-in id, a file inside the repository, or a URL — narrowed by `hosts` when that key is present. | A path outside the repository. |
+| `any` (default) | A built-in id, a file inside the repository, or a URL, narrowed by `hosts` when that key is present. | A path outside the repository. |
 | `local` | A built-in id, or a file inside the repository. | Any URL. |
-| `none` | Nothing — the key is ignored and the config decides. Docmeta prints one line to stderr naming the file and the reference it dropped. | — |
+| `none` | Nothing, because the key is ignored and the config decides. Docmeta prints one line to stderr naming the file and the reference it dropped. | n/a |
 
 **This key never applies to a reference an operator supplied.** `schemas`,
 `overrides[].schemas`, and `-s/--schema` are unfiltered in every mode. Someone
 who can edit the config or pass a flag is not the person this key has in mind.
 
-A refused document is **one failing file** (exit 1), not a stopped run: the
+A refused document is **one failing file** (exit 1), not a stopped run. The
 refusal is reported as that file's error, so in `github` and `sarif` output the
 annotation lands on the offending document in the pull request. Every other file
 in the run is validated as usual.
 
 A built-in id keeps working under `local`, which is what makes that mode safe to
-turn on: the [self-describing
+turn on. The [self-describing
 document](/docmeta/reference/schema-resolution/#the-schema-key-in-a-file)
-pattern — `$schema: google:okf:0.1` in the frontmatter — names a schema shipped
-inside docmeta, so it reaches nothing.
+pattern is `$schema: google:okf:0.1` in the frontmatter. It names a schema
+shipped inside docmeta, so it reaches nothing.
 
 #### Where "inside the repository" ends
 
 A document-supplied *path* must resolve inside the repository, in every mode
-that honors the reference — `any` included, because containment costs no
-existing setup anything. `$schema: ../../../../etc/passwd` is refused; a
-monorepo package's `$schema: ../shared/house.json` is not, because the boundary
-is the **git root** rather than the config's directory.
+that honors the reference, `any` included, because containment costs no existing
+setup anything. `$schema: ../../../../etc/passwd` is refused; a monorepo
+package's `$schema: ../shared/house.json` is not, because the boundary is the
+**git root** rather than the config's directory.
 
 With no git repository anywhere above the run, the boundary falls back to the
-config's own directory and the message says so, so "outside the repository" and
+config's own directory, and the message says so. "Outside the repository" and
 "outside where you happen to be standing" stay distinguishable.
 
 Paths in `schemas` and on `--schema` are never contained. A schema kept beside
@@ -233,8 +235,8 @@ that genuinely distrusts its contributors, the honest setting is
 
 <Aside type="caution" title="Pin the docmeta version in CI">
 A version older than 3.11 has never heard of `schemaTrust:`, so it reads the
-config, ignores the key, and **silently does nothing** — no guard, no warning.
-That is inherent to any new guard: an old release predates it, and cannot
+config, ignores the key, and **silently does nothing**. No guard, no warning.
+That is inherent to any new guard, because an old release predates it and cannot
 report a key it does not know is missing.
 
 The mitigation is a version floor wherever the gate runs:
@@ -243,7 +245,7 @@ The mitigation is a version floor wherever the gate runs:
 npx -y docmeta@4 validate "docs/**/*.md"
 ```
 
-A *misspelled* key is no longer part of this: since the [unknown-key
+A *misspelled* key is no longer part of this. Since the [unknown-key
 rule](#unknown-keys-are-errors), `schemTrust:` is an error (exit 2) rather than
 a no-op, in the version that introduced it and every version after. The
 remaining silence is only the older-binary case above, which a version floor is
@@ -293,9 +295,9 @@ The key is derived from the path's last two segments and is never spelled here.
 Paths are validated when the config loads, so a typo is an error naming the file
 rather than a check that silently never runs.
 
-Unlike `schemas:`, these **accumulate**: the top-level list and every matching
-`overrides:` entry all contribute, because element paths are extra places to
-look rather than a complete statement about how a file is judged. See [Element
+Unlike `schemas:`, these **accumulate**. The top-level list and every matching
+`overrides:` entry all contribute. Element paths are extra places to look,
+rather than a complete statement about how a file is judged. See [Element
 metadata](/docmeta/reference/element-metadata/).
 
 ### Overrides
@@ -307,7 +309,7 @@ a glob.
 |---|---|---|---|
 | `files` | `string` \| `string[]` | yes | A glob, or a list of globs, matched against each file's path. |
 | `schemas` | `string[]` | yes | The schema set applied to matching files. |
-| `name` | `string` | no | Makes the group a named **collection**: a SQL view of that name over the `docs` projection, in both `docmeta query` and `checks:`. See [Named collections](#named-collections). |
+| `name` | `string` | no | Makes the group a named **collection**, which is a SQL view of that name over the `docs` projection, in both `docmeta query` and `checks:`. See [Named collections](#named-collections). |
 
 For a given file, docmeta uses the **first** override whose `files` glob matches
 (in list order); later matching overrides are ignored. See [schema
@@ -317,7 +319,7 @@ the precedence chain.
 #### Grouping several globs
 
 `files` accepts a list, and a file matches when **any** glob in it does. Use it
-when one schema set governs path shapes that no single pattern reaches — brace
+when one schema set governs path shapes that no single pattern reaches. Brace
 expansion needs a common stem, and these have none:
 
 ```yaml
@@ -329,16 +331,17 @@ overrides:
 ```
 
 A list counts as **one** override for first-match-wins, so the whole group has a
-single position in the precedence order, and — with `name:` — becomes a single
+single position in the precedence order. With `name:`, it becomes a single
 collection. An empty list is refused: it would match nothing and read as
 configured.
 
 #### Named collections
 
 An override carrying `name:` becomes a **view** over the `docs` table wherever
-SQL runs — [`docmeta query`](/docmeta/reference/query/) and the [`checks:`](#checks)
-list alike — so a cross-file rule can say `FROM docs d LEFT JOIN authors a`
-instead of duplicating the config's glob as a SQL `GLOB` pattern:
+SQL runs, in [`docmeta query`](/docmeta/reference/query/) and the
+[`checks:`](#checks) list alike. A cross-file rule can then say
+`FROM docs d LEFT JOIN authors a` instead of duplicating the config's glob as a
+SQL `GLOB` pattern:
 
 ```yaml
 overrides:
@@ -348,59 +351,59 @@ overrides:
 ```
 
 **Membership is the resolution winner, not the glob.** A file belongs to the
-view of the override that **won its schema resolution** — so `FROM authors`
-means exactly "the files the author schema judges", views are disjoint
-(first-match-wins), and two consequences follow from [the precedence
+view of the override that **won its schema resolution**. So `FROM authors` means
+exactly "the files the author schema judges", and views are disjoint under
+first-match-wins. Two consequences follow from [the precedence
 chain](/docmeta/reference/schema-resolution/#precedence):
 
-- A file inside `authors/**` that names its **own `$schema`** — even the
-  identical schema — resolves as a document ref, not an override, and exits
-  the view. docmeta prints a stderr notice naming the file and why, whenever
-  the run actually builds the views — a statement that names a collection or
+- A file inside `authors/**` that names its **own `$schema`** resolves as a
+  document ref, not an override, and exits the view. That holds even for the
+  identical schema. A stderr notice names the file and why, whenever the run
+  actually builds the views. That means a statement that names a collection or
   reads the catalog (`sqlite_master`/`sqlite_schema`, a `PRAGMA`,
   `CREATE`/`DROP`/`ALTER`), a `--db` export, or a check run. For those
   statements the views, and with them the membership notices, land before the
-  statement is prepared; only the rare retry path — a collection reference
-  the eager trigger cannot see in the SQL text — emits them after a first
-  prepare was swallowed and retried. A `query` statement that never touches a
-  collection resolves nothing and prints no membership notice.
-- Trust settings move membership: under
+  statement is prepared. Only the rare retry path emits them after a first
+  prepare was swallowed and retried. That path is a collection reference the
+  eager trigger cannot see in the SQL text. A `query` statement that never
+  touches a collection resolves nothing and prints no membership notice.
+- Trust settings move membership. Under
   [`schemaTrust.documentRefs: none`](#schema-trust) the document's `$schema` is
-  ignored, the override wins the file back, and the view grows. A per-file
-  trust *refusal* (a `$schema` URL the settings reject) demotes the file to
-  member of no view — it never turns a working `SELECT` into exit 2; `validate`
-  is where that refusal is reported as a finding.
+  ignored, the override wins the file back, and the view grows. A per-file trust
+  *refusal* (a `$schema` URL the settings reject) demotes the file to member of
+  no view. It never turns a working `SELECT` into exit 2. `validate` is where
+  that refusal is reported as a finding.
 
-Views are **read-only**: an `UPDATE` through one refuses with the remedy —
+Views are **read-only**, and an `UPDATE` through one refuses with the remedy,
 write through `docs`, scoped by the view
-(`UPDATE docs … WHERE _path IN (SELECT _path FROM "authors")`). They ride into
-a [`--db` export](/docmeta/reference/query/#exporting-the-database) as ordinary `CREATE VIEW`
-rows, and the effect gate never sees them.
+(`UPDATE docs … WHERE _path IN (SELECT _path FROM "authors")`). They ride into a
+[`--db` export](/docmeta/reference/query/#exporting-the-database) as ordinary
+`CREATE VIEW` rows, and the effect gate never sees them.
 
-Any string is a legal name — view names are quoted identifiers — except what
-`parseConfig` refuses up front: a **duplicate** name, the name **`docs`** (in
-any casing — it is the table every query reads), an **empty or blank** name, a
-name starting **`sqlite_`** (SQLite reserves the prefix), and a `name:` on an
-override with **no `schemas:`** (a schema-less override never wins resolution,
-so its view would always be empty). A config using `name:` requires a docmeta
-at or above the version that introduced it everywhere the config is read — the
-standard new-key caveat.
+Any string is a legal name, because view names are quoted identifiers. Five are
+the exception, and `parseConfig` refuses them up front. A **duplicate** name.
+The name **`docs`**, in any casing, since it is the table every query reads. An
+**empty or blank** name. A name starting **`sqlite_`**, because SQLite reserves
+the prefix. And a `name:` on an override with **no `schemas:`**, since a
+schema-less override never wins resolution, so its view would always be empty.
+A config using `name:` requires a docmeta at or above the version that
+introduced it, everywhere the config is read. That is the standard new-key caveat.
 
 ### Checks
 
-`checks` is a list of named cross-file rules. Each is one SQL statement run
-over the same `docs` projection [`docmeta
-query`](/docmeta/reference/query/#the-docs-table) builds — one row per file, one column
-per top-level metadata key — and every row the statement returns is reported
-as a **finding**, exactly as a schema violation is: it renders in every
-[output format](/docmeta/reference/output-and-exit-codes/), counts toward
-exit 1, and rides the [baseline
+`checks` is a list of named cross-file rules. Each is one SQL statement run over
+the same `docs` projection
+[`docmeta query`](/docmeta/reference/query/#the-docs-table) builds, with one row
+per file and one column per top-level metadata key. Every row the statement
+returns is reported as a **finding**, exactly as a schema violation is. It
+renders in every [output format](/docmeta/reference/output-and-exit-codes/),
+counts toward exit 1, and rides the [baseline
 ratchet](/docmeta/reference/cli/#baselines).
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `name` | `string` | yes | The check's identity. Must match `[a-z0-9][a-z0-9._-]*` and not end in `.json`; two checks may not share a name, and `query` is reserved (it is the rule id `query --check` files ad-hoc findings under). |
-| `query` | `string` | yes | One SQL SELECT following the column convention below. Checks are **read-only**: the projection runs under `query_only`, so a mutating statement is refused with the check named (edits belong to `docmeta query`), and `ATTACH`/`VACUUM` are refused by name. Checks bind no parameters, so a named parameter (`$x`, `:x`, `@x`) is refused too — an unbound name would bind NULL and green the gate on a typo; inline the value. |
+| `name` | `string` | yes | The check's identity. Must match `[a-z0-9][a-z0-9._-]*` and not end in `.json`. Two checks may not share a name, and `query` is reserved as the rule id `query --check` files ad-hoc findings under. |
+| `query` | `string` | yes | One SQL SELECT following the column convention below. Checks are **read-only**. The projection runs under `query_only`, so a mutating statement is refused with the check named (edits belong to `docmeta query`). `ATTACH`/`VACUUM` are refused by name. Checks bind no parameters, so a named parameter (`$x`, `:x`, `@x`) is refused too. An unbound name would bind NULL and green the gate on a typo, so inline the value. |
 
 ```yaml
 checks:
@@ -414,9 +417,9 @@ checks:
 ```
 
 Findings carry the schema ref `check:<name>` and the keyword `check`, so the
-rule id everywhere — SARIF, JUnit, the baseline — is `check:<name>/check`.
-That is why the name grammar is enforced at parse time rather than hoped for:
-the name is fingerprint identity, and a name that classified as a file path
+rule id everywhere, in SARIF, JUnit and the baseline, is `check:<name>/check`.
+That is why the name grammar is enforced at parse time rather than hoped for.
+The name is fingerprint identity, and a name that classified as a file path
 would produce fingerprints that change with the working directory.
 
 #### The column convention
@@ -425,31 +428,31 @@ A check's SELECT says where each violation lives by naming its columns:
 
 | Column | | Meaning |
 |---|---|---|
-| `path` | required | The file the finding attaches to — must be a file the run loaded. A row naming any other path is an error (exit 2) with the check named, as is a check whose SQL does not prepare. |
-| `line` | optional | 1-based source line. `lineFor(path, key)` — a SQL function registered for the run — computes it from the extractor's own position data; it returns `NULL` for an unknown path or a key the extractor cannot place. |
-| `key` | optional | The metadata field at fault. Becomes the finding's instance path (`/<key>`) — and with it part of the finding's baseline identity. |
+| `path` | required | The file the finding attaches to, which must be a file the run loaded. A row naming any other path is an error (exit 2) with the check named, as is a check whose SQL does not prepare. |
+| `line` | optional | 1-based source line. `lineFor(path, key)`, a SQL function registered for the run, computes it from the extractor's own position data. It returns `NULL` for an unknown path or a key the extractor cannot place. |
+| `key` | optional | The metadata field at fault. Becomes the finding's instance path (`/<key>`), and with it part of the finding's baseline identity. |
 | `message` | optional | The prose. When absent it is synthesized as `col=value` pairs from any remaining columns. |
 
-An aggregate rule reports by emitting one row per offending file — in the
-example above, the aggregate lives in the subquery and the outer SELECT fans
-it back out to files. A check that can fire more than once per file should
-make the occurrences distinct through `key`: the baseline dedupes fingerprints
-as a set, so two findings in one file that differ only in `message` collapse
-to one recorded entry and any number of future duplicates stay forgiven.
+An aggregate rule reports by emitting one row per offending file. In the example
+above, the aggregate lives in the subquery, and the outer SELECT fans it back
+out to files. A check that can fire more than once per file should make the
+occurrences distinct through `key`. The baseline dedupes fingerprints as a set.
+Two findings in one file that differ only in `message` collapse to one recorded
+entry, and any number of future duplicates stay forgiven.
 
 #### When checks run
 
-A corpus rule computed over half a corpus reports wrong answers — "dangling
-author" because `authors/` was not loaded — so named checks run only when the
-resolved file set **is** the config-resolved corpus. Any CLI reshaping of the
-input set disqualifies the run: positional paths, stdin, `--as`, `--ext`,
-`--exclude`, and `--no-gitignore`. So does `-s/--schema`, even though the
-file set is unchanged: a schema override reshapes the corpus contract — it
-outranks every override group, so all [collection](#named-collections) views
-would be empty by construction. A scoped run prints one stderr notice
+A corpus rule computed over half a corpus reports wrong answers, such as
+"dangling author" because `authors/` was not loaded. So named checks run only
+when the resolved file set **is** the config-resolved corpus. Any CLI reshaping
+of the input set disqualifies the run: positional paths, stdin, `--as`, `--ext`,
+`--exclude`, and `--no-gitignore`. So does `-s/--schema`, even though the file
+set is unchanged. A schema override reshapes the corpus contract. It outranks
+every override group, so all [collection](#named-collections) views would be
+empty by construction. A scoped run prints one stderr notice
 (`corpus checks skipped: run is scoped`) and validates as usual. Config-level
-`exclude:` and `respectGitignore:` do **not** disqualify — they *define* the
-corpus; the CLI flags redefine the run.
+`exclude:` and `respectGitignore:` do **not** disqualify, because they *define*
+the corpus; the CLI flags redefine the run.
 [`--no-checks`](/docmeta/reference/cli/#validate) opts out explicitly for one
 run, mirroring `--no-baseline`. Checks resolve no schemas and make no network
 requests, so `--offline` does not affect them.
@@ -490,22 +493,23 @@ for these files, in order:
 2. `docmeta.config.yml`
 
 The **first file found wins** and the search stops there. Configs are never
-merged: `schemas` is a set every file must satisfy in full and `overrides` is
-first-match-wins ordered, so a partial merge would quietly redefine what the
+merged. `schemas` is a set every file must satisfy in full, and `overrides` is
+first-match-wins ordered. A partial merge would quietly redefine what the
 contract means. A `docmeta.config.yaml` inside `docs/` therefore *shadows* the
-one at the repo root for runs started inside `docs/` — the escape hatch for a
-subtree with genuinely different rules. For per-directory rules within one
+one at the repo root for runs started inside `docs/`. That is the escape hatch
+for a subtree with genuinely different rules. For per-directory rules within one
 contract, prefer [`overrides`](#overrides) instead.
 
-The search stops at the **project boundary**: the first directory containing a
-`.git` entry, which is itself searched. A git *file* — what a worktree or a
-submodule carries — counts as a boundary just as a directory does. If no
-ancestor is a repository, only the current working directory is searched;
-docmeta never reads a config from your home directory or from `/`.
+The search stops at the **project boundary**, which is the first directory
+containing a `.git` entry, and that directory is itself searched. A git *file*,
+what a worktree or a submodule carries, counts as a boundary just as a directory
+does. If no ancestor is a repository, only the current working directory is
+searched; docmeta never reads a config from your home directory or from `/`.
 
 If no config is found, docmeta runs on the [built-in default schema
 set](/docmeta/reference/schema-resolution/#precedence). Pass `--no-config` to
-skip discovery deliberately — useful for a one-off run against the defaults.
+skip discovery deliberately, which is useful for a one-off run against the
+defaults.
 
 When you pass `-c/--config <path>` explicitly, no search happens at all and that
 file must exist; a missing config file is an error (exit 2).
@@ -517,25 +521,25 @@ Using docmeta.config.yaml (../..)
 ```
 
 The path in parentheses is the config's directory relative to where you ran the
-command. The line goes to stdout in `pretty` output and to stderr for every
-machine format — `json`, `github`, `sarif`, and `junit` — so machine-readable
-output stays parseable.
+command. The line goes to stdout in `pretty` output, and to stderr for every
+machine format. `json`, `github`, `sarif`, and `junit` all keep it on stderr, so
+machine-readable output stays parseable.
 
 ## What relative paths are relative to
 
 A config's relative paths mean what they look like they mean to whoever is
-editing the config: they resolve against **the config file's own directory**,
+editing the config. They resolve against **the config file's own directory**,
 not the directory you happened to run from. That applies to `paths`, `exclude`,
 `baseline`, and any local `.json` schema file named in `schemas` or `overrides`.
 So a config means the same thing whether you run from the repo root, from
 `docs/`, or from a monorepo package script.
 
 This matters most for `baseline`. Resolving it against the working directory
-instead would mean a run from a subdirectory quietly found no baseline and
-reported the entire recorded backlog as new. For the same reason, the schema
+instead would mean a run from a subdirectory quietly found no baseline. It would
+then report the entire recorded backlog as new. For the same reason, the schema
 reference inside a [violation fingerprint](/docmeta/reference/cli/#baselines) is
-measured against the config's directory too, so a baseline recorded from the
-repo root matches one recorded from `docs/`, byte for byte.
+measured against the config's directory too. A baseline recorded from the repo
+root then matches one recorded from `docs/`, byte for byte.
 
 Two things stay relative to the **current working directory** instead, because
 a person standing in a shell typed them there:
@@ -557,7 +561,7 @@ corresponding config value; others merge with it.
 | Inputs | `[paths...]` | `paths` | CLI positional paths **override** config `paths` entirely. Config `paths` is used only when no positional paths are given. |
 | Excludes | `--exclude` | `exclude` | **Merged.** The effective exclude set is config `exclude` plus every `--exclude` glob plus the [default ignores](/docmeta/reference/cli/#default-ignores). |
 | Schemas | `-s/--schema` | `schemas` / `overrides` | CLI `--schema` **overrides** both `schemas` and `overrides` for every file. See [precedence](/docmeta/reference/schema-resolution/#precedence). |
-| Config discovery | `--no-config` | — | `--no-config` skips discovery entirely, so no config value applies. It sets the same option as `-c/--config`, so if you pass both, whichever comes later on the command line wins. |
+| Config discovery | `--no-config` | n/a | `--no-config` skips discovery entirely, so no config value applies. It sets the same option as `-c/--config`, so if you pass both, whichever comes later on the command line wins. |
 | Empty input sets | `--allow-empty` | `allowEmpty` | The flag **overrides** the config key, and only in the permissive direction: passing it turns the check off. Omitting it falls back to config, then to off. |
 | Fill settings | `--confidence`, `--provider`, `--model`, `--max-turns`, `--chunk-chars`, `--concurrency` | `fill.*` | Each flag **overrides** its matching `fill` key. An unset flag falls back to config, then to the built-in default. |
 | Offline | `--offline` | `offline` | The flag **overrides** the config key, and only in the restrictive direction: passing it turns fetching off. Omitting it falls back to config, then to off. |
@@ -577,6 +581,6 @@ Use config `overrides` when different folders need different schemas.
 {/* step {"description":"A config whose paths is not a list of strings is a usage error (exit 2).","runShell":{"command":"docmeta validate -c test/fixtures/dd/bad-config.yaml test/fixtures/valid.md","exitCodes":[2],"stdio":"\"paths\" must be a list of strings"}} */}
 {/* step {"description":"--schema overrides config/file schema resolution for every file in the run.","runShell":{"command":"docmeta validate test/fixtures/missing-type.md -s ./test/fixtures/extra.schema.json","exitCodes":[0],"stdio":"1 passed"}} */}
 {/* step {"description":"A documentRefs value outside the three modes is a usage error (exit 2), not a silently ignored key.","runShell":{"command":"docmeta validate -c test/fixtures/dd/bad-schema-trust.yaml test/fixtures/valid.md","exitCodes":[2],"stdio":"must be one of"}} */}
-{/* step {"description":"documentRefs: local keeps a built-in $schema working — the self-describing document pattern is unaffected.","runShell":{"command":"docmeta validate -c test/fixtures/dd/schema-trust-local.yaml test/fixtures/schema-ref.md","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"documentRefs: local keeps a built-in $schema working, so the self-describing document pattern is unaffected.","runShell":{"command":"docmeta validate -c test/fixtures/dd/schema-trust-local.yaml test/fixtures/schema-ref.md","exitCodes":[0],"stdio":"1 passed"}} */}
 {/* step {"description":"A misspelled top-level key is a usage error (exit 2), not a silent no-op.","runShell":{"command":"docmeta validate -c test/fixtures/dd/misspelled-top-level-key.yaml test/fixtures/valid.md","exitCodes":[2],"stdio":"unknown key"}} */}
 {/* test end */}

@@ -5,16 +5,17 @@ description: Add a document-metadata gate to GitHub Actions, with inline pull re
 
 import { Steps, Tabs, TabItem, Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-This page wires docmeta into GitHub Actions so that every push and pull request
-validates your document metadata, fails the job when a file is non-conformant,
-and reports each failure as an inline annotation on the pull request diff.
+This page wires docmeta into GitHub Actions. Every push and pull request then
+validates your document metadata, and fails the job when a file is
+non-conformant. Each failure is reported as an inline annotation on the pull
+request diff.
 
 You do not need to install docmeta into your repository. The recipes here run it
 with `npx`, which fetches the published `docmeta` package on demand. The only
 requirement on the runner is Node.js 24 or newer.
 
 <Aside type="tip" title="Just want the gate?">
-On GitHub Actions, use the packaged action — it sets up Node, pins the CLI, and
+On GitHub Actions, use the packaged action. It sets up Node, pins the CLI, and
 defaults to inline PR annotations:
 
 ```yaml
@@ -25,9 +26,9 @@ defaults to inline PR annotations:
 ```
 
 `paths`, `schema` and `args` each accept one item per line as well as a single
-space-separated line. Use lines whenever a value contains a space — shell
-quoting is not interpreted, so `args: --exclude "*.draft.md"` would hand docmeta
-a pattern with the quote marks still in it:
+space-separated line. Use lines whenever a value contains a space. Shell quoting
+is not interpreted, so `args: --exclude "*.draft.md"` would hand docmeta a
+pattern with the quote marks still in it:
 
 ```yaml
 - uses: hawkeyexl/docmeta@v4
@@ -50,16 +51,16 @@ is the same thing written out by hand, for when you want to own the steps.
 docmeta is built to behave well in CI. Two properties carry the whole
 integration:
 
-- **Exit codes drive the gate.** docmeta exits `0` when every file is valid,
-  `1` when one or more files fail validation, and `2` on an operational or usage
-  error (for example, no inputs and no config). GitHub Actions treats any
+- **Exit codes drive the gate.** docmeta exits `0` when every file is valid, and
+  `1` when one or more files fail validation. It exits `2` on an operational or
+  usage error, such as no inputs and no config. GitHub Actions treats any
   non-zero exit from a step as a failed step, so the metadata gate is enforced
-  for free; there is no separate "if failures, then fail" wiring to maintain.
+  for free. There is no separate "if failures, then fail" wiring to maintain.
 - **`--format github` produces inline annotations.** Instead of pretty console
   output, the `github` format emits one GitHub Actions workflow command per
   error (`::error file=...,line=...,col=...::...`). GitHub turns each line into
-  an annotation pinned to the offending file and line in the pull request, so
-  reviewers see exactly what failed without opening the job log.
+  an annotation, pinned to the offending file and line in the pull request.
+  Reviewers then see exactly what failed without opening the job log.
 
 For the full contract, see
 [Exit codes & PR annotations](/docmeta/ci/exit-codes-and-annotations/).
@@ -183,8 +184,8 @@ all. To always run validation and still surface a build failure, add
 
 ## Verify it works
 
-To confirm the gate fires, open a pull request that introduces a metadata error,
-for example, a Markdown file missing a required `type` field, then check that:
+To confirm the gate fires, open a pull request that introduces a metadata error.
+A Markdown file missing a required `type` field will do. Then check that:
 
 - The `docmeta` job is red.
 - The failing file shows an inline annotation on the changed line.

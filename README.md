@@ -7,7 +7,21 @@ Validate the **presence and format** of document metadata against **JSON Schema*
 [![node](https://img.shields.io/node/v/docmeta?color=5fa04e&logo=node.js&logoColor=white)](https://nodejs.org)
 [![license](https://img.shields.io/npm/l/docmeta?color=blue)](LICENSE)
 
-`docmeta` checks the metadata in your documents (Markdown frontmatter and more) against one or more JSON Schemas. It verifies that required fields are present and correctly formatted (a `type`, an ISO 8601 `timestamp`, a URI `resource`); it does not judge prose quality. It ships with seven [built-in schemas](https://hawkeyexl.github.io/docmeta/reference/built-in-schemas/): the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md), vocabularies for [Diátaxis](https://diataxis.fr/), [The Good Docs Project](https://www.thegooddocsproject.dev/template), and the [Seven-Action model](https://passo.uno/seven-action-model/), and the docs, blog, and pages front matter contracts of [Docusaurus](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-docs#markdown-front-matter) 3.10. It follows [clig.dev](https://clig.dev) conventions and returns a nonzero exit code (plus optional GitHub annotations) when validation fails.
+`docmeta` checks the metadata in your documents (Markdown frontmatter and more)
+against one or more JSON Schemas. It verifies that required fields are present
+and correctly formatted: a `type`, an ISO 8601 `timestamp`, a URI `resource`. It
+does not judge prose quality. It ships with 23 [built-in
+schemas](https://hawkeyexl.github.io/docmeta/reference/built-in-schemas/). They
+cover content vocabularies such as the [Open Knowledge Format
+(OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md),
+[Diátaxis](https://diataxis.fr/), [The Good Docs
+Project](https://www.thegooddocsproject.dev/template), and the [Seven-Action
+model](https://passo.uno/seven-action-model/). They also cover the front matter
+contracts of site generators such as
+[Docusaurus](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-docs#markdown-front-matter)
+3.10, Hugo, Jekyll, and MkDocs Material. Run `docmeta schemas` for the full
+list. It follows [clig.dev](https://clig.dev) conventions and returns a nonzero
+exit code (plus optional GitHub annotations) when validation fails.
 
 It can also **fill in** the metadata that is missing, so adopting a standard on an existing docset is not a data-entry project.
 
@@ -51,9 +65,10 @@ defaults to inline PR annotations:
     paths: "docs/**/*.md"
 ```
 
-Every input is in the [Action reference](https://hawkeyexl.github.io/docmeta/reference/action/).
-Other platforms run the CLI directly — see the
-[CI recipes](https://hawkeyexl.github.io/docmeta/ci/recipes/) for GitLab CI,
+Every input is in the [Action
+reference](https://hawkeyexl.github.io/docmeta/reference/action/). Other
+platforms run the CLI directly. The [CI
+recipes](https://hawkeyexl.github.io/docmeta/ci/recipes/) cover GitLab CI,
 Jenkins, and the rest.
 
 To catch problems before they reach CI, docmeta publishes a
@@ -89,26 +104,27 @@ anthropic/claude-sonnet-4-5 · Threshold 0.7 · 1 file · 1 field written · 1 s
 ```
 
 Confidence is the last gate, not the only one. A proposal must first satisfy the
-target property's own subschema, name a property your schema declares, and leave
-the document still valid after the merge. Only then does `--confidence`
-(default `0.7`) apply. Values below it are skipped and reported by name, never
-written with a caveat, and the score itself never reaches your document.
+target property's own subschema. It must name a property your schema declares,
+and it must leave the document still valid after the merge. Only then does
+`--confidence` (default `0.7`) apply. Values below it are skipped and reported
+by name. They are never written with a caveat, and the score itself never
+reaches your document.
 
 `fill` writes in place by default, so run it on a clean tree and review the
 diff.
 
-It picks an LLM provider by detecting one: `ANTHROPIC_API_KEY`, then
-`OPENAI_API_KEY`, then a signed-in `claude` CLI, then a local model that needs no
-credentials at all — so it works with whatever you have, and reports which it
-used. Pass `--provider` to pin one, which is worth doing in CI: left to detect, a
-runner that loses its key falls back to the local model and downloads it rather
-than failing the build.
+It picks an LLM provider by detecting one. The order is `ANTHROPIC_API_KEY`,
+then `OPENAI_API_KEY`, then a signed-in `claude` CLI, then a local model that
+needs no credentials at all. That means it works with whatever you have, and it
+reports which provider it used. Pass `--provider` to pin one. That is worth
+doing in CI. Left to detect, a runner that loses its key falls back to the local
+model, and downloads it rather than failing the build.
 
 Pass `--local` when the document must not leave the machine. It runs inference
 on-device and **refuses every hosted provider**, a signed-in `claude` CLI
-included — that CLI runs locally, but its inference does not. See the
-[`fill` reference](https://hawkeyexl.github.io/docmeta/reference/cli/#fill) for
-every flag and for what the local fallback costs.
+included. That CLI runs locally, but its inference does not. See the [`fill`
+reference](https://hawkeyexl.github.io/docmeta/reference/cli/#fill) for every
+flag and for what the local fallback costs.
 
 ## Supported formats
 
@@ -116,9 +132,9 @@ Markdown, MDX, AsciiDoc, reStructuredText, XML (including DITA topics and maps),
 and HTML. Run `docmeta schemas` to list the built-in schemas, every supported
 format, and which formats `fill` can write back to.
 
-`fill` writes to all of them, by splicing the exact character range of the value
-rather than re-serializing the document — so comments, entity spellings,
-attribute order, indentation, and a DOCTYPE all survive untouched.
+`fill` writes to all of them. It splices the exact character range of the value
+rather than re-serializing the document. Comments, entity spellings, attribute
+order, indentation, and a DOCTYPE all survive untouched.
 
 ## Documentation
 

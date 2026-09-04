@@ -8,7 +8,7 @@ import { Aside } from '@astrojs/starlight/components';
 docmeta ships three **taxonomy** schemas: closed vocabularies that constrain a
 classification field to a published set of values. They exist because
 [`google:okf:0.1`](/docmeta/reference/okf-schema/) requires a `type` but accepts
-any non-empty string for it, so it cannot stop a docs set from drifting into
+any non-empty string for it. It cannot stop a docs set from drifting into
 `how-to`, `howto`, and `guide` all meaning the same thing.
 
 | Id | Key | Key required? | Framework | JSON |
@@ -22,12 +22,12 @@ allow additional properties, and are [built-in
 references](/docmeta/reference/schema-resolution/#reference-kinds).
 
 Each **JSON** link is the schema itself, at a [permanent, version-pinned
-URL](/docmeta/reference/built-in-schemas/#the-published-urls) — useful for
-reading the exact vocabulary, or for `$ref`-ing one from a schema of your own.
-Inside docmeta the URL and the id are interchangeable, and neither makes a
+URL](/docmeta/reference/built-in-schemas/#the-published-urls). That is useful
+for reading the exact vocabulary, or for `$ref`-ing one from a schema of your
+own. Inside docmeta the URL and the id are interchangeable, and neither makes a
 network call.
 
-The two keyed on `type` are alternatives to each other — see [Which ones
+The two keyed on `type` are alternatives to each other. See [Which ones
 compose](#which-ones-compose). For the other four schemas docmeta ships,
 including the [Docusaurus front matter
 contracts](/docmeta/reference/docusaurus-schemas/), see the [built-in schema
@@ -35,9 +35,9 @@ registry](/docmeta/reference/built-in-schemas/).
 
 ## Vocabulary checks vs. presence checks
 
-The two content-type schemas do both jobs: they **require** their key as well as
+The two content-type schemas do both jobs. They **require** their key as well as
 constraining it, so neither needs a partner to get presence-checking. Adopting a
-named set of document types is a claim that every page *is* one of them, which
+named set of document types is a claim that every page *is* one of them. That
 makes an untyped page a gap rather than an abstention:
 
 ```text
@@ -53,8 +53,8 @@ docmeta validate docs/ -s diataxis:diataxis:1.0 -s google:okf:0.1
 ```
 
 `passo-uno:seven-action:1.0` is the exception. It checks `action` only *if one
-is present*, which is what makes it safe to layer onto an existing setup — and
-what makes it safe to carry in the [default
+is present*. That is what makes it safe to layer onto an existing setup, and
+safe to carry in the [default
 set](/docmeta/reference/schema-resolution/#precedence).
 
 <Aside type="caution" title="Both `type` schemas require the key, so retrofit with `--dry-run` first">
@@ -64,9 +64,9 @@ reports every untyped page at once. Run [`docmeta fill
 writing anything.
 
 Schema order does not matter, here or anywhere else. Both schemas define `type`,
-and [`fill`](/docmeta/reference/cli/#fill) infers against the two rules combined,
-so the vocabulary's enum reaches the model whichever `-s` comes first — the
-proposal can only be one of the four. `validate` likewise always runs every
+and [`fill`](/docmeta/reference/cli/#fill) infers against the two rules
+combined. The vocabulary's enum reaches the model whichever `-s` comes first, so
+the proposal can only be one of the four. `validate` likewise always runs every
 schema in the set.
 </Aside>
 
@@ -97,9 +97,9 @@ using Diátaxis. Opt in with `-s` or a `schemas:` entry in config.
 
 Requires `type` and constrains it to the template slugs published by [The Good
 Docs Project](https://www.thegooddocsproject.dev/template). Where Diátaxis names
-four abstract forms, TGDP names 25 concrete deliverables, so it fits a docs set
-that thinks in terms of "we owe this product an installation guide and a
-changelog" rather than in terms of the four quadrants.
+four abstract forms, TGDP names 25 concrete deliverables. That suits a docs set
+that thinks in deliverables rather than quadrants. Such a set says "we owe this
+product an installation guide and a changelog".
 
 The values are the template directory slugs from the upstream
 [templates repo](https://gitlab.com/tgdp/templates), grouped here by the pack
@@ -120,20 +120,20 @@ title: Install the collector
 ```
 
 Like Diátaxis, TGDP is **not** in the [default
-set](/docmeta/reference/schema-resolution/#precedence): it both constrains and
+set](/docmeta/reference/schema-resolution/#precedence). It both constrains and
 requires `type`, so defaulting it would fail every untyped document in every
 repo that had not opted in.
 
 <Aside type="note" title="TGDP prescribes no frontmatter of its own">
-The upstream templates are body-structure templates — they open at a heading and
+The upstream templates are body-structure templates. They open at a heading and
 carry no YAML block. The only metadata TGDP publishes is `index.json`, which
 describes the *templates* (`name`, `summary`, `last_updated`, `contributors`,
 `packs`), not documents written from them. So the vocabulary here is lifted from
-the template set, not an implementation of a TGDP metadata spec, and requiring
-`type` is docmeta's choice rather than an upstream rule — the same choice it
-makes for Diátaxis, which likewise publishes no frontmatter spec. Pair it with
-[`google:okf:0.1`](/docmeta/reference/okf-schema/) for the fields TGDP leaves
-unspecified.
+the template set, not an implementation of a TGDP metadata spec. Requiring
+`type` is docmeta's choice rather than an upstream rule. It is the same choice
+docmeta makes for Diátaxis, which likewise publishes no frontmatter spec. Pair
+it with [`google:okf:0.1`](/docmeta/reference/okf-schema/) for the fields TGDP
+leaves unspecified.
 </Aside>
 
 ## `passo-uno:seven-action:1.0`
@@ -162,8 +162,8 @@ title: Work through the tutorial
 ```
 
 This schema **is** in the default set, alongside OKF. It can be, because it
-constrains a key that documents do not otherwise carry and does not require it —
-so it fails nothing that passed before.
+constrains a key that documents do not otherwise carry and does not require it.
+So it fails nothing that passed before.
 
 <Aside type="caution" title="If you already use an `action` key">
 `action` is a generic field name. If your frontmatter already uses it for
@@ -200,10 +200,10 @@ title: Rotate an API key
 | TGDP + Seven-Action | Composes |
 | Diátaxis + TGDP | **Pick one** |
 
-Stacking the two `type` schemas is not an error, but it validates against the
-intersection of their vocabularies, which is narrower than either. `explanation`
+Stacking the two `type` schemas runs without error, and it validates against
+the intersection of their vocabularies, which is narrower than either. `explanation`
 is Diátaxis-only and `installation-guide` is TGDP-only, so each rules out values
-the other exists to allow — leaving only `tutorial`, `how-to`, and `reference`.
+the other exists to allow, leaving only `tutorial`, `how-to`, and `reference`.
 Choose the vocabulary your docs set actually uses.
 
 ## Crosswalk
@@ -249,7 +249,7 @@ the `enum`:
 ```
 
 Drop the `required` line if you want a vocabulary check without a presence
-check — a document with no `type` then passes.
+check. A document with no `type` then passes.
 
 Then reference it by path instead of the built-in id. See [Author a
 schema](/docmeta/schemas/) for the full authoring guide.

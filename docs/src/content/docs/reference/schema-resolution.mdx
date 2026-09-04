@@ -5,10 +5,10 @@ description: How docmeta picks the schema set for each file, covering the preced
 
 import { Aside } from '@astrojs/starlight/components';
 
-For each file, docmeta resolves a **schema set** of one or more schema references,
-then validates the file's metadata against every schema in that set. This page
-documents how the set is chosen, what a reference can be, and which JSON Schema
-dialects are supported.
+For each file, docmeta resolves a **schema set** of one or more schema
+references. It then validates the file's metadata against every schema in that
+set. This page documents how the set is chosen, what a reference can be, and
+which JSON Schema dialects are supported.
 
 ## Precedence
 
@@ -61,13 +61,13 @@ neither a string nor a list of strings is an error for that file.
 ### What a document may reference, and how a repo narrows it
 
 By default a document's `$schema` may name any of the [three
-kinds](#reference-kinds) — a built-in id, a local file, or a URL. That is the
+kinds](#reference-kinds): a built-in id, a local file, or a URL. That is the
 feature: a page carries its own contract, and level 2 of the chain is above
 config precisely so it can.
 
 It also means one line of frontmatter chooses the schema that file is judged by.
 In a repository whose pull requests come from outside, that is a way to opt out
-of the standard: a document naming a permissive URL passes while the documents
+of the standard. A document naming a permissive URL passes, while the documents
 playing by the config's rules fail.
 
 [`schemaTrust`](/docmeta/reference/configuration/#schema-trust) is how a repo
@@ -76,20 +76,20 @@ narrows level 2. It changes nothing else in the chain:
 | `schemaTrust.documentRefs` | Effect on level 2 |
 |---|---|
 | `any` (default) | Unchanged. All three kinds, from any host unless `schemaTrust.hosts` is set. |
-| `local` | Built-in ids and repository files resolve; a URL is refused, except a [published built-in URL](/docmeta/reference/built-in-schemas/#the-published-urls), which is a built-in under a second name. |
+| `local` | Built-in ids and repository files resolve, and a URL is refused. The exception is a [published built-in URL](/docmeta/reference/built-in-schemas/#the-published-urls), which is a built-in under a second name. |
 | `none` | Level 2 is skipped entirely, so resolution continues at level 3. The dropped reference is reported on stderr. |
 
 Two things hold in **every** mode, including the default:
 
-- A document-supplied **path** must resolve inside the repository — the git
-  root, so a monorepo's `../shared/house.json` still resolves. A path that
+- A document-supplied **path** must resolve inside the repository, meaning the
+  git root, so a monorepo's `../shared/house.json` still resolves. A path that
   escapes it is refused.
 - A reference an **operator** supplied is never filtered. `schemas`,
   `overrides[].schemas`, and `-s/--schema` resolve exactly as they always have,
   in every mode, including to a path outside the repository.
 
-A refused reference fails **that file** (exit 1) with the reason as its error,
-so the rest of the run is validated normally and the annotation lands on the
+A refused reference fails **that file** (exit 1) with the reason as its error.
+The rest of the run is validated normally, and the annotation lands on the
 document that carried the reference.
 
 ## Reference kinds
@@ -101,24 +101,25 @@ classified into one of three kinds by its shape:
 |---|---|---|
 | **builtin** | `vendor:name:version`, e.g. `google:okf:0.1` | A schema shipped with docmeta. |
 | **file** | A `.json` path or any path containing a separator, e.g. `./my.schema.json` | The local filesystem. |
-| **url** | An `http://` or `https://` URL | Fetched over the network — except a [published built-in URL](/docmeta/reference/built-in-schemas/#the-published-urls), which docmeta answers from its own bundle. |
+| **url** | An `http://` or `https://` URL | Fetched over the network. The exception is a [published built-in URL](/docmeta/reference/built-in-schemas/#the-published-urls), which docmeta answers from its own bundle. |
 
 How a reference is classified:
 
 - A reference starting with `http://` or `https://` is a **url**.
 - Otherwise, a reference is a **builtin** when it contains no path separator
-  (`/` or `\`), does not end in `.json`, and matches the built-in id pattern
-  (colon-separated segments of `[a-z0-9._-]`, such as `google:okf:0.1`).
+  (`/` or `\`) and does not end in `.json`. It must also match the built-in id
+  pattern, which is colon-separated segments of `[a-z0-9._-]`, such as
+  `google:okf:0.1`.
 - Everything else is a **file**.
 
 This deliberately classifies a Windows path (`C:\...`), a URL, and any `.json`
-reference as non-builtin, so a typo'd built-in id is reported as an unknown
+reference as non-builtin. A typo'd built-in id is then reported as an unknown
 built-in rather than silently treated as a missing file.
 
 ### File references
 
 A relative **file** reference resolves against the directory of whatever named
-it — which is the directory the person who wrote it was looking at:
+it. That is the directory the person who wrote it was looking at:
 
 | Where the ref came from | Resolved relative to |
 |---|---|
@@ -127,27 +128,27 @@ it — which is the directory the person who wrote it was looking at:
 | `-s/--schema` on the command line | The current working directory |
 
 So `schemas: ["./house.schema.json"]` in a config at the repo root means the
-file next to that config, whether you run docmeta from the repo root, from
-`docs/`, or with `-c ../docmeta.config.yaml`. See [config
+file next to that config. That holds whether you run docmeta from the repo root,
+from `docs/`, or with `-c ../docmeta.config.yaml`. See [config
 discovery](/docmeta/reference/configuration/#what-relative-paths-are-relative-to).
 
 <Aside type="note">
-When a config directory differs from the working directory, docmeta reports
-config-supplied file schemas by their absolute path, so it is unambiguous which
-file a run actually loaded.
+When a config directory differs from the working directory, config-supplied file
+schemas are reported by their absolute path. It is then unambiguous which file a
+run actually loaded.
 </Aside>
 
 A file reference a **document** supplied has one extra rule: it must resolve
 inside the repository. `$schema: ../../../../etc/passwd` is refused rather than
 read, in every `schemaTrust` mode. A file reference from a config or from
-`--schema` has no such limit — see [what a document may
+`--schema` has no such limit. See [what a document may
 reference](#what-a-document-may-reference-and-how-a-repo-narrows-it).
 
 If a local schema file is not valid JSON, docmeta reports the reference and the
 line and column where parsing failed. It does **not** quote the file's contents
 back, because that message travels into `json` and `sarif` reports that are
-routinely uploaded to code scanning. A *fetched* body is quoted, deliberately —
-seeing what a URL actually returned is how you tell a gateway from a schema.
+routinely uploaded to code scanning. A *fetched* body is quoted, deliberately.
+Seeing what a URL actually returned is how you tell a gateway from a schema.
 
 #### Vendored references
 
@@ -162,8 +163,8 @@ schemas:
 ```
 
 **A pinned reference resolves exactly like any other file reference.** `ref` is
-the whole of what resolution sees: it is classified, rebased, deduplicated, and
-reported identically to the bare string `./schema/2.1.json`, and it is the
+the whole of what resolution sees. It is classified, rebased, deduplicated, and
+reported identically to the bare string `./schema/2.1.json`. It is also the
 string that appears in reports, in `json` output, and in [baseline
 fingerprints](/docmeta/reference/cli/#baselines). `source` and `integrity` are
 carried alongside and consulted only when the file is read.
@@ -183,7 +184,7 @@ the recorded integrity if the change was intended.
 
 There is deliberately **no fallback**. Loading the file anyway, or re-fetching
 `source` instead, would mean the run continues against a contract nobody
-approved — which is the failure the pin exists to make visible.
+approved. That is the failure the pin exists to make visible.
 
 Three other messages come out of the same check, and which one you get says
 what actually happened:
@@ -192,11 +193,11 @@ what actually happened:
 |---|---|
 | The bytes differ only in **line endings** | `The contents differ only in line endings…`, with a `.gitattributes` suggestion. A committed schema plus `core.autocrlf` produces a mismatch on a file nobody edited, and this is the case that would otherwise read as corruption. |
 | The file is **missing** | `Schema file not found: "…". It was vendored from <source>; commit the file, or re-download it…`. Usually a copy that was never committed. |
-| The pin is on a **built-in or URL** ref | Rejected when the config is parsed: neither can be verified, so a pin there would be decorative. |
+| The pin is on a **built-in or URL** ref | Rejected when the config is parsed, because neither can be verified, so a pin there would be decorative. |
 
 The hash is taken over the raw bytes, and `schemas vendor` writes exactly what
-the server sent, so the pin also attests to the upstream file: re-downloading
-the URL and hashing it reproduces the same value.
+the server sent. So the pin also attests to the upstream file, and
+re-downloading the URL and hashing it reproduces the same value.
 
 <Aside type="tip" title="Keep the vendored file byte-exact">
 The one thing that can move the bytes without anyone editing them is a checkout
@@ -212,22 +213,22 @@ schema/*.json -text
 
 A `url` reference is fetched with a default **10-second timeout**. Within a
 single run, fetched schemas are **cached per URL**, so the same URL is only
-retrieved once even when many files reference it — including when many files are
+retrieved once even when many files reference it. That holds when many files are
 processed concurrently, which shares the one in-flight request rather than
 opening one per file. A timeout, a non-2xx HTTP status, or a response that is
 not valid JSON is an error (exit 2).
 
 A failed request is retried **once**, after roughly 500 ms, and only for the
-failures that can plausibly heal: a network-level error (DNS, refused
-connection, reset socket) or a `5xx`. A `4xx` is not retried — a 404 will not
-become a 200 — and neither is a timeout, since the timeout is already the budget
-for a host that is not answering and retrying it would double the ceiling per
-URL for no new information.
+failures that can plausibly heal. Those are a network-level error (DNS, refused
+connection, reset socket) or a `5xx`. A `4xx` is not retried, because a 404 will
+not become a 200. Neither is a timeout, because the timeout is already the
+budget for a host that is not answering. Retrying it would double the ceiling
+per URL for no new information.
 
 #### The cross-run cache
 
 A schema fetched successfully is written to a **disk cache** and served from
-there on later runs, so an edit-validate loop against a remote contract does not
+there on later runs. An edit-validate loop against a remote contract does not
 re-fetch it every time.
 
 | | |
@@ -244,12 +245,12 @@ What invalidates an entry:
 
 - **Age.** Past `ttlHours` since the file was last written, the next run
   re-fetches and rewrites it. Freshness reads the filesystem's mtime rather than
-  the `fetchedAt` recorded inside the file, because a restored cache or a clock
-  change makes an embedded timestamp disagree with reality — and an entry that
-  never looks old is a cache that never expires. An mtime in the *future* —
-  which an archived cache carries with it, and a machine whose clock ran fast
-  leaves behind — is treated as stale for the same reason, since it would
-  otherwise satisfy the age check until the clock caught up.
+  the `fetchedAt` recorded inside the file. A restored cache or a clock change
+  makes an embedded timestamp disagree with reality. An entry that never looks
+  old is a cache that never expires. An mtime in the *future* is treated as
+  stale for the same reason. It would otherwise satisfy the age check until the
+  clock caught up. An archived cache carries one with it, and so does a machine
+  whose clock ran fast.
 - **A different URL.** The key is the full URL, so changing the version segment
   is a different entry, not a stale one.
 - **Damage.** An unreadable, unparseable, or unrecognized entry is treated as a
@@ -260,15 +261,15 @@ cached either.
 
 <Aside type="caution">
 **This is a local win, not a CI one.** A hosted runner starts with an empty
-workspace, so the cache is cold on **every** job and the remote host is still a
+workspace, so the cache is cold on **every** job. The remote host is still a
 single point of failure for every repository that points at it. Restoring the
-cache with a CI cache action does not fix that either — an entry keyed on the
-URL can restore a *stale* contract, which is worse than fetching, because the
-build then validates against a rule nobody is looking at.
+cache with a CI cache action does not fix that either. An entry keyed on the URL
+can restore a *stale* contract, which is worse than fetching. The build then
+validates against a rule nobody is looking at.
 
 Treat the cache as a developer and pre-commit convenience. For CI durability,
 [vendor the schema](#vendored-references) into the consuming repository with
-`docmeta schemas vendor`, so the contract is a reviewable artifact in your own
+`docmeta schemas vendor`. The contract is then a reviewable artifact in your own
 history rather than a request that has to succeed.
 </Aside>
 
@@ -277,26 +278,26 @@ history rather than a request that has to succeed.
 `--offline` (or [`offline: true`](/docmeta/reference/configuration/#offline))
 makes a run touch the network not at all:
 
-- a `url` reference is served from the cache, **ignoring the TTL** — expiry
+- A `url` reference is served from the cache, **ignoring the TTL**. Expiry
   exists to trigger a re-fetch, and there is none available, so a stale copy
-  beats failing the run;
-- a `url` reference that is not cached is an operational error (exit 2) naming
-  the URL;
-- built-in ids and local `.json` files resolve exactly as they always do.
+  beats failing the run.
+- A `url` reference that is not cached is an operational error (exit 2) naming
+  the URL.
+- Built-in ids and local `.json` files resolve exactly as they always do.
 
-Priming the cache is one ordinary run: fetch once online, and every later run
+Priming the cache is one ordinary run. Fetch once online, and every later run
 can be `--offline`. With `schemaCache.ttlHours: 0` there is no cache to read, so
 `--offline` fails on any `url` reference.
 
 #### What docmeta requires of a fetched schema
 
 A URL is a live third party, and `200 OK` is not proof that what came back is a
-schema. Two checks apply to a fetched payload, and to it only — a local file or
-a built-in is something you chose deliberately and can read:
+schema. Two checks apply to a fetched payload, and to it only. A local file or a
+built-in is something you chose deliberately and can read:
 
 | Requirement | Why |
 |---|---|
-| The body must be a JSON **object** carrying at least one standard JSON Schema keyword — any of the validation or applicator vocabularies from draft-04 through 2020-12, including `$ref`, `$defs`, `type`, `properties`, `required`, `allOf`/`anyOf`/`oneOf`/`not`, `if`/`then`/`else`, `additionalProperties`, `patternProperties`, `propertyNames`, `items`/`prefixItems`/`contains`, `enum`, `const`, `format`, and the numeric, string and array constraints. | An object with none of them constrains nothing, so **every document passes it**. |
+| The body must be a JSON **object** carrying at least one standard JSON Schema keyword. Any of the validation or applicator vocabularies from draft-04 through 2020-12 counts. That includes `$ref`, `$defs`, `type`, `properties`, `required`, `allOf`/`anyOf`/`oneOf`/`not`, `if`/`then`/`else`, `additionalProperties`, `patternProperties`, `propertyNames`, `items`/`prefixItems`/`contains`, `enum`, `const`, `format`, and the numeric, string and array constraints. | An object with none of them constrains nothing, so **every document passes it**. |
 | The body must be at most **5 MB**. | `res.json()` would otherwise read an unbounded body into memory. The timeout catches a slow response but not a fast, enormous one. |
 
 The first check exists because of a specific, silent failure. An API gateway, a
@@ -308,39 +309,40 @@ JSON *error envelope*:
 ```
 
 That compiles as a perfectly valid schema with no constraints. Without the
-check, every document in the repo validates against it and the run is **green** —
-a gate that reports success precisely because it has stopped working. With it,
-the run stops with an exit-2 error naming the URL and quoting what the server
+check, every document in the repo validates against it and the run is **green**.
+It is a gate that reports success because it has stopped working. With it, the
+run stops with an exit-2 error naming the URL and quoting what the server
 actually sent.
 
-This is intentionally **not** meta-schema validation. docmeta compiles [four
-dialects](#dialects), and how strict a schema is remains its author's business:
-a sparse but genuine schema such as `{"type": "object"}` is accepted. The check
-targets one failure — a non-schema served as one.
+This is intentionally **not** meta-schema validation. Four [dialects](#dialects)
+are compiled, and how strict a schema is remains its author's business. A sparse
+but genuine schema such as `{"type": "object"}` is accepted. The check targets
+one failure, which is a non-schema served as one.
 
 The keyword list is deliberately generous, because the two ways this check can
 be wrong are not equally costly. Letting an unusual payload through means it
-either fails to compile or behaves as the permissive schema it literally is;
-rejecting a real schema stops a working setup outright. So a schema whose only
+either fails to compile or behaves as the permissive schema it literally is.
+Rejecting a real schema stops a working setup outright. So a schema whose only
 root keyword is `if`/`then`, `patternProperties`, or `additionalProperties` is
-accepted — each is perfectly ordinary — while an error envelope carries none of
+accepted, because each is perfectly ordinary. An error envelope carries none of
 them.
 
 <Aside type="note">
-A consequence worth stating: a fetched `{}` is rejected. It is a legal JSON
-Schema, but over the wire nothing distinguishes a deliberate no-op contract from
-a body that lost its content, and both pass every document. A no-op schema is
-still expressible as a local file or in `$schema`-bearing form.
+One consequence is worth stating, which is that a fetched `{}` is rejected. It
+is a legal JSON Schema. But over the wire nothing distinguishes a deliberate
+no-op contract from a body that lost its content, and both pass every document.
+A no-op schema is still expressible as a local file or in `$schema`-bearing
+form.
 </Aside>
 
-The size cap counts the bytes actually received. `content-length` is advisory —
-it is absent on a chunked response and can simply be wrong — so it is never
+The size cap counts the bytes actually received. `content-length` is advisory.
+It is absent on a chunked response and can simply be wrong, so it is never
 trusted on its own.
 
 ## Dialects
 
-Every schema declares its dialect through its own `$schema` meta-schema URI.
-docmeta auto-detects the dialect from that URI and compiles the schema with the
+Every schema declares its dialect through its own `$schema` meta-schema URI. The
+dialect is auto-detected from that URI, and the schema is compiled with the
 matching validator. Schemas of different dialects can coexist in one run.
 
 | Dialect | Detected from meta-schema URI containing | Notes |
@@ -352,8 +354,8 @@ matching validator. Schemas of different dialects can coexist in one run.
 | Draft-04 | `draft-04` / `draft/4` | |
 
 A schema with a missing or unrecognized `$schema` meta-schema URI falls back to
-Draft 2020-12. Schemas are compiled in non-strict mode, so lax metadata still
-compiles. A schema that fails to compile is an error (exit 2).
+Draft 2020-12. Compilation is non-strict, so lax metadata still compiles. A
+schema that fails to compile is an error (exit 2).
 
 <Aside type="note">
 Two different `$schema` keys are at play. A schema's **own** `$schema` (its
@@ -364,7 +366,7 @@ meta-schema URI) selects the dialect, as described here. A **document's**
 
 ## Validating against the whole set
 
-When a file's resolved set contains more than one schema, docmeta validates the
-file's metadata against **every** schema in the set and reports the union of all
+When a file's resolved set contains more than one schema, the metadata is
+validated against **every** schema in the set. The report is the union of all
 violations. A file passes only when it satisfies all schemas in its set. Each
 reported error is tagged with the schema that produced it.

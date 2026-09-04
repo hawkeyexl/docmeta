@@ -34,10 +34,9 @@ a misspelled field fails loudly.
 | `revision-of` · `derived-from` | Document lineage (`prov:wasRevisionOf`, `prov:wasDerivedFrom`) |
 | `provenance` | The machine-proposal trail: which model proposed which kg fields, at what confidence |
 
-Every label field takes one string or a non-empty list without
-duplicates. The three iiRDS enums stay closed because iiRDS publishes the
-lists, which is the kind of authority the family's no-invented-enums rule
-asks for.
+Every label field takes one string or a non-empty list without duplicates. The
+three iiRDS enums stay closed because iiRDS publishes the lists. That is the
+kind of authority the family's no-invented-enums rule asks for.
 
 ## Example
 
@@ -63,13 +62,13 @@ kg:
 - **The closed block is the one exception to the family's flat-keys
   rule.** It is what lets a closed, typo-catching block coexist with an
   open page.
-- **The deeper declaration wins; the page level is the fallback.** Where
-  the block and a page-level field describe the same fact (`type`,
-  `concepts`, `applies-to`), the block's declaration wins, fact by fact,
-  and the page-level field feeds the graph when the block is silent. When
-  `kg.type` is absent, an implementer may derive it from the page's
-  `type` (`how-to` → `task`, `tutorial` → `learning`, `explanation` →
-  `concept`). An explicit block always wins.
+- **The deeper declaration wins; the page level is the fallback.** Some facts
+  appear in both the block and a page-level field: `type`, `concepts` and
+  `applies-to`. There the block's declaration wins, fact by fact, and the
+  page-level field feeds the graph when the block is silent. When `kg.type` is
+  absent, an implementer may derive it from the page's `type` (`how-to` →
+  `task`, `tutorial` → `learning`, `explanation` → `concept`). An explicit block
+  always wins.
 - **Plain-language kebab names; the RDF mapping lives in the
   descriptions.** iiRDS itself spells its properties in kebab-case
   (`has-topic-type`), so mirroring a vocabulary's internal spellings in

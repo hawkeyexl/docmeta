@@ -1,6 +1,6 @@
 # Critical User Journeys (CUJs)
 
-A CUJ is a complete, end-to-end outcome a persona must be able to reach using docmeta and its documentation. The CUJs are the organizing principle for the IA: each top-level nav section maps to one persona's set of journeys, and every page is justified by the CUJ it serves.
+A CUJ is a complete, end-to-end outcome a persona must be able to reach using docmeta and its documentation. The CUJs are the organizing principle for the IA. Each top-level nav section maps to one persona's set of journeys, and every page is justified by the CUJ it serves.
 
 See `information-architecture.md` for the page-level content set and which pages carry each CUJ.
 
@@ -10,7 +10,7 @@ See `information-architecture.md` for the page-level content set and which pages
 
 ### M1 · Stand up metadata validation for my repo
 
-Maya needs to go from zero to a working CI gate: evaluate whether docmeta fits her use case, install it, validate one file and read the output, add a config file and a schema, and land a passing CI step.
+Maya needs to go from zero to a working CI gate. She evaluates whether docmeta fits her use case, installs it, then validates one file and reads the output. She adds a config file and a schema, and lands a passing CI step.
 
 This is the anchor CUJ. It is the first thing the lead persona does, and it threads through install, config, schema, and CI in a single coherent journey.
 
@@ -18,7 +18,7 @@ On an existing docset the journey does not end at a green gate: the pages that p
 
 ### M2 · Tighten the standard without breaking the build
 
-Maya wants to add a new required field (or make an existing optional field required) without immediately failing every existing doc that doesn't have it yet. She needs to: add the field in an incremental way, understand how to stage the rollout across a large repo, and ratchet up strictness over time.
+Maya wants to add a new required field, or make an existing optional field required. She needs to do it without immediately failing every existing doc that doesn't have it yet. So she adds the field incrementally, stages the rollout across a large repo, and ratchets up strictness over time.
 
 ### M3 · Apply different rules to different areas
 
@@ -26,7 +26,7 @@ Maya's repo has heterogeneous content: `/api` docs need a `type: api-reference` 
 
 ### M4 · Retrofit a docset that never had metadata, without breaking our data policy
 
-Maya's older pages predate the standard, so the fields her gate now requires are missing from most of them. `fill` is what closes that backlog, and it is the only command that sends her documents to a third party. She needs to know what leaves on each call, how much of each document goes, and what the cache keeps afterwards — then pin a provider she chose, or keep inference on her own hardware.
+Maya's older pages predate the standard, so the fields her gate now requires are missing from most of them. `fill` is what closes that backlog, and it is the only command that sends her documents to a third party. She needs to know what leaves on each call, how much of each document goes, and what the cache keeps afterwards. Then she pins a provider she chose, or keeps inference on her own hardware.
 
 ---
 
@@ -38,15 +38,15 @@ Devin needs working recipes for every CI system his org uses: GitHub Actions, Gi
 
 ### D2 · Govern one schema across many repos
 
-Devin wants a single canonical schema stored in a central repo and referenced by URL from every consuming repo. He needs to understand: how docmeta fetches remote `$schema` URIs, the 10-second fetch timeout, per-run caching behavior, and how to version the URL so consumers pin a stable release.
+Devin wants a single canonical schema stored in a central repo and referenced by URL from every consuming repo. He needs to understand how docmeta fetches remote `$schema` URIs, the 10-second fetch timeout, and per-run caching behavior. He also needs to know how to version the URL so consumers pin a stable release.
 
 ### D3 · Feed results into our tooling
 
-Devin needs programmatic access to validation output: `--format json` for machine-readable results, the `get` command to extract metadata values from files in scripts, and the TypeScript API for teams building tools on top of docmeta.
+Devin needs programmatic access to validation output. `--format json` gives him machine-readable results. The `get` command extracts metadata values from files in scripts, and the TypeScript API serves teams building tools on top of docmeta.
 
 ### D4 · Enforce rules that span files
 
-Per-file schema validation cannot see a dangling cross-reference, a duplicate slug, or a taxonomy drifting across the corpus. Devin needs to phrase those rules as SQL over the metadata table `docmeta query` builds — one row per file — and wire `--check` (rows are findings, exit 1) in beside the validate gate. The same journey covers feeding that table onward (`-f json`, the `--db` SQLite export) and knowing the write surface exists (a mutating statement applies by default; `--dry-run` previews; `--check` never mutates), without this page becoming the write surface's manual — the CLI reference owns the vocabulary.
+Per-file schema validation cannot see a dangling cross-reference, a duplicate slug, or a taxonomy drifting across the corpus. Devin needs to phrase those rules as SQL over the metadata table `docmeta query` builds, one row per file. He then wires `--check` in beside the validate gate, where rows are findings and the exit code is 1. The same journey covers feeding that table onward, through `-f json` and the `--db` SQLite export. It also covers knowing the write surface exists: a mutating statement applies by default, `--dry-run` previews, and `--check` never mutates. This page does not become the write surface's manual, because the CLI reference owns the vocabulary.
 
 ---
 
@@ -54,7 +54,7 @@ Per-file schema validation cannot see a dangling cross-reference, a duplicate sl
 
 ### S1 · Define our metadata standard as a schema
 
-Sara needs to encode her metadata standard as a JSON Schema: define required vs. recommended fields, specify value formats (`uri`, `date-time`, enum), and understand what the built-in OKF schema already provides so she can start from it or deviate deliberately.
+Sara needs to encode her metadata standard as a JSON Schema. That means defining required and recommended fields, and specifying value formats such as `uri`, `date-time`, and enum. She also needs to understand what the built-in OKF schema already provides, so she can start from it or deviate deliberately.
 
 ### S2 · Wire schemas to the right documents
 
@@ -70,7 +70,7 @@ Sara needs to ship a stricter version of the schema without immediately breaking
 
 ### T1 · Fix a failing metadata check fast
 
-Theo lands on the docs via a red CI check or a search. He needs: a clear map from error message to the specific field or line in his file, remediation steps for the most common failures (missing `type`, bad `date-time` format, schema not found, parse error), a way to validate locally before re-pushing, and confirmation that the fix worked.
+Theo lands on the docs via a red CI check or a search. He needs a clear map from the error message to the specific field or line in his file. He needs remediation steps for the most common failures. Those are a missing `type`, a bad `date-time` format, a schema not found, and a parse error. He also needs a way to validate locally before re-pushing, and confirmation that the fix worked.
 
 This is the highest-traffic page in the docs. Every contributor who hits a failing check arrives here. It is cross-cutting: the same page serves regardless of which persona configured docmeta.
 

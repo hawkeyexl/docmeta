@@ -42,11 +42,11 @@ anchors, `provider`, `runs` and `model` (the three legal only on `ai`
 graders), `target`, `weight`, the command family with the same guard
 rails, `options`, `severity-map`, and `skip`.
 
-`target` selects what the grader receives: `transcript` (the default, the
-whole session), `last-message` (the final assistant message), `files` (the
-files the session wrote), `artifact` (the instruction artifact itself), or
-a named file (`source: file` plus a `path` relative to the session's
-working directory).
+`target` selects what the grader receives. The options are `transcript` (the
+default, the whole session), `last-message` (the final assistant message),
+`files` (the files the session wrote), and `artifact` (the instruction artifact
+itself). It can also be a named file, with `source: file` plus a `path` relative
+to the session's working directory.
 
 ## Graders
 
@@ -96,16 +96,15 @@ metadata:
 
 ## Design decisions
 
-- **The envelope belongs to the host.** This is the one place the
-  family's flat-keys rule cannot reach: a skill's top-level frontmatter
-  belongs to the tool that runs it, and `metadata` is its extension
-  point. `metadata` stays open, so other tools' members pass untouched,
-  while entry objects are closed. The schema rejects any `eval-*` key
-  inside `metadata` other than the ones above, which gives it the same
-  protection the page side applies at its root: a misspelled key fails
-  instead of being ignored. In `proposal.1` this was a request to
-  implementers, and the implementer that followed the description
-  faithfully ended up without the guard.
+- **The envelope belongs to the host.** This is the one place the family's
+  flat-keys rule cannot reach. A skill's top-level frontmatter belongs to the
+  tool that runs it, and `metadata` is its extension point. `metadata` stays
+  open, so other tools' members pass untouched, while entry objects are closed.
+  The schema rejects any `eval-*` key inside `metadata` other than the ones
+  above. That gives it the same protection the page side applies at its root,
+  where a misspelled key fails instead of being ignored. In `proposal.1` this
+  was a request to implementers, and the implementer that followed the
+  description faithfully ended up without the guard.
 - **Ids are required on object entries.** Names derived from position
   orphan cached verdicts whenever entries move. An eval that is worth an
   object is worth a stable name.

@@ -7,9 +7,9 @@ import { Aside } from '@astrojs/starlight/components';
 
 Four built-ins describe a document to something *outside* your docs site. A
 [platform schema](/docmeta/reference/platform-schemas/) says what your generator
-will parse; a [taxonomy schema](/docmeta/reference/taxonomy-schemas/) says what
-kind of page this is; these say how the page presents itself to a social card
-renderer, a catalogue, or another publisher's build.
+will parse. A [taxonomy schema](/docmeta/reference/taxonomy-schemas/) says what
+kind of page this is. These four say how the page presents itself to a social
+card renderer, a catalogue, or another publisher's build.
 
 | Id | Speaks to | Requires |
 |---|---|---|
@@ -22,8 +22,8 @@ renderer, a catalogue, or another publisher's build.
 
 The [Open Graph protocol](https://ogp.me/) basic properties plus the `article`
 object type. This is the built-in that checks something **no build tool
-checks**: nothing fails when `og:image` is missing, the page builds and deploys
-perfectly, and then renders as a grey box everywhere it is shared.
+checks**. Nothing fails when `og:image` is missing. The page builds and deploys
+perfectly, then renders as a grey box everywhere it is shared.
 
 In HTML these live on `<meta property="…">`. docmeta reads `property` alongside
 `name`, so an ordinary HTML page needs no special handling:
@@ -49,7 +49,7 @@ In front matter they are ordinary keys, quoted because they contain a colon:
 | Property | Type | Notes |
 |---|---|---|
 | `og:title` | string | **Required.** Non-empty. |
-| `og:type` | string | **Required.** Not enumerated — the protocol allows namespaced and vendor types. |
+| `og:type` | string | **Required.** Not enumerated, because the protocol allows namespaced and vendor types. |
 | `og:url` | URI | **Required.** Absolute. A site-root path is not a canonical URL. |
 | `og:image` | URI \| array | **Required.** |
 | `og:description` | string | One or two sentences. |
@@ -67,16 +67,16 @@ In front matter they are ordinary keys, quoted because they contain a colon:
 
 <Aside type="caution" title="`en-US` is rejected, and that is the point">
 `og:locale` takes `language_TERRITORY` with an underscore. The hyphenated BCP 47
-spelling `en-US` is correct almost everywhere else in web metadata and is wrong
-here, which is exactly the class of mistake that survives review. The pattern
+spelling `en-US` is correct almost everywhere else in web metadata, and wrong
+here. That is exactly the class of mistake that survives review. The pattern
 accepts `en` and `en_US` and rejects `en-US`.
 </Aside>
 
 <Aside type="note" title="Repeated `<meta>` tags collapse">
-Open Graph allows a property to repeat — several `article:tag` tags, several
-`og:image` tags. docmeta's HTML reader keeps the last occurrence of a key, so a
-repeated property arrives as a single string. The array forms in the table are
-there for front matter, where a real list is possible.
+Open Graph allows a property to repeat, with several `article:tag` tags or
+several `og:image` tags. docmeta's HTML reader keeps the last occurrence of a
+key, so a repeated property arrives as a single string. The array forms in the
+table are there for front matter, where a real list is possible.
 </Aside>
 
 ## `dcmi:elements:1.1`
@@ -103,24 +103,24 @@ date: 2026-08
 ```
 
 `date` is the one element with a format. It is encoded as W3CDTF, which permits
-reduced precision — `2026`, `2026-08`, and `2026-08-23` are all valid, and a
-full datetime carries a timezone. `June 5th` is not.
+reduced precision, so `2026`, `2026-08`, and `2026-08-23` are all valid. A full
+datetime carries a timezone. `June 5th` is not.
 
 <Aside type="note" title="`type` is not enumerated, on purpose">
-DCMI publishes a Type Vocabulary — Collection, Dataset, Event, Image,
+DCMI publishes a Type Vocabulary (Collection, Dataset, Event, Image,
 InteractiveResource, MovingImage, PhysicalObject, Service, Software, Sound,
-StillImage, Text — but describes using it as *recommended best practice* rather
-than requiring it. Enumerating it here would reject conforming documents that
-use a different controlled vocabulary. If your repo has standardised on the DCMI
-Type Vocabulary, that is a one-property schema of your own worth writing, `$ref`-ing
-this built-in and narrowing `type`.
+StillImage, Text). It describes using that vocabulary as *recommended best
+practice* rather than requiring it. Enumerating it here would reject conforming
+documents that use a different controlled vocabulary. If your repo has
+standardised on the DCMI Type Vocabulary, write a one-property schema of your
+own. It `$ref`s this built-in and narrows `type`.
 </Aside>
 
 <Aside type="caution" title="Element names are unprefixed">
-This schema uses the bare term names the Recommendation defines — `title`,
-`creator`, `date`. Documents that use the DCMI-HTML profile spelling in
-`<meta name="DC.title">` carry a different set of keys and are not covered by
-this built-in.
+This schema uses the bare term names the Recommendation defines, such as
+`title`, `creator`, and `date`. Documents that use the DCMI-HTML profile
+spelling in `<meta name="DC.title">` carry a different set of keys and are not
+covered by this built-in.
 </Aside>
 
 ## `microsoft:learn:1.0`
@@ -167,9 +167,9 @@ articles, so `ms.topic` is checked for presence and shape only.
 ## `x:cards:1.0`
 
 The `twitter:*` meta tags that decide how a link renders when someone shares it
-on X. The companion to `ogp:article:1.0`: same `<meta>` channel, same extractor,
-and normally shipped together — which is why a site with Open Graph tags and no
-card tags is the usual half-finished state.
+on X. It is the companion to `ogp:article:1.0`, on the same `<meta>` channel and
+through the same extractor. The two normally ship together, which is why a site
+with Open Graph tags and no card tags is the usual half-finished state.
 
 ```html
 <meta name="twitter:card" content="summary_large_image" />
@@ -200,7 +200,7 @@ page carrying good Open Graph tags and no `twitter:title` is *correct*, so
 requiring one here would fail it.
 
 `twitter:card` is the exception. It has no fallback, and X will not infer a card
-type from Open Graph alone — without it no card renders at all, however complete
+type from Open Graph alone. Without it no card renders at all, however complete
 the rest of the markup is. That is the whole of what this schema insists on.
 
 The length caps are real limits rather than style advice: X truncates past them.
@@ -215,9 +215,8 @@ card rather than to a summary. No other card type triggers that rule.
 </Aside>
 
 <Aside type="note" title="Numbers arrive as strings from HTML, and as numbers from front matter">
-`twitter:player:width` and the account ids are typed `string | integer`. An HTML
-`content=` attribute is always a string, so typing them as integers alone would
-fail every real HTML page; front matter can carry a genuine number. Both
-spellings are constrained — the string form by a digits pattern, the number form
-by a minimum — so neither channel goes unchecked.
+`twitter:player:width` and the account ids are typed `string | integer`. An HTML `content=` attribute is always a string, so typing them as integers
+alone would fail every real HTML page. Front matter can carry a genuine number.
+Both spellings are constrained, the string form by a digits pattern and the
+number form by a minimum, so neither channel goes unchecked.
 </Aside>

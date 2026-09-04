@@ -6,8 +6,9 @@ description: Feed docmeta validation output into your own tooling, covering the 
 import { Tabs, TabItem, Aside, Steps, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 A gate that only passes or fails is the floor. Once docmeta is running, the same
-data behind the pass/fail decision can feed dashboards, PR bots, content
-catalogs, and custom checks, without re-parsing documents yourself.
+data behind the pass/fail decision can feed other tools. That means dashboards,
+PR bots, content catalogs, and custom checks, without re-parsing documents
+yourself.
 
 docmeta exposes its results three ways, each suited to a different integration
 style:
@@ -70,18 +71,19 @@ The fields:
 - **`results`**: one object per file: `file` (the path as docmeta saw it),
   `format` (the extractor that read it), `ok`, `schemas` (the resolved schema
   set), and `errors`.
-- **Each error**: `schema` (the schema id that produced it), `instancePath` (a
-  JSON Pointer to the field, `""` for the document root), `message`, `keyword`,
-  `subject`, `line` (1-based, when docmeta can locate it), and `col` (1-based,
-  when the format can supply one).
+- **Each error** carries `schema`, the schema id that produced it, and
+  `instancePath`, a JSON Pointer to the field, or `""` for the document root. It
+  also carries `message`, `keyword` and `subject`. Finally `line`, 1-based, when
+  docmeta can locate it, and `col`, 1-based, when the format can supply one.
 
 <Aside type="tip" title="Key on keyword, not on message">
 `message` is prose docmeta gets from Ajv, and an Ajv release can reword it.
-`keyword` — the JSON Schema keyword that failed (`required`, `format`,
-`pattern`, `type`, …) — is stable, as is `subject`, the identifier within it:
-the missing property, the additional property, the format name, the expected
-type. A script that counts "how many pages are missing `owner`" should match
-`keyword === "required" && subject === "owner"` rather than parse English.
+`keyword` is stable, and so is `subject`. `keyword` is the JSON Schema keyword
+that failed, such as `required`, `format`, `pattern` or `type`. `subject` is the
+identifier within it: the missing property, the additional property, the format
+name, the expected type. A script that counts "how many pages are missing
+`owner`" should match `keyword === "required" && subject === "owner"` rather
+than parse English.
 
 `subject` is omitted for keywords whose parameter is a schema-authored value
 rather than an identifier, such as `pattern`'s regex or `minLength`'s number.
@@ -92,10 +94,10 @@ be read, `schema` when a schema set could not be resolved. Both keep
 
 <Aside type="note" title="line and col are both optional">
 `line` appears only when docmeta can map an error back to a source position, so
-parse it as optional. `col` is optional in a second way as well: only the `html`
-and `xml` extractors resolve a column today, and even there it is omitted for a
+parse it as optional. `col` is optional in a second way as well. Only the `html`
+and `xml` extractors resolve a column today. Even there it is omitted for a
 `required` violation, which reports the parent object and names the missing
-property — there is no column for something absent. Frontmatter formats
+property. There is no column for something absent. Frontmatter formats
 (Markdown, MDX, AsciiDoc, reStructuredText) give a line and no column at all.
 Check for each field rather than assuming it exists.
 </Aside>
@@ -123,10 +125,11 @@ npx -y docmeta validate "docs/**/*.md" --format json | jq '.summary'
 ```
 
 <Aside type="tip" title="Preserve the exit code through a pipe">
-Piping into `jq` replaces docmeta's exit code with `jq`'s. When you need both the
-parsed output and the gate to fail on validation errors, write the report to a
-file with `tee` first, as `docmeta validate ... --format json | tee report.json`,
-then run `jq` over `report.json` in a later step. See the
+Piping into `jq` replaces docmeta's exit code with `jq`'s. You may need both the
+parsed output and the gate to fail on validation errors. Then write the report
+to a file with `tee` first, as
+`docmeta validate ... --format json | tee report.json`. Then run `jq` over
+`report.json` in a later step. See the
 [CI recipes](/docmeta/ci/recipes/) for capturing JSON as a build artifact.
 </Aside>
 
@@ -137,9 +140,9 @@ then run `jq` over `report.json` in a later step. See the
 
 When a script needs metadata *values* rather than a validation verdict (say, to
 build an index of every page's `title` and `type`), use `docmeta get`. It reads
-the named fields from each file and prints them, sharing `validate`'s input
-handling (positional paths, directories, globs, `-` for stdin with `--as`, and
-`paths:` from config as a fallback).
+the named fields from each file and prints them. It shares `validate`'s input
+handling: positional paths, directories, globs, `-` for stdin with `--as`, and
+`paths:` from config as a fallback.
 
 Pass the fields as a single comma-separated argument, then the targets:
 
@@ -219,8 +222,8 @@ does **not** accept `--format github`, `sarif`, or `junit`: `get` reports
 [`fill`](/docmeta/reference/cli/#github-annotations); `sarif` and `junit` are
 `validate`-only. Passing an unsupported format is a usage error and exits `2`.
 
-Add `-q` / `--quiet` to drop the files where every requested field is unset — a
-file with any of them set still prints, `(unset)` included.
+Add `-q` or `--quiet` to drop the files where every requested field is unset.
+A file with any of them set still prints, `(unset)` included.
 </Aside>
 
 </TabItem>
@@ -228,11 +231,11 @@ file with any of them set still prints, `(unset)` included.
 
 ## The TypeScript API
 
-For tools built on top of docmeta (a custom reporter, a bespoke gate, a script
-that validates and then acts on the results), call the command cores directly
-instead of shelling out. docmeta ships a programmatic entry point that exports
-the same cores the CLI is built on, so you get structured results without
-spawning a process or parsing stdout.
+Some tools are built on top of docmeta. Think of a custom reporter, a bespoke
+gate, or a script that validates and then acts on the results. For those, call
+the command cores directly instead of shelling out. docmeta ships a programmatic
+entry point that exports the same cores the CLI is built on. You get structured
+results without spawning a process or parsing stdout.
 
 The most common call is `runValidate`, which runs the full validation pipeline
 and returns the same `{ results, summary }` structure that backs `--format

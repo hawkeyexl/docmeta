@@ -1,10 +1,11 @@
 # Releasing
 
-Releases are automated by [semantic-release](https://semantic-release.gitbook.io/)
-via [`.github/workflows/release.yml`](../../.github/workflows/release.yml). On a
-push to a release branch it reads the conventional commits since the last tag,
-computes the next version, updates `CHANGELOG.md`/`package.json`, tags, creates a
-GitHub Release, and publishes to npm.
+Releases are automated by
+[semantic-release](https://semantic-release.gitbook.io/) via
+[`.github/workflows/release.yml`](../../.github/workflows/release.yml). On a
+push to a release branch it reads the conventional commits since the last tag
+and computes the next version. It then updates `CHANGELOG.md`/`package.json`,
+tags, creates a GitHub Release, and publishes to npm.
 
 | Branch    | npm dist-tag            |
 | --------- | ----------------------- |
@@ -12,10 +13,10 @@ GitHub Release, and publishes to npm.
 | `next`    | `next` (prerelease)     |
 | `feat/**` | per-branch prerelease   |
 
-You don't run anything by hand for a normal release — merge a PR with the right
-commit types and the workflow does the rest. The two pieces below are **one-time
-infrastructure setup** that's already configured; this page documents it so it
-can be recreated or audited.
+You don't run anything by hand for a normal release. Merge a PR with the right
+commit types, and the workflow does the rest. The two pieces below are
+**one-time infrastructure setup** that's already configured. This page documents
+it so it can be recreated or audited.
 
 ## npm publishing: OIDC trusted publishing
 
@@ -30,11 +31,12 @@ Configured on npmjs.com under the package's **Settings → Trusted Publisher**:
 - Repository: `hawkeyexl/docmeta`
 - Workflow filename: **`release.yml`** (exact, case-sensitive)
 
-Requirements baked into the workflow: a GitHub-hosted runner, npm CLI ≥ 11.5.1
-(Node 24 bundles a new enough npm), `@semantic-release/npm` ≥ 13, and
-`repository.url` in `package.json` matching the repo. Do **not** add
-`registry-url` to `setup-node` or any `NPM_TOKEN`/`NODE_AUTH_TOKEN`: a written-out
-auth token in `.npmrc` shadows OIDC and breaks the publish.
+The workflow bakes in four requirements. It needs a GitHub-hosted runner, npm
+CLI ≥ 11.5.1 (Node 24 bundles a new enough npm), and `@semantic-release/npm`
+≥ 13. It also needs `repository.url` in `package.json` to match the repo.
+Do **not** add `registry-url` to `setup-node`, or any
+`NPM_TOKEN`/`NODE_AUTH_TOKEN`. A written-out auth token in `.npmrc` shadows OIDC
+and breaks the publish.
 
 ## The moving major tag
 
@@ -55,8 +57,8 @@ It tags `v$version` rather than `HEAD`, because semantic-release commits the
 changelog and version bump itself, so `HEAD` is not necessarily what it tagged.
 
 It force-pushes with the GitHub App token explicitly, because the `checkout`
-step sets `persist-credentials: false` — the job holds `contents: write`, but no
-credential sits in git's config, and the App is also the only actor allowed to
+step sets `persist-credentials: false`. The job holds `contents: write`, but no
+credential sits in git's config. The App is also the only actor allowed to
 bypass the `main` ruleset.
 
 Consumers wanting an immutable reference pin `@v4.1.0` instead; that is the usual
@@ -72,8 +74,8 @@ a **GitHub App** that is the sole bypass actor on the ruleset.
 ### One-time setup
 
 1. **Create a GitHub App** (Settings → Developer settings → GitHub Apps → New).
-   - Name: e.g. `docmeta-release-bot`.
-   - Homepage URL: the repo URL (any valid URL works).
+   - Name it something like `docmeta-release-bot`.
+   - Set the homepage URL to the repo URL (any valid URL works).
    - Uncheck **Webhook → Active**.
    - **Repository permissions:**
      - Contents: **Read and write** (release commit, tag, GitHub Release)
@@ -88,13 +90,14 @@ a **GitHub App** that is the sole bypass actor on the ruleset.
    (App settings → Install App → choose the repo).
 
 4. **Add repository secrets** (repo Settings → Secrets and variables → Actions):
-   - `RELEASE_APP_ID` — the App ID from step 2.
-   - `RELEASE_APP_PRIVATE_KEY` — the full contents of the `.pem` private key.
+   - `RELEASE_APP_ID` holds the App ID from step 2.
+   - `RELEASE_APP_PRIVATE_KEY` holds the full contents of the `.pem` private
+     key.
 
-5. **Add the App as a bypass actor** on the `main` ruleset
-   (repo Settings → Rules → Rulesets → `main` → **Bypass list** → Add bypass →
-   select the App). Set its bypass mode to **Always** — the release pushes
-   directly, not through a PR.
+5. **Add the App as a bypass actor** on the `main` ruleset (repo Settings →
+   Rules → Rulesets → `main` → **Bypass list** → Add bypass → select the App).
+   Set its bypass mode to **Always**, because the release pushes directly rather
+   than through a PR.
 
    Equivalent via the API (replace `<APP_ID>`):
 
@@ -113,9 +116,12 @@ a **GitHub App** that is the sole bypass actor on the ruleset.
    value as `RELEASE_APP_ID`).
 
 The workflow mints a short-lived token from this App
-(`actions/create-github-app-token`) and hands it to semantic-release as
+(`actions/create-github-app-token`). It hands that token to semantic-release as
 `GITHUB_TOKEN`, so the release commit is pushed by the App and bypasses the
 ruleset. (The token controls which actor authenticates the push, not the git
 `author`/`committer` fields, which semantic-release sets independently.) The
-release commit message ends with `[skip ci]`, so it doesn't re-trigger the
-workflow.
+release job skips its own release commit with a job-level `if:` that matches the
+`chore(release):` subject prefix, so it doesn't re-trigger. It deliberately does
+not use `[skip ci]`. GitHub honours that marker anywhere in a pushed message,
+and a squash merge concatenates a branch's commits. Prerelease markers therefore
+rode into `main` and skipped Release and Docs both.

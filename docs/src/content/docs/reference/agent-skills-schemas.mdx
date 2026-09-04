@@ -1,6 +1,6 @@
 ---
 title: Agent Skills schemas
-description: The two built-in schemas for SKILL.md front matter — the portable Agent Skills standard and the Claude Code superset — with every field, why one is strict, and which to run when.
+description: The two built-in schemas for SKILL.md front matter, the portable Agent Skills standard and the Claude Code superset, with every field, why one is strict, and which to run when.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -38,7 +38,7 @@ allowed-tools, compatibility, description, license, metadata, name
 ```
 
 A permissive schema would report that file as clean. So the strictness is not an
-editorial opinion — it is the same rule the upload enforces, moved earlier.
+editorial opinion. It is the same rule the upload enforces, moved earlier.
 
 <Aside type="caution" title="Do not point the spec schema at your local skills">
 A working Claude Code skill that uses `disable-model-invocation`, `paths` or
@@ -64,8 +64,8 @@ The whole standard. Six fields, two required.
 Two rules deserve a note.
 
 **`metadata` takes strings, and only strings.** The standard's own example
-quotes it — `version: "1.0"` — because unquoted, YAML makes that a float and the
-map is defined as string to string:
+quotes the value, as in `version: "1.0"`. Unquoted, YAML reads that as a float,
+and the map is defined as string to string:
 
 ```yaml
 metadata:
@@ -74,16 +74,17 @@ metadata:
 ```
 
 **`name` also has to match the directory.** The standard requires the `name`
-field to equal the name of the folder holding the `SKILL.md`. That is a fact
-about the path rather than about the front matter, so no metadata check can see
-it — docmeta validates the character rules and the length, and the directory
+field to equal the name of the folder that holds the `SKILL.md` file. That is a
+fact about the path rather than about the front matter, so no metadata check can
+see it. docmeta validates the character rules and the length, and the directory
 match is on you.
 
 ## `anthropic:claude-skill:2.1`
 
-Everything above, plus the fourteen fields Claude Code adds. It requires nothing,
-because Claude Code marks every field optional: a `SKILL.md` with no front matter
-at all loads, taking its description from the first paragraph of the body.
+Everything above, plus the fourteen fields Claude Code adds. It requires
+nothing, because Claude Code marks every field optional. A `SKILL.md` with no
+front matter at all still loads, and takes its description from the first
+paragraph of the body.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -118,11 +119,11 @@ one is an error:
     /effort  must be equal to one of the allowed values  (line 4)  [anthropic:claude-skill:2.1]
 ```
 
-`model` is not enumerated. Its accepted values move with the product and are
-narrowed further by an organisation's `availableModels` allowlist, so a list
-written here would reject skills that work. This is the same rule the
-[vocabulary schemas](/docmeta/reference/metadata-vocabularies/) follow for
-`ms.topic`: a set assembled from examples fails correct documents.
+`model` is not enumerated. Its accepted values move with the product, and an
+organisation's `availableModels` allowlist narrows them further. A list written
+here would reject skills that work. This is the same rule the [vocabulary
+schemas](/docmeta/reference/metadata-vocabularies/) follow for `ms.topic`: a set
+assembled from examples fails correct documents.
 
 `name` is not constrained either, and that one is the division of labour between
 the two schemas. `name: Fancy Review` is a legal Claude Code display label and an
@@ -132,8 +133,8 @@ out.
 ### Booleans have six spellings, and YAML only understands two
 
 Claude Code accepts `yes`, `no`, `on`, `off`, `1` and `0` in any letter case, as
-well as `true` and `false`. A YAML 1.2 parser — which is what reads your front
-matter — resolves only `true` and `false` to booleans. Everything else arrives as
+well as `true` and `false`. A YAML 1.2 parser, which is what reads your front
+matter, resolves only `true` and `false` to booleans. Everything else arrives as
 a string or an integer:
 
 ```yaml
@@ -143,9 +144,9 @@ user-invocable: TRUE            # the boolean true
 ```
 
 All three work in Claude Code, so the schema accepts all three types rather than
-`boolean` alone: a `pattern` that constrains only the string form, a `0`–`1`
-range that constrains only the integer one, and booleans left alone. A word that
-is not one of the spellings still fails:
+`boolean` alone. A `pattern` constrains only the string form, a `0`–`1` range
+constrains only the integer one, and booleans are left as they are. A word that is
+not one of the spellings still fails:
 
 ```text
 ✗ .claude/skills/audit/SKILL.md
@@ -155,7 +156,7 @@ is not one of the spellings still fails:
 ## Validate both at once
 
 Nothing stops you stacking them, and for a skill that has to work locally *and*
-publish, that is the right run — each failure is attributed to the schema that
+publish, that is the right run. Each failure is attributed to the schema that
 raised it:
 
 ```bash
@@ -170,9 +171,9 @@ things to remove before you package.
 
 ## The other file in `.claude/`
 
-A subagent definition is a different contract, not a third skill schema: it
-lives under `.claude/agents/`, it *requires* `name` and `description`, and it
-spells its tool grants `tools` and `disallowedTools` rather than
-`allowed-tools` and `disallowed-tools`. Validating one against a `SKILL.md`
-schema passes it while every key it set does nothing. See [Claude Code subagent
+A subagent definition is a different contract, not a third skill schema. It
+lives under `.claude/agents/`, and it *requires* `name` and `description`. It
+spells its tool grants `tools` and `disallowedTools` rather than `allowed-tools`
+and `disallowed-tools`. Validating one against a `SKILL.md` schema passes it
+while every key it set does nothing. See [Claude Code subagent
 schema](/docmeta/reference/claude-subagent-schema/).

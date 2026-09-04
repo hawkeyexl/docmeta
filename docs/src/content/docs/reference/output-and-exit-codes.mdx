@@ -42,7 +42,7 @@ is the total number of error lines across all files. Pass
 failures and the summary.
 
 When [`.gitignore`](/docmeta/reference/cli/#gitignore) removed candidate
-documents from the walk, the line says so too, so a gate that got quieter is
+documents from the walk, the line says so too. A gate that got quieter is
 visible rather than inferred from a count that shrank:
 
 ```
@@ -104,15 +104,15 @@ Machine-readable. Prints a single JSON object with a run `summary` and a
 | `results[].baselined` | number | Findings a baseline forgave for this file. Omitted when none were. |
 | `results[].errors[].schema` | string | Schema that produced the error. |
 | `results[].errors[].instancePath` | string | JSON Pointer to the field (`""` for the root). |
-| `results[].errors[].message` | string | Human-readable message. Generated prose — an Ajv upgrade may reword it, so match on `keyword` instead. |
+| `results[].errors[].message` | string | Human-readable message. This is generated prose, and an Ajv upgrade may reword it, so match on `keyword` instead. |
 | `results[].errors[].keyword` | string | The JSON Schema keyword that failed (`required`, `format`, `pattern`, `type`, …), or `parse` / `schema` for docmeta's own errors. |
-| `results[].errors[].subject` | string | The identifier within that keyword: the missing property, the additional property, the format name, the expected type. Omitted for keywords whose parameter is a schema-authored *value*, such as `pattern`'s regex or `minLength`'s number. |
+| `results[].errors[].subject` | string | The identifier within that keyword, which is the missing property, the additional property, the format name, or the expected type. Omitted for keywords whose parameter is a schema-authored *value*, such as `pattern`'s regex or `minLength`'s number. |
 | `results[].errors[].line` | number | 1-based source line. Omitted when unknown. |
-| `results[].errors[].col` | number | 1-based column. Supplied by the `html` and `xml` extractors — the `content=` attribute of a `<meta>` tag, the value of an XML attribute. Omitted for every other format, and for a `required` violation in any format: that error reports the parent object, and a missing property has no column. |
+| `results[].errors[].col` | number | 1-based column. Supplied by the `html` and `xml` extractors, from the `content=` attribute of a `<meta>` tag or the value of an XML attribute. Omitted for every other format, and for a `required` violation in any format. That error reports the parent object, and a missing property has no column. |
 
 `keyword` and `subject` are the machine-stable half of a violation's identity.
 They are what a script should key on when it needs to recognize "the same
-violation" across runs or across docmeta versions; `message` is for humans.
+violation" across runs or across docmeta versions. `message` is for humans.
 
 </TabItem>
 <TabItem label="github">
@@ -131,19 +131,19 @@ Each line has the form:
 ::error file=<file>,line=<N>,col=<N>::[<schema-id>] <field> <message>
 ```
 
-`line` and `col` are included only when known — `col` today means an `html` or
-`xml` document and a violation other than `required`. `<field>` is the field path, or
-`(root)` for a whole-document error.
+`line` and `col` are included only when known. `col` today means an `html` or
+`xml` document and a violation other than `required`. `<field>` is the field
+path, or `(root)` for a whole-document error.
 
-The message is escaped the way GitHub's workflow-command protocol requires:
-`%` becomes `%25`, a carriage return becomes `%0D`, and a newline becomes
-`%0A`. GitHub decodes them again when it renders the annotation, so you see the
+The message is escaped the way GitHub's workflow-command protocol requires: `%`
+becomes `%25`, a carriage return becomes `%0D`, and a newline becomes `%0A`.
+GitHub decodes them again when it renders the annotation, so you see the
 original characters on the pull request. The escaping matters because the
-protocol is line-oriented — an unescaped newline would end the command early and
-spill the rest of the message into the log as plain text — and because a schema
-`pattern` is quoted into the message verbatim, so a regex containing `%` reaches
-the annotation. Only those three are encoded; `,` and `:` are special in the
-`file=` / `line=` properties, not in the message.
+protocol is line-oriented. An unescaped newline would end the command early and
+spill the rest of the message into the log as plain text. It also matters
+because a schema `pattern` is quoted into the message verbatim. A regex
+containing `%` then reaches the annotation. Only those three are encoded; `,`
+and `:` are special in the `file=` / `line=` properties, not in the message.
 
 </TabItem>
 <TabItem label="sarif">
@@ -152,8 +152,8 @@ the annotation. Only those three are encoded; `,` and `:` are special in the
 the interchange format GitHub code scanning, GitLab, and Azure DevOps ingest
 directly. Where `github` annotations vanish with the job log, SARIF findings
 become **tracked alerts** with state across commits. A clean run still prints a
-complete envelope with an empty `results` array — never an empty file, which
-`upload-sarif` rejects.
+complete envelope with an empty `results` array. It is never an empty file,
+which `upload-sarif` rejects.
 
 ```json
 {
@@ -205,12 +205,12 @@ complete envelope with an empty `results` array — never an empty file, which
 | `runs[].tool.driver.name` | string | Always `docmeta`. |
 | `runs[].tool.driver.version` | string | The docmeta version that produced the log. |
 | `runs[].tool.driver.rules` | object[] | Only the rules this run actually **hit**, deduplicated. docmeta does not enumerate every keyword of every schema. |
-| `results[].ruleId` | string | `<schema-ref>/<keyword>` — for example `google:okf:0.1/required`. Built from `keyword`, never from the message, so an Ajv rewording cannot close and reopen every historical alert. |
+| `results[].ruleId` | string | `<schema-ref>/<keyword>`, for example `google:okf:0.1/required`. Built from `keyword`, never from the message, so an Ajv rewording cannot close and reopen every historical alert. |
 | `results[].level` | string | Always `error`. See [severity](#severity-is-always-error) below. |
 | `results[].message.text` | string | The field path (or `(root)`) followed by the violation message. |
 | `results[].locations[].physicalLocation.artifactLocation.uri` | string | The file, **relative to the repository root**. See [paths](#sarif-paths-are-repository-root-relative). |
-| `results[].locations[].physicalLocation.region.startLine` | number | 1-based source line. The whole `region` is **omitted** when no line is known — SARIF requires `startLine >= 1`, so `0` would be invalid and `1` would silently mislocate the finding at the top of the file. A location with only an `artifactLocation` renders as a file-level alert, which is true. No `startColumn` is ever emitted, even for a finding whose JSON `col` is set — the SARIF region stays line-only for now. |
-| `results[].partialFingerprints` | object | `{"docmetaViolation/v1": "<fingerprint>"}` — the same fingerprint the [baseline](/docmeta/reference/cli/#baselines) records. |
+| `results[].locations[].physicalLocation.region.startLine` | number | 1-based source line. The whole `region` is **omitted** when no line is known. SARIF requires `startLine >= 1`. A `0` would be invalid, and a `1` would silently mislocate the finding at the top of the file. A location with only an `artifactLocation` renders as a file-level alert, which is true. No `startColumn` is ever emitted, even for a finding whose JSON `col` is set. The SARIF region stays line-only for now. |
+| `results[].partialFingerprints` | object | `{"docmetaViolation/v1": "<fingerprint>"}`, the same fingerprint the [baseline](/docmeta/reference/cli/#baselines) records. |
 
 docmeta's own failures do not get a rule id built from `(parse)`. A document
 whose metadata block could not be read reports `docmeta/parse-error`, and one
@@ -223,27 +223,26 @@ consumer can resolve, and a location pointing at one would be dropped anyway.
 #### SARIF paths are repository-root-relative
 
 GitHub resolves `artifactLocation.uri` **against the repository root**, and
-silently drops results that do not resolve — so a wrong path means the upload
-*succeeds* with zero alerts, which reads as a clean scan. docmeta therefore
-rebases every path onto the nearest git repository root, so
+silently drops results that do not resolve. A wrong path means the upload
+*succeeds* with zero alerts, which reads as a clean scan. So docmeta rebases
+every path onto the nearest git repository root.
 `docmeta validate api.md -f sarif` run from inside `docs/` reports
 `docs/api.md`, exactly as a run from the repository root does.
 
 When there is no git repository above the working directory, paths stay relative
 to that directory and docmeta says so on stderr. A file **outside** the
-repository — validated through a `../` path — has no repository-relative name at
-all, so its findings are omitted and the count is reported on stderr rather than
+repository, validated through a `../` path, has no repository-relative name at
+all. Its findings are omitted, and the count is reported on stderr rather than
 quietly missing from the log.
 
 #### The fingerprint does not include the path
 
 `partialFingerprints` carries the [baseline](/docmeta/reference/cli/#baselines)
-fingerprint verbatim, which deliberately excludes the file path — the path sits
+fingerprint verbatim, which deliberately excludes the file path. The path sits
 beside it in `artifactLocation.uri`, exactly as the baseline keeps it as the
 entry key. So **two files with the same violation share a fingerprint.** They
-still track as separate alerts, because GitHub derives alert identity from
-fingerprint *plus* rule *plus* location. Do not use the fingerprint alone as an
-alert key.
+still track as separate alerts. GitHub derives alert identity from fingerprint
+*plus* rule *plus* location. Do not use the fingerprint alone as an alert key.
 
 #### Severity is always `error`
 
@@ -256,15 +255,15 @@ invented, and it is tracked as
 The SARIF envelope's own `$schema` names the SARIF meta-schema. It has nothing
 to do with the document-level [`$schema`
 directive](/docmeta/reference/schema-resolution/) docmeta reads from front
-matter, which is easy to misread when you are debugging schema resolution *and*
+matter. That is easy to misread when you are debugging schema resolution *and*
 looking at a SARIF file.
 </Aside>
 
 <Aside type="caution" title="GitHub caps SARIF uploads at 10 MB">
 Roughly 15,000 results reach that limit. A repository with that many findings
-wants a [baseline](/docmeta/reference/cli/#baselines) reporting only new ones —
-docmeta never silently truncates a log, because a short log is worse than a
-rejected upload.
+wants a [baseline](/docmeta/reference/cli/#baselines) reporting only new ones. A
+log is never silently truncated, because a short log is worse than a rejected
+upload.
 </Aside>
 
 </TabItem>
@@ -288,22 +287,22 @@ JUnit XML, which Jenkins, GitLab, CircleCI, and Azure render natively in their
 | Attribute | On | Description |
 |---|---|---|
 | `name` | `testsuites`, `testsuite` | Always `docmeta`. |
-| `tests` | `testsuites`, `testsuite` | Files checked — **one test per file**, not per violation. |
+| `tests` | `testsuites`, `testsuite` | Files checked, as **one test per file** rather than per violation. |
 | `failures` | `testsuites`, `testsuite` | Files with at least one violation. |
 | `errors` | `testsuites`, `testsuite` | Always `0`. Every violation is a `<failure>`; `errors` is reserved for a test that could not run, which has no analogue here. |
-| `name` | `testcase` | The file path, as docmeta reported it. Not rebased onto the repository root — unlike SARIF, nothing resolves it. |
+| `name` | `testcase` | The file path, as docmeta reported it. Not rebased onto the repository root. Unlike SARIF, nothing resolves it. |
 | `classname` | `testcase` | Always `docmeta.validate`. |
 | `type` | `failure` | The same rule id SARIF uses: `<schema-ref>/<keyword>`. |
 | `message` | `failure` | The field path (or `(root)`), the violation message, and `(line N)` when the line is known. |
 
-One test per **file** is deliberate: the tab then reads "2 tests, 1 failed" and
+One test per **file** is deliberate. The tab then reads "2 tests, 1 failed" and
 matches `2 files checked, 1 failed`. One test per *violation* would make the
 test count rise and fall with document quality, which reads as a suite someone
 broke.
 
 <Aside type="note" title="There is no authoritative JUnit schema">
-Jenkins, GitLab, and Azure each accept a different superset. docmeta emits only
-the attributes all of them honor, and avoids the contested ones — `time`, which
+Jenkins, GitLab, and Azure each accept a different superset. Only the attributes
+all of them honor are emitted. The contested ones are avoided: `time`, which
 would be meaningless here, `system-out`, and nested suites.
 </Aside>
 
@@ -311,11 +310,11 @@ would be meaningless here, `system-out`, and nested suites.
 </Tabs>
 
 <Aside type="note">
-A file that cannot be parsed (such as malformed YAML, TOML, or JSON frontmatter)
-becomes a failing result with a single error whose `schema` is `(parse)` and
-whose `schemas` set is empty. The rest of the run continues. Its `keyword` is
-`parse`; a file whose *schema set* could not be resolved uses the same `(parse)`
-label with `keyword` set to `schema`.
+A file that cannot be parsed becomes a failing result with a single error. That
+error's `schema` is `(parse)`, and its `schemas` set is empty. Malformed YAML,
+TOML, or JSON frontmatter all qualify. The rest of the run continues. Its
+`keyword` is `parse`; a file whose *schema set* could not be resolved uses the
+same `(parse)` label with `keyword` set to `schema`.
 </Aside>
 
 ### Baseline fields
@@ -339,7 +338,7 @@ governed the run.
 |---|---|
 | `0` | All files passed (or nothing failed). |
 | `1` | One or more files failed validation. |
-| `2` | Operational or usage error — for example, an **unknown flag**, an **unknown subcommand**, a **missing required argument**, no inputs, **no files matched**, an unknown `--format`, a missing config file, a missing `--baseline` file, or an unresolvable schema. |
+| `2` | Operational or usage error. That covers an **unknown flag**, an **unknown subcommand**, or a **missing required argument**. It also covers no inputs, **no files matched**, an unknown `--format`, a missing config file, a missing `--baseline` file, and an unresolvable schema. |
 
 The first three are the parser's own rejections; the rest are a `DocmetaError`.
 Both are exit `2`, because both mean the invocation was wrong rather than the
@@ -359,9 +358,9 @@ schema.
   subtracted from `summary.errors` and counted in `results[].baselined`, so exit
   `0` here means "nothing new", not "nothing wrong". The
   `N baselined findings` line reports the outstanding debt on every run.
-- A finding the baseline **does not record** fails the run as usual (exit `1`),
-  including every finding in a file that has no entry at all — a renamed
-  document, for instance.
+- A finding the baseline **does not record** fails the run as usual (exit `1`).
+  That includes every finding in a file that has no entry at all, such as a
+  renamed document.
 - A recorded fingerprint that **no longer occurs** is reported and never fails.
 - `--write-baseline` records what it saw and exits `0`, so it always succeeds
   regardless of how many violations there were.
@@ -375,23 +374,23 @@ both covered by `--allow-empty` (or config `allowEmpty: true`):
 | Situation | Message |
 |---|---|
 | A named path that does not exist, even if other inputs matched. | `File not found: "docs/typo.md".` |
-| Nothing matched — a glob with no hits, a missing directory, or an `--ext`/`--exclude` filter that removed everything. | `No files matched. Patterns tried: …` |
+| Nothing matched, whether a glob with no hits, a missing directory, or an `--ext`/`--exclude` filter that removed everything. | `No files matched. Patterns tried: …` |
 
-Exit 2 rather than 1 is deliberate: nothing was validated, so no verdict exists.
-`1` sends you looking for a bad document; `2` sends you to look at the
+Exit 2 rather than 1 is deliberate, because nothing was validated, so no verdict
+exists. `1` sends you looking for a bad document; `2` sends you to look at the
 invocation, which is where the problem is. Reading stdin with `-` is one input,
-so a piped document — even an empty one — still produces a verdict.
+so a piped document still produces a verdict, even an empty one.
 
 ### Exit 2 when a fetched schema is not a schema
 
 A schema reference that is a URL is checked before it is compiled, because a
-`200 OK` response is not proof that the body is a schema. These are exit 2 —
+`200 OK` response is not proof that the body is a schema. These are exit 2.
 docmeta could not establish the contract, so it produces no verdict rather than
 a green one:
 
 | Situation | Message |
 |---|---|
-| The body parsed, but constrains nothing — most often a JSON error envelope served with `200 OK`. | `Schema "<url>" does not look like a JSON Schema: it carries no JSON Schema keyword, so it constrains nothing and every document would pass it. The server returned: {"error":"not found","requestId":"abc123"}` |
+| The body parsed, but constrains nothing. Most often a JSON error envelope served with `200 OK`. | `Schema "<url>" does not look like a JSON Schema: it carries no JSON Schema keyword, so it constrains nothing and every document would pass it. The server returned: {"error":"not found","requestId":"abc123"}` |
 | The body exceeds the 5 MB response limit. | `Schema "<url>" is too large: the response exceeds the 5242880-byte limit.` |
 | The request, or the response body, did not finish inside the timeout. | `Failed to fetch schema "<url>": timed out after 10000ms.` |
 | A non-2xx status. | `Failed to fetch schema "<url>": HTTP 404.` |
@@ -400,7 +399,7 @@ a green one:
 The first row is the one worth internalizing: without that check the run exits
 **0**, because a schema with no constraints passes every document. Exiting 2
 means a broken gate announces itself instead of reporting success. The error
-quotes what the server actually returned, so it is immediately clear whether you
+quotes what the server actually returned. It is immediately clear whether you
 are looking at your schema host or at a proxy in front of it. See [what docmeta
 requires of a fetched
 schema](/docmeta/reference/schema-resolution/#what-docmeta-requires-of-a-fetched-schema).
@@ -410,7 +409,7 @@ schema](/docmeta/reference/schema-resolution/#what-docmeta-requires-of-a-fetched
 | Command | Exits 1 when |
 |---|---|
 | `validate` | One or more files failed validation. |
-| `get` | One or more files had a metadata block that could not be read — frontmatter that is not valid YAML, or that parses to something other than a mapping. A requested field that is merely *absent* is reported as unset and is **not** a failure. An absent **file** is different again: that is an operational error and exits 2. |
+| `get` | One or more files had a metadata block that could not be read. That means frontmatter that is not valid YAML, or that parses to something other than a mapping. A requested field that is merely *absent* is reported as unset and is **not** a failure. An absent **file** is different again: that is an operational error and exits 2. |
 | [`fill`](/docmeta/reference/cli/#fill) | A property the schema lists as `required` could not be filled confidently, or a file errored. Skipped **optional** properties leave the exit code at `0`. |
 | `schemas` | Never. |
 
@@ -419,10 +418,12 @@ documents still need work, not that docmeta malfunctioned.
 
 ## stdout vs stderr
 
-- **Primary output**: the rendered report in any format, goes to **stdout**.
-- **Diagnostics**: operational errors that cause exit 2, go to **stderr**,
-  prefixed with `docmeta: `. Usage errors the argument parser rejects also go to
-  stderr, prefixed with `error: ` and followed by `(add --help for usage)`.
+- **Primary output** is the rendered report in any format, and goes to
+  **stdout**.
+- **Diagnostics** are operational errors that cause exit 2, and go to
+  **stderr**, prefixed with `docmeta: `. Usage errors the argument parser
+  rejects also go to stderr, prefixed with `error: ` and followed by
+  `(add --help for usage)`.
 
 This separation lets you capture machine-readable output cleanly:
 
@@ -443,10 +444,10 @@ destination:
 | stdout is a TTY and none of the above | on |
 
 The `json`, `github`, `sarif`, and `junit` formats are never colored, whatever
-the conditions above say — a machine format that changed shape with the terminal
+the conditions above say. A machine format that changed shape with the terminal
 would not be a machine format.
 
-For the same reason, those four own stdout completely: the "Using
+For the same reason, those four own stdout completely. The "Using
 docmeta.config.yaml" notice that `pretty` prints to stdout goes to **stderr**
 instead, so the report stays parseable.
 

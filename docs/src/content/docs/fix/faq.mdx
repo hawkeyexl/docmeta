@@ -7,33 +7,34 @@ import { Aside, LinkCard } from '@astrojs/starlight/components';
 
 Quick answers to the questions contributors ask most when a docmeta check goes
 red. Each one links to the page that covers it in full. If you're staring at a
-failing check right now, start with [Fix a failing check](/docmeta/fix/); this page is
-for the "wait, but what about…" follow-ups.
+failing check right now, start with [Fix a failing check](/docmeta/fix/). This
+page is for the "wait, but what about…" follow-ups.
 
 ## What if a file has no frontmatter at all?
 
 It still fails, as long as the schema requires any field. A file with no
-frontmatter block reads as empty metadata, so a schema that requires `type` (the
-built-in default does) reports the same "must have required property 'type'"
-error it would for a file that simply left `type` out.
+frontmatter block reads as empty metadata. So a schema that requires `type`, as
+the built-in default does, reports the same "must have required property 'type'"
+error. It is the same error you would get for a file that simply left `type`
+out.
 
-So an empty or frontmatter-less file is not a free pass. It's the maximally
+So an empty or frontmatter-less file earns no free pass. It's the maximally
 failing case. If you expected the file to have metadata, the usual cause is a
-missing opening `---` fence, or content sitting above the block. See
-[No frontmatter at all](/docmeta/fix/#no-frontmatter-at-all) for the fix.
+missing opening `---` fence, or content sitting above the block. See [No
+frontmatter at all](/docmeta/fix/#no-frontmatter-at-all) for the fix.
 
 ## Which schema validated my file, and why did *this* rule fire?
 
-Every error line ends with the schema that produced it, in brackets. For
-example `[google:okf:0.1]`. That's the schema whose rule you tripped. If you're
+Every error line ends with the schema that produced it, in brackets. For example
+`[google:okf:0.1]`. That's the schema whose rule you tripped. If you're
 surprised by *which* schema applied, docmeta picks it through a fixed precedence
-chain: a `--schema` flag wins over a `$schema` key in your file, which wins over
+chain. A `--schema` flag wins over a `$schema` key in your file. That wins over
 config `overrides`, then config `schemas`, then the built-in default.
 
 The first source that yields a schema wins, and lower sources are ignored for
-that file. So if your repo's config assigns a strict schema to `/api/**` and
-your file is under `/api`, that's the rule that fired, even if you never set
-anything in the file itself.
+that file. Say your repo's config assigns a strict schema to `/api/**`, and your
+file is under `/api`. That's the rule that fired, even if you never set anything
+in the file itself.
 
 <LinkCard
   title="How schema resolution works"
@@ -49,7 +50,8 @@ applies (via `$schema`, config `overrides`, or `--schema`) so that only the rule
 you care about run.
 
 If your goal is just to *read* a field's value rather than validate it, that's a
-different command: `get` extracts named field values without validating anything.
+different command. `get` extracts named field values without validating
+anything.
 
 ```sh
 docmeta get type docs/guide.md
@@ -99,8 +101,8 @@ One of three:
 | Code | Meaning |
 | --- | --- |
 | `0` | Every file passed. The check is green. |
-| `1` | One or more files **failed validation** — a missing or malformed field. The red check you're here to fix. |
-| `2` | An **operational error** — docmeta couldn't run the check at all (a missing or unreadable schema, an unsupported file type, no files to validate). The message goes to stderr, prefixed `docmeta:`. |
+| `1` | One or more files **failed validation**, from a missing or malformed field. The red check you're here to fix. |
+| `2` | An **operational error**, where docmeta couldn't run the check at all. That covers a missing or unreadable schema, an unsupported file type, or no files to validate. The message goes to stderr, prefixed `docmeta:`. |
 
 A `1` means fix your document. A `2` means fix the setup, not the content. CI
 gates on this code, so the distinction matters when you read a raw log.
@@ -144,9 +146,9 @@ run, local and CI, skips the same files.
 
 ## Still stuck?
 
-If your error doesn't match anything here or on the fix-it page, the
-[Reference](/docmeta/reference/) shelf documents every flag, output format, exit code,
-and resolution rule in full.
+Your error may not match anything here or on the fix-it page. The
+[Reference](/docmeta/reference/) shelf documents every flag, output format, exit
+code, and resolution rule in full.
 
 <LinkCard
   title="Read & fix a validation failure"

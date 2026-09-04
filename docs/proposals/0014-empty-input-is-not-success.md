@@ -1,7 +1,7 @@
-# 0014 — An empty input set is not success
+# 0014: An empty input set is not success
 
 - **Status:** Implemented (#73)
-- **Serves:** every persona; this is the highest-severity item in the set
+- **Serves:** Every persona; this is the highest-severity item in the set
 - **Relates to:** [0004](0004-config-upward-discovery.md) (same false-green class), [0001](0001-validation-baseline.md) (a ratchet makes this worse)
 - **Touches:** `src/cli.ts`, `src/commands/{validate,get,fill}.ts`
 
@@ -30,9 +30,9 @@ $ docmeta validate docs/typo.md          # explicitly named, does not exist
 exit=0
 ```
 
-The third is the sharpest: the user **named one specific file**, that file does
-not exist, and docmeta reports success. There is no reading of "all files passed"
-under which that is right.
+The third is the sharpest. The user **named one specific file**, that file does
+not exist, and docmeta reports success. There is no reading of "all files
+passed" under which that is right.
 
 It also reaches through config. From 0004's sandbox, a `paths:` glob that
 resolves against the wrong base:
@@ -46,7 +46,7 @@ exit=0
 ### And it swallows typo'd subcommands
 
 `validate` is registered with `{ isDefault: true }`, so an unrecognized first
-token is not an error — it is treated as a **path**:
+token is not an error. It is treated as a **path**:
 
 ```console
 $ docmeta valdiate docs/
@@ -67,7 +67,7 @@ to `content/`, the CI glob stops matching, and the metadata gate reports success
 forever. Nobody investigates a green check. The gate's entire value is that it is
 load-bearing, and this makes it silently non-load-bearing.
 
-[0001](0001-validation-baseline.md) makes it strictly worse: once a baseline
+[0001](0001-validation-baseline.md) makes it strictly worse. Once a baseline
 establishes "0 findings" as the expected steady state, a glob that stopped
 matching is indistinguishable from a successfully completed ratchet.
 
@@ -83,7 +83,7 @@ docmeta: No files matched. Patterns tried: "docs/**/*.nomatch".
 Nothing was validated, so this is an error rather than a pass.
 ```
 
-Exit `2`, not `1`: nothing was validated, so no verdict was produced — which is
+Exit `2`, not `1`. Nothing was validated, so no verdict was produced, which is
 precisely the documented meaning of `2`. This matches `eslint`'s default
 (`--no-error-on-unmatched-pattern` opts out) and `pytest`'s exit 5.
 
@@ -104,29 +104,30 @@ decide "is this a pattern or a literal name" rather than hand-rolling the test.
 
 ### 3. `--allow-empty` opts out
 
-One flag covers both cases above, for the genuine uses: a shared CI template that
-runs docmeta on repos that may legitimately have no docs yet, and a pre-commit
-hook whose file list can be empty. Config: `allowEmpty: true`.
+One flag covers both cases above, for the genuine uses. One is a shared CI
+template that runs docmeta on repos that may legitimately have no docs yet. The
+other is a pre-commit hook whose file list can be empty. In config it is
+`allowEmpty: true`.
 
 ### 4. Unknown subcommands stop being paths
 
 Keep `validate` as the default command, but reject a first positional that looks
-like a misspelled subcommand. Concretely: if the first token contains no path
-separator, no glob metacharacter, no `.`-extension, and is not `-`, and its edit
-distance to a known command name is ≤ 2, fail with a suggestion:
+like a misspelled subcommand. Concretely, take a first token that contains no
+path separator, no glob metacharacter, no `.`-extension, and is not `-`. If its
+edit distance to a known command name is ≤ 2, fail with a suggestion:
 
 ```
 docmeta: Unknown command "valdiate". Did you mean "validate"?
 ```
 
-The narrow guard matters — `docmeta docs` must keep working as
+The narrow guard matters. `docmeta docs` must keep working as
 `docmeta validate docs`, and `docs` is not within edit distance 2 of any command
 name. Commander's `showSuggestionAfterError` does not help here, because with a
 default command there is no parse error to hang a suggestion on.
 
 ## Stress test
 
-### 1. Does this break the documented `get` contract? — yes, deliberately, and narrowly
+### 1. Does this break the documented `get` contract? (yes, deliberately, and narrowly)
 
 `reference/output-and-exit-codes.mdx` says `get` "never" exits 1. It says nothing
 about 2, and `get` already exits 2 on operational errors (unknown `--format`, no
@@ -134,28 +135,28 @@ inputs). "No files matched" is the same class. The documented table needs a note
 not a redefinition: *absent field* stays unset-and-successful; *absent file* is an
 error. Those are different things and conflating them is the current bug.
 
-### 2. Empty stdin — must stay valid
+### 2. Empty stdin must stay valid
 
 `echo "" | docmeta validate - --as markdown` resolves zero *files* but one input.
 The check must be "zero resolved files **and** no stdin", or piping an empty
 document starts failing. Verified the current code path: `usingStdin` is tracked
 separately from `files`, so the condition is expressible without restructuring.
 
-### 3. `--allow-empty` as the default instead — rejected
+### 3. `--allow-empty` as the default instead (rejected)
 
 Safer for existing users, worthless as a fix: the dangerous configuration stays
 the default and only the diligent opt in. The people harmed by silent-green are
 exactly the people who will not add a flag they have never heard of. Breaking
 change, pre-1.0, documented in the changelog.
 
-### 4. Exit 1 instead of exit 2 — rejected
+### 4. Exit 1 instead of exit 2 (rejected)
 
 Tempting because CI treats both as failure. Wrong because the codes mean
-different things to *humans* and to `--format json` consumers: `1` sends someone
-looking for a bad document, `2` sends them to look at their invocation. A
+different things to *humans* and to `--format json` consumers. `1` sends someone
+looking for a bad document, and `2` sends them to look at their invocation. A
 mismatched glob is an invocation problem.
 
-### 5. Interaction with `--exclude` — a real edge, resolved
+### 5. Interaction with `--exclude` (a real edge, resolved)
 
 `docmeta validate "docs/**/*.md" --exclude "docs/**"` legitimately resolves to
 zero files, and the user asked for that. Still an error under this proposal.
@@ -164,37 +165,37 @@ too-broad exclude silently disabling the gate is the same defect wearing a
 different hat. `--allow-empty` is the answer, and the error message should
 mention that excludes were applied.
 
-### 6. Interaction with `--ext` — same shape
+### 6. Interaction with `--ext`, which is the same shape
 
 `--ext .rst` against a Markdown-only tree resolves to zero. Same verdict, same
 remedy. The message should name the extension filter, because "no files matched"
 is baffling when the glob obviously matches files on disk.
 
-### 7. Edit-distance suggestions producing false positives — bounded by the guard
+### 7. Edit-distance suggestions producing false positives (bounded by the guard)
 
 `docmeta get` / `docmeta fill` / `docmeta schemas` are 3–7 characters, so
-distance ≤ 2 has real collision potential with short real paths (`docmeta git`,
-a directory named `fil`). The guard requires *all* of: no separator, no glob
-char, no extension, not `-`. A real directory named `fil` in cwd would still trip
-it — so the check should run **after** a `stat`, and only fire when the token
-does not exist on disk. That makes a false positive impossible: if it exists, it
-is a path.
+distance ≤ 2 has real collision potential with short real paths, such as
+`docmeta git` or a directory named `fil`. The guard requires *all* of: no
+separator, no glob char, no extension, not `-`. A real directory named `fil` in
+cwd would still trip it. So the check should run **after** a `stat`, and only
+fire when the token does not exist on disk. That makes a false positive
+impossible, because if it exists, it is a path.
 
-### 8. Replacing edit distance with a known-commands allowlist — considered and declined
+### 8. Replacing edit distance with a known-commands allowlist (considered and declined)
 
-Suggested in review: since there are only four short command names, drop
-Levenshtein and instead fire whenever the first token has no separator, no glob
-character, no extension, and is not one of the four — emitting a generic
+Review suggested dropping Levenshtein, since there are only four short command
+names. It would instead fire whenever the first token has no separator, no glob
+character, no extension, and is not one of the four. It would emit a generic
 "did you mean validate/get/fill/schemas?".
 
 Declined, on precision rather than cost. That predicate is true of **every**
-mistyped path that happens to be a bare word, so `docmeta myproject` (a real
-directory, renamed last week) would answer "did you mean validate/get/fill/
-schemas?" — which is both wrong and less informative than
-`File not found: "myproject"`. Edit distance is the only thing separating "this is
-plausibly a misspelled command" from "this is some other mistake", and that
-distinction *is* the feature. The cost being avoided is four comparisons of
-≤ 7-character strings, once per invocation, on a token that has already failed a
+mistyped path that happens to be a bare word. So `docmeta myproject`, a real
+directory renamed last week, would answer "did you mean
+validate/get/fill/schemas?". That is both wrong and less informative than
+`File not found: "myproject"`. Edit distance is the only thing separating "this
+is plausibly a misspelled command" from "this is some other mistake", and that
+distinction *is* the feature. The cost being avoided is four comparisons of ≤
+7-character strings, once per invocation, on a token that has already failed a
 `stat`.
 
 Implementation made the trade sharper. Once the missing-literal rule in item 2 is
@@ -206,13 +207,13 @@ exit=2
 docmeta: File not found: "valdiate".
 ```
 
-So the suggestion is purely a message upgrade on an already-correct failure. That
-raises the bar for precision rather than lowering it: a targeted
-`Unknown command "valdiate". Did you mean "validate"?` earns its keep, while a
+So the suggestion is purely a message upgrade on an already-correct failure.
+That raises the bar for precision rather than lowering it. A targeted
+`Unknown command "valdiate". Did you mean "validate"?` earns its keep. A
 scattershot four-way suggestion attached to every mistyped directory name is
 strictly worse than the plain not-found message it would replace.
 
-### 9. Monorepo template runs — the legitimate case, handled
+### 9. Monorepo template runs, the legitimate case, handled
 
 A shared workflow running `docmeta validate "docs/**/*.md"` across 40 repos where
 6 have no `docs/` would newly fail in 6. That is the one genuine cost, and
@@ -222,17 +223,19 @@ are the population most likely to be surprised.
 
 ## Implementation sketch
 
-1. `test/load-files.test.ts` — `resolveTargets` reports a literal input that does
-   not exist; distinguishes literal from pattern via `picomatch.scan()`.
-2. `test/commands.test.ts` — zero resolved files throws `DocmetaError`; stdin-only
-   does not; `allowEmpty` suppresses.
-3. `test/cli.integration.test.ts` — the three reproductions above exit 2; the
-   `paths:`-from-config case exits 2; `--allow-empty` returns them to 0.
-4. `test/cli.integration.test.ts` — `docmeta valdiate docs/` exits 2 with a
-   suggestion; `docmeta docs/` still validates `docs/`; a real directory named
-   `fil` is treated as a path.
-5. Apply to all three of `validate`, `get`, and `fill` — the shared input model is
-   a stated working agreement, so the check belongs next to it, not in one command.
+1. In `test/load-files.test.ts`, `resolveTargets` reports a literal input that
+   does not exist, and distinguishes literal from pattern via
+   `picomatch.scan()`.
+2. In `test/commands.test.ts`, zero resolved files throws `DocmetaError`,
+   stdin-only does not, and `allowEmpty` suppresses.
+3. In `test/cli.integration.test.ts`, the three reproductions above exit 2, the
+   `paths:`-from-config case exits 2, and `--allow-empty` returns them to 0.
+4. In `test/cli.integration.test.ts`, `docmeta valdiate docs/` exits 2 with a
+   suggestion, `docmeta docs/` still validates `docs/`, and a real directory
+   named `fil` is treated as a path.
+5. Apply to all three of `validate`, `get`, and `fill`. The shared input model
+   is a stated working agreement, so the check belongs next to it, not in one
+   command.
 
 Then `reference/output-and-exit-codes.mdx` (the `get` row and a new "no files
 matched" row), `reference/cli.mdx` for `--allow-empty`, and a note in the CI

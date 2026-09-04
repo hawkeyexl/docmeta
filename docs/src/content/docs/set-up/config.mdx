@@ -7,19 +7,19 @@ import { Aside, LinkCard } from '@astrojs/starlight/components';
 
 A `docmeta.config.yaml` stores what "valid" means for your repo: which files to check, which to skip, and which schema set they must satisfy. With it committed at your repo root, both you and CI can run a bare `docmeta validate` and get a consistent, repeatable result.
 
-Every key is optional. This page covers where docmeta looks for the file, then each key in turn, a complete worked example, and how command-line flags combine with what you configure.
+Every key is optional. This page covers where docmeta looks for the file, then each key in turn. It then gives a complete worked example, and shows how command-line flags combine with what you configure.
 
 ## Where docmeta looks for the config
 
 docmeta finds your config in one of two ways:
 
-- **Discovery.** With no `--config` flag, docmeta looks in the current working directory for `docmeta.config.yaml`, then `docmeta.config.yml`, and then repeats that in each parent directory. The first file it finds wins, and the search stops at your repo root — the first directory containing `.git`. If no parent is a repository, only the current directory is checked.
+- **Discovery.** With no `--config` flag, docmeta looks in the current working directory for `docmeta.config.yaml`, then `docmeta.config.yml`, and then repeats that in each parent directory. The first file it finds wins, and the search stops at your repo root. That is the first directory containing `.git`. If no parent is a repository, only the current directory is checked.
 - **Explicit path.** Pass `-c <path>` (or `--config <path>`) to point at a specific file. If that file does not exist, docmeta exits with an error rather than falling back to discovery.
 
 Because the search walks up, `docmeta validate` gives the same verdict from your repo root as it does from `docs/` or from a package subdirectory. When a config governs a run, docmeta prints a line naming it, such as `Using docmeta.config.yaml (../..)`. To run against the built-in defaults instead, pass `--no-config`.
 
 <Aside type="note">
-Relative paths written **in** the config — `paths`, `exclude`, and any local `.json` schema file — resolve against the config file's own directory, not the directory you ran from. Paths you type on the command line stay relative to where you are. See the [configuration reference](/docmeta/reference/configuration/#what-relative-paths-are-relative-to).
+Relative paths written **in** the config resolve against the config file's own directory, not the directory you ran from. That covers `paths`, `exclude`, and any local `.json` schema file. Paths you type on the command line stay relative to where you are. See the [configuration reference](/docmeta/reference/configuration/#what-relative-paths-are-relative-to).
 </Aside>
 
 ## The keys
@@ -37,12 +37,12 @@ paths:
 With this in place, a bare `docmeta validate` checks everything under `docs/` and `articles/`. Pass paths explicitly and they take priority, so `docmeta validate README.md` validates only `README.md`, ignoring `paths`.
 
 <Aside type="caution">
-If you provide no positional paths **and** `paths` is empty or absent (and no config is found), docmeta exits with code `2` and the message `No files to validate.` This is an operational error; docmeta will not silently do nothing.
+You might provide no positional paths, with `paths` empty or absent, and no config found. Then docmeta exits with code `2` and the message `No files to validate.` This is an operational error, and docmeta will not silently do nothing.
 </Aside>
 
 ### `exclude`
 
-A list of globs to skip. Your excludes are **merged with** docmeta's built-in defaults and any `--exclude` flags passed on the command line, so they add to the exclusion set rather than replacing it.
+A list of globs to skip. Your excludes are **merged with** docmeta's built-in defaults, and with any `--exclude` flags passed on the command line. They add to the exclusion set rather than replacing it.
 
 ```yaml title="docmeta.config.yaml"
 exclude:
@@ -52,7 +52,7 @@ exclude:
 docmeta always ignores `**/node_modules/**` and `**/.git/**`, so you never need to list those. The example above additionally skips any `drafts` folder.
 
 <Aside type="note" title="How excludes combine">
-The final exclusion set is: the built-in defaults (`**/node_modules/**`, `**/.git/**`) + your config `exclude` + any `--exclude` flags. There is no way to remove the built-in defaults.
+The final exclusion set is the built-in defaults (`**/node_modules/**`, `**/.git/**`) plus your config `exclude` plus any `--exclude` flags. There is no way to remove the built-in defaults.
 </Aside>
 
 ### `schemas`
@@ -132,7 +132,7 @@ Some command-line flags layer onto the config; others replace it. Keep the disti
 |---|---|
 | positional `[paths...]` | **Replaces** `paths` for this run. |
 | `--exclude <glob>` | **Merges** with config `exclude` and the built-in defaults. |
-| `-s, --schema <ref>` | **Overrides** all schema resolution — config `schemas`, `overrides`, and file `$schema` are ignored. |
+| `-s, --schema <ref>` | **Overrides** all schema resolution. Config `schemas`, `overrides`, and file `$schema` are ignored. |
 
 <Aside type="tip">
 For the full flag list, see the [CLI reference](/docmeta/reference/). For the complete schema-resolution precedence chain, see the [Schema resolution reference](/docmeta/reference/schema-resolution/).

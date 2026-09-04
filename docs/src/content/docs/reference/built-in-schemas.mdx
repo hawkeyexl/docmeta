@@ -41,15 +41,15 @@ installed.
 | `mkdocs:material:9.7` | 19 MkDocs and Material front matter keys | nothing | No | [`mkdocs-material/9.7.json`](/docmeta/schemas/mkdocs-material/9.7.json) | [Platform schemas](/docmeta/reference/platform-schemas/) |
 | `anthropic:claude-subagent:2.1` | 18 Claude Code agent definition fields | `name`, `description` | No | [`claude-subagent/2.1.json`](/docmeta/schemas/claude-subagent/2.1.json) | [Claude Code subagent schema](/docmeta/reference/claude-subagent-schema/) |
 
-All twenty-three use [Draft 2020-12](/docmeta/reference/schema-resolution/#dialects)
-and are [built-in
-references](/docmeta/reference/schema-resolution/#reference-kinds), so a typo in
-an id is reported as an unknown built-in rather than a missing file.
+All twenty-three use [Draft
+2020-12](/docmeta/reference/schema-resolution/#dialects) and are [built-in
+references](/docmeta/reference/schema-resolution/#reference-kinds). A typo in an
+id is reported as an unknown built-in rather than a missing file.
 
-Twenty-two of them allow additional properties. `agentskills:skill:1.0` is the one
-exception, and not out of strictness: the tooling that packages a skill for
+Twenty-two of them allow additional properties. `agentskills:skill:1.0` is the
+one exception, and not out of strictness. The tooling that packages a skill for
 distribution *hard-errors* on a key outside the standard's six rather than
-ignoring it, so a schema that tolerated unknown keys would pass exactly the file
+ignoring it. A schema that tolerated unknown keys would pass exactly the file
 that cannot ship. See [Agent Skills
 schemas](/docmeta/reference/agent-skills-schemas/).
 
@@ -84,14 +84,14 @@ https://hawkeyexl.github.io/docmeta/schemas/mkdocs-material/9.7.json
 https://hawkeyexl.github.io/docmeta/schemas/claude-subagent/2.1.json
 ```
 
-They exist for three jobs: `$ref`-ing a built-in from a schema of your own,
-using one with a JSON Schema tool that is not docmeta, and reading the actual
-JSON instead of a description of it.
+They exist for three jobs. You can `$ref` a built-in from a schema of your own,
+or use one with a JSON Schema tool that is not docmeta. You can also read the
+actual JSON instead of a description of it.
 
 **Inside docmeta, a published URL costs nothing.** docmeta recognises its own
-URLs and answers them from the copy bundled in the package — no request, no
-timeout, and no dependence on GitHub Pages being up. `--offline` and an
-air-gapped build work exactly as they do with the id, and a
+URLs and answers them from the copy bundled in the package. There is no request,
+no timeout, and no dependence on GitHub Pages being up. `--offline` and an
+air-gapped build work exactly as they do with the id. A
 [`schemaTrust`](/docmeta/reference/configuration/) policy that refuses URLs
 still accepts these, because they reach nothing. The two spellings are
 interchangeable:
@@ -108,7 +108,7 @@ Open one of the files and you will see `"$id": "google:okf:0.1"` rather than the
 `https://…` address you fetched it from. Some strict JSON Schema tooling warns
 about that mismatch. The warning is expected and the file is not broken.
 
-The `$id` is docmeta's reference for the schema: it is what a document's
+The `$id` is docmeta's reference for the schema. It is what a document's
 `$schema` names, what Ajv de-duplicates registrations on, and what appears in
 every report. Changing it to the URL would move all three at once and would
 break every document already carrying `$schema: google:okf:0.1`. The retrieval
@@ -119,8 +119,8 @@ resolve.
 ### Extend a built-in with `$ref`
 
 The reason a URL beats a copy-paste. Reference a built-in from your own schema
-and add to it, by either name — the id and the URL both work, and neither
-touches the network:
+and add to it, by either name. The id and the URL both work, and neither touches
+the network:
 
 ```json title="house.schema.json"
 {
@@ -134,24 +134,23 @@ touches the network:
 }
 ```
 
-Every rule the built-in carries still applies, and yours are added on top. This
-is composition *inside* one schema, which is different from listing two schemas
-in a set — a set applies each schema whole and attributes failures separately,
-while a `$ref` lets you narrow or extend what the built-in said.
+Every rule the built-in carries still applies, and yours are added on top. That
+is composition *inside* one schema. Listing two schemas in a set is different. A
+set applies each schema whole and attributes failures separately. A `$ref` lets
+you narrow or extend what the built-in said.
 
-<Aside type="caution" title="A published URL never changes — that is the point">
-Each of these paths is immutable. The bytes served at
-`schemas/okf/0.1.json` today are the bytes served there for good; a fix to a
-built-in ships as a *new* version file rather than an edit to a published one.
-A CI check hashes every schema against a committed manifest and fails the build
-if an already-published version is altered, so this is enforced rather than
-promised.
+<Aside type="caution" title="A published URL never changes, and that is the point">
+Each of these paths is immutable. The bytes served at `schemas/okf/0.1.json`
+today are the bytes served there for good. A fix to a built-in ships as a *new*
+version file rather than an edit to a published one. A CI check hashes every
+schema against a committed manifest and fails the build if an already-published
+version is altered. This is enforced rather than promised.
 
-Two hosting caveats for anything load-bearing outside docmeta: GitHub Pages can
-return 404 briefly during a deploy, and its `Access-Control-Allow-Origin: *` is
-current behaviour rather than a contract. If a build must not depend on either,
-[vendor the file](/docmeta/reference/configuration/) into your own repository
-and reference the local copy.
+Two hosting caveats apply to anything load-bearing outside docmeta. GitHub Pages
+can return 404 briefly during a deploy, and its `Access-Control-Allow-Origin: *`
+is current behaviour rather than a contract. If a build must not depend on
+either, [vendor the file](/docmeta/reference/configuration/) into your own
+repository and reference the local copy.
 </Aside>
 
 ## Two kinds of built-in
@@ -159,31 +158,30 @@ and reference the local copy.
 The **Requires** column above is the distinction that matters when you pick one.
 
 **Editorial schemas** describe what a page *is*. `google:okf:0.1` and the two
-`type` vocabularies demand their key, because adopting them is a claim that
-every page carries that classification, which makes an unclassified page a gap
-rather than an abstention. Turning one on for the first time reports every page
-that has not caught up yet.
+`type` vocabularies demand their key. Adopting them is a claim that every page
+carries that classification, which makes an unclassified page a gap rather than
+an abstention. Turning one on for the first time reports every page that has not
+caught up yet.
 
 **Platform schemas** describe what your site generator accepts. A platform
 schema requires **exactly what the generator refuses to build without**, and
-nothing more — so what it demands is a fact about the tool, not an editorial
-choice docmeta made for you.
+nothing more. What it demands is a fact about the tool, not an editorial choice
+docmeta made for you.
 
 That cuts both ways. The three `docusaurus:*` schemas and `sphinx:docinfo:9.1`
-require nothing, because those tools mark no field as mandatory; switching one
+require nothing, because those tools mark no field as mandatory. Switching one
 on cannot fail a page that was already building. `astro:starlight:0.41` and
 `antora:page:3.1` both require `title`, because Starlight and Antora both
-*error* without a page title — a page failing that check was already broken, and
+*error* without a page title. A page failing that check was already broken, and
 docmeta is only telling you sooner.
 
 The three agent schemas are platform schemas of a different sort: the platform
-is the agent runtime rather than a site generator.
-`anthropic:claude-skill:2.1` requires nothing, because Claude Code marks every
-`SKILL.md` field optional; `agentskills:skill:1.0` requires `name` and
-`description`, because the open standard does and the packaging tools refuse a
-skill without them. `anthropic:claude-subagent:2.1` requires the same two for a
-third reason — Claude Code will not load an agent definition that is missing
-either. See [Agent Skills
+is the agent runtime rather than a site generator. `anthropic:claude-skill:2.1`
+requires nothing, because Claude Code marks every `SKILL.md` field optional.
+`agentskills:skill:1.0` requires `name` and `description`, because the open
+standard does and the packaging tools refuse a skill without them.
+`anthropic:claude-subagent:2.1` requires the same two for a third reason. Claude
+Code will not load an agent definition that is missing either. See [Agent Skills
 schemas](/docmeta/reference/agent-skills-schemas/) and [Claude Code subagent
 schema](/docmeta/reference/claude-subagent-schema/).
 
@@ -194,11 +192,11 @@ schema](/docmeta/reference/claude-subagent-schema/) and [Docusaurus
 schemas](/docmeta/reference/docusaurus-schemas/) pages.
 
 **Vocabulary schemas** are a third kind. They describe a document to something
-*outside* your docs site: a social card renderer
-(`ogp:article:1.0`), a catalogue or repository (`dcmi:elements:1.1`), or another
-publisher's build (`microsoft:learn:1.0`). Open Graph is the one built-in that
-checks something no build tool checks — nothing fails when `og:image` is
-missing, the page just renders badly everywhere it is shared. See [Metadata
+*outside* your docs site: a social card renderer (`ogp:article:1.0`), a
+catalogue or repository (`dcmi:elements:1.1`), or another publisher's build
+(`microsoft:learn:1.0`). Open Graph is the one built-in that checks something no
+build tool checks. Nothing fails when `og:image` is missing, and the page just
+renders badly everywhere it is shared. See [Metadata
 vocabularies](/docmeta/reference/metadata-vocabularies/).
 
 The two kinds mostly claim different keys, so they compose. One run can hold a
@@ -220,10 +218,10 @@ full, so a page using the object form fails OKF:
     /tags/0  must be string  (line 6)  [google:okf:0.1]
 ```
 
-If your docs set uses object tags, pair the Docusaurus schema with a vocabulary
-(`diataxis:diataxis:1.0` or `tgdp:templates:1.0`, which claim only `type`)
-rather than with OKF, or use the string form. `title` and `description` also
-appear in both, and those definitions agree.
+If your docs set uses object tags, pair the Docusaurus schema with
+`diataxis:diataxis:1.0` or `tgdp:templates:1.0` rather than with OKF, or use the
+string form. Those two claim only `type`. `title` and `description` also appear
+in both, and those definitions agree.
 </Aside>
 
 <Aside type="caution" title="`diataxis` and `tgdp` are alternatives, not a pair">
@@ -241,16 +239,16 @@ Only two of the twenty-three are in the default set:
 google:okf:0.1 + passo-uno:seven-action:1.0
 ```
 
-Everything else is opt-in. Seven-Action is safe to carry by default precisely
-because it requires nothing — it rules that an `action`, if present, is
-legitimate, without insisting on one. The default set sits at the bottom of the
-[precedence chain](/docmeta/reference/schema-resolution/#precedence) and applies
-only when no `--schema` flag, no in-file `$schema`, and no config rule matched.
+Everything else is opt-in. Seven-Action is safe to carry by default because it
+requires nothing. It rules that an `action`, if present, is legitimate, without
+insisting on one. The default set sits at the bottom of the [precedence
+chain](/docmeta/reference/schema-resolution/#precedence). It applies only when
+no `--schema` flag, no in-file `$schema`, and no config rule matched.
 
 ## Turn one on
 
 Three ways, in [precedence
-order](/docmeta/reference/schema-resolution/#precedence) — the first one that
+order](/docmeta/reference/schema-resolution/#precedence). The first one that
 matches wins, and each replaces the set rather than adding to it.
 
 <Tabs>
@@ -310,26 +308,25 @@ standard, not docmeta's own release number:
 
 - `google:okf:0.1` is OKF v0.1.
 - `docusaurus:docs:3.10` is the front matter contract of Docusaurus 3.10.
-- `hugo:page:0.165` is the contract as of Hugo 0.165. Hugo releases monthly and
-  its front matter fields change far more slowly, so this id is not expected to
-  move every month — a new one ships when the *contract* changes, not when Hugo
+- `hugo:page:0.165` is the contract as of Hugo 0.165, and Hugo releases monthly.
+  Its front matter fields change far more slowly, so this id is not expected to
+  move every month. A new one ships when the *contract* changes, not when Hugo
   does.
 - `mkdocs:material:9.7` versions on **Material for MkDocs 9.7**, not on MkDocs
   1.6, even though the vendor segment says `mkdocs`. MkDocs itself defines two
-  front matter keys and Material defines the other seventeen, so Material is
-  what the contract tracks and Material's version is the one that can move it.
-  `astro:starlight:0.41` pairs a platform with a theme the same way.
-Ids are stable. A new upstream version arrives as a *new* id rather than a
-change to an existing one, so upgrading docmeta never silently retightens a
-check you already passed. Pin the id you validated against and move it
-deliberately.
+  front matter keys and Material defines the other seventeen. Material is what
+  the contract tracks, and Material's version is the one that can move it.
+  `astro:starlight:0.41` pairs a platform with a theme the same way. Ids are
+  stable. A new upstream version arrives as a *new* id rather than a change to
+  an existing one. Upgrading docmeta never silently retightens a check you
+  already passed. Pin the id you validated against and move it deliberately.
 
 ## If none of these fit
 
 The built-ins are a shortcut, not a ceiling. A docs set with its own field names
-or its own vocabulary needs its own schema — a `.json` file you reference by
-path, or a URL you host for several repos to share. Copying the closest built-in
-and editing it is usually faster than starting from nothing.
+or its own vocabulary needs its own schema. That is a `.json` file you reference
+by path, or a URL you host for several repos to share. Copying the closest
+built-in and editing it is usually faster than starting from nothing.
 
 <CardGrid>
   <LinkCard
