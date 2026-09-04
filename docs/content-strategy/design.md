@@ -13,15 +13,16 @@ and two different layout models**:
 |---|---|---|---|
 | `write-support-1x1` | `#4FA978` green | `#101010` | uniform `scale 0.9`, band at y=886 |
 | `action-precommit-1x1` | `#58a6ff` blue | `#0d0d0d` | title band 112px, caption band 86px |
-| `fill-local-1x1` | `#4EC9D9` cyan | — | per-beat crop, no band constants |
+| `fill-local-1x1` | `#4EC9D9` cyan | n/a | per-beat crop, no band constants |
 
-Only three things were consistent: the 1080×1080/30fps frame, JetBrains Mono,
-and the `#171717` terminal background — and that last one only because every
-agent sampled it from the same VHS capture rather than because anyone chose it.
+Three things were consistent, and only three. Those are the 1080×1080/30fps
+frame, JetBrains Mono, and the `#171717` terminal background. That last one held
+only because every agent sampled it from the same VHS capture, rather than
+because anyone chose it.
 
-Two of those three accents were also **wrong**, in a way nobody caught, because
-nothing had written down that docmeta's own output already assigns meaning to
-colour. See [Reserved colours](#reserved-colours).
+Two of those three accents were also **wrong**, in a way nobody caught. Nothing
+had written down that docmeta's own output already assigns meaning to colour.
+See [Reserved colours](#reserved-colours).
 
 Meanwhile the docs site is stock Starlight: no `customCss`, no tokens, no
 relationship to any of it.
@@ -33,15 +34,15 @@ already uses colour semantically, in `src/reporters/fill.ts`:
 
 | Colour | Means, in docmeta's own output |
 |---|---|
-| red | a failure — `✗` |
-| green | a success — `✓` |
+| red | a failure, `✗` |
+| green | a success, `✓` |
 | yellow | a warning, or a required field that could not be filled |
-| cyan | **a metadata field name** — `/type`, `/audience` |
-| dim | secondary detail — confidence scores, paths |
+| cyan | **a metadata field name**, as in `/type` or `/audience` |
+| dim | secondary detail, such as confidence scores and paths |
 
-**A brand accent may not be any of those.** Not as a preference — because the
-frame shows product output and chrome at the same time, and a shared colour
-makes a viewer read a relationship that is not there.
+**A brand accent may not be any of those.** This is not a preference. The frame
+shows product output and chrome at the same time, so a shared colour makes a
+viewer read a relationship that is not there.
 
 Both defects are visible in shipped frames. In `fill-local-1x1` the beat title
 and the `/title` `/audience` `/status` field names are the same cyan. In
@@ -54,7 +55,7 @@ the whole derivation.
 
 | Token | Dark | Light | Use |
 |---|---|---|---|
-| `accent` | `#58a6ff` | `#0969da` | Chrome only: rules, titles, active nav, links |
+| `accent` | `#58a6ff` | `#0969da` | Chrome only. Rules, titles, active nav, links |
 | `bg` | `#171717` | `#ffffff` | Terminal background; page background |
 | `bg-band` | `#0d0d0d` | `#f6f8fa` | Video title/caption bands; sidebar |
 | `text` | `#ffffff` | `#1f2328` | Captions, body copy |
@@ -70,7 +71,7 @@ contrast, computed rather than assumed:
 | `#ffffff` on `#171717` | **17.93** | passes at any size |
 | `#d5dbe3` on `#171717` | **12.87** | passes at any size |
 | `#0969da` on `#ffffff` | **5.19** | passes at any size |
-| `#58a6ff` on `#ffffff` | **2.53** | **fails** — never use the dark accent on light |
+| `#58a6ff` on `#ffffff` | **2.53** | **fails**. Never use the dark accent on light |
 
 AA is 4.5:1 for normal text and 3:1 for large text (18pt/24px, or 14pt bold).
 That last row is why the light value exists.
@@ -78,9 +79,9 @@ That last row is why the light value exists.
 ## Type
 
 **JetBrains Mono everywhere**, chrome included, not just the terminal. It is
-already what the captures use, and a proportional chrome font would draw a line
+already what the captures use. A proportional chrome font would draw a line
 between "the tool" and "us talking about the tool" that this project does not
-want — the product *is* the terminal.
+want. The product *is* the terminal.
 
 Sizes are given per surface below, because a px in a 1080 video frame and a px
 in a browser are not the same thing.
@@ -95,11 +96,11 @@ in a browser are not the same thing.
 | Frame rate | 30fps | Composition base; see the VHS note below |
 | Container | MP4, H.264, yuv420p, AAC 48kHz | Broadest compatibility |
 | Length | **20–45s** | |
-| Loudness | **−16 LUFS, −1.5 dBTP** | Two-pass `loudnorm`, once, on the finished mix — never per beat |
+| Loudness | **−16 LUFS, −1.5 dBTP** | Two-pass `loudnorm`, once, on the finished mix. Never per beat |
 
 A 1:1 cut is **not a crop of a 16:9 master**. Cropping 1920 to 1080 discards 44%
-of the width, which on terminal footage deletes file paths and schema tags — the
-content. Build format-native captures.
+of the width. On terminal footage that deletes file paths and schema tags, which
+are the content. Build format-native captures.
 
 **VHS reports 25fps regardless of the tape setting.** Probe the capture and
 convert to the 30fps composition base before computing any trim.
@@ -112,7 +113,7 @@ convert to the 30fps composition base before computing any trim.
 | `Set Padding` | `0` |
 | `Set CursorBlink` | `false` |
 | `Set TypingSpeed` | `35ms`–`70ms` |
-| `Set FontSize` | **measured — see below** |
+| `Set FontSize` | **measured. See below** |
 
 **Font size is derived, not chosen.** Measure the longest real line the demo will
 print, then pick the largest size whose column count exceeds it. Do not copy a
@@ -125,14 +126,14 @@ Two traps, both hit for real:
   own source, regardless of terminal width or `COLUMNS`. No amount of `tput` or
   `export COLUMNS` changes it.
 - **Column count moves in steps, not linearly**, because glyph advance rounds to
-  a whole pixel. FontSize 24 gives 78 columns and 23 gives 83. Landing one column
-  short is *worse* than landing fifteen short: a 79-character line at 78 columns
-  orphans a single character onto the next row, which reads as a broken renderer
-  rather than as wrapped output.
+  a whole pixel. FontSize 24 gives 78 columns and 23 gives 83. Landing one
+  column short is *worse* than landing fifteen short. A 79-character line at 78
+  columns orphans a single character onto the next row. That reads as a broken
+  renderer rather than as wrapped output.
 
-Crop each capture to its **used rows** before scaling. A tape is 980px tall and a
-five-line demo uses a third of it; without the crop, half the square is empty and
-the type is smaller than it needed to be.
+Crop each capture to its **used rows** before scaling. A tape is 980px tall, and
+a five-line demo uses a third of it. Without the crop, half the square is empty
+and the type is smaller than it needed to be.
 
 ### Composition
 
@@ -161,7 +162,7 @@ the only thing most viewers will read.
 ### Timing
 
 Narration is generated first and **measured** with `ffprobe`. Word-count
-arithmetic is not a model of speech — `v2.0.0` is one word that reads as seven
+arithmetic is not a model of speech. `v2.0.0` is one word that reads as seven
 syllables, and release demos are dense with exactly that.
 
 | Property | Value |
@@ -172,23 +173,24 @@ syllables, and release demos are dense with exactly that.
 
 That last row is worth stating plainly, because the alternative is a video that
 feels rushed. When a real command takes 43 seconds, do not run the whole beat at
-4×. Compress **only the static wait** — typing and output stay at 1× — and
+4×. Compress **only the static wait**, leaving typing and output at 1×, and
 disclose the real elapsed time on screen. Bash's own `time` output in frame is
-the strongest form of that disclosure, because it is the command's output rather
-than a label someone wrote.
+the strongest form of that disclosure. It is the command's output rather than a
+label someone wrote.
 
 ### Honesty
 
 Everything on screen is real execution. Staging the input is fine; faking the
 output is not.
 
-- A warm cache is disclosed or avoided. `docmeta` prints `· 3 cached` itself — if
+- A warm cache is disclosed or avoided. `docmeta` prints `· 3 cached` itself. If
   that undercuts the claim the video is making, re-shoot cold rather than hide
   it.
 - Latency is disclosed, not trimmed away.
-- A claim that is not shown is not made. "No network" belongs on screen only if a
-  run with no network is what was filmed, or the claim is independently verified
-  and carried as narration rather than presented as a demonstrated result.
+- A claim that is not shown is not made. "No network" belongs on screen only if
+  a run with no network is what was filmed. Otherwise the claim must be
+  independently verified, and carried as narration rather than presented as a
+  demonstrated result.
 
 ## Website
 
@@ -214,7 +216,8 @@ Map the palette onto Starlight's tokens:
 | `--sl-color-white`, `--sl-color-gray-1` … `--sl-color-gray-7` | the neutral ramp |
 
 Starlight ships light and dark themes and switches on `[data-theme]`, so define
-both. Never ship the dark accent into light mode — 2.53:1, and unreadable.
+both. Never ship the dark accent into light mode. It measures 2.53:1, and is
+unreadable.
 
 ### Code blocks
 
@@ -244,10 +247,10 @@ Code is the site's primary content, so it carries the most weight:
 | JetBrains Mono | Size scales |
 | The `✓` / `✗` / field-name semantics | Layout entirely |
 
-The first column exists so that a still from a video and a code block on the site
-look like the same product. The second exists because a 1080×1080 feed post and a
-docs page have nothing else in common, and forcing them to share a layout helps
-nobody.
+The first column exists so that a still from a video and a code block on the
+site look like the same product. The second exists because a 1080×1080 feed post
+and a docs page have nothing else in common. Forcing them to share a layout
+helps nobody.
 
 ## Checks before shipping
 
@@ -265,7 +268,7 @@ Site:
 
 1. Contrast computed for every text/background pair, in both themes.
 2. Light and dark both defined; no token defined only inside a media query.
-3. `docmeta validate` passes on the changed pages — editing frontmatter is a
+3. `docmeta validate` passes on the changed pages. Editing frontmatter is a
    validation change, not a prose change.
 
 ## Open
@@ -273,8 +276,8 @@ Site:
 - **No logo or wordmark exists.** The videos have no end card and the site has no
   `logo` in its Starlight config. Worth deciding before either surface grows a
   fourth accent colour.
-- **The light theme is untested.** Every value above is measured, but the site has
-  never rendered with a custom stylesheet, so the neutral ramp is a starting
+- **The light theme is untested.** Every value above is measured. But the site
+  has never rendered with a custom stylesheet, so the neutral ramp is a starting
   point rather than a result.
 - **The three shipped videos do not follow this page.** They are not being
   re-rendered for consistency alone; the next one follows it, and any re-shoot
