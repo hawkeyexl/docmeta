@@ -35,7 +35,7 @@ A couple of things worth knowing:
 - **Command cores are unit-tested directly.** Tests in `test/*.test.ts` exercise the command cores (`validate`, `get`, `fill`, `schemas`) and the shared core modules without going through the CLI. `fill` reaches an LLM provider, so its tests inject a `MockProvider` and never touch the network.
 - **CLI integration tests run against the built `dist/`.** `test/cli.integration.test.ts` invokes the compiled binary, so run `npm run build` before `npm test` if you've changed anything the integration tests depend on. Otherwise those tests run against a stale (or missing) build.
 
-- **Lint is type-aware.** eslint runs `typescript-eslint`'s `strictTypeChecked` set over `src/` and `test/`, so it needs type information and is slower than a syntax-only linter. It catches a class `tsc` does not: an *inferred* `any` crossing a boundary — a commander callback parameter, a `JSON.parse`, a `ReadableStream<any>` — where the unsafety never appears as the word `any` in the source.
+- **Lint is type-aware.** eslint runs `typescript-eslint`'s `strictTypeChecked` set over `src/` and `test/`, so it needs type information and is slower than a syntax-only linter. It catches one class of problem that `tsc` does not. That is an *inferred* `any` crossing a boundary, such as a commander callback parameter, a `JSON.parse`, or a `ReadableStream<any>`. In those cases the unsafety never appears as the word `any` in the source.
 - **Coverage is reported, not gated.** `npm run test:coverage` prints a summary; there are no thresholds to trip over. Treat a number that drops sharply as worth a look, not as a build failure.
 
 Before opening a pull request, make sure `npm run typecheck`, `npm run lint`, and `npm test` all pass.
@@ -44,11 +44,11 @@ Before opening a pull request, make sure `npm run typecheck`, `npm run lint`, an
 
 Please develop test-first:
 
-1. **Red**: write or adjust tests for the new behavior and run them. Confirm they fail for the right reason.
-2. **Green**: implement the minimum needed to make them pass.
-3. **Refactor**: clean up with the tests as a safety net.
+1. **Red.** Write or adjust tests for the new behavior and run them. Confirm they fail for the right reason.
+2. **Green.** Implement the minimum needed to make them pass.
+3. **Refactor.** Clean up with the tests as a safety net.
 
-When a behavior change makes existing tests fail correctly (for example, you removed a flag), update those tests as part of the red step rather than working around them.
+Sometimes a behavior change makes existing tests fail correctly, as when you remove a flag. Update those tests as part of the red step rather than working around them.
 
 ### A test fixture per feature
 
@@ -77,7 +77,7 @@ Scope work where it helps readers. New input formats use the `extractors` scope:
 feat(extractors): add TOML frontmatter support
 ```
 
-docmeta is past 1.0 and published to npm, so a breaking change is not free: semantic-release turns it into a major version and a release note. That is a cost worth paying when a change genuinely improves the tool, but not one to absorb by accident. Call breaking changes out with `feat!:` or a `BREAKING CHANGE:` footer so the release tooling bumps the major version — and prefer making the change cleanly over softening it with a deprecated alias, which leaves a permanent second surface behind.
+docmeta is past 1.0 and published to npm, so a breaking change is not free. That is because semantic-release turns it into a major version and a release note. That is a cost worth paying when a change genuinely improves the tool, but not one to absorb by accident. Call breaking changes out with `feat!:` or a `BREAKING CHANGE:` footer, so the release tooling bumps the major version. Prefer making the change cleanly over softening it with a deprecated alias, which leaves a permanent second surface behind.
 
 ## Keeping commands consistent
 
@@ -108,7 +108,7 @@ Metadata extraction is a pluggable layer. A new format is an isolated change; it
 2. **Register it** in [`src/extractors/index.ts`](src/extractors/index.ts) by adding it to the `EXTRACTORS` array.
 3. **Add a test and fixture.** Cover the new format in `test/extractors.test.ts` and add a minimal sample under `test/fixtures/`, following the red/green flow above.
 
-The `MetadataExtractor` interface returns an `ExtractedMetadata` object: the parsed `data`, whether a metadata block was `present`, the `format` name, and a `lineFor()` function that maps a field to its source line for precise error annotations. Set `implemented: true` once the extractor is wired up; a format registered before its parser works sets `implemented: false`, which keeps it out of directory walks and has the `schemas` command report it as planned.
+The `MetadataExtractor` interface returns an `ExtractedMetadata` object. That object carries the parsed `data`, whether a metadata block was `present`, and the `format` name. It also carries a `lineFor()` function that maps a field to its source line, which is what makes error annotations precise. Set `implemented: true` once the extractor is wired up. A format registered before its parser works sets `implemented: false`. That keeps it out of directory walks, and has the `schemas` command report it as planned.
 
 ### Write support is optional
 
@@ -120,43 +120,42 @@ every call site handle the read-only case.
 
 Only implement it if the format can round-trip without disturbing the rest of
 the document. The test is whether you can find the exact character range the
-value occupies: fenced frontmatter can, because the write is a splice of the
-characters between the fences (`src/extractors/frontmatter-write.ts`), and so
-can HTML, because parse5 reports a byte range for every tag and attribute
+value occupies. Fenced frontmatter passes, because the write is a splice of the
+characters between the fences (`src/extractors/frontmatter-write.ts`). HTML
+passes too, because parse5 reports a byte range for every tag and attribute
 (`src/extractors/html-write.ts`). XML needs one step more, because xmldom
-reports only where each attribute starts — `src/extractors/xml-locate.ts`
-rebuilds the range, and documents why its line index has to recognise six
-break forms rather than one. A format whose read is lossy should stay read-only
-rather than guess: `rst` and `asciidoc` write only into a fenced block that
-already exists, because their native docinfo and header syntax does not survive
-a round trip.
+reports only where each attribute starts. `src/extractors/xml-locate.ts`
+rebuilds the range, and documents why its line index has to recognise six break
+forms rather than one. A format whose read is lossy should stay read-only rather
+than guess. `rst` and `asciidoc` write only into a fenced block that already
+exists. Their native docinfo and header syntax does not survive a round trip.
 
 A writer may also need more than one strategy within a format. `xml` writes
-plain XML by setting a root attribute, but writes DITA into
-`<prolog><metadata><othermeta/></metadata></prolog>` (or `<topicmeta>` for a
-map), because DITA's DTD declares which root attributes a topic may carry and
-adding an undeclared one produces a file the user's toolchain rejects. Where a
-format has two such channels, `xml-read.ts` decides precedence once and reports
-it, and `dita-write.ts` aims at what it reports.
+plain XML by setting a root attribute. It writes DITA into
+`<prolog><metadata><othermeta/></metadata></prolog>`, or `<topicmeta>` for a
+map. DITA's DTD declares which root attributes a topic may carry, and adding an
+undeclared one produces a file the user's toolchain rejects. Where a format has
+two such channels, `xml-read.ts` decides precedence once and reports it, and
+`dita-write.ts` aims at what it reports.
 
 Two rules apply to any writer you add:
 
 - **Verify by re-parsing before returning.** A serializer bug should become a
   refusal, not a corrupted file.
 - **Write back to wherever the read took the value from.** `fill` corrects
-  values that are present but invalid, not just missing ones, so a format with
+  values that are present but invalid, not just missing ones. So a format with
   more than one metadata channel can otherwise gain a correction beside the
-  stale value the reader actually honors — a green report on a wrong page. Where
-  precedence is decided, decide it once and share it: `html-read.ts` exports a
-  `sources` map for exactly this, and `html-write.ts` aims at it rather than
-  carrying its own copy of the rule.
+  stale value the reader actually honors. The result is a green report on a
+  wrong page. Where precedence is decided, decide it once and share it.
+  `html-read.ts` exports a `sources` map for exactly this, and `html-write.ts`
+  aims at it rather than carrying its own copy of the rule.
 
 Cover fenced formats in `test/frontmatter-write.test.ts` and others in their own
 file (`test/html-write.test.ts`).
 
 ## Reporting a security issue
 
-Not as a public issue. docmeta fetches schemas over the network and runs inside other people's CI pipelines, so a public report is a disclosure to every one of them before there is a version to upgrade to. Use [private vulnerability reporting](https://github.com/hawkeyexl/docmeta/security/advisories/new) instead; [SECURITY.md](SECURITY.md) covers the supported versions, the trust boundaries, and what is already a documented decision rather than a bug.
+Not as a public issue. docmeta fetches schemas over the network and runs inside other people's CI pipelines. A public report is therefore a disclosure to every one of them, before there is a version to upgrade to. Use [private vulnerability reporting](https://github.com/hawkeyexl/docmeta/security/advisories/new) instead. [SECURITY.md](SECURITY.md) covers the supported versions, the trust boundaries, and what is already a documented decision rather than a bug.
 
 ## License
 

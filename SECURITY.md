@@ -20,9 +20,9 @@ no backports to older majors.
 
 > [Security tab → Report a vulnerability](https://github.com/hawkeyexl/docmeta/security/advisories/new)
 
-A public issue about a CI tool is a disclosure to everyone already running it,
-days or weeks before there is a version to upgrade to. Private reporting gives
-the same thread, the same maintainer, and a fix first.
+A public issue about a CI tool is a disclosure to everyone already running it.
+It lands days or weeks before there is a version to upgrade to. Private
+reporting gives the same thread, the same maintainer, and a fix first.
 
 If GitHub's private reporting is unavailable to you, email
 **manuel.r.b.silva@gmail.com** with the same detail.
@@ -37,8 +37,8 @@ docmeta is maintained by one person, so these are real numbers rather than
 aspirational ones:
 
 - **Acknowledgement** within 5 business days.
-- **An assessment** — in scope or not, and a rough severity — within 10
-  business days.
+- **An assessment** within 10 business days: whether it is in scope, and a
+  rough severity.
 - **A fix**, for anything confirmed, released as soon as it is ready, with a
   published advisory naming the affected versions.
 
@@ -48,13 +48,13 @@ be credited in the advisory unless you would rather not be.
 ## Trust boundaries
 
 docmeta touches two things it did not write. Both have been reasoned about in
-the open, and the reasoning is worth reading before filing: it will tell you
+the open, and the reasoning is worth reading before filing. It will tell you
 whether you have found a bug or a documented decision.
 
 ### Remote and document-supplied schemas
 
-A document's own `$schema` can name a built-in id, a path, or a URL, and it sits
-*above* config in the resolution chain — so on a repo that accepts outside pull
+A document's own `$schema` can name a built-in id, a path, or a URL. It sits
+*above* config in the resolution chain. So on a repo that accepts outside pull
 requests, one line of frontmatter can otherwise choose the contract that
 document is judged against. That is what the `schemaTrust:` config key exists to
 close. See
@@ -78,9 +78,9 @@ The following **are** in scope:
 
 - Any way past `documentRefs: local` or `documentRefs: none`.
 - A document-supplied local path escaping the containment root.
-- Ajv resolving a remote `$ref` from inside a fetched schema. It is asserted
-  not to — a remote `$ref` is a hard `MissingRefError` — and the whole resolver
-  chokepoint design rests on that.
+- Ajv resolving a remote `$ref` from inside a fetched schema. A remote `$ref`
+  is asserted to be a hard `MissingRefError`, and the whole resolver chokepoint
+  design rests on that.
 - Getting past the 10 s fetch timeout or the 5 MB response cap into resource
   exhaustion.
 - An integrity pin verifying bytes it should not.
@@ -88,12 +88,12 @@ The following **are** in scope:
 ### What `docmeta fill` sends
 
 `fill` sends document content to an LLM provider. **That** it does so is
-documented, intended, and not a report;
-[proposal 0017](docs/proposals/0017-fill-egress-and-bounds.md) and the
+documented, intended, and not a report.
+[Proposal 0017](docs/proposals/0017-fill-egress-and-bounds.md) and the
 [`fill` reference](https://hawkeyexl.github.io/docmeta/reference/cli/#fill)
-enumerate exactly what leaves the machine, including the file path and the full
-`$defs` of every resolved schema, and what the on-disk cache retains
-(the proposal set *before* confidence gating).
+enumerate exactly what leaves the machine. That includes the file path and the
+full `$defs` of every resolved schema. They also cover what the on-disk cache
+retains, which is the proposal set *before* confidence gating.
 
 Note that provider auto-detection is deliberately permissive: a stray
 `OPENAI_API_KEY` in the environment redirects egress, by design. `--local`

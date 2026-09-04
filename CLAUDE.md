@@ -46,25 +46,26 @@ command but positional paths on another). If a parser limitation forces a
 difference, prefer changing how the *other* argument is supplied rather than
 breaking parity.
 
-Do not add a deprecated alias to soften a rename unless asked. The reason is not
-that breakage is free — docmeta is past 1.0 and published to npm, and
-semantic-release turns a breaking change into a major release, so it costs the
-version number and a release note. It is that an alias is a permanent second
-surface for one command, which is what "commands must have parallel behaviors"
-exists to prevent. When a rename is right, make it and mark the commit
-`feat!:` / `BREAKING CHANGE:` so the release says so.
+Do not add a deprecated alias to soften a rename unless asked. Breakage is not
+free here. docmeta is past 1.0 and published to npm, and semantic-release turns
+a breaking change into a major release. That costs the version number and a
+release note. The objection to an alias is a different one. An alias is a
+permanent second surface for one command, which is what "commands must have
+parallel behaviors" exists to prevent. When a rename is right, make it and mark
+the commit `feat!:` / `BREAKING CHANGE:` so the release says so.
 
 ### Red/green TDD
 
 Develop test-first:
 
-1. **Red**: write or adjust tests for the new behavior and run them; confirm
-   they fail for the right reason.
-2. **Green**: implement the minimum to make them pass.
-3. **Refactor**: clean up with the tests as a safety net.
+1. **Red.** Write or adjust tests for the new behavior and run them, and
+   confirm they fail for the right reason.
+2. **Green.** Implement the minimum to make them pass.
+3. **Refactor.** Clean up with the tests as a safety net.
 
-When a behavior change makes existing tests fail correctly (e.g. a removed flag),
-update those tests as part of the red step rather than working around them.
+Sometimes a behavior change makes existing tests fail correctly, as when you
+remove a flag. Update those tests as part of the red step rather than working
+around them.
 
 ### Test fixtures per feature
 
@@ -83,54 +84,54 @@ Before any user-facing writing or docs task, consult `docs/content-strategy/`:
 3. Link into the **Reference shelf** (`reference/`) for exhaustive detail (flag tables, config keys, precedence chain). Journey pages explain the path; they don't duplicate reference.
 4. Check `information-architecture.md` for the page's place in the content set and its ★ launch status.
 5. Every page in `docs/src/content/docs/**` needs `title` and `description` frontmatter.
-6. Anything **visual** — a screenshot, a diagram, a code-block style, an embedded
-   video — follows `docs/content-strategy/design.md`, which governs the docs site
-   and the demo videos alike.
+6. Anything **visual** follows `docs/content-strategy/design.md`, which governs
+   the docs site and the demo videos alike. That covers a screenshot, a diagram,
+   a code-block style, and an embedded video.
 
-### Changing a dependency: keep npm at 11.6.3 or newer
+### Keep npm at 11.6.3 or newer when changing a dependency
 
-Change dependencies normally — `npm install <dep>`, commit the lockfile — as
-long as npm is at least **11.6.3**. `npm run check:deps` asserts that floor and
+Change dependencies normally, with `npm install <dep>` and a committed lockfile.
+This needs npm **11.6.3** or newer. `npm run check:deps` asserts that floor and
 auto-runs before `test`, `typecheck` and `build`, so the version cannot drift
 back down unnoticed.
 
-At 11.6.2 and below, npm writes an incomplete `package-lock.json`. It drops
-the top-level entries for the peer dependencies of an optional package —
-`@emnapi/core` and `@emnapi/runtime`, reached through
-`@rolldown/binding-wasm32-wasi` (vitest → vite → rolldown) — while keeping the
-dependency edges that point at them. The result installs happily, so nothing
-looks wrong locally, and `npm ci` rejects it. Every workflow starts with
-`npm ci`, so on the next push build-test, lint, docs and docs-as-tests all go
-red at once with `Missing: @emnapi/core@<ver> from lock file`.
+At 11.6.2 and below, npm writes an incomplete `package-lock.json`. It drops the
+top-level entries for the peer dependencies of an optional package, while
+keeping the dependency edges that point at them. Those peers are `@emnapi/core`
+and `@emnapi/runtime`, reached through `@rolldown/binding-wasm32-wasi` (vitest →
+vite → rolldown). The result installs happily, so nothing looks wrong locally,
+and `npm ci` rejects it. Every workflow starts with `npm ci`. So on the next
+push build-test, lint, docs and docs-as-tests all go red at once with `Missing:
+@emnapi/core@<ver> from lock file`.
 
 **This is not platform-specific**, whatever the symptom suggests. The repo
 carried a "splice the lockfile by hand, never regenerate it" rule for a while,
-on the theory that `npm install` was broken *on Windows*. It was not: npm 11.6.2
+on the theory that `npm install` was broken *on Windows*. It was not. npm 11.6.2
 drops those entries on Linux, macOS and Windows alike, and npm 11.6.3 keeps them
-on all three. The local npm was 11.6.1 — two patch releases below the fix — while
-CI's bundled npm was well above it, which is why only CI ever complained.
+on all three. The local npm was 11.6.1, two patch releases below the fix, while
+CI's bundled npm was well above it. That is why only CI ever complained.
 
 Regenerating the whole tree is fine again. Hand-splicing is not needed, and it
-leaves its own cruft behind — the spliced lockfile had accumulated a stale
-nested entry for `conventional-commits-parser` under `git-raw-commits` that a
-clean regeneration removes.
+leaves its own cruft behind. The spliced lockfile had accumulated a stale nested
+entry for `conventional-commits-parser` under `git-raw-commits` that a clean
+regeneration removes.
 
 Still worth doing after any dependency change: **read the lockfile diff**. A
 change that adds packages you cannot name, or removes any, is worth stopping
 for. And `npm link` / `npm unlink` rewrite `package-lock.json` as a side effect
-of something you ran for another reason — running the docs-as-tests suite (Doc Detective)
-locally needs `npm link` — so check `git status` afterwards and
-`git checkout -- package-lock.json` if it was touched.
+of something you ran for another reason. Running the docs-as-tests suite (Doc
+Detective) locally needs `npm link`. So check `git status` afterwards, and `git
+checkout -- package-lock.json` if it was touched.
 
-### Working in a worktree: run `npm ci` first
+### Run `npm ci` first when working in a worktree
 
 Worktrees live at `.claude/worktrees/<name>/`, **inside** the main checkout. A
-worktree with no `node_modules` therefore does not fail — Node's resolution
-walks up and silently finds the outer checkout's `node_modules`, which belongs
-to whatever branch happens to be checked out there. `tsc` and `vitest` then run
-against another branch's dependency tree, and the type errors and test failures
-that come back read exactly like real code bugs. Diagnosing that once cost a
-detour through four "pre-existing failures" that were nothing of the kind.
+worktree with no `node_modules` therefore does not fail. Node's resolution walks
+up and silently finds the outer checkout's `node_modules`, which belongs to
+whatever branch happens to be checked out there. `tsc` and `vitest` then run
+against another branch's dependency tree. The type errors and test failures that
+come back read exactly like real code bugs. Diagnosing that once cost a detour
+through four "pre-existing failures" that were nothing of the kind.
 
 `npm ci` is the fix. It installs *from* `package-lock.json` and never rewrites
 it, so it cannot drag an unrelated lockfile change into your branch.
@@ -159,29 +160,30 @@ thing semantic-release and commitlint agree on:
 A bug fix does not get a video no matter how significant it felt to write. If a
 branch carries both a `feat:` and some `fix:` commits, the feature is what the
 video shows. When it is genuinely unclear whether something is a feature or a
-fix, ask rather than guessing — the commit type is a release-visible decision
+fix, ask rather than guessing. The commit type is a release-visible decision
 anyway.
 
 **What it shows.** docmeta is a CLI, so the demo is a terminal session, not
 slides:
 
-1. the problem — a real document or repo that is missing something;
+1. the problem, as a real document or repo that is missing something;
 2. the new command or flag, typed out and run;
 3. the result, including the exit code where that is the point.
 
 Aim for **20–45 seconds**. Use `test/fixtures/` as the material wherever it
 fits, so the demo stays true to what CI actually runs. Keep the terminal legible
-at phone size: large font, short lines, no scrollback noise, `--no-color` off (the
-color is worth showing). Add a one-line caption per step rather than narration.
+at phone size, with a large font, short lines, and no scrollback noise. Leave
+`--no-color` off, because the color is worth showing. Add a one-line caption per
+step rather than narration.
 
-**How it should look.** `docs/content-strategy/design.md` is the spec — frame,
-capture geometry, bands, type, timing, and the palette. Read it before shooting.
-The rule that is least obvious and most often broken: the accent colour may not be
-red, green, yellow or cyan, because docmeta's own output already uses all four to
-mean something. Two of the first three videos shipped with an accent that collided
-with the product output in the same frame.
+**How it should look.** `docs/content-strategy/design.md` is the spec. It covers
+frame, capture geometry, bands, type, timing, and the palette. Read it before
+shooting. One rule is least obvious and most often broken. The accent colour may
+not be red, green, yellow or cyan, because docmeta's own output already uses all
+four to mean something. Two of the first three videos shipped with an accent
+that collided with the product output in the same frame.
 
-**How to make it.** The tooling is **not in this repo** — it comes from plugin
+**How to make it.** The tooling is **not in this repo**. It comes from plugin
 skills, which you invoke with the Skill tool. Do not go looking for a vendored
 script, and do not hand-roll `ffmpeg` when a skill covers the step:
 
@@ -201,15 +203,15 @@ whole pipeline is worth delegating in one go, and
 process.
 
 **Caption it.** LinkedIn autoplays muted, so a demo with no on-screen text reads
-as a silent flicker in the feed. Captions or step titles are not optional
-polish — they are the only thing most viewers will read.
+as a silent flicker in the feed. Captions or step titles are the only thing most
+viewers will read, so they are not optional polish.
 
-If a skill is genuinely unavailable in the session, say so plainly and hand over
+If a skill is genuinely unavailable in the session, say so plainly. Hand over
 the script plus the exact commands to run, rather than silently skipping the
 step or substituting a screenshot.
 
 **Where it goes.** Write to `media/` (gitignored). **Do not commit video or GIF
-binaries** — they bloat the history permanently and this repo publishes a docs
+binaries.** They bloat the history permanently, and this repo publishes a docs
 site that does not need them. Attach the file to the PR, or hand the path to the
 user.
 
@@ -218,11 +220,11 @@ to LinkedIn or any other account, and never draft-and-send on someone's behalf.
 Writing the suggested caption text is fine and useful. Publishing it is the
 user's call, every time.
 
-### Proposals are historical records: supersede, never amend
+### Supersede a proposal, never amend it
 
 `docs/proposals/` is an ADR log. Each file records what was decided **at the
 time it was written**, on the evidence available then. That makes the wrong ones
-as valuable as the right ones — they are the only account of why a decision
+as valuable as the right ones. They are the only account of why a decision
 looked correct before it wasn't.
 
 So when reality moves past a proposal, **write a new one that supersedes it**.
@@ -231,19 +233,19 @@ record of the reasoning that produced it, and leaves no trace that the question
 was ever open.
 
 0007 is the worked example. It concluded "implement HTML, keep XML and DITA
-read-only, permanently", and shipped all three — because the two objections
-behind that verdict turned out to be answerable (xmldom positions are
-reconstructible into offsets; DITA has a DTD-valid metadata channel in
-`<prolog>`). The right response is a superseding proposal that states what
-changed and why, not a patch to 0007's title and verdict. Reading 0007 as
-written is how the next person learns that "permanently" was a judgment about
-effort, not a fact about the format.
+read-only, permanently", and shipped all three. Both objections behind that
+verdict turned out to be answerable. xmldom positions are reconstructible into
+offsets, and DITA has a DTD-valid metadata channel in `<prolog>`. The right
+response is a superseding proposal that states what changed and why, not a patch
+to 0007's title and verdict. Reading 0007 as written is how the next person
+learns that "permanently" was a judgment about effort, not a fact about the
+format.
 
 A superseding proposal should say what it supersedes, and the superseded one is
 left exactly as it was.
 
 The one exception is the `Status:` line, which is an index entry rather than
-part of the record — `0004` went `Proposed` → `Implemented (#74)` in the PR that
+part of the record. `0004` went `Proposed` → `Implemented (#74)` in the PR that
 implemented it, and that is how you find out a proposal was acted on. Mark a
 superseded proposal `Superseded by NNNN` and change nothing else: not the title,
 not the verdict, not the reasoning, however wrong they read afterwards.
@@ -255,10 +257,10 @@ not the verdict, not the reasoning, however wrong they read afterwards.
   indexed access and regex capture groups.
 - **Type-aware lint.** `npm run lint` runs `typescript-eslint`'s
   `strictTypeChecked` set over `src/` and `test/`. It needs type information, so
-  it is slower than a syntax linter and worth the cost: the thing it catches that
-  `tsc` does not is an *inferred* `any` crossing a boundary — a commander
-  callback parameter, a `JSON.parse`, a `ReadableStream<any>` — which never
-  appears as the word `any` in the source and so cannot be grepped for. When a
+  it is slower than a syntax linter, and worth the cost. What it catches that
+  `tsc` does not is an *inferred* `any` crossing a boundary, such as a commander
+  callback parameter, a `JSON.parse`, or a `ReadableStream<any>`. That never
+  appears as the word `any` in the source, so it cannot be grepped for. When a
   rule is genuinely wrong here, turn it off in `eslint.config.js` with a comment
   saying why, rather than scattering inline disables.
 - **Conventional Commits.** Commit messages are linted by commitlint and drive
