@@ -5,9 +5,9 @@ description: "Exactly what docmeta fill transmits on each inference call, how mu
 
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-[`docmeta fill`](/docmeta/reference/cli/#fill) is the one command that sends your documents somewhere. Every other part of docmeta reads files and JSON Schema and stays on the machine it runs on; `fill` asks a model to infer the metadata you are missing, and to do that it has to show the model your content.
+[`docmeta fill`](/docmeta/reference/cli/#fill) is the one command that sends your documents somewhere. Every other part of docmeta reads files and JSON Schema and stays on the machine it runs on. `fill` asks a model to infer the metadata you are missing. To do that, it has to show the model your content.
 
-If your organization has a data-egress policy, that makes `fill` a decision before it is a tool. This page gives you the facts a security review asks for — *what* leaves, *how much* leaves, and *what is kept afterwards* — and then the flags that bound or eliminate the egress. It does not restate the flag surface; [the CLI reference](/docmeta/reference/cli/#fill) is where every flag and default lives.
+If your organization has a data-egress policy, that makes `fill` a decision before it is a tool. This page gives you the facts a security review asks for: *what* leaves, *how much* leaves, and *what is kept afterwards*. It then covers the flags that bound or eliminate the egress. It does not restate the flag surface; [the CLI reference](/docmeta/reference/cli/#fill) is where every flag and default lives.
 
 ## What leaves your machine
 
@@ -18,45 +18,45 @@ Per inference call, `fill` transmits:
 | The file path | The path **as it was matched**, interpolated into the prompt. In a docs repo, paths often name products that are not public yet. |
 | The existing metadata | The entire metadata block already in the file, serialized as JSON, **unfiltered**. `--fields` narrows what `fill` *proposes*; it does not narrow what is sent. |
 | The document text | The whole file. See [how much of the document](#how-much-of-the-document) below. |
-| One subschema per property being filled | Each candidate property's own subschema, lifted **verbatim** out of your schema — including its `description`, which is written for your team and now travels with the request. |
+| One subschema per property being filled | Each candidate property's own subschema, lifted **verbatim** out of your schema. That includes its `description`, which is written for your team and now travels with the request. |
 | Every `$defs` and `definitions` block | From **every schema in the resolved set**, whether or not anything being filled references them. An internal schema's private definitions leave in full. |
 
 Two consequences are worth stating plainly, because neither is what a reader guesses.
 
-The `$defs` row is the one that surprises people. `fill` reproduces the definition blocks so that a `$ref` inside a lifted subschema still resolves, and it has no way to know in advance which ones a given property will reach — so it sends all of them. If your schema set includes an internal schema with definitions unrelated to the properties being filled, those definitions still go.
+The `$defs` row is the one that surprises people. `fill` reproduces the definition blocks so that a `$ref` inside a lifted subschema still resolves. It has no way to know in advance which ones a given property will reach, so it sends all of them. If your schema set includes an internal schema with definitions unrelated to the properties being filled, those definitions still go.
 
 And `--dry-run` does **not** change any of this. It holds back the write to your files; the inference call has already happened by then. `--dry-run` is a review gate, not an egress control.
 
 <Aside type="note" title="Per call, not per file">
-Everything in the table above is sent on *each* call. A document split across several calls repeats the path, the metadata block, and the property list every time — only the slice of document text differs.
+Everything in the table above is sent on *each* call. A document split across several calls repeats the path, the metadata block, and the property list every time. Only the slice of document text differs.
 </Aside>
 
 ## How much of the document
 
 All of it.
 
-A file longer than the chunk budget is split and sent across several calls, and the per-chunk proposals are merged by keeping the **most confident value for each property**. `--chunk-chars` sets that budget, defaulting to 12,000 characters per call. Every character of the file reaches the provider; the budget only decides how many calls that takes.
+A file longer than the chunk budget is split and sent across several calls. The per-chunk proposals are merged by keeping the **most confident value for each property**. `--chunk-chars` sets that budget, defaulting to 12,000 characters per call. Every character of the file reaches the provider; the budget only decides how many calls that takes.
 
-The text sent is the **whole file, front matter included** — not the body after it. So the metadata block travels twice: once as the JSON in the prompt's own metadata section, and again inside the document text.
+The text sent is the **whole file, front matter included**, rather than the body after it. So the metadata block travels twice: once as the JSON in the prompt's own metadata section, and again inside the document text.
 
 <Aside type="tip" title="If fill did badly on your long pages">
-Before chunking, `fill` sent only the first 12,000 characters and replaced the rest with a truncation marker, so a long reference page was described from its introduction and its own conclusion was never read. That is the usual explanation for a weak `description` on a long page filled with an older version — and re-running on a current version is the fix.
+Before chunking, `fill` sent only the first 12,000 characters and replaced the rest with a truncation marker. A long reference page was then described from its introduction, and its own conclusion was never read. That is the usual explanation for a weak `description` on a long page filled with an older version. Re-running on a current version is the fix.
 </Aside>
 
 ## What is kept afterwards
 
-`fill` writes a proposal cache to `.docmeta/cache`, and what it stores is **pre-gating**: every value the model returned, including the ones that were rejected for low confidence and the ones that were reverted for failing your schema, together with the model's stated reasoning for each.
+`fill` writes a proposal cache to `.docmeta/cache`, and what it stores is **pre-gating**. That means every value the model returned, including the ones rejected for low confidence and the ones reverted for failing your schema. The model's stated reasoning for each is stored with them.
 
-That is the opposite of the natural assumption. The cache is not a record of what `fill` wrote into your files — it is a record of everything the model said about your content, whether or not you took it. Treat it as **exactly as sensitive as the documents themselves**, because it is derived from them.
+That is the opposite of the natural assumption. The cache records everything the model said about your content, whether or not you took it. It is not a record of what `fill` wrote into your files. Treat it as **exactly as sensitive as the documents themselves**, because it is derived from them.
 
 It is otherwise unremarkable to operate:
 
-- **Machine-local**, rooted at the working directory. Running `fill` from a subdirectory creates a *second* cache there rather than reusing the one at the repo root — a real way to leave a forgotten copy behind.
+- **Machine-local**, rooted at the working directory. Running `fill` from a subdirectory creates a *second* cache there rather than reusing the one at the repo root. That is a real way to leave a forgotten copy behind.
 - **Not committed**, provided you say so: add `.docmeta/` to your `.gitignore`.
 - **Safe to delete** at any time.
 - **Skippable** entirely with `--no-cache`.
 
-Deleting the cache costs nothing but a re-run. The reason to keep it — re-scoring proposals at a different `--confidence` for free — is [covered in the CLI reference](/docmeta/reference/cli/#the-confidence-gate); weigh that against a retained copy of the model's full output, and delete it when the retrofit is done.
+Deleting the cache costs nothing but a re-run. Keeping it lets you re-score proposals at a different `--confidence` for free, which is [covered in the CLI reference](/docmeta/reference/cli/#the-confidence-gate). Weigh that against a retained copy of the model's full output, and delete the cache when the retrofit is done.
 
 ## The provider is detected, and that can surprise you
 
@@ -68,7 +68,7 @@ A developer on your team set `OPENAI_API_KEY` months ago for an unrelated side p
 docmeta fill docs/internal/
 ```
 
-Every page under `docs/internal/` — paths, metadata, full text — goes to OpenAI. Nobody chose that. Detection chose it, from an environment variable that had nothing to do with docmeta, and the run succeeds so nothing draws attention to it. `fill` does report the provider and model it used, in both output formats, but that is a line in the summary of a command that otherwise worked.
+Every page under `docs/internal/`, including paths, metadata and full text, goes to OpenAI. Nobody chose that. Detection chose it, from an environment variable that had nothing to do with docmeta, and the run succeeds so nothing draws attention to it. `fill` does report the provider and model it used, in both output formats. But that is a line in the summary of a command that otherwise worked.
 
 The fix is to stop leaving the choice to the environment. Pin the provider explicitly:
 
@@ -95,7 +95,7 @@ And if the answer is that this content may not go to a hosted provider at all, t
 docmeta fill docs/internal/ --local
 ```
 
-If the environment holds an `OPENAI_API_KEY`, `--local` overrides it rather than following it. If no local model is available, the run fails with exit 2 instead of quietly falling back to something hosted — a refusal is the point.
+If the environment holds an `OPENAI_API_KEY`, `--local` overrides it rather than following it. If no local model is available, the run fails with exit 2 instead of quietly falling back to something hosted. The refusal is the point.
 
 `--local` also refuses **`claude-cli`**, and that is the part to internalize. The rest of the CLI treats `claude-cli` as the local-ish option: no API key, no per-token bill, just a binary on your `PATH`. But the binary is what runs locally; the inference does not. It is the one provider where "local" is true of the process and false of the thing your policy is about. `--local` means `llama-cpp`, and nothing else.
 
@@ -109,7 +109,7 @@ docmeta fill docs/internal/ --local --offline
 
 ### The first local run downloads
 
-Choosing `--local` trades egress for a one-time install. On its first run the local provider fetches model weights — under 10 GB, sized to your machine — and, if the `node-llama-cpp` binding is missing, installs that too, roughly 700 MB more. Both warn once before starting, and both land in `~/.hawkeyexl-inference/`, never in your project.
+Choosing `--local` trades egress for a one-time install. On its first run the local provider fetches model weights, under 10 GB and sized to your machine. If the `node-llama-cpp` binding is missing, it installs that too, roughly 700 MB more. Both warn once before starting, and both land in `~/.hawkeyexl-inference/`, never in your project.
 
 Set `INFERENCE_NO_AUTO_INSTALL=1` to refuse the binding install if a native install needs approval in your environment. On a CI runner, either pin a provider or expect that download on every fresh agent.
 
@@ -121,11 +121,11 @@ A whole-docset `fill` is many calls, and chunking means it is more calls than it
 docmeta fill docs/ --max-turns 200
 ```
 
-It counts **inference calls, not files**. That distinction is the user-visible face of chunking: a short page costs one call, a long reference page costs several, so 200 turns is not 200 files. When the cap is reached the run says so, and each file it never got to is reported by name with `--max-turns` given as the reason — so you can see how far it got and resume against a narrower target rather than guessing.
+It counts **inference calls, not files**. That distinction is the user-visible face of chunking. A short page costs one call and a long reference page costs several, so 200 turns is not 200 files. When the cap is reached the run says so. Each file it never got to is reported by name, with `--max-turns` given as the reason. You can see how far it got, and resume against a narrower target rather than guessing.
 
-`--max-turns` is the control worth setting before the first real run on an unfamiliar docset, when you do not yet know how long the pages are. Pair it with `--dry-run` and one folder to calibrate, then widen.
+`--max-turns` is the control worth setting before the first real run on an unfamiliar docset. At that point you do not yet know how long the pages are. Pair it with `--dry-run` and one folder to calibrate, then widen.
 
-Under `--local` there is no bill to bound at all — a capped run there is about your own wall-clock, not spend.
+Under `--local` there is no bill to bound at all. A capped run there is about your own wall-clock, not spend.
 
 ## Where to go next
 
