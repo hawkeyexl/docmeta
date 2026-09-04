@@ -2,7 +2,7 @@
 
 - **Status:** Implemented
 - **Serves:** Sara · S1 "Define our metadata standard as a schema"; external consumers
-- **Depends on:** URL→built-in aliasing (stress test 1) — without it this proposal is a regression
+- **Depends on:** URL→built-in aliasing (stress test 1). Without it this proposal is a regression
 - **Touches:** New `docs/public/schemas/**`, `src/core/schema-registry.ts`, `src/core/resolve-schema.ts`, `src/core/validator.ts`, `src/schemas/manifest.json`, `scripts/sync-builtin-schemas.mjs`, `scripts/check-builtin-schemas.mjs`, `.github/workflows/ci.yml`
 
 ## What shipped, and where it diverged
@@ -11,17 +11,17 @@ Four changes to the design below. Each is recorded against the stress test it
 came out of, because each was found by taking that stress test literally.
 
 **Stress test 1 (aliasing) grew a second half, from proposal 0015.** 0015
-(`214bbaa`) landed after this was written and added `schemaTrust`, which refuses
-a document-supplied URL in two independent places: `documentRefs: "local"`
-rejects any URL outright and never reaches the host list, and `documentRefs:
-"any"` with a non-empty `schemaTrust.hosts` rejects a host the operator did not
-list. Aliasing inside `loadSchema` does not help, because both refusals happen
-earlier, in `resolveSchemaSet` — the last place that still knows a ref came from
-a document. So a published URL is exempted in `assertDocumentRefAllowed`
-alongside built-in ids, **above** the `kind === "url"` block; putting it inside
-that block would clear the host check and leave `local` broken. The predicate
-(`isPublishedBuiltinUrl`) is exported from `schema-registry.ts` and shared, so
-there is one table rather than two.
+(`214bbaa`) landed after this was written, and added `schemaTrust`. That refuses
+a document-supplied URL in two independent places. `documentRefs: "local"`
+rejects any URL outright and never reaches the host list. `documentRefs: "any"`
+with a non-empty `schemaTrust.hosts` rejects a host the operator did not list.
+Aliasing inside `loadSchema` does not help, because both refusals happen
+earlier, in `resolveSchemaSet`. That is the last place that still knows a ref
+came from a document. So a published URL is exempted in
+`assertDocumentRefAllowed` alongside built-in ids, **above** the `kind ===
+"url"` block. Putting it inside that block would clear the host check and leave
+`local` broken. The predicate `isPublishedBuiltinUrl` is exported from
+`schema-registry.ts` and shared, so there is one table rather than two.
 
 **Stress test 1's premise "the mapping needs no table" was wrong.** The path
 does *not* mirror the id: `passo-uno:seven-action:1.0` is at
@@ -33,43 +33,43 @@ exist and must stay an ordinary remote ref.
 
 **Stress test 3's enforcement idiom was described wrongly.** The claim that
 `docs:check-cli` "runs the script and fails on a dirty tree" is not what
-`scripts/check-cli-reference.mjs` does — it regenerates nothing and never
+`scripts/check-cli-reference.mjs` does. It regenerates nothing and never
 inspects git state. `scripts/check-builtin-schemas.mjs` copies the actual idiom
-instead: pure Node stdlib, parse both sides, accumulate and sort a `problems[]`
-array, prefix every line with the npm script name, exit 0/1/2, and end with a
-remedy line naming the command to re-run. The writer (`npm run schemas:sync`) is
-deliberately **additive**: it adds manifest entries and refreshes the copies but
-never rewrites a hash it has already recorded, so re-running it cannot paper the
-immutability check over.
+instead. That means pure Node stdlib, parsing both sides, and accumulating and
+sorting a `problems[]` array. Every line is prefixed with the npm script name.
+It exits 0, 1 or 2, and ends with a remedy line naming the command to re-run. The
+writer, `npm run schemas:sync`, is deliberately **additive**. It adds manifest
+entries and refreshes the copies. But it never rewrites a hash it has already
+recorded, so re-running it cannot paper the immutability check over.
 
 **Stress test 7's "copy at docs-build time" would not have worked.** The `build`
 job in `.github/workflows/docs.yml` is a separate checkout that runs `npm ci`
-only inside `docs/`: the repo root has no `node_modules` there, and nothing from
+only inside `docs/`. The repo root has no `node_modules` there, and nothing from
 the `validate-docs` job reaches it. So the copies are **committed**, and byte
-equality is asserted in `npm test` — which `ci.yml` runs, so it gates pull
+equality is asserted in `npm test`. `ci.yml` runs that, so it gates pull
 requests, which is what stress test 7 actually asked for.
 
 **Stress test 5 needed one mechanic the sketch does not mention.** `addSchema`
-validates against the meta-schema by default, and the 2019, draft-07 and
-draft-04 Ajv instances do not carry the 2020-12 meta-schema every built-in
-declares — so registration throws there unless it is skipped per call.
-Registration also lives in `buildAjv`, not in `Validator`, because
-`compileWithFormats` builds its own throwaway instance for `fill`'s proposal
-envelope and would otherwise lose every `$ref` into a built-in. One
-`addSchema(schema, url)` covers both spellings, since Ajv also registers the
-schema's `$id`; draft-04 predates `$id` and needs the id added explicitly.
+validates against the meta-schema by default. The 2019, draft-07 and draft-04
+Ajv instances do not carry the 2020-12 meta-schema every built-in declares. So
+registration throws there unless it is skipped per call. Registration also lives
+in `buildAjv`, not in `Validator`. `compileWithFormats` builds its own throwaway
+instance for `fill`'s proposal envelope, and would otherwise lose every `$ref`
+into a built-in. One `addSchema(schema, url)` covers both spellings, since Ajv
+also registers the schema's `$id`. draft-04 predates `$id` and needs the id
+added explicitly.
 
 **One thing deliberately left alone.** A published URL carrying an `integrity:`
 pin still fails, because `loadSchema`'s "a pin can only be verified against a
 local file" guard runs before the alias. That is the right answer, not an
-oversight: the URL is served from the bundle, so there are no fetched bytes for
-a pin to hash, and a pin that silently verified nothing would read as protection
+oversight. The URL is served from the bundle, so there are no fetched bytes for
+a pin to hash. A pin that silently verified nothing would read as protection
 that is not there. Vendor the file if you want a pinned copy.
 
 ## Problem
 
-docmeta ships seven schemas — OKF, Diátaxis, TGDP, Seven-Action, and three
-Docusaurus 3.10 contracts — and they are reachable **only from inside docmeta**, as
+docmeta ships seven schemas: OKF, Diátaxis, TGDP, Seven-Action, and three
+Docusaurus 3.10 contracts. They are reachable **only from inside docmeta**, as
 `vendor:name:version` ids resolved from a bundled `Map` in
 `src/core/schema-registry.ts`.
 
@@ -77,9 +77,9 @@ Consequences:
 
 - A team that wants to validate OKF frontmatter with any other JSON Schema tool
   cannot, without copying the file out of `node_modules`.
-- Sara cannot `$ref` the built-in OKF schema from her own schema to extend it,
-  which is the single most natural thing a schema author wants to do and is
-  precisely S1's job ("start from it or deviate deliberately").
+- Sara cannot `$ref` the built-in OKF schema from her own schema to extend it.
+  That is the single most natural thing a schema author wants to do. It is
+  precisely S1's job: "start from it or deviate deliberately".
 - The docs describe these schemas in prose across four reference pages, and a
   reader who wants the actual JSON has nowhere to click.
 
@@ -115,13 +115,14 @@ Copy at build time via the existing docs build, and verify in CI.
 
 ## Stress test
 
-### 1. Published URLs must resolve to the bundled copy — otherwise this is a regression
+### 1. Published URLs must resolve to the bundled copy, or this is a regression
 
-The trap. Once `https://…/schemas/okf/0.1.json` exists, users will write it in a
-document's `$schema` or in config. `classifyRef` returns `kind: "url"` for
-anything matching `^https?://`, so docmeta would **fetch its own built-in over the
-network** — slower, subject to the 10 s timeout, broken offline, and broken in the
-air-gapped case [0008](0008-remote-schema-durability.md) is trying to guarantee.
+This is the trap. Once `https://…/schemas/okf/0.1.json` exists, users will write
+it in a document's `$schema` or in config. `classifyRef` returns `kind: "url"`
+for anything matching `^https?://`, so docmeta would **fetch its own built-in
+over the network**. That is slower, subject to the 10 s timeout, broken offline,
+and broken in the air-gapped case [0008](0008-remote-schema-durability.md) is
+trying to guarantee.
 
 So `loadSchema` must alias known published URLs back to the bundled objects,
 before any fetch:
@@ -139,7 +140,7 @@ docmeta strictly worse for anyone who uses the URLs it advertises.
 Consequence to test explicitly: `--offline` must still succeed against a document
 whose `$schema` is a published URL.
 
-### 2. Changing `$id` to the URL — rejected, and it is not cosmetic
+### 2. Changing `$id` to the URL (rejected, and it is not cosmetic)
 
 Every built-in already has `$id` set to its docmeta id (verified):
 
@@ -161,24 +162,24 @@ self-describing. Rejected:
   not `$id`, so baselines survive — but only because the ref is what is hashed.
   That is a narrow escape, not a reason to churn ids.
 
-Decision: keep `$id` as the docmeta id; serve the file at a URL that differs from
-its `$id`. Some strict JSON Schema tooling warns when a schema's `$id` disagrees
-with its retrieval URI. That warning is acceptable and must be **documented on the
-built-in schemas reference page**, because a schema author who hits it will
-otherwise assume the published file is broken.
+The decision is to keep `$id` as the docmeta id, and serve the file at a URL
+that differs from its `$id`. Some strict JSON Schema tooling warns when a
+schema's `$id` disagrees with its retrieval URI. That warning is acceptable, and
+must be **documented on the built-in schemas reference page**. A schema author
+who hits it will otherwise assume the published file is broken.
 
-### 3. Immutability — needs enforcement, not just intent
+### 3. Immutability needs enforcement, not just intent
 
 The value of a pinned URL is that its content never changes. Nothing stops a
 future PR editing `src/schemas/okf/0.1.json`, which would silently change the
-contract for every external consumer of the published URL — the exact failure
-[0008](0008-remote-schema-durability.md) adds integrity pins to detect.
+contract for every external consumer of the published URL. That is the exact
+failure [0008](0008-remote-schema-durability.md) adds integrity pins to detect.
 
-Enforce it: a CI check that hashes each `src/schemas/<dir>/<version>.json` against
-a committed manifest and fails if an **existing** version's hash changes. A
-genuine fix ships as a new version file. This is a real constraint on the project,
-and it is the reason to do this deliberately rather than casually: publishing a URL
-is a promise.
+Enforce it with a CI check. It hashes each `src/schemas/<dir>/<version>.json`
+against a committed manifest, and fails if an **existing** version's hash
+changes. A genuine fix ships as a new version file. This is a real constraint on
+the project. It is the reason to do this deliberately rather than casually,
+because publishing a URL is a promise.
 
 The manifest shape has to be specified, or two implementers will pick differently
 and the check becomes its own merge-conflict source. Use
@@ -199,40 +200,41 @@ Rules that make it unambiguous:
 
 - **Key** is the path relative to `src/schemas/`, posix separators, so it is
   platform-stable.
-- **Value** is `sha256-<hex>` over the file's exact bytes — no JSON
+- **Value** is `sha256-<hex>` over the file's exact bytes, with no JSON
   canonicalization, because the published artifact is the bytes.
-- **Adding** a version adds a key; the check fails only when an **existing** key's
-  value changes, so new schemas need no ceremony.
-- **Removing** a key fails the check too: a published URL must not 404 after
-  someone deletes the source file.
+- **Adding** a version adds a key. The check fails only when an **existing**
+  key's value changes, so new schemas need no ceremony.
+- **Removing** a key fails the check too, because a published URL must not 404
+  after someone deletes the source file.
 - Sorted keys keep the diff to one line per change, which is what keeps this from
   becoming a conflict magnet.
 
-A regenerate script (`npm run schemas:manifest`) writes it, and the CI check runs
-the script and fails on a dirty tree — the same pattern as `docs:check-cli`, so
-there is one idiom in the repo rather than two.
+A regenerate script, `npm run schemas:manifest`, writes it. The CI check runs
+the script and fails on a dirty tree. That is the same pattern as
+`docs:check-cli`, so there is one idiom in the repo rather than two.
 
-Note this repo has already edited built-ins in place —
-`f7e611b fix(schemas): require type on the Diataxis vocabulary` changed
-`diataxis:diataxis:1.0` and shipped as a **major** version bump of docmeta. That
+Note this repo has already edited built-ins in place. `f7e611b fix(schemas):
+require type on the Diataxis vocabulary` changed `diataxis:diataxis:1.0`, and
+shipped as a **major** version bump of docmeta. That
 was defensible for a bundled schema. Once the URL is public it would break
 consumers who never upgraded docmeta at all. The manifest check is what makes the
 new rule stick.
 
-### 4. Editor autocomplete — the weakest of the claimed benefits, stated honestly
+### 4. Editor autocomplete, the weakest of the claimed benefits, stated honestly
 
 A tempting pitch is "now editors can autocomplete your frontmatter". Mostly they
-cannot: YAML language servers resolve `$schema` for YAML *files*, not for YAML
-frontmatter embedded in Markdown, and docmeta's `$schema` is a docmeta directive
+cannot. YAML language servers resolve `$schema` for YAML *files*, not for YAML
+frontmatter embedded in Markdown. And docmeta's `$schema` is a docmeta directive
 that `Validator.validate` deliberately strips before validating. Some editors
-support frontmatter schemas via their own settings (`yaml.schemas` glob mapping),
-which works with these URLs but does not need the file's `$schema` at all.
+support frontmatter schemas via their own settings, through a `yaml.schemas`
+glob mapping. That works with these URLs, but does not need the file's `$schema`
+at all.
 
 Real benefits, in order: `$ref` from a user's own schema (S1), use by non-docmeta
 tooling, and a clickable link from the reference pages. The proposal should be sold
 on those.
 
-### 5. `$ref`-ing a built-in is impossible today — by **any** route
+### 5. `$ref`-ing a built-in is impossible today, by **any** route
 
 Tested rather than assumed, and the result is worse than expected. Ajv is
 constructed with no `loadSchema` option, so a remote `$ref` cannot resolve:
@@ -254,55 +256,58 @@ docmeta: Schema "./extends-builtin.json" failed to compile:
   can't resolve reference google:okf:0.1 from id #
 ```
 
-So S1's stated job — "understand what the built-in OKF schema already provides so
-she can start from it or deviate deliberately" — has no `$ref` path at all.
-Composition is only reachable through the schema **set** (listing OKF alongside a
-custom schema, which is AND-composition and does work). Extending, overriding, or
-narrowing a built-in from inside your own schema does not.
+S1's stated job is to "understand what the built-in OKF schema already provides
+so she can start from it or deviate deliberately". It has no `$ref` path at all.
+Composition is only reachable through the schema **set**, by listing OKF
+alongside a custom schema, which is AND-composition and does work. Extending,
+overriding, or narrowing a built-in from inside your own schema does not.
 
-That is an independent gap that publishing does not fix and could disguise: once
-the URLs exist, users will try exactly this `$ref` and get a compile error that
-looks like the published file is broken.
+That is an independent gap that publishing does not fix, and could disguise.
+Once the URLs exist, users will try exactly this `$ref`, and get a compile error
+that looks like the published file is broken.
 
-Fix: register all seven built-ins with each Ajv instance up front via `addSchema`,
-under both their `$id` and their published URL. Bounded to seven schemas, needs no
-network, and makes both forms above compile. Recommended as part of this proposal
-rather than deferred, because publishing without it invites the failure.
+The fix is to register all seven built-ins with each Ajv instance up front via
+`addSchema`, under both their `$id` and their published URL. It is bounded to
+seven schemas, needs no network, and makes both forms above compile. Recommended
+as part of this proposal rather than deferred, because publishing without it
+invites the failure.
 
-### 6. Hosting on GitHub Pages — caching and MIME
+### 6. Hosting on GitHub Pages, with caching and MIME
 
-Pages serves `.json` as `application/json` and sets a short `Cache-Control`. Fine
-for tooling. Two notes: Pages has no `Access-Control-Allow-Origin` guarantee for
-browser-based consumers (it does send `*` today, but it is not contractual), and
-Pages can 404 during a deploy. Neither matters for the CLI (which aliases to
-bundled copies) and both matter for external consumers, so the docs should suggest
-vendoring per [0008](0008-remote-schema-durability.md) for anything load-bearing.
+Pages serves `.json` as `application/json` and sets a short `Cache-Control`.
+That is fine for tooling. Two notes follow. Pages has no
+`Access-Control-Allow-Origin` guarantee for browser-based consumers, though it
+does send `*` today. And Pages can 404 during a deploy. Neither matters for the
+CLI, which aliases to bundled copies. Both matter for external consumers, so the
+docs should suggest vendoring per [0008](0008-remote-schema-durability.md) for
+anything load-bearing.
 
-### 7. Duplicated JSON in the repo — drift risk, cheaply closed
+### 7. Duplicated JSON in the repo, a drift risk cheaply closed
 
-Copying seven files into `docs/public/` creates two copies of each schema. A test
-asserting byte equality closes it, and must run in the normal `npm test` (not only
-in the docs workflow) or the copy will drift in a PR that does not touch docs.
-Alternative considered: an Astro dynamic endpoint importing from `../../src/schemas`
-— avoids duplication but couples the docs build to a path outside `docs/`, and the
-docs package has its own `package.json`/`node_modules`. The copy plus equality test
-is simpler and the failure mode is louder.
+Copying seven files into `docs/public/` creates two copies of each schema. A
+test asserting byte equality closes it. It must run in the normal `npm test`,
+not only in the docs workflow, or the copy will drift in a PR that does not
+touch docs. One alternative was considered: an Astro dynamic endpoint importing
+from `../../src/schemas`. That avoids duplication, but couples the docs build to
+a path outside `docs/`, and the docs package has its own `package.json` and
+`node_modules`. The copy plus equality test is simpler, and the failure mode is
+louder.
 
 ## Implementation sketch
 
-1. `test/schema-registry.test.ts` — a published URL ref resolves to the bundled
-   schema with **zero** fetches (assert against `test/helpers/schema-server.ts`
-   request count, or a `fetch` spy).
-2. `test/schema-registry.test.ts` — the alias map covers exactly
-   `listBuiltins()`; adding a built-in without a URL fails the test.
-3. `test/builtin-schemas.test.ts` — hash manifest: every existing
+1. In `test/schema-registry.test.ts`, a published URL ref resolves to the
+   bundled schema with **zero** fetches. Assert against
+   `test/helpers/schema-server.ts` request count, or a `fetch` spy.
+2. In `test/schema-registry.test.ts`, the alias map covers exactly
+   `listBuiltins()`, and adding a built-in without a URL fails the test.
+3. In `test/builtin-schemas.test.ts`, the hash manifest. Every existing
    `<dir>/<version>.json` matches its recorded hash.
-4. `test/builtin-schemas.test.ts` — `docs/public/schemas/**` is byte-identical to
-   `src/schemas/**`.
-5. `test/validator.test.ts` — a user schema `$ref`-ing a published built-in URL
-   compiles offline (stress test 5).
-6. `test/cli.integration.test.ts` — `--offline` validates a document whose
+4. In `test/builtin-schemas.test.ts`, `docs/public/schemas/**` is byte-identical
+   to `src/schemas/**`.
+5. In `test/validator.test.ts`, a user schema `$ref`-ing a published built-in URL
+   compiles offline. That is stress test 5.
+6. In `test/cli.integration.test.ts`, `--offline` validates a document whose
    `$schema` is a published URL.
-7. Docs: `reference/built-in-schemas.mdx` gains a URL column, the `$id`-vs-URL
-   note, and the immutability promise; the OKF, taxonomy, and Docusaurus pages
-   link to their JSON.
+7. For docs, `reference/built-in-schemas.mdx` gains a URL column, the
+   `$id`-vs-URL note, and the immutability promise. The OKF, taxonomy, and
+   Docusaurus pages link to their JSON.
