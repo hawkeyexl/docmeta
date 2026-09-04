@@ -101,8 +101,8 @@ metadata:
   tool that runs it, and `metadata` is its extension point. `metadata` stays
   open, so other tools' members pass untouched, while entry objects are closed.
   The schema rejects any `eval-*` key inside `metadata` other than the ones
-  above, which gives it the same protection the page side applies at its root: a
-  misspelled key fails instead of being ignored. In `proposal.1` this was a
+  above. That gives it the same protection the page side applies at its root,
+  where a misspelled key fails instead of being ignored. In `proposal.1` this was a
   request to implementers, and the implementer that followed the description
   faithfully ended up without the guard.
 - **Ids are required on object entries.** Names derived from position
