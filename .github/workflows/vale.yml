@@ -1,8 +1,10 @@
 name: Vale
 
-# Prose lint against the Moose house voice (Voices + Direct). Advisory for
-# now: reviewdog annotates only the lines a PR adds, and errors do not fail
-# the check. Flip fail_on_error once the existing corpus is worked down.
+# Prose lint against the Moose house voice (Voices + Direct). reviewdog
+# annotates only the lines a PR adds, and an error on one of them fails the
+# check. The corpus was worked down to zero before this stopped being
+# advisory, so a failure here is always something the pull request wrote.
+# CHANGELOG.md is exempt in .vale.ini, because semantic-release writes it.
 on:
   pull_request:
     paths:
@@ -24,11 +26,16 @@ jobs:
           version: 3.20.0
           reporter: github-pr-review
           filter_mode: added
-          fail_on_error: false
-          # Three fixtures carry deliberately broken frontmatter (that is what
-          # docmeta tests). Vale cannot parse them and aborts the whole run on
-          # the first one (E201), which no level setting can downgrade, so they
-          # are kept out of the run. Every other file is linted.
-          vale_flags: "--glob=!{test/fixtures/dd/malformed-yaml.md,test/fixtures/get-parse-error/unparseable.md,test/fixtures/get-parse-error/toml-fences.md}"
+          fail_on_error: true
+          # The fixture tree is test data, not prose. Two things follow from
+          # that. Some fixtures carry deliberately broken frontmatter (that is
+          # what docmeta tests), which Vale cannot parse; it aborts the whole
+          # run on the first one (E201), and no level setting downgrades it.
+          # The rest are sample documents whose bodies describe what they
+          # exercise, and holding those to a house voice would gate the
+          # dedicated fixture CLAUDE.md asks for with every feature. Excluding
+          # the tree covers both, and never needs updating as fixtures are
+          # added. Every other file in the repo is linted.
+          vale_flags: "--glob=!test/fixtures/**"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
