@@ -5,17 +5,17 @@ description: Adopt docmeta on a repo that has never had metadata validation. Mea
 
 import { Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-Adding metadata validation to a mature docs repo has a chicken-and-egg problem. The reason you want validation is that the existing metadata is inconsistent: fields missing, values fat-fingered, no enforcement. But if your very first CI run holds every page to a strict standard, hundreds of long-lived docs fail at once and the gate is unmergeable before anyone has written a single new line.
+Adding metadata validation to a mature docs repo has a chicken-and-egg problem. You want validation because the existing metadata is inconsistent, with fields missing, values fat-fingered, and no enforcement. But if your very first CI run holds every page to a strict standard, hundreds of long-lived docs fail at once. The gate is then unmergeable before anyone has written a single new line.
 
 The way through is to adopt **incrementally**. Land a permissive schema that the repo already satisfies, so the build is green on day one and the gate is real. Then tighten the standard over time, on your schedule, while the gate quietly catches new regressions from the start.
 
 <Aside type="note" title="The goal on day one">
-A green build with a working gate beats a red build with a perfect standard. Once the check is wired and passing, every future pull request is held to whatever the schema currently requires, so even a near-empty schema immediately stops *new* metadata from getting worse while you work on the backlog.
+A green build with a working gate beats a red build with a perfect standard. Once the check is wired and passing, every future pull request is held to whatever the schema currently requires. Even a near-empty schema stops *new* metadata from getting worse while you work on the backlog.
 </Aside>
 
 ## Step 1: Take a coverage reading
 
-Before you pick a schema, find out what the repo already has. [`docmeta schemas infer`](/docmeta/reference/cli/#schemas-infer) reads every metadata block in a docset and counts it. It is purely statistical — no network, no model, no credentials — so it is safe to run against anything, including in CI.
+Before you pick a schema, find out what the repo already has. [`docmeta schemas infer`](/docmeta/reference/cli/#schemas-infer) reads every metadata block in a docset and counts it. It is purely statistical, with no network, no model, and no credentials, so it is safe to run against anything, including in CI.
 
 ```sh
 npx docmeta schemas infer docs/
@@ -33,16 +33,16 @@ lastReviewed       3.2%  string (date)    "2026-04-01"
 
 This table is the whole retrofit plan in one screen:
 
-- **`title` at 99.8%** — you can require this today, and fix the two pages that fail.
-- **`type` at 61.4%** — requiring it breaks 39% of the repo. This is a step 6 ratchet, not a day-one rule.
-- **`lastReviewed` at 3.2%** — one team's convention. Adopting it as a standard would create 1,165 pages of new debt for a field almost nobody uses.
+- **`title` at 99.8%.** You can require this today, and fix the two pages that fail.
+- **`type` at 61.4%.** Requiring it breaks 39% of the repo. This is a step 6 ratchet, not a day-one rule.
+- **`lastReviewed` at 3.2%.** One team's convention. Adopting it as a standard would create 1,165 pages of new debt for a field almost nobody uses.
 
 And read the **`38 with no metadata block`** count carefully; it is the number the rest of this page keeps coming back to.
 
 <Aside type="note" title="`infer` never marks anything required">
-It reports; you decide. There is deliberately no flag that turns a coverage
-percentage into a `required` list — what your docset happens to contain is not
-the same thing as what your standard should demand.
+It reports; you decide. There is deliberately no flag that turns a coverage percentage into a `required`
+list. What your docset happens to contain is not the same thing as what your
+standard should demand.
 </Aside>
 
 ## Step 2: Start with a permissive schema
@@ -55,7 +55,7 @@ You do not have to write it by hand. `--out` turns the reading you just took int
 npx docmeta schemas infer docs/ --out ./schemas/permissive.json
 ```
 
-What comes out looks like this — nothing in `required`, and a constraint only where one was observed:
+What comes out looks like this, with nothing in `required` and a constraint only where one was observed:
 
 ```json title="schemas/permissive.json"
 {
@@ -70,7 +70,7 @@ What comes out looks like this — nothing in `required`, and a constraint only 
 
 This schema requires no field. It only checks format **when a field is present**, so a `title:` that is accidentally empty fails, but a doc with no `title` at all passes. You get format enforcement immediately without demanding any field be filled in yet.
 
-The draft is a starting point, not a verdict — read it and cut anything that is noise rather than standard. (`--out` refuses to overwrite an existing file, so your edits are safe on a re-run, and it refuses a path `.gitignore` covers, because a schema you cannot commit is missing in CI.)
+The draft is a starting point, not a verdict. Read it and cut anything that is noise rather than standard. (`--out` refuses to overwrite an existing file, so your edits are safe on a re-run. It also refuses a path `.gitignore` covers, because a schema you cannot commit is missing in CI.)
 
 Point your config at it:
 
@@ -91,7 +91,7 @@ npx docmeta validate
 If something still fails here, it is a genuine format problem (a malformed `timestamp`, an empty required-by-you field), not a missing-field avalanche. Fix those few, and your baseline is clean.
 
 <Aside type="caution" title="Files with no frontmatter">
-A file with no frontmatter block at all still gets validated. With a require-nothing schema it passes, because there is no required field to be missing. But the moment you add a field to `required`, every frontmatter-free file fails it: a blank doc has no `type`, so a rule that requires `type` flags it. This is what the `with no metadata block` count from [step 1](#step-1-take-a-coverage-reading) is for: it is exactly the number of files that will turn red on your first ratchet, and you want to know it before CI tells you.
+A file with no frontmatter block at all still gets validated. With a require-nothing schema it passes, because there is no required field to be missing. But the moment you add a field to `required`, every frontmatter-free file fails it. A blank doc has no `type`, so a rule that requires `type` flags it. This is what the `with no metadata block` count from [step 1](#step-1-take-a-coverage-reading) is for. It is exactly the number of files that will turn red on your first ratchet. You want to know it before CI tells you.
 </Aside>
 
 ## Step 3: Wire the CI gate
@@ -137,7 +137,7 @@ Exclusions are how you sequence the rollout. You bring each subtree under the ga
 
 ## Step 5: Roll out folder by folder
 
-You rarely tighten the whole repo at once. Use per-folder **overrides** to hold a stricter schema where the metadata is already clean, while the rest of the repo stays on the permissive default. New and well-maintained areas adopt the real standard first; legacy areas catch up on their own timeline.
+You rarely tighten the whole repo at once. Use per-folder **overrides** to hold a stricter schema where the metadata is already clean. The rest of the repo stays on the permissive default. New and well-maintained areas adopt the real standard first; legacy areas catch up on their own timeline.
 
 ```yaml title="docmeta.config.yaml"
 # Permissive default for the long tail.
@@ -161,7 +161,7 @@ Files under `docs/guides/` are held to `guide.json` (which can require `type`, `
 
 ## Step 6: Ratchet strictness with a baseline
 
-The permissive schema was only ever a starting line. Once the gate is wired, tighten the standard — but you do not have to wait for coverage before you do it. Add the field to `required`, record the existing violations once, and let docmeta fail only on new ones:
+The permissive schema was only ever a starting line. Once the gate is wired, tighten the standard. You do not have to wait for coverage before you do it. Add the field to `required`, record the existing violations once, and let docmeta fail only on new ones:
 
 ```bash
 npx docmeta validate --write-baseline
@@ -190,9 +190,9 @@ From here the build is green, the stricter rule applies to everything anyone wri
 
 Ratcheting works because new pages arrive already compliant. It does nothing for the pages that were already there, and on a mature repo that backlog is most of the docset. Typing `description:` into four hundred existing files by hand is the reason adoption stalls at step 6.
 
-[`docmeta fill`](/docmeta/reference/cli/#fill) works that backlog down. For each page it resolves the same schema set the gate uses, asks an LLM to infer the properties that are missing or invalid, and writes back only the values it is confident about. Because the schema drives the prompt, the fields it proposes are exactly the ones you are about to require.
+[`docmeta fill`](/docmeta/reference/cli/#fill) works that backlog down. For each page it resolves the same schema set the gate uses. It asks an LLM to infer the properties that are missing or invalid, and writes back only the values it is confident about. Because the schema drives the prompt, the fields it proposes are exactly the ones you are about to require.
 
-That inference is the one part of docmeta that leaves your machine, so before you point it at a whole docset, read [Run `fill` under a data-egress policy](/docmeta/set-up/fill-providers/) for what each call transmits, what the proposal cache keeps afterwards, and how to keep inference local.
+That inference is the one part of docmeta that leaves your machine. So before you point it at a whole docset, read [Run `fill` under a data-egress policy](/docmeta/set-up/fill-providers/). It covers what each call transmits, what the proposal cache keeps afterwards, and how to keep inference local.
 
 Preview before you trust it:
 
@@ -230,7 +230,14 @@ Once a folder is filled and reviewed, promote its field to `required` using the 
 
 ## What you have now
 
-A repo that went green on day one, a CI gate that has been catching regressions since before the standard was finished, a folder-by-folder path to the stricter rules you actually want, and a way to clear the existing backlog without a data-entry marathon. You adopted docmeta without a flag day and without a backlog of red checks blocking everyone's work.
+You now have four things:
+
+- A repo that went green on day one.
+- A CI gate that has been catching regressions since before the standard was finished.
+- A folder-by-folder path to the stricter rules you actually want.
+- A way to clear the existing backlog without a data-entry marathon.
+
+You adopted docmeta without a flag day and without a backlog of red checks blocking everyone's work.
 
 ## Where to go next
 

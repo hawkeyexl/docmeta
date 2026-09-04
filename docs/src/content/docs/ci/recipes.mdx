@@ -1,19 +1,19 @@
 ---
-title: 'CI recipes: code scanning, GitLab CI, Jenkins, pre-commit'
+title: CI recipes for code scanning, GitLab CI, Jenkins, and pre-commit
 description: Copy-paste recipes that add a docmeta metadata gate to GitHub code scanning, GitLab CI, Jenkins, and pre-commit, each wired to the exit-code contract.
 ---
 
 import { Tabs, TabItem, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-docmeta is a plain CLI with a stable exit-code contract, so it drops into any CI
+docmeta is a plain CLI with a stable exit-code contract. It drops into any CI
 system that can run a Node.js command and read its exit code. This page gives
 complete, runnable recipes for four common setups. The
 [GitHub Actions gate](/docmeta/ci/) is on its own page; the first recipe here
 adds persistence on top of it.
 
-Every recipe relies on the same contract: docmeta exits `0` when all files are
-valid, `1` when one or more files fail validation, and `2` on an operational or
-usage error. Each platform fails the job on a non-zero exit, so the gate is
+Every recipe relies on the same contract. docmeta exits `0` when all files are
+valid and `1` when one or more files fail validation. An operational or usage
+error exits `2`. Each platform fails the job on a non-zero exit, so the gate is
 enforced without extra scripting. For the full definition, see
 [Exit codes & PR annotations](/docmeta/ci/exit-codes-and-annotations/).
 
@@ -29,9 +29,9 @@ annotation format is documented in
 ## GitHub code scanning (upload-sarif)
 
 `--format github` renders annotations on the pull request and then loses them
-with the job log. `--format sarif` turns the same findings into **tracked
-alerts** in the Security tab, with state across commits — which is what makes
-"when did this regress" and "is our metadata debt going down" answerable.
+with the job log. `--format sarif` turns the same findings into **tracked alerts** in the Security
+tab, with state across commits. That is what makes "when did this regress" and
+"is our metadata debt going down" answerable.
 
 ```yaml title=".github/workflows/docmeta-sarif.yml"
 name: docmeta code scanning
@@ -77,19 +77,17 @@ jobs:
 ```
 
 <Aside type="caution" title="continue-on-error is not optional here">
-This is the trap the recipe exists to avoid. `validate` exits `1` when it finds
-anything, so without `continue-on-error: true` on the docmeta step and
-`if: always()` on the upload, the job stops at the first finding and **the
-Security tab stays empty forever** — the failing case is exactly the case with
-something to upload.
+This is the trap the recipe exists to avoid. `validate` exits `1` when it finds anything. Without `continue-on-error: true`
+on the docmeta step and `if: always()` on the upload, the job stops at the first
+finding. **The Security tab then stays empty forever**, and the failing case is
+exactly the case with something to upload.
 </Aside>
 
 <Aside type="caution" title="Run docmeta from the repository root">
 GitHub resolves each `artifactLocation.uri` against the **repository root** and
 silently drops results that do not resolve, so a bad path uploads successfully
-with zero alerts. docmeta rebases paths onto the git root to prevent that, but
-it needs the checkout to *be* a git repository — which `actions/checkout` gives
-you. If docmeta warns on stderr that it could not make paths
+with zero alerts. docmeta rebases paths onto the git root to prevent that, but it needs the
+checkout to *be* a git repository. `actions/checkout` gives you one. If docmeta warns on stderr that it could not make paths
 repository-root-relative, the upload will report nothing.
 </Aside>
 
@@ -242,7 +240,7 @@ stage('Validate metadata') {
 ```
 
 `post { always { ... } }` matters for the same reason `if: always()` does in the
-SARIF recipe: the run worth reporting is the one that failed.
+SARIF recipe. The run worth reporting is the one that failed.
 
 ## pre-commit
 
@@ -258,28 +256,28 @@ repos:
       - id: docmeta
 ```
 
-`rev` has to be a concrete tag — pre-commit does not follow a floating major
-the way `uses: hawkeyexl/docmeta@v4` does, so this is one place a copied
+`rev` has to be a concrete tag, because pre-commit does not follow a floating
+major the way `uses: hawkeyexl/docmeta@v4` does. So this is one place a copied
 snippet really will go stale. Take the tag from
 [the latest release](https://github.com/hawkeyexl/docmeta/releases/latest), and
 let `pre-commit autoupdate` move it for you afterwards.
 
-The hook fails the commit when docmeta returns a non-zero exit code, and it
-already knows which files to look at — every extension docmeta reads, matched
-case-insensitively. You do not write a `files` pattern, which matters more than
-it sounds: a hand-written one is easy to narrow to `\.md$` and then quietly stop
-checking the AsciiDoc and DITA in the same repo.
+The hook fails the commit when docmeta returns a non-zero exit code. It already
+knows which files to look at, covering every extension docmeta reads, matched
+case-insensitively. You do not write a `files` pattern, and that matters more
+than it sounds. A hand-written one is easy to narrow to `\.md$` and then quietly
+stop checking the AsciiDoc and DITA in the same repo.
 
 <Aside type="note" title="It needs Node on the machine">
 The hook runs `npx docmeta`, so contributors need Node 24 or newer on their
-`PATH` — the same requirement as running docmeta anywhere else. pre-commit does
+`PATH`. That is the same requirement as running docmeta anywhere else. pre-commit does
 not install Node for it.
 </Aside>
 
 ## pre-commit without the published hook
 
-If you would rather not fetch from GitHub — an air-gapped machine, or a policy
-against remote hook repos — define a `local` hook instead. You then own the
+On an air-gapped machine, or under a policy against remote hook repos, you can
+define a `local` hook instead of fetching from GitHub. You then own the
 `files` pattern, so keep it in step with the formats you actually use.
 
 <Tabs>
@@ -298,8 +296,8 @@ repos:
 ```
 
 With `entry: npx -y docmeta validate` and no positional paths in the entry,
-pre-commit appends the list of staged, matched files as arguments, so each
-commit validates exactly what changed. `language: system` tells pre-commit to
+pre-commit appends the list of staged, matched files as arguments. Each commit
+then validates exactly what changed. `language: system` tells pre-commit to
 use the `npx` already on your `PATH` rather than managing its own environment;
 Node.js 24+ must be installed locally.
 
