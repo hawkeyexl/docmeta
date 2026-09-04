@@ -15,7 +15,7 @@
 - **Touches (planned):** new `src/extractors/{markdoc,notebook,notebook-write}.ts`,
   `src/extractors/index.ts`, `reference/{formats,platform-schemas}.mdx`,
   `CONTRIBUTING.md`, `test/{extractors,notebook-write,cli.integration}.test.ts`
-- **Verdict:** implement `.mdoc` and `.ipynb`. **Reject** standalone `.json`/`.yaml`,
+- **Verdict:** Implement `.mdoc` and `.ipynb`. **Reject** standalone `.json`/`.yaml`,
   LaTeX, Typst, Confluence storage format and `.txt`. Defer Org-mode.
 
 ## Problem

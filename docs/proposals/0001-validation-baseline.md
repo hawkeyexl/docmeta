@@ -2,7 +2,7 @@
 
 - **Status:** Implemented
 - **Serves:** Maya · M2 "Tighten the standard without breaking the build"
-- **Depends on:** the `FieldError` extension below (shared with [0003](0003-sarif-and-junit-reporters.md)); path resolution from [0004](0004-config-upward-discovery.md)
+- **Depends on:** The `FieldError` extension below (shared with [0003](0003-sarif-and-junit-reporters.md)); path resolution from [0004](0004-config-upward-discovery.md)
 - **Touches:** `src/core/validator.ts`, `src/commands/validate.ts`, `src/cli.ts`, `src/core/config.ts`, new `src/core/baseline.ts`
 
 ## Problem

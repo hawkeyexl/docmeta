@@ -2,7 +2,7 @@
 
 - **Status:** Proposed; open for community review before anything registers
 - **Serves:** Sara · S1 "Define our metadata standard as a schema" · S2 "Wire schemas to the right documents"
-- **Relates to:** an earlier, unmerged house-vocabulary exploration whose
+- **Relates to:** An earlier, unmerged house-vocabulary exploration whose
   briefing seeded this work. That exploration numbered its own drafts 0021
   and 0022 on its branch; those numbers have since been taken on `main` by
   the `docmeta query` proposals, so references here to "the exploration's

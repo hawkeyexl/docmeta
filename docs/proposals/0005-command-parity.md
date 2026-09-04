@@ -1,7 +1,7 @@
 # 0005 — Command parity: flags first, positional fallbacks kept
 
 - **Status:** Implemented
-- **Serves:** every persona; enforces the project's own working agreement
+- **Serves:** Every persona; enforces the project's own working agreement
 - **Touches:** `src/cli.ts`, `src/reporters/{index,fill,get}.ts` (as built — the command cores were *not* touched; see [correction 3](#correction-3--quiet-is-a-reporter-concern-not-a-core-one))
 - **Constraint:** `npm run docs:check-cli` compares documented args/options/defaults *and* required-vs-optional arity against `buildProgram()`. Every change here needs a matching `reference/cli.mdx` edit.
 

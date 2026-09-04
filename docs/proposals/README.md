@@ -2,8 +2,8 @@
 
 Internal design docs for changes that are bigger than a single PR's commit
 message. Like `../content-strategy/` and `../maintainers/`, these live inside
-`docs/` but outside `docs/src/content/docs/**`, so they are **not published** to
-the site and are not covered by the dogfood validation or doc-detective run.
+`docs/` but outside `docs/src/content/docs/**`. So they are **not published** to
+the site, and are not covered by the dogfood validation or doc-detective run.
 
 ## Status vocabulary
 
@@ -18,9 +18,9 @@ the site and are not covered by the dogfood validation or doc-detective run.
 ## The set
 
 These came out of a review of the shipped product against the intent recorded in
-`../content-strategy/`. Each doc names the persona and CUJ it serves, carries a
-**Stress test** section recording what was tried against the design and what
-changed as a result, and lists what it depends on.
+`../content-strategy/`. Each doc names the persona and CUJ it serves, and lists
+what it depends on. Each also carries a **Stress test** section recording what
+was tried against the design, and what changed as a result.
 
 | # | Proposal | Serves | Status |
 |---|---|---|---|
@@ -33,7 +33,7 @@ changed as a result, and lists what it depends on.
 | [0007](0007-html-xml-write-support.md) | `fill` write support for HTML (XML/DITA stay read-only) | Maya · M1 | Superseded by [0018](0018-write-support-shipped-for-all-three.md) |
 | [0008](0008-remote-schema-durability.md) | Remote schema durability | Devin · D2 | Implemented |
 | [0009](0009-publish-builtin-schemas.md) | Publish built-in schemas at stable URLs | Sara · S1 | Implemented |
-| [0010](0010-init-and-schema-inference.md) | `docmeta init` and schema inference | Maya · M1 / Sara · S1 | Partly shipped — `infer` landed; `init` rejected by [0019](0019-no-docmeta-init.md) |
+| [0010](0010-init-and-schema-inference.md) | `docmeta init` and schema inference | Maya · M1 / Sara · S1 | Partly shipped. `infer` landed; `init` rejected by [0019](0019-no-docmeta-init.md) |
 | [0011](0011-fill-in-content-strategy.md) | Fold `fill` into the content strategy | strategy debt | Implemented |
 | [0012](0012-fill-cost-and-privacy.md) | `fill` cost, privacy, and offline operation | Maya · M4 / Devin · D1 | Superseded by [0017](0017-fill-egress-and-bounds.md) |
 | [0013](0013-cleanup-dead-code-and-exit-codes.md) | Dead code, unpopulated fields, usage exit codes | correctness | Implemented |
@@ -46,46 +46,47 @@ changed as a result, and lists what it depends on.
 | [0020](0020-element-metadata.md) | Element metadata in XML and HTML, and the DITA schema it unblocks | Sara · S1 / Maya · M1, M4 | Implemented |
 | [0021](0021-frontmatter-as-a-database.md) | The corpus is a database: `docmeta query` | Devin · D1, D3 / Maya · M2 | Implemented (#120) |
 | [0022](0022-sql-write-back.md) | Write-back: an UPDATE against the corpus edits the files | Maya · M2, M4 / Devin · D3 | Implemented (#122) |
-| [0023](0023-metadata-vocabularies.md) | The docmeta metadata vocabularies — nine ids, drafts and worked examples under [0023/](0023/), reviewed publicly at the site's Proposals page | Sara · S1 / S2 | Proposed |
+| [0023](0023-metadata-vocabularies.md) | The docmeta metadata vocabularies. Nine ids, drafts and worked examples under [0023/](0023/), reviewed publicly at the site's Proposals page | Sara · S1 / S2 | Proposed |
 | [0024](0024-standard-sql-vocabulary.md) | Standard SQL vocabulary: DML edits the files, DDL edits the schema | Maya · M2, M3 / Sara · S1, S3 / Devin · D3 | Implemented (#125, #126) |
 | [0025](0025-query-dry-run-polarity.md) | query writes by default, `--dry-run` previews | Devin · D4 / Maya · M2 | Implemented |
-| [0026](0026-corpus-checks-are-findings.md) | Corpus checks are findings: named `checks:` in config, run by `validate` | Devin · D4 / Maya · M2 | Implemented (#132) |
-| [0027](0027-named-collections.md) | Named collections: override groups as SQL views | Devin · D4 / Maya · M2 | Implemented (#134) |
-| [0028](0028-ddl-type-bridge.md) | The DDL type bridge: formats as column types, enums as CHECK IN | Sara · S1, S3 / Maya · M2, M3 | Implemented (#135) |
+| [0026](0026-corpus-checks-are-findings.md) | Corpus checks are findings, as named `checks:` in config, run by `validate` | Devin · D4 / Maya · M2 | Implemented (#132) |
+| [0027](0027-named-collections.md) | Named collections, which are override groups as SQL views | Devin · D4 / Maya · M2 | Implemented (#134) |
+| [0028](0028-ddl-type-bridge.md) | The DDL type bridge, with formats as column types and enums as CHECK IN | Sara · S1, S3 / Maya · M2, M3 | Implemented (#135) |
 | [0029](0029-query-for-scripts.md) | query for scripts: CSV output and bound parameters | Devin · D3, D4 | Implemented (#133) |
 | [0030](0030-query-schema-flag.md) | `-s/--schema` on `query`: naming the contract DDL evolves | Sara · S1, S3 / Maya · M2, M3 | Implemented (#139) |
 | [0031](0031-input-formats-notebooks-and-markdoc.md) | The input-format gap: Jupyter notebooks and Markdoc in, standalone data files out | Maya · M1, M4 / Sara · S1, S2 | Proposed |
 
-0014 was not in the original review. It surfaced while stress-testing 0004 and
-is the most severe item in the set: **docmeta currently exits `0` when it
+0014 was not in the original review. It surfaced while stress-testing 0004, and
+is the most severe item in the set. **docmeta currently exits `0` when it
 validates nothing at all**, including when an explicitly named file does not
 exist.
 
 0015 was reserved by 0008 § stress test 6 and written later. A document's
-`$schema` outranks config, so in a repo that takes outside pull requests a
-contributor can pick the schema their own file is judged against — and the file
-that opts out of the standard is the one that passes. It adds an opt-in
+`$schema` outranks config. So in a repo that takes outside pull requests, a
+contributor can pick the schema their own file is judged against. The file that
+opts out of the standard is the one that passes. It adds an opt-in
 constraint; it does not narrow what `$schema` may reference by default.
 
 0017 is the first proposal written under `CLAUDE.md § Proposals are historical
-records`. It supersedes 0012 rather than correcting it: 0012's evidence grep
+records`. It supersedes 0012 rather than correcting it. 0012's evidence grep
 searched for `sent to` while the docs said `sends`, so it concluded no page
 documented `fill`'s egress when one had for two weeks. The gap it was reaching
-for is real and narrower — the docs say *that* content is sent, never *what*,
-*how much*, or *what is kept* — and 0017 answers it mostly by changing the
-behavior rather than describing it.
+for is real, and narrower. The docs say *that* content is sent, never *what*,
+*how much*, or *what is kept*. 0017 answers it mostly by changing the behavior
+rather than describing it.
 
 0011 shipped much smaller than it was written, and the reason is worth recording
 because it is the same lesson as 0017's. By the time it was implemented, most of
-what it asked for had already been done *incidentally* by the proposals downstream
-of it: 0017 added the M4 CUJ and the egress page while implementing itself, and
-0001 renumbered the retrofit page's steps underneath it. What was left was the
-part no other proposal had a reason to touch — the retrofit row's missing M4 tag,
-the dangling `fill` source-of-truth row, and the two persona sentences. The
-proposal was not amended to match; it was implemented as written, and the items
-already satisfied were verified page by page rather than assumed. That check is
-what turned up the last published-page gap, which no proposal had named: the T1
-fix-it page recommends `fill` without ever linking to the M4 egress page.
+what it asked for had already been done *incidentally* by the proposals
+downstream of it. 0017 added the M4 CUJ and the egress page while implementing
+itself, and 0001 renumbered the retrofit page's steps underneath it. What was
+left was the part no other proposal had a reason to touch. That is the retrofit
+row's missing M4 tag, the dangling `fill` source-of-truth row, and the two
+persona sentences. The proposal was not amended to match. It was implemented as
+written, and the items already satisfied were verified page by page rather than
+assumed. That check is what turned up the last published-page gap, which no
+proposal had named. The T1 fix-it page recommends `fill` without ever linking to
+the M4 egress page.
 
 ## Dependency order
 
@@ -122,24 +123,26 @@ At a glance, so a planning pass does not have to reconstruct it from 29 headers.
 0014 ──┘                 (why an unreadable corpus errors instead of passing green)
 ```
 
-The four `Proposed` SQL items (0026–0029) are independent of each other except that
-0026 and 0029 both grow `query`'s `-f` value list — each specifies the combined
-six-value surface, and whichever is implemented second merges into the one const.
-Recommended implementation order is 0026 → 0029 → 0027 → 0028 — impact-first, with the
-two config-touching ones (0026, 0027) landed apart so the second rebases trivially.
+The four `Proposed` SQL items (0026–0029) are independent of each other, with
+one exception. 0026 and 0029 both grow `query`'s `-f` value list. Each specifies
+the combined six-value surface, and whichever is implemented second merges into
+the one const. Recommended implementation order is 0026 → 0029 → 0027 → 0028,
+which is impact-first. The two config-touching ones (0026, 0027) land apart, so
+the second rebases trivially.
 
-**Safe to start in any order, no blockers:** 0031 (its dependencies are all
-shipped; the arrows above record which rules it inherits, not what it waits on).
-0011 held this slot until it shipped, and 0023, the only other `Proposed` entry,
-is not in this bucket — it waits on public review rather than on an
-implementation slot.
+**Safe to start in any order, no blockers:** 0031. Its dependencies are all
+shipped, and the arrows above record which rules it inherits, not what it waits
+on.
+0011 held this slot until it shipped. 0023, the only other `Proposed` entry, is
+not in this bucket. It waits on public review rather than on an implementation
+slot.
 
-**Shipped so far:** everything the table above marks `Implemented` — through 0025 that
-is all but 0023 (`Proposed`), 0016 and 0019 (`Accepted`, nothing to ship), and
-the superseded/rejected halves the Status column records — plus the standalone
-false-green guard called out in
-[0008 § Problem](0008-remote-schema-durability.md#problem). The dependency graph
-above is kept as the record of why the early set landed in the order it did.
+**Shipped so far:** everything the table above marks `Implemented`. Through 0025
+that is all but 0023 (`Proposed`), 0016 and 0019 (`Accepted`, nothing to ship),
+and the superseded or rejected halves the Status column records. It also
+includes the standalone false-green guard called out in [0008 §
+Problem](0008-remote-schema-durability.md#problem). The dependency graph above
+is kept as the record of why the early set landed in the order it did.
 
 **Next, if you want the thread continued:** the 0026 → 0029 → 0027 → 0028 order above.
 (This line pointed at 0009 until 0009 shipped; the Status column, not this paragraph,
@@ -148,7 +151,7 @@ is the ground truth for what remains.)
 ## Shared prerequisite
 
 0001 and 0003 both need a violation to have a **stable machine identity**, and
-`FieldError` does not carry one today — `toFieldError` in `src/core/validator.ts`
+`FieldError` does not carry one today. `toFieldError` in `src/core/validator.ts`
 keeps Ajv's prose `message` and discards `keyword`, `schemaPath`, and `params`.
 Both proposals therefore depend on the `FieldError` extension described in
 [0001 § Prerequisite](0001-validation-baseline.md#prerequisite-fielderror-needs-a-machine-identity).

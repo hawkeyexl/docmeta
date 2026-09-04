@@ -3,7 +3,7 @@
 - **Status:** Implemented
 - **Serves:** Sara · S1 "Define our metadata standard as a schema"; external consumers
 - **Depends on:** URL→built-in aliasing (stress test 1) — without it this proposal is a regression
-- **Touches:** new `docs/public/schemas/**`, `src/core/schema-registry.ts`, `src/core/resolve-schema.ts`, `src/core/validator.ts`, `src/schemas/manifest.json`, `scripts/sync-builtin-schemas.mjs`, `scripts/check-builtin-schemas.mjs`, `.github/workflows/ci.yml`
+- **Touches:** New `docs/public/schemas/**`, `src/core/schema-registry.ts`, `src/core/resolve-schema.ts`, `src/core/validator.ts`, `src/schemas/manifest.json`, `scripts/sync-builtin-schemas.mjs`, `scripts/check-builtin-schemas.mjs`, `.github/workflows/ci.yml`
 
 ## What shipped, and where it diverged
 

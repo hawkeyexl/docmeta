@@ -1,7 +1,7 @@
 # 0006 — `.gitignore`-aware file discovery
 
 - **Status:** Implemented
-- **Serves:** every persona; removes hand-maintained `exclude:` boilerplate
+- **Serves:** Every persona; removes hand-maintained `exclude:` boilerplate
 - **Relates to:** [0014](0014-empty-input-is-not-success.md) (fewer files makes the empty case reachable), [0004](0004-config-upward-discovery.md) (both need the repo root)
 - **Touches:** `src/core/load-files.ts`, `src/core/config.ts`, `src/cli.ts`
 

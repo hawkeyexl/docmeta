@@ -1,7 +1,7 @@
 # 0004 — Config discovery walks up, and config paths resolve config-relative
 
 - **Status:** Implemented (#74)
-- **Serves:** every persona; prevents a false-green CI result
+- **Serves:** Every persona; prevents a false-green CI result
 - **Blocks:** [0001](0001-validation-baseline.md) (baseline path resolution)
 - **Touches:** `src/core/config.ts`, `src/core/schema-registry.ts`, `src/commands/{validate,get,fill}.ts`
 

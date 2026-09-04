@@ -1,9 +1,9 @@
 # 0019 — `docmeta init` is rejected, not deferred
 
 - **Status:** Accepted
-- **Supersedes:** the `init` half of [0010](0010-init-and-schema-inference.md). Its `schemas infer` half shipped and stands.
+- **Supersedes:** The `init` half of [0010](0010-init-and-schema-inference.md). Its `schemas infer` half shipped and stands.
 - **Serves:** Maya · M1
-- **Touches:** nothing. That is the point.
+- **Touches:** Nothing. That is the point.
 
 ## Decision
 
@@ -17,11 +17,15 @@ this closes it, so nobody re-derives the same four hazards from scratch.
 > four hazards, each with a failure mode measured in confused hours, for a saving
 > measured in seconds of typing
 
-The hazards are unchanged — refusing to overwrite an existing config, warning
-about an ancestor config that [0004](0004-config-upward-discovery.md)'s upward
-walk would let a new one silently shadow, sequencing detection so it never writes
-a config that [0014](0014-empty-input-is-not-success.md) then makes exit 2, and
-choosing among several plausible `paths:` candidates without guessing quietly.
+The hazards are unchanged:
+
+- refusing to overwrite an existing config;
+- warning about an ancestor config that
+  [0004](0004-config-upward-discovery.md)'s upward walk would let a new one
+  silently shadow;
+- sequencing detection so it never writes a config that
+  [0014](0014-empty-input-is-not-success.md) then makes exit 2;
+- choosing among several plausible `paths:` candidates without guessing quietly.
 
 Two things have changed, and both weaken `init` further rather than strengthening
 it:
@@ -39,14 +43,15 @@ copy-pasteable in full.
 
 ## What would reopen it
 
-Not "someone asks for it" — a config that is genuinely hard to write by hand.
-Today's is four lines. If `paths:`, `schemas:` and `overrides:` grow to the point
-where a correct starting config is not obvious from the reference page, the
-saving stops being seconds and the trade changes.
+Not "someone asks for it". What would reopen it is a config that is genuinely
+hard to write by hand. Today's is four lines. If `paths:`, `schemas:` and
+`overrides:` grow to the point where a correct starting config is not obvious
+from the reference page, the saving stops being seconds. At that point the trade
+changes.
 
-0010's stress test 10 still binds if that day comes: `init` must not also infer a
-schema, or it writes a config plus a schema ratifying the current state in one
-step — which is 0010's stress test 1 failure, automated.
+0010's stress test 10 still binds if that day comes. `init` must not also infer
+a schema, or it writes a config plus a schema ratifying the current state in one
+step. That is 0010's stress test 1 failure, automated.
 
 ## Consequences
 

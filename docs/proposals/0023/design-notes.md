@@ -350,7 +350,7 @@ open issue #13 already asks for template selection from frontmatter "to
 lint multiple different kinds of documents in a single run" (today
 `--template` is required and broadcast over every file in a directory).
 
-- **Do:** select the template from the page's `type` via a type→template
+- **Do:** Select the template from the page's `type` via a type→template
   map in templates.yaml (repo-level fact at repo-level altitude), CLI
   `-t` overriding, with zero new frontmatter vocabulary. Do NOT use issue
   #13's proposed `template:` key: Starlight claims `template` as

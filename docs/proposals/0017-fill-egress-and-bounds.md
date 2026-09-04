@@ -9,7 +9,7 @@
   claim was already false on the day it was written
 - **Relates to:** [0007](0007-html-xml-write-support.md), which extended `fill`
   to XML and DITA and so grew the population this proposal is about
-- **Breaking:** yes — `--max-cost-usd` is removed (major)
+- **Breaking:** Yes — `--max-cost-usd` is removed (major)
 
 ## Problem
 

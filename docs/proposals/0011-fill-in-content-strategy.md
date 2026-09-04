@@ -1,9 +1,9 @@
 # 0011 — Reconcile the content strategy with `fill`
 
 - **Status:** Implemented
-- **Serves:** the writing process itself — `content-strategy/` is the mandated input to every docs task
+- **Serves:** The writing process itself — `content-strategy/` is the mandated input to every docs task
 - **Touches:** `docs/content-strategy/cujs.md`, `docs/content-strategy/information-architecture.md`, `docs/content-strategy/personas.md`
-- **Scope note:** this is a **strategy-record** fix, not a docs-content fix. See "What is actually missing".
+- **Scope note:** This is a **strategy-record** fix, not a docs-content fix. See "What is actually missing".
 
 ## Problem
 

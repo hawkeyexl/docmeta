@@ -1,24 +1,24 @@
 # 0016 — Which command owns a flag, and where it may be written
 
 - **Status:** Accepted
-- **Serves:** every persona; it is the rule behind `CONTRIBUTING.md § Keeping commands consistent`
+- **Serves:** Every persona; it is the rule behind `CONTRIBUTING.md § Keeping commands consistent`
 - **Touches:** `src/cli.ts` (the rule's one implementation), any future subcommand
-- **Prompted by:** two real defects found while shipping [0010](0010-init-and-schema-inference.md)
+- **Prompted by:** Two real defects found while shipping [0010](0010-init-and-schema-inference.md)
 
 ## Problem
 
 docmeta has one command group with subcommands (`schemas` → `vendor`, `infer`),
 and a program level above both. A long flag can therefore be declared in more
-than one place, and **commander binds a parent's option wherever it appears in
-the argv** unless told otherwise. So the meaning of a flag depends on where it
-was written and on which command happened to declare it — and neither is visible
-to the person typing it.
+than one place. Unless told otherwise, **commander binds a parent's option
+wherever it appears in the argv**. So the meaning of a flag depends on where it
+was written, and on which command happened to declare it. Neither is visible to
+the person typing it.
 
 Two defects, both found in the same week, both silent:
 
 **`schemas infer <path> -f json` printed the pretty report and exited 0.** The
 parent's `-f` swallowed it. A request docmeta can honor, served in a format
-nobody asked for, with a success code — the same false-green shape as
+nobody asked for, with a success code. That is the same false-green shape as
 `schemas -f github` being accepted and ignored before it was fixed.
 
 **`schemas vendor <url> -f nonsense` is accepted and ignored.** `vendor` declares
@@ -33,43 +33,44 @@ Against a minimal commander program reproducing docmeta's shape:
 
 | argv | default | `enablePositionalOptions()` |
 |---|---|---|
-| `schemas infer x -f json` | `fmt=pretty` — **wrong** | `fmt=json` — right |
+| `schemas infer x -f json` | `fmt=pretty`, **wrong** | `fmt=json`, right |
 | `validate docs/ --no-color` | works | **`error: unknown option '--no-color'`** |
 
 That is the whole trade, and it is why the obvious fix is not the fix.
 
 ## Options considered
 
-### A. `enablePositionalOptions()` — rejected, and the reason is structural
+### A. `enablePositionalOptions()` (rejected, and the reason is structural)
 
-It resolves ownership correctly: an option after a subcommand name belongs to
-that subcommand. It also requires every parent option to *precede* the
-subcommand, which breaks `docmeta validate docs/ --no-color`.
+It resolves ownership correctly, in that an option after a subcommand name
+belongs to that subcommand. It also requires every parent option to *precede*
+the subcommand, which breaks `docmeta validate docs/ --no-color`.
 
 That is not an edge case here. `CONTRIBUTING.md` makes **paths positional on
 every command**, so "flag written after a positional" is the ordinary shape of a
 docmeta invocation, not an unusual one. Trading a common correct invocation for
 an uncommon ambiguous one is the wrong direction.
 
-### B. Never share a long name between a parent and its child — rejected
+### B. Never share a long name between a parent and its child (rejected)
 
 Move the listing behavior to `schemas list -f` and leave `schemas` as pure group
 help, so only one command declares `-f`.
 
 Rejected because bare `docmeta schemas` is a **documented default action**, not
-group help — [0005](0005-command-parity.md) decided that explicitly, the
+group help. [0005](0005-command-parity.md) decided that explicitly, the
 reference page documents it, and integration tests depend on it. Removing the
-default action to fix a flag-binding problem is a user-visible regression in service
-of an implementation detail.
+default action to fix a flag-binding problem is a user-visible regression in
+service of an implementation detail.
 
 Worth keeping in view for *new* subcommands, though: not sharing a name is free
 before the name exists, and expensive after.
 
-### C. Explicit-source precedence — accepted
+### C. Explicit-source precedence (accepted)
 
 Both commands may declare the flag. At read time, ask commander which one was
-actually *typed* — `getOptionValueSource(name)` returns `"cli"` for a value the
-user supplied and `"default"` for one commander filled in — and prefer that one.
+actually *typed*, and prefer that one. `getOptionValueSource(name)` returns
+`"cli"` for a value the user supplied, and `"default"` for one commander filled
+in.
 
 This makes a flag mean what the command that declares it says, **wherever it is
 written**, which is the property the two defects were missing.
@@ -95,13 +96,13 @@ Corollaries, so this is a rule and not one function:
 
 ## Stress test
 
-### 1. Does precedence hide a genuine ambiguity? — yes, and that is the point
+### 1. Does precedence hide a genuine ambiguity? (yes, and that is the point)
 
 `docmeta schemas -f json infer x` sets the parent's format explicitly and the
 child's not at all, so the child gets `json`. Someone could argue the user meant
 to format the *listing* and then asked for an inference instead.
 
-They could, but there is no listing in that invocation — the subcommand ran. One
+They could, but there is no listing in that invocation. The subcommand ran. One
 format was typed, one command produced output, and it used the typed format.
 The alternative is to error on a combination that has exactly one sensible
 reading, which trades a working invocation for a lecture.
@@ -112,20 +113,20 @@ If commander changed that API the rule survives but the implementation would not
 Recorded because the rule is the durable part: *the typed value wins*. Any
 mechanism that establishes which value was typed satisfies it.
 
-### 3. It does not fix a flag the subcommand never declares — the known deviation
+### 3. It does not fix a flag the subcommand never declares (the known deviation)
 
 Corollary 1 says a command owns the flags it declares. It says nothing useful
 about `schemas vendor <url> -f nonsense`, where `vendor` declares no `-f`, the
 parent's absorbs it, and nothing reads it. **This is a live deviation from the
 rule** and is not fixed here.
 
-Harmless today — `vendor` has no format to choose, so the only cost is a typo
+Harmless today. `vendor` has no format to choose, so the only cost is a typo
 exiting 0 instead of 2. The remedy, when it is worth doing, is the same
-mechanism: a subcommand that does not declare a flag can ask its parent whether
-that flag's source is `"cli"` and refuse. Recorded rather than fixed so the
+mechanism. A subcommand that does not declare a flag can ask its parent whether
+that flag's source is `"cli"`, and refuse. Recorded rather than fixed, so the
 deviation is a known one instead of a discovered one.
 
-### 4. Why not test this once and trust it? — because the failure is silent
+### 4. Why not test this once and trust it? (because the failure is silent)
 
 Both defects exited **0** with plausible output. Neither would have been caught
 by a test asserting "the command works", only by one asserting *which format came
@@ -137,5 +138,5 @@ carries one for `schemas infer -f json`.
 
 - One helper, one rule, applied wherever a flag is shared.
 - Adding a subcommand no longer requires reasoning about commander's binding
-  order — but it does require asking whether a name is already taken above.
+  order. It does require asking whether a name is already taken above.
 - The `vendor -f` deviation stands, documented, with its remedy written down.

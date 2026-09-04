@@ -82,7 +82,7 @@ module contract. The `--db`-export-only run (no SQL) prints its summary as today
 
 ### Named parameters, string-by-default
 
-- **CLI:** repeatable `--param name=value` binds `value` as a **string**;
+- **CLI:** Repeatable `--param name=value` binds `value` as a **string**;
   `--param name:=value` parses `value` as JSON for typed binds (numbers, booleans,
   arrays, null) — the httpie/jq convention. Split on the first `=`/`:=`; everything
   after is the value, so values containing `=` need no escaping.
@@ -90,7 +90,7 @@ module contract. The `--db`-export-only run (no SQL) prints its summary as today
   `bindValue` the projection loader uses, so booleans become `1`/`0` and arrays/objects
   become JSON text — a bound parameter compares against a stored cell under exactly the
   encoding the cell got.
-- **SQL:** standard named parameters — `$name`, `:name`, or `@name` — usable anywhere a
+- **SQL:** Standard named parameters — `$name`, `:name`, or `@name` — usable anywhere a
   value goes: SELECTs, `--check` gates, UPDATEs. The engine change is one call site
   (`stmt.all()` grows the bound object), which is why parameters work uniformly across
   read, gate, and write with no per-path code.
