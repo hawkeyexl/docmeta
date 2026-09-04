@@ -16,21 +16,22 @@ There are two ways to hold one canonical schema, and they fail differently.
 |---|---|---|
 | What the repo contains | The schema file, committed, plus a hash pin | One line naming a URL |
 | What CI depends on | Its own checkout | The schema host answering within 10 seconds, on every job |
-| Taking an update | Re-run one command; review the diff | Automatic — including when you did not want it |
+| Taking an update | Re-run one command; review the diff | Automatic, including when you did not want it |
 | An upstream change you did not expect | Shows up as a pull request | Shows up as a build that started failing |
 | Setup per repo | One command | One line |
 
 Vendoring is the default recommendation because it moves the schema into the
-consuming repository's own history: reviewable in a pull request, diffable when
-it changes, and immune to the host being down. Start there, and keep the URL
-form for the cases described in [When the URL form is enough](#when-the-url-form-is-enough).
+consuming repository's own history. It is reviewable in a pull request, diffable
+when it changes, and immune to the host being down. Start there, and keep the
+URL form for the cases described in [When the URL form is
+enough](#when-the-url-form-is-enough).
 
 ## Vendor the schema
 
 <Steps>
 
 1. **Publish the schema at a stable, versioned URL.** Put the version in the
-   path so each release has its own immutable URL — for example
+   path so each release has its own immutable URL. For example,
    `https://schemas.example.com/house/2.1.json`, then `.../house/2.2.json`. This
    is still worth doing when consumers vendor: the URL is what they vendor
    *from*, and what a re-vendor points at.
@@ -61,7 +62,7 @@ form for the cases described in [When the URL form is enough](#when-the-url-form
    ```
 
 3. **Commit both.** The downloaded file and the config change belong in the same
-   commit. This is the step the whole approach rests on — see the caution below.
+   commit. This is the step the whole approach rests on. See the caution below.
 
 4. **Validate as usual.** Nothing else changes:
 
@@ -79,22 +80,22 @@ form for the cases described in [When the URL form is enough](#when-the-url-form
    npx -y docmeta schemas vendor https://schemas.example.com/house/2.2.json
    ```
 
-   The existing entry is replaced rather than duplicated, and the result is a
-   pull request whose diff shows exactly what changed in the contract — the same
-   ergonomics as a lockfile.
+   The existing entry is replaced rather than duplicated. The result is a pull
+   request whose diff shows exactly what changed in the contract. That is the
+   same ergonomics as a lockfile.
 
 </Steps>
 
 <Aside type="caution" title="A vendored schema git ignores is worse than no schema">
-An ignored copy validates perfectly on the machine that downloaded it and is
-simply *absent* in CI, where the failure arrives as a missing schema file in a
+An ignored copy validates perfectly on the machine that downloaded it, and is
+simply *absent* in CI. The failure arrives as a missing schema file in a
 repository nobody changed. So `schemas vendor` asks `git check-ignore` about the
-target **before** it downloads anything and refuses (exit 2) if the answer is
-yes — which is also why the default is `./schema` and not `.docmeta/`, a
-directory docmeta expects you to ignore wholesale.
+target **before** it downloads anything, and refuses (exit 2) if the answer is
+yes. That is also why the default is `./schema` and not `.docmeta/`, a directory
+docmeta expects you to ignore wholesale.
 
-Outside a repository, or with no `git` on `PATH`, the check cannot run. docmeta
-says so on stderr and continues; make sure the file is tracked.
+Outside a repository, or with no `git` on `PATH`, the check cannot run. It says
+so on stderr and continues. Make sure the file is tracked.
 </Aside>
 
 ### Migrating a repo that already references the URL
@@ -125,11 +126,11 @@ The file's contents have changed since it was vendored. Re-download it with
 the recorded integrity if the change was intended.
 ```
 
-That is the cost, stated plainly: an edit to the vendored file that does not go
-through `schemas vendor` — including a well-meant local tweak — breaks the build
-until the pin is updated. In exchange, no copy of the shared standard can drift
-without a reviewer seeing it. If you want the local file without the pin, delete
-the `integrity:` line; `ref` and `source` keep working on their own.
+That is the cost, stated plainly. An edit to the vendored file that does not go
+through `schemas vendor` breaks the build. The pin has to be updated first. That
+includes a well-meant local tweak. In exchange, no copy of the shared standard
+can drift without a reviewer seeing it. If you want the local file without the
+pin, delete the `integrity:` line; `ref` and `source` keep working on their own.
 
 <Aside type="tip" title="Keep the file byte-exact">
 The one thing that moves the bytes without anyone editing them is a checkout
@@ -146,27 +147,25 @@ as changed contents.
 
 ## When the URL form is enough
 
-A plain URL reference is one line and needs no command, and for some setups that
-is the right trade:
-
-- an **internal repo on the same infrastructure** as the schema host, where the
-  host being down already means nobody is working;
-- a **prototype or spike** where a broken build costs nothing;
-- **checking a candidate schema** for one run, with `-s`:
+A plain URL reference is one line and needs no command. For some setups that is
+the right trade. - An **internal repo on the same infrastructure** as the schema
+host, where the host being down already means nobody is working. - A **prototype
+or spike** where a broken build costs nothing. - **Checking a candidate schema**
+for one run, with `-s`:
 
   ```sh
   npx -y docmeta validate "docs/**/*.md" -s https://schemas.example.com/house/3.0.json
   ```
 
-State the tradeoff rather than hiding it: with a URL reference, every job in
-every consuming repo depends on that host answering within 10 seconds, and they
-all fail at the same moment when it does not. A URL that is *mutable*
+State the tradeoff rather than hiding it. With a URL reference, every job in
+every consuming repo depends on that host answering within 10 seconds. They all
+fail at the same moment when it does not. A URL that is *mutable*
 (`.../house/latest.json`) adds a second failure: the meaning of your build can
 change overnight without a commit anywhere in your repository.
 
 With vendoring, that same mutable-URL case degrades to "your committed copy is
-stale" — visible, safe, and fixed by a re-vendor — instead of "your build
-changed meaning while you slept."
+stale", which is visible, safe, and fixed by a re-vendor. It does not become
+"your build changed meaning while you slept."
 
 ### How a URL reference behaves
 
@@ -193,7 +192,7 @@ schemas:
 ```
 
 This is the form `schemas vendor` replaces. You can also scope a URL schema to a
-subtree with an `overrides` entry — see the [configuration
+subtree with an `overrides` entry. See the [configuration
 reference](/docmeta/reference/configuration/).
 
 </TabItem>
@@ -209,25 +208,26 @@ npx -y docmeta validate "docs/**/*.md" -s https://schemas.example.com/house/2.1.
 </Tabs>
 
 Whichever source supplies it, the schema set for each file is resolved by the
-same precedence chain (`--schema` → file `$schema` → config `overrides` → config
-`schemas` → built-in default). Vendoring does not change that chain; it changes
-what one reference in it points at. For the full chain, see the [schema
+same precedence chain. That is `--schema` → file `$schema` → config `overrides`
+→ config `schemas` → built-in default. Vendoring does not change that chain; it
+changes what one reference in it points at. For the full chain, see the [schema
 resolution reference](/docmeta/reference/schema-resolution/).
 
-Each fetch is bounded by a **10-second timeout**, retried **once** after roughly
-500 ms on a network error or a `5xx` (never on a `4xx`, which will not heal),
-and cached in memory for the rest of the run, so two thousand files sharing one
-URL make one request. Successful fetches are also written to a [cross-run disk
-cache](/docmeta/reference/schema-resolution/#the-cross-run-cache) — which speeds
-up your local edit loop and does **not** help CI, because a hosted runner starts
+Each fetch is bounded by a **10-second timeout**. It is retried **once** after
+roughly 500 ms on a network error or a `5xx`. A `4xx` is never retried, because
+it will not heal. The result is cached in memory for the rest of the run, so two
+thousand files sharing one URL make one request. Successful fetches are also
+written to a [cross-run disk
+cache](/docmeta/reference/schema-resolution/#the-cross-run-cache). That speeds
+up your local edit loop. It does **not** help CI, because a hosted runner starts
 with an empty workspace on every job.
 
 ### When a fetch fails
 
-A URL schema that cannot be turned into a usable schema fails the *run*. docmeta
-raises an operational error and exits `2`, distinct from a validation failure
-(exit `1`), so a gate can tell "a document is non-conformant" from "the schema
-host is unreachable". For the full contract, see [Exit codes & PR
+A URL schema that cannot be turned into a usable schema fails the *run*. The
+error is operational and exits `2`, distinct from a validation failure (exit
+`1`). A gate can tell "a document is non-conformant" from "the schema host is
+unreachable". For the full contract, see [Exit codes & PR
 annotations](/docmeta/ci/exit-codes-and-annotations/).
 
 | Failure | What docmeta reports |
@@ -239,18 +239,18 @@ annotations](/docmeta/ci/exit-codes-and-annotations/).
 | The body parses but is not a schema | `Schema "<url>" does not look like a JSON Schema: …` |
 
 That last row matters more than it looks. An API gateway or a misconfigured
-bucket commonly answers a bad path with `200 OK` and a JSON error envelope,
-which would otherwise compile as a schema with no constraints and pass every
-document — a green gate that has stopped working. docmeta [refuses
+bucket commonly answers a bad path with `200 OK` and a JSON error envelope. That
+would otherwise compile as a schema with no constraints and pass every document,
+which is a green gate that has stopped working. On the vendoring path as well,
+docmeta [refuses
 it](/docmeta/reference/schema-resolution/#what-docmeta-requires-of-a-fetched-schema),
-on the vendoring path as well, so an envelope can never be committed as your
-contract.
+so an envelope can never be committed as your contract.
 
 <Aside type="tip" title="Keep the schema's own dialect explicit">
 docmeta auto-detects a schema's JSON Schema dialect from its own `$schema`
-meta-schema URI (2020-12, 2019-09, draft-07, draft-06, and draft-04; a schema
-with no `$schema` is treated as 2020-12). Set `$schema` explicitly in the
-published schema so its dialect is unambiguous to every consumer.
+meta-schema URI. That covers 2020-12, 2019-09, draft-07, draft-06, and draft-04.
+A schema with no `$schema` is treated as 2020-12. Set `$schema` explicitly in
+the published schema so its dialect is unambiguous to every consumer.
 </Aside>
 
 ## When your repo takes outside pull requests
@@ -260,8 +260,8 @@ thing decides whether a repository is actually judged by it.
 
 A document's own `$schema` sits **above** config in the [precedence
 chain](/docmeta/reference/schema-resolution/#precedence). That is the feature
-that lets a page carry its own contract — and in a repo whose pull requests come
-from people you have not met, it is also a way to opt out of yours. One line of
+that lets a page carry its own contract. In a repo taking pull requests from
+people you have not met, it is also a way to opt out of yours. One line of
 frontmatter, and that file is judged by a schema the contributor chose:
 
 ```yaml title="contributed.md"
@@ -272,8 +272,8 @@ $schema: https://example.invalid/permissive.json
 ```
 
 Serve `{"type": "object"}` from that URL and the file passes everything. Worse,
-the run reads as a *partial* success — the contributed file green, the honest
-files still red against your real schema — so nothing about the output looks
+the run reads as a *partial* success, with the contributed file green and the
+honest files still red against your real schema. Nothing about the output looks
 like a bypass:
 
 ```
@@ -282,8 +282,8 @@ like a bypass:
     (root)  must have required property 'type'  (line 1)  [google:okf:0.1]
 ```
 
-Note what this walks past: `schemas:`, the vendored copy, and the integrity pin
-all sit *below* `$schema` in the chain, so none of the durability work above
+Note what this walks past. `schemas:`, the vendored copy, and the integrity pin
+all sit *below* `$schema` in the chain. None of the durability work above
 applies to that file.
 
 One key closes it:
@@ -306,30 +306,30 @@ other document is validated exactly as before:
     schemaTrust.documentRefs is "local" …
 ```
 
-It is a **failing file**, exit 1 — not a stopped run — so with `--format github`
-the annotation appears on that line of the pull request, where the contributor
-can act on it.
+It is a **failing file** and exit 1, rather than a stopped run. So with
+`--format github` the annotation appears on that line of the pull request. The
+contributor can act on it.
 
 What `local` still allows is worth stating, because it is why turning it on is
-cheap: a built-in id (`$schema: google:okf:0.1`) and a schema file committed in
+cheap. A built-in id (`$schema: google:okf:0.1`) and a schema file committed in
 the repository both keep working. Only a URL, and a path reaching outside the
-repository, are refused. And `-s/--schema` is untouched in every mode — you can
-still check a candidate schema for one run.
+repository, are refused. And `-s/--schema` is untouched in every mode, so you
+can still check a candidate schema for one run.
 
-`documentRefs: none` goes one step further: the document's key is ignored
-entirely and the config decides for every file, with one line on stderr naming
-each file whose reference was dropped.
+`documentRefs: none` goes one step further. The document's key is ignored
+entirely and the config decides for every file. One line on stderr names each
+file whose reference was dropped.
 
 <Aside type="caution" title="Two things to know before you rely on it">
 **An allowlist is not the strong setting.** `schemaTrust.hosts` narrows which
-hosts a document-supplied URL may name, but `fetch` follows redirects, so an
+hosts a document-supplied URL may name. But `fetch` follows redirects, so an
 allowlisted host answering `302` sends the request wherever it likes. Use
 `hosts` for a known publisher; use `documentRefs: local` when you actually
 distrust the contributor.
 
 **Pin the version in CI.** A docmeta older than 3.11 does not know the key,
-ignores it, and reports nothing — so the guard is only as real as the binary
-your workflow runs:
+ignores it, and reports nothing. The guard is only as real as the binary your
+workflow runs:
 
 ```sh
 npx -y docmeta@4 validate "docs/**/*.md"
@@ -338,7 +338,7 @@ npx -y docmeta@4 validate "docs/**/*.md"
 
 ## Verify it works
 
-The `json` output reports the resolved schema set per file, so a normal run on a
+The `json` output reports the resolved schema set per file. A normal run on a
 known-good file shows which reference a repo is actually wired to:
 
 ```sh
@@ -348,9 +348,9 @@ npx -y docmeta validate docs/concepts/overview.md --format json
 In the JSON, the file's `schemas` array names either your vendored path or your
 URL. A clean run exits `0`.
 
-The check worth doing once per repo is the one that proves vendoring took: with
-the schema file committed, temporarily block the schema host (or just note that
-nothing in the run touches it) and confirm the gate still passes.
+One check is worth doing once per repo, to prove vendoring took. With the schema
+file committed, temporarily block the schema host, or just note that nothing in
+the run touches it. Then confirm the gate still passes.
 
 ## Next steps
 
@@ -383,6 +383,6 @@ nothing in the run touches it) and confirm the gate still passes.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 {/* test {"testId":"govern-shared-schema","description":"URL-reference classification, the fetch-failure contract, and what `schemas vendor` refuses, exercised against the local build."} */}
 {/* step {"description":"A reference starting with https:// is treated as a URL and fetched; an unreachable host fails the run as an operational error (exit 2), distinct from a validation failure. Uses a closed loopback port so the failure is instant and needs no external network.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md -s https://127.0.0.1:1/article/1.json","exitCodes":[2],"stdio":"Failed to fetch schema"}} */}
-{/* step {"description":"By contrast, a clean run against a resolvable (built-in) schema exits 0 — the URL path is the only difference.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md -s google:okf:0.1","exitCodes":[0],"stdio":"1 passed"}} */}
+{/* step {"description":"By contrast, a clean run against a resolvable (built-in) schema exits 0. The URL path is the only difference.","runShell":{"command":"npx docmeta validate test/fixtures/valid.md -s google:okf:0.1","exitCodes":[0],"stdio":"1 passed"}} */}
 {/* step {"description":"`schemas vendor` takes an http(s) URL to download. A built-in id is already bundled, so it is refused as a usage error (exit 2) before anything is written.","runShell":{"command":"npx docmeta schemas vendor google:okf:0.1","exitCodes":[2],"stdio":"http(s) URL"}} */}
 {/* test end */}
