@@ -35,10 +35,7 @@ problem, in this shape:
 
 | Part | What it tells you |
 | --- | --- |
-| `<field>` | Which field is wrong. It's a [JSON
-Pointer](https://datatracker.ietf.org/doc/html/rfc6901) such as `/timestamp`, or
-a bare key name. `(root)` means the document as a whole, most often a *required
-field is missing entirely*. |
+| `<field>` | Which field is wrong. It's a [JSON Pointer](https://datatracker.ietf.org/doc/html/rfc6901) such as `/timestamp`, or a bare key name. `(root)` means the document as a whole, most often a *required field is missing entirely*. |
 | `<message>` | What's wrong, e.g. `must have required property 'type'` or `must match format "date-time"`. |
 | `(line N)` | The source line of the offending field, when docmeta can locate it. A missing required field has no line, so this part is absent. |
 | `[schema-id]` | The schema that flagged it, e.g. `google:okf:0.1`. Useful when more than one schema applies. |
@@ -313,11 +310,8 @@ or reading raw CI logs, here's what each code means:
 | Code | Meaning |
 | --- | --- |
 | `0` | Every file passed. The check is green. |
-| `1` | One or more files **failed validation**, from a missing or malformed
-field. This is the red check you came here to fix. |
-| `2` | An **operational error**, where docmeta couldn't run the check at all.
-That covers a missing or unreadable schema, an unsupported file type, or no
-files to validate. The message goes to stderr, prefixed `docmeta:`. |
+| `1` | One or more files **failed validation**, from a missing or malformed field. This is the red check you came here to fix. |
+| `2` | An **operational error**, where docmeta couldn't run the check at all. That covers a missing or unreadable schema, an unsupported file type, or no files to validate. The message goes to stderr, prefixed `docmeta:`. |
 
 A code `1` means fix your document. A code `2` means fix the setup. See
 [Schema not found](#schema-not-found) above, or escalate to whoever configured

@@ -23,16 +23,13 @@ last change) are left out. Git owns them, and a hand-typed copy goes stale.
 | Field | Type | Notes |
 |---|---|---|
 | `authors` | string, object, or list of them | Who wrote it. `owner` is who answers for it now |
-| `owner` | string or list | Who answers for the page, as a name, handle, chat
-channel, or team slug. Ownership systems such as Backstage make this field
-mandatory |
+| `owner` | string or list | Who answers for the page, as a name, handle, chat channel, or team slug. Ownership systems such as Backstage make this field mandatory |
 | `stakeholders` | string or list | Who has a stake in this page being right, such as the feature's engineer, the product owner, or the support lead. It is page-level because the right people differ from page to page |
 | `reviewed-by` | string or list | Who did the last review. The spelling avoids `reviewers`, which MyST uses for scholarly metadata |
 | `last-reviewed` | W3CDTF date | When the last review happened. Freshness tooling reads this field |
 | `review-interval` | ISO 8601 duration | How often review is due: `P90D`, `P1Y`. Machines can compare these, unlike `90d` |
 | `verified-against` | string, non-empty | The product version or spec the content was checked against: `operator 1.4.2` |
-| `source-of-truth` | string or list | Where the facts live, as a repo path or
-an API spec. A drift check compares the page against it |
+| `source-of-truth` | string or list | Where the facts live, as a repo path or an API spec. A drift check compares the page against it |
 
 All list fields accept one string or a non-empty list without
 duplicates. `authors` is the exception: it also accepts the person

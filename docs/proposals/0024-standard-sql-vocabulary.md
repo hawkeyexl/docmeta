@@ -34,16 +34,14 @@ is the schema.**
 | `SELECT …` | read | rows out |
 | `UPDATE docs SET k = v` | DML | set a key; a corpus-new key widens the table (0022) |
 | `UPDATE docs SET k = NULL` | DML | **remove the key** from matching files; absent is a no-op |
-| `UPDATE docs SET k = explicit_null()` | DML | write a literal `k: null`, the
-rare case |
+| `UPDATE docs SET k = explicit_null()` | DML | write a literal `k: null`, the rare case |
 | `UPDATE docs SET _path = '…'` | DML | move/rename the file, body byte-preserved |
 | `INSERT INTO docs (_path, …) VALUES (…)` | DML | create a file: that frontmatter, an empty body |
 | `DELETE FROM docs WHERE …` | DML | strip the frontmatter block; the file and body survive |
 | `ALTER TABLE docs ADD COLUMN k TYPE [NOT NULL] [DEFAULT v]` | DDL | the schema gains property `k` (required if NOT NULL); a DEFAULT backfills the files |
 | `ALTER TABLE docs DROP COLUMN k` | DDL | the schema loses `k`; the key is removed from the files |
 | `ALTER TABLE docs RENAME COLUMN a TO b` | DDL | the schema property is renamed; the key is renamed in every file |
-| `DROP TABLE`, `ATTACH`, `VACUUM`, multi-statement | n/a | refused, with
-messages naming why |
+| `DROP TABLE`, `ATTACH`, `VACUUM`, multi-statement | n/a | refused, with messages naming why |
 
 Everything rides the architecture 0022 fixed. That is preview by default,
 `--write` to apply, and `--check` as the drift gate. It is also effects judged

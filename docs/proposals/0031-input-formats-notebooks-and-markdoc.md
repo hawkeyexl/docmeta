@@ -158,13 +158,10 @@ costs an operator today.
 |---|---|---|
 | `.ipynb` | **Implement**, read then write | docmeta already publishes a schema for this content. Two real metadata channels; both readable; positions and write offsets measured available (§ stress test 1). |
 | `.mdoc` | **Implement** | Reuses `extractFrontmatter`/`applyFrontmatter` unchanged. The only thing missing is a name and an extension. |
-| `.json` / `.yaml` standalone | **Reject** | A file that *is* metadata has no extraction step. So docmeta's distinguishing
-layer does nothing, and a generic JSON Schema validator does the job better. Reopening condition named below. |
+| `.json` / `.yaml` standalone | **Reject** | A file that *is* metadata has no extraction step. So docmeta's distinguishing layer does nothing, and a generic JSON Schema validator does the job better. Reopening condition named below. |
 | `.org` | **Defer** | A real, parseable header channel (`#+TITLE:`), structurally the same as the RST/AsciiDoc native fallbacks. No demand signal, and no MyST-style self-inflicted inconsistency to force it. |
 | `.tex` | **Reject** | The value of `\title{}` is a macro expansion, not a string. A read that resolves it is a TeX interpreter; a read that does not is lossy in exactly the way `CONTRIBUTING.md` forbids. |
-| `.typ` | **Reject** | The same argument applies, since `#set document(title:
-…)` takes an arbitrary Typst expression. And there is none of LaTeX's installed
-base to weigh against it. |
+| `.typ` | **Reject** | The same argument applies, since `#set document(title: …)` takes an arbitrary Typst expression. And there is none of LaTeX's installed base to weigh against it. |
 | Confluence storage format | **Reject** | The metadata is not in the file. Labels and page properties live in Confluence's API, not the stored XHTML, so no extractor reading a file on disk can be correct. |
 | `.txt` | **Reject** | No metadata channel exists to read. Registering it makes every `.txt` in a walk a document with `present: false`. |
 

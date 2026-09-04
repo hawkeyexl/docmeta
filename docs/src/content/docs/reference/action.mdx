@@ -67,8 +67,7 @@ the working directory.
 
 | Output | Value |
 |---|---|
-| `exit-code` | docmeta's exit code. `0` clean, `1` validation failures, `2`
-operational or usage error. |
+| `exit-code` | docmeta's exit code. `0` clean, `1` validation failures, `2` operational or usage error. |
 
 `exit-code` is only observable with `continue-on-error: true`. Without it a
 non-zero code has already failed the step, so there is nothing left to read:

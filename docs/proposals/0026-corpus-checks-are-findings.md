@@ -76,8 +76,7 @@ A check's SELECT says where each violation lives by naming its columns:
 
 | column | | meaning |
 |---|---|---|
-| `path` | required | the file the finding attaches to, which must be a file the
-run loaded |
+| `path` | required | the file the finding attaches to, which must be a file the run loaded |
 | `line` | optional | 1-based source line; `lineFor(path, key)` computes it (below) |
 | `key` | optional | the metadata field at fault; becomes the finding's `instancePath` and part of its baseline identity |
 | `message` | optional | the prose; synthesized as `col=value` pairs from any remaining columns when absent |

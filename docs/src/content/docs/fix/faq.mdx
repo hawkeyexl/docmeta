@@ -101,11 +101,8 @@ One of three:
 | Code | Meaning |
 | --- | --- |
 | `0` | Every file passed. The check is green. |
-| `1` | One or more files **failed validation**, from a missing or malformed
-field. The red check you're here to fix. |
-| `2` | An **operational error**, where docmeta couldn't run the check at all.
-That covers a missing or unreadable schema, an unsupported file type, or no
-files to validate. The message goes to stderr, prefixed `docmeta:`. |
+| `1` | One or more files **failed validation**, from a missing or malformed field. The red check you're here to fix. |
+| `2` | An **operational error**, where docmeta couldn't run the check at all. That covers a missing or unreadable schema, an unsupported file type, or no files to validate. The message goes to stderr, prefixed `docmeta:`. |
 
 A `1` means fix your document. A `2` means fix the setup, not the content. CI
 gates on this code, so the distinction matters when you read a raw log.

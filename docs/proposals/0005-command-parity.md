@@ -187,12 +187,12 @@ that also writes wants to report. No reason to couple the format to `--dry-run`.
 ### 9. stdin plus `-f github` on `fill`, a genuine output collision
 
 With `-`, `fill` writes the filled document to **stdout** and the report to
-stderr. `::error` workflow commands are only interpreted on stdout, so `cat p.md
-| docmeta fill - --as markdown -f github` produces annotations on stderr where
-GitHub ignores them. The options are to silently degrade, to error out, or to
-document it. The decision is to **error out** with a `DocmetaError`. `-f github`
-with stdin input is a request that cannot be honored. A silent no-op annotation
-is the kind of false-green this proposal set exists to eliminate.
+stderr. `::error` workflow commands are only interpreted on stdout, so
+`cat p.md | docmeta fill - --as markdown -f github` produces annotations on
+stderr where GitHub ignores them. The options are to silently degrade, to error
+out, or to document it. The decision is to **error out** with a `DocmetaError`.
+`-f github` with stdin input is a request that cannot be honored. A silent no-op
+annotation is the kind of false-green this proposal set exists to eliminate.
 
 ### 10. Should `validate` gain `--fields` for symmetry? (no)
 
