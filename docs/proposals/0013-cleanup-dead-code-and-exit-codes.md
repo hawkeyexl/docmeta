@@ -62,8 +62,8 @@ Three coherent options:
 
 **Recommend C.** `implemented` is a meaningful *declaration* on the extractor
 interface, and costs nothing to keep. The factory is 20 lines that exist so a
-future author does not have to write `implemented: false` by hand, which is not
-a burden worth a file. Delete the factory and its self-test, keep the field, and
+future author does not have to write `implemented: false` by hand. That is not a
+burden worth a file. Delete the factory and its self-test, keep the field, and
 reword CONTRIBUTING to say "set `implemented: false` on the extractor" rather
 than pointing at a helper.
 
@@ -272,8 +272,8 @@ rejected an unknown key. `parseSchemaTrust`'s own docstring already named the
 consequence. A misspelled `schemaTrust:` was a silent no-op, "leaving a repo
 that reads as guarded and is not". That is the same false-green this proposal
 set exists to remove, so all three levels are now strict. It is a real breaking
-change for a config carrying a stray key, and for an older binary reading a
-config written for a newer one. The configuration reference states both.
+change for a config carrying a stray key. It also breaks an older binary reading
+a config written for a newer one. The configuration reference states both.
 
 ### Deliberately not done
 

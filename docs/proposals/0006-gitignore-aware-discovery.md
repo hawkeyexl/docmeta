@@ -26,7 +26,7 @@ files checked: 2
   docs/real.md
 ```
 
-`node_modules` was correctly skipped, so the hardcoded list works — it is just
+`node_modules` was correctly skipped, so the hardcoded list works. It is just
 far too small. Any repo with a built site (`build/`, `.astro/`, `_site/`,
 `.docusaurus/`), a vendored copy, or a local scratch directory validates
 generated Markdown. The consequences are worse than noise:
@@ -35,12 +35,13 @@ generated Markdown. The consequences are worse than noise:
   transformed or stripped frontmatter, producing violations the user cannot fix
   in source.
 - **Every user pays the same tax.** The remedy today is hand-maintaining
-  `exclude:` to restate what `.gitignore` already says — two lists to keep in
-  sync, in a project whose own working agreements are hostile to exactly that
-  pattern.
+  `exclude:` to restate what `.gitignore` already says. That is two lists to
+  keep in sync, in a project whose own working agreements are hostile to exactly
+  that pattern.
 - **This repo dogfoods around it.** The documented dogfood command targets
-  `docs/src/content/docs/**` explicitly rather than the repo, and `docs/.gitignore`
-  lists `dist`, `.astro`, `node_modules` — none of which docmeta itself honors.
+  `docs/src/content/docs/**` explicitly rather than the repo. `docs/.gitignore`
+  lists `dist`, `.astro` and `node_modules`, none of which docmeta itself
+  honors.
 
 ## Proposal
 
@@ -81,7 +82,7 @@ types a path means it.
 
 ## Stress test
 
-### 1. Hand-rolling gitignore semantics — rejected, and the probe shows why
+### 1. Hand-rolling gitignore semantics (rejected, and the probe shows why)
 
 The obvious dependency-free approach is translating `.gitignore` lines into
 picomatch patterns (picomatch is already a dependency). The probe kills it.
@@ -94,51 +95,52 @@ docs/.gitignore:1:tmp/    docs/tmp/x.md
 docs/.gitignore:1:tmp/    docs/tmp/keep.md
 ```
 
-`!keep.md` does **not** rescue `docs/tmp/keep.md`, because git cannot re-include a
-file inside an excluded directory. That rule is not expressible as a flat pattern
-list, and it is one of several — precedence across nested files, directory-only
-patterns, leading-`/` anchoring, `**` semantics that differ from glob `**`,
-`.git/info/exclude`, and `core.excludesFile`. A translation layer would be subtly
-wrong in ways that silently change which files are validated, which is the exact
-failure class this proposal set exists to remove.
+`!keep.md` does **not** rescue `docs/tmp/keep.md`, because git cannot re-include
+a file inside an excluded directory. That rule is not expressible as a flat
+pattern list, and it is one of several. The others are precedence across nested
+files, directory-only patterns, leading-`/` anchoring, `**` semantics that
+differ from glob `**`, `.git/info/exclude`, and `core.excludesFile`. A
+translation layer would be subtly wrong in ways that silently change which files
+are validated. That is the exact failure class this proposal set exists to
+remove.
 
-### 2. Adding the `ignore` package instead — rejected on this repo's own terms
+### 2. Adding the `ignore` package instead (rejected on this repo's own terms)
 
 `ignore` implements gitignore semantics correctly, is ~30 KB, and has no
-dependencies. It is also **absent** from the tree — verified not present even
-transitively (`grep -c '"node_modules/ignore"' package-lock.json` → 0). Adding it
-means a lockfile change, and CLAUDE.md devotes an entire section to how that goes
-wrong here: `npm install <dep>` on Windows drops the top-level `@emnapi/*` entries
-and reddens every Linux CI job at once, so the dep must be **spliced by hand** and
-diffed against `origin/main`.
+dependencies. It is also **absent** from the tree, verified not present even
+transitively (`grep -c '"node_modules/ignore"' package-lock.json` → 0). Adding
+it means a lockfile change, and CLAUDE.md devotes an entire section to how that
+goes wrong here. `npm install <dep>` on Windows drops the top-level `@emnapi/*`
+entries and reddens every Linux CI job at once. So the dep must be **spliced by
+hand**, and diffed against `origin/main`.
 
-That cost is payable but it buys strictly less than the probe option: `ignore`
-still needs docmeta to find, read, and correctly stack every nested `.gitignore`,
-plus `.git/info/exclude` and the global excludes file. `git check-ignore` does all
-of that by construction.
+That cost is payable, but it buys strictly less than the probe option. `ignore`
+still needs docmeta to find, read, and correctly stack every nested
+`.gitignore`, plus `.git/info/exclude` and the global excludes file. `git
+check-ignore` does all of that by construction.
 
-### 3. Performance of a subprocess — measured, acceptable
+### 3. Performance of a subprocess, measured and acceptable
 
-Concern: shelling out on every run. Measured on this machine:
+The concern is shelling out on every run. Measured on this machine:
 
 | Candidates | Half ignored | Wall clock |
 |---|---|---|
 | 5,000 | no | 0.111 s |
 | 5,000 | yes | 0.260 s |
 
-One subprocess, sub-second at 5,000 files. For comparison, a single remote schema
-fetch is allowed 10 s ([0008](0008-remote-schema-durability.md)). Not a concern,
-and it does not grow with repo size — only with candidate count, which is already
-bounded by the glob.
+One subprocess, sub-second at 5,000 files. For comparison, a single remote
+schema fetch is allowed 10 s ([0008](0008-remote-schema-durability.md)). Not a
+concern. It does not grow with repo size, only with candidate count, which is
+already bounded by the glob.
 
-### 4. Not a git repository — must degrade silently
+### 4. Not a git repository, which must degrade silently
 
-Verified: outside a repo, git prints `fatal: not a git repository`. Extracted
+Verified. Outside a repo, git prints `fatal: not a git repository`. Extracted
 tarballs, `npm pack` contents, and some Docker build contexts all hit this. The
 implementation must treat a non-zero *setup* failure as "no filtering" and
 continue, not as an error.
 
-Critically, `git check-ignore` **exits 1 when nothing matched** — verified:
+Critically, `git check-ignore` **exits 1 when nothing matched**, as verified here:
 
 ```
 none-ignored -> exit 1
@@ -149,14 +151,14 @@ So exit 1 is a normal, successful result meaning "keep everything". Conflating i
 with failure would make the filter silently no-op in the common clean case, or
 worse, error. This is the single most likely implementation bug.
 
-### 5. `git` missing from `PATH` — same degradation, but say so
+### 5. `git` missing from `PATH`, the same degradation, but say so
 
-Minimal CI containers may lack a git binary. Degrade to no filtering, and emit a
+Minimal CI containers may lack a git binary. Degrade to no filtering. Emit a
 one-line stderr diagnostic when `respectGitignore` was **explicitly** enabled in
-config (the user asked for something that did not happen). Stay silent when it was
-merely the default, or every non-git run gains noise.
+config, because the user asked for something that did not happen. Stay silent
+when it was merely the default, or every non-git run gains noise.
 
-### 6. Behavior change: files disappear from the checked set — the real risk
+### 6. Behavior change, where files disappear from the checked set (the real risk)
 
 A repo currently validating gitignored files will check fewer files, and a run
 that was red can turn green. That is the *dangerous* direction of change: the gate
@@ -168,14 +170,14 @@ Mitigations, in order of importance:
 2. Report the count: `12 files checked, 3 skipped by .gitignore`. Silent removal
    is what makes this dangerous; a counted removal is auditable.
 3. `--no-gitignore` restores the old behavior in one flag.
-4. [0014](0014-empty-input-is-not-success.md) catches the pathological case — a
+4. [0014](0014-empty-input-is-not-success.md) catches the pathological case. A
    repo whose entire docs tree is gitignored now errors instead of reporting a
    green zero.
 
 Point 4 is why 0014 should land first. Without it, this proposal can turn a
 working gate into a silent no-op.
 
-### 7. Interaction with `--exclude` — additive, and order matters for reporting
+### 7. Interaction with `--exclude`, which is additive, and order matters for reporting
 
 `.gitignore` and `--exclude` compose: a file is skipped if either applies.
 `--exclude` continues to be passed to `fast-glob`'s `ignore`, while gitignore
@@ -183,34 +185,34 @@ filtering happens after enumeration. That means the skipped-count in point 6
 reflects only gitignore, not `--exclude`. Correct, and worth stating in the
 reference page so the numbers are interpretable.
 
-### 8. Interaction with `--ext` — ordering is a correctness question
+### 8. Interaction with `--ext`, where ordering is a correctness question
 
 Filter gitignore **before** the extension check, not after. Both orders produce
-the same file set, but running `check-ignore` on the smaller post-extension list
-is cheaper, while running it first keeps the skipped-count meaningful ("skipped
-because ignored" vs "skipped because wrong extension" are different facts the
-user may want separated). Decision: extension filter first for cost, and count
-only extension-eligible files as gitignore-skipped, so the reported number
-answers "how many candidate documents did .gitignore remove".
+the same file set. But running `check-ignore` on the smaller post-extension list
+is cheaper, while running it first keeps the skipped-count meaningful. "Skipped
+because ignored" and "skipped because wrong extension" are different facts the
+user may want separated. The decision is extension filter first for cost, and
+count only extension-eligible files as gitignore-skipped. That way the reported
+number answers "how many candidate documents did .gitignore remove".
 
-### 9. Worktrees — verified relevant to this repo
+### 9. Worktrees, verified relevant to this repo
 
 This repo's worktrees live at `.claude/worktrees/<name>/` with `.git` as a
 **file**. `git check-ignore` resolves worktrees natively, so no special handling
-is needed — but it is also the reason not to hand-roll `.git` discovery
-(cf. [0004 § stress test 2](0004-config-upward-discovery.md), which must handle
-the gitfile explicitly because it does *not* delegate to git).
+is needed. It is also the reason not to hand-roll `.git` discovery. Compare
+[0004 § stress test 2](0004-config-upward-discovery.md), which must handle the
+gitfile explicitly because it does *not* delegate to git.
 
-### 10. Windows path separators — must normalize before the pipe
+### 10. Windows path separators, which must be normalized before the pipe
 
-`resolveTargets` already normalizes to posix via `toPosix()`, and
-`git check-ignore` wants forward slashes. Feed it the already-normalized relative
-paths. Paths are also relative to the git root, not `cwd` — so the subprocess must
-run with `cwd` set to the invocation directory and receive `cwd`-relative paths,
-which git resolves correctly. Needs an explicit test from a subdirectory, since
-that is where this class of bug lives (see 0004).
+`resolveTargets` already normalizes to posix via `toPosix()`, and `git
+check-ignore` wants forward slashes. Feed it the already-normalized relative
+paths. Paths are also relative to the git root, not `cwd`. So the subprocess
+must run with `cwd` set to the invocation directory, and receive `cwd`-relative
+paths, which git resolves correctly. Needs an explicit test from a subdirectory,
+since that is where this class of bug lives (see 0004).
 
-### 11. NUL-delimited input for hostile filenames — required
+### 11. NUL-delimited input for hostile filenames (required)
 
 Newline-delimited breaks on filenames containing a newline. `git check-ignore`
 supports `-z` for NUL-delimited input and output. Use it: the cost is zero and the
@@ -218,20 +220,20 @@ alternative is a rare, baffling failure.
 
 ## Implementation sketch
 
-1. `test/load-files.test.ts` — a gitignored file is dropped from a glob expansion;
-   an explicitly named gitignored file is kept.
-2. `test/load-files.test.ts` — nested `.gitignore` honored; the
+1. In `test/load-files.test.ts`, a gitignored file is dropped from a glob
+   expansion, and an explicitly named gitignored file is kept.
+2. In `test/load-files.test.ts`, a nested `.gitignore` is honored, and the
    `tmp/` + `!keep.md` case from the probe asserts git's semantics, not ours.
-3. `test/load-files.test.ts` — `check-ignore` exit 1 (nothing ignored) keeps all
-   files; simulated missing git keeps all files.
-4. `test/load-files.test.ts` — run from a subdirectory of the git root.
-5. `test/cli.integration.test.ts` — `--no-gitignore`; the skipped count appears in
-   `pretty` output.
-6. **Fixtures cannot live in `test/fixtures/`, and the reason is a trap.** A file
-   this repo's own `.gitignore` ignores would never be committed, so a
+3. In `test/load-files.test.ts`, `check-ignore` exit 1 (nothing ignored) keeps
+   all files, and a simulated missing git keeps all files.
+4. In `test/load-files.test.ts`, a run from a subdirectory of the git root.
+5. In `test/cli.integration.test.ts`, `--no-gitignore`, and the skipped count
+   appearing in `pretty` output.
+6. **Fixtures cannot live in `test/fixtures/`, and the reason is a trap.** A
+   file this repo's own `.gitignore` ignores would never be committed, so a
    `test/fixtures/gitignored/` directory would arrive on CI *empty*. The test
    would then find nothing to ignore, assert that nothing was ignored, and
-   **pass for the wrong reason** — a green test proving nothing.
+   **pass for the wrong reason**. That is a green test proving nothing.
 
    The test helper must therefore build a throwaway repo at runtime:
 
