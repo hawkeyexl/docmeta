@@ -6,8 +6,8 @@ description: Read a docmeta validation error, map it to the offending field and 
 import { Steps, Aside, LinkCard } from '@astrojs/starlight/components';
 
 Your PR's docmeta check is red and you'd like it green again. You're in the right
-place. This page decodes the error, points you at the exact field and line to
-change, and shows you how to confirm the fix locally before you re-push. You
+place. This page decodes the error, and points you at the exact field and line to
+change. It also shows you how to confirm the fix locally before you re-push. You
 don't need to know how docmeta was set up, only what its output is telling you.
 
 <Aside type="tip" title="The fastest path">
@@ -34,7 +34,10 @@ problem, in this shape:
 
 | Part | What it tells you |
 | --- | --- |
-| `<field>` | Which field is wrong. It's a [JSON Pointer](https://datatracker.ietf.org/doc/html/rfc6901) such as `/timestamp`, or a bare key name. `(root)` means the document as a whole — most often a *required field is missing entirely*. |
+| `<field>` | Which field is wrong. It's a [JSON
+Pointer](https://datatracker.ietf.org/doc/html/rfc6901) such as `/timestamp`, or
+a bare key name. `(root)` means the document as a whole, most often a *required
+field is missing entirely*. |
 | `<message>` | What's wrong, e.g. `must have required property 'type'` or `must match format "date-time"`. |
 | `(line N)` | The source line of the offending field, when docmeta can locate it. A missing required field has no line, so this part is absent. |
 | `[schema-id]` | The schema that flagged it, e.g. `google:okf:0.1`. Useful when more than one schema applies. |
@@ -103,8 +106,8 @@ timestamp: last Tuesday
 
 The `/timestamp` pointer and `(line 4)` take you straight to the offending line.
 
-**Fix:** replace the value with a properly formatted one. An ISO 8601 `date-time`
-looks like `2026-06-25T10:00:00Z`:
+**Fix:** replace the value with a properly formatted one. An ISO 8601
+`date-time` looks like this:
 
 ```diff lang="md" title="docs/guide.md"
   ---
@@ -115,7 +118,7 @@ looks like `2026-06-25T10:00:00Z`:
   ---
 ```
 
-The same pattern applies to other formats: a `uri` field needs a full URL
+The same pattern applies to other formats. A `uri` field needs a full URL
 (`https://example.com/...`), and an enum field needs one of its allowed values.
 The message names the format or constraint that failed.
 
@@ -127,9 +130,8 @@ The message names the format or constraint that failed.
 ```
 
 A file with no frontmatter block reads as empty metadata, so it fails the same
-way a file missing a required field does. If you expected this file to have
-metadata, it's probably missing its opening `---` fence, or the block isn't at
-the very top of the file.
+way a file missing a required field does. If you expected this file to have metadata, it's probably missing its opening
+`---` fence. Or the block isn't at the very top of the file.
 
 **Fix:** add a frontmatter block at the top of the file, between `---` fences (or
 `+++`/`;;;` for [TOML/JSON](/docmeta/reference/formats/#frontmatter-flavors)):
@@ -200,7 +202,8 @@ or:
 docmeta: Schema file not found: "./schemas/my.schema.json".
 ```
 
-This isn't a problem with your document. It's a configuration problem. docmeta
+Your document is not the problem here. The configuration is.
+docmeta
 couldn't load the schema it was told to use, so it can't validate anything. This
 exits with code `2` (an operational error), not `1`.
 
@@ -247,9 +250,9 @@ before CI does.
 
 ## Let docmeta draft the fix
 
-When the failure is a *missing* field rather than a malformed one, and
-especially when several pages fail the same way,
-[`docmeta fill`](/docmeta/reference/cli/#fill) can propose the values for you. It
+Sometimes the failure is a *missing* field rather than a malformed one, and
+several pages fail the same way. Then [`docmeta
+fill`](/docmeta/reference/cli/#fill) can propose the values for you. It
 reads the page, resolves the same schema the check used, and writes back the
 values it is confident about.
 
@@ -278,17 +281,16 @@ docmeta fill docs/intro.md && docmeta validate docs/intro.md
 before you commit; treat a proposed `description` as a first draft.
 </Aside>
 
-`fill` picks an LLM provider by detecting one, so it runs with whatever
-credentials you have — and, with none at all, falls back to a local model it
-downloads on first use. The report's first line names what it used. On a machine
-with no API key, pass `--provider` or see the
-[`fill` reference](/docmeta/reference/cli/#fill) before the first run, so the
-download is a choice rather than a surprise.
+`fill` picks an LLM provider by detecting one, so it runs with whatever credentials you
+have. With none at all, it falls back to a local model it downloads on first
+use. The report's first line names what it used. On a machine with no API key, pass `--provider`, or see the [`fill`
+reference](/docmeta/reference/cli/#fill) before the first run. Then the download
+is a choice rather than a surprise.
 
-You are usually fixing someone else's repo, so it is worth knowing that `fill` is
-the one docmeta command that sends the page off your machine.
+You are usually fixing someone else's repo. So it is worth knowing that `fill`
+is the one docmeta command that sends the page off your machine.
 [Run `fill` under a data-egress policy](/docmeta/set-up/fill-providers/) spells
-out what each call transmits and what the cache keeps, and `--local` is the flag
+out what each call transmits, and what the cache keeps. `--local` is the flag
 that keeps inference on your own hardware.
 
 Anything below the confidence threshold is skipped and named, so you still get a
@@ -307,8 +309,11 @@ or reading raw CI logs, here's what each code means:
 | Code | Meaning |
 | --- | --- |
 | `0` | Every file passed. The check is green. |
-| `1` | One or more files **failed validation** — a missing or malformed field. This is the red check you came here to fix. |
-| `2` | An **operational error** — docmeta couldn't run the check at all. A missing or unreadable schema, an unsupported file type, or no files to validate. The message goes to stderr, prefixed `docmeta:`. |
+| `1` | One or more files **failed validation**, from a missing or malformed
+field. This is the red check you came here to fix. |
+| `2` | An **operational error**, where docmeta couldn't run the check at all.
+That covers a missing or unreadable schema, an unsupported file type, or no
+files to validate. The message goes to stderr, prefixed `docmeta:`. |
 
 A code `1` means fix your document. A code `2` means fix the setup. See
 [Schema not found](#schema-not-found) above, or escalate to whoever configured

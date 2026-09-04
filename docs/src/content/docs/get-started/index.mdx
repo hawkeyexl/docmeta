@@ -5,9 +5,9 @@ description: Install docmeta and validate your first file in under a minute. Rea
 
 import { Steps, Tabs, TabItem, Aside, LinkCard } from '@astrojs/starlight/components';
 
-This page takes you from nothing to a validated file. You'll install docmeta (or
-skip install entirely), validate one document, and learn to read both a passing
-and a failing result, including the summary line that CI watches.
+This page takes you from nothing to a validated file. You'll install docmeta, or skip install entirely, then validate one document.
+You'll also learn to read both a passing and a failing result, including the
+summary line that CI watches.
 
 ## Before you start
 
@@ -50,10 +50,10 @@ If that prints `v24` or higher, you're ready.
 
 2. **Validate a file.**
 
-   Point docmeta at any Markdown file. With no schema configured, it validates
-   the file's YAML frontmatter against the built-in
-   [OKF schema](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md),
-   which requires a `type` field and recommends a handful of others.
+   Point docmeta at any Markdown file. With no schema configured, it validates the file's YAML frontmatter against the
+built-in [OKF
+schema](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md).
+That schema requires a `type` field, and recommends a handful of others.
 
    ```sh
    docmeta validate path/to/your-doc.md
@@ -126,7 +126,8 @@ N files checked, M passed, K failed, E errors
 | `N files checked` | How many files docmeta resolved and validated. |
 | `M passed` | Files with no errors. |
 | `K failed` | Files with at least one error. |
-| `E errors` | Total errors across all files — a single file can contribute several. |
+| `E errors` | Total errors across all files. A single file can contribute
+several. |
 
 A run is green only when `K failed` is `0`. The exit code follows: `0` when
 nothing failed, `1` when one or more files failed validation. (A third code,

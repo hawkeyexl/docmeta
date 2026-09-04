@@ -17,9 +17,9 @@ hero:
 
 import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-docmeta checks that your documents carry the metadata your tooling depends on,
-that every page declares a `type`, that timestamps are real dates, that required
-fields are actually present, and it fails your build when they aren't. It reads
+docmeta checks that your documents carry the metadata your tooling depends on.
+It checks that every page declares a `type`, that timestamps are real dates, and
+that required fields are actually present. It fails your build when they aren't. It reads
 the frontmatter or headers from your files, validates them against a
 [JSON Schema](https://json-schema.org/), and reports what's missing or malformed.
 
@@ -89,10 +89,9 @@ which requires only `type`.
   />
 </CardGrid>
 
-Not sure you need to write a schema at all? docmeta ships twenty-three, from the
-Hugo, Jekyll, Starlight, Docusaurus, Antora and Sphinx front matter contracts to
-the Diátaxis and Good Docs vocabularies, Dublin Core, Open Graph, and the Agent
-Skills `SKILL.md` format.
+Not sure you need to write a schema at all? docmeta ships twenty-three. They run from the Hugo, Jekyll, Starlight, Docusaurus, Antora and Sphinx front
+matter contracts to the Diátaxis and Good Docs vocabularies. They also cover
+Dublin Core, Open Graph, and the Agent Skills `SKILL.md` format.
 The [built-in schema registry](/docmeta/reference/built-in-schemas/) lists them
 all in one table.
 

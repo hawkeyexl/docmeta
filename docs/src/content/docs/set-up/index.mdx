@@ -5,7 +5,9 @@ description: Go from zero to a working CI gate, by installing docmeta, validate 
 
 import { Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-You own a docs repo, and you want every page to carry correct, complete frontmatter so search and your content catalog stay trustworthy. This guide threads the whole setup together: install docmeta, validate a folder by hand, capture your rules in a `docmeta.config.yaml`, then land a CI gate that runs the same check on every pull request.
+You own a docs repo, and you want every page to carry correct, complete frontmatter so search and your content catalog stay trustworthy. This guide threads the whole setup together. Install docmeta, validate a folder
+by hand, then capture your rules in a `docmeta.config.yaml`. Then land a CI gate
+that runs the same check on every pull request.
 
 By the end you will have a committed config file and a check that fails the build when a doc is missing required metadata.
 
@@ -38,7 +40,8 @@ docmeta validates the **presence and format** of your frontmatter against [JSON 
 
 2. **Add a `docmeta.config.yaml` at your repo root.**
 
-   The command above works, but you do not want to retype paths and schemas every run, and CI needs a stored definition of what "valid" means for your repo. Capture it in a config file so a bare `docmeta validate` knows what to do.
+   The command above works, but you do not want to retype paths and schemas every
+run. CI also needs a stored definition of what "valid" means for your repo. Capture it in a config file so a bare `docmeta validate` knows what to do.
 
    ```yaml title="docmeta.config.yaml"
    # Default targets when no paths are passed on the command line.
@@ -69,7 +72,9 @@ docmeta validates the **presence and format** of your frontmatter against [JSON 
    This is the exact command CI will run. Confirm it reports what you expect locally before you wire it up.
 
    <Aside type="caution">
-   If you run a bare `docmeta validate` with no config file and no paths, docmeta exits with code `2` and the message `No files to validate.` That is an operational error, not a silent pass; it means docmeta had nothing to do.
+   If you run a bare `docmeta validate` with no config file and no paths, docmeta
+exits with code `2`. The message is `No files to validate.` That is an
+operational error rather than a silent pass. It means docmeta had nothing to do.
    </Aside>
 
 4. **Land the CI gate.**
@@ -92,7 +97,9 @@ docmeta validates the **presence and format** of your frontmatter against [JSON 
 
 ## What you have now
 
-A committed `docmeta.config.yaml` that defines which files to check and which schema they must satisfy, plus a CI step that runs the same check on every pull request and fails the build on bad metadata. New contributors get the same enforcement you do, without any review fatigue on your side.
+A committed `docmeta.config.yaml` that defines which files to check, and which
+schema they must satisfy. Plus a CI step that runs the same check on every pull
+request, and fails the build on bad metadata. New contributors get the same enforcement you do, without any review fatigue on your side.
 
 ## Where to go next
 

@@ -1,5 +1,5 @@
 ---
-title: "Proposal: the metadata vocabularies"
+title: "The proposed metadata vocabularies"
 description: "Nine proposed frontmatter vocabularies for maintained, machine-readable docs, open for community review before anything ships."
 sidebar:
   order: 0
@@ -22,19 +22,17 @@ docmeta is a CLI that validates the presence and format of document
 metadata (frontmatter) against JSON Schema, in CI. Its built-in schemas
 have always transcribed contracts other people published: Hugo's front
 matter, DITA's prolog, Open Graph. This proposal adds the first
-vocabularies docmeta would publish itself. They cover the facts a docs
-set needs to stay maintained and readable by machines: ownership,
-review, audience, applicability, lifecycle, relationships, AI
-provenance, and quality checks. No site generator defines those facts,
+vocabularies docmeta would publish itself. They cover the facts a docs set needs to stay maintained and readable by
+machines. Those are ownership, review, audience, applicability, lifecycle,
+relationships, AI provenance, and quality checks. No site generator defines those facts,
 and no standard owns them.
 
 ## The nine vocabularies
 
 The nine are designed as one family. They share the same conventions,
-and no two of them claim the same key. They are split by intent so that
-each one is a separate decision to adopt: six describe a page, and three
-carry quality and knowledge-graph metadata that any grader, graph
-builder, or CI tool can implement. Each has its own page (the sidebar
+and no two of them claim the same key. They are split by intent, so that each one is a separate decision to adopt. Six
+describe a page. Three carry quality and knowledge-graph metadata that any
+grader, graph builder, or CI tool can implement. Each has its own page (the sidebar
 lists all nine) with its fields, examples, design rationale, and its own
 questions for reviewers:
 
@@ -138,15 +136,13 @@ take when you are ready for it.
    page.
 6. **Enumerate only what is switched on and bounded.** `visibility` and
    `lifecycle` are the only enums this family invents, because something
-   downstream branches on each value. Fields with recommended but open
-   values (`risks`, the artifact grader family) use an open list: the
-   recommended values feed editors and tooling, any other string stays
-   legal, and a consumer that meets an unknown value should treat it as
-   a caution rather than as nothing.
-7. **Compose, don't duplicate.** Content classification is three layers,
-   each owned by the schema that published it: `type` (what the page is),
-   Seven-Action's `action` (what the reader is doing), and `intent` (the
-   specific job).
+   downstream branches on each value. Fields with recommended but open values, such as `risks` and the artifact grader
+family, use an open list. The recommended values feed editors and tooling, and
+any other string stays legal. A consumer that meets an unknown value should
+treat it as a caution rather than as nothing.
+7. **Compose, don't duplicate.** Content classification is three layers, each owned by the schema that published
+it. Those are `type` for what the page is, Seven-Action's `action` for what the
+reader is doing, and `intent` for the specific job.
 8. **Deeper wins.** Where the `kg` block and a page field describe the
    same fact (`type`, `concepts`, `applies-to`), the declaration inside
    the block wins and the page-level field is the fallback.
@@ -225,9 +221,8 @@ expect debate:
 
 Open an issue on
 [hawkeyexl/docmeta](https://github.com/hawkeyexl/docmeta/issues).
-Field-level nitpicks are as welcome as structural objections. The
-complete design record (every cut and rename, plus the runnable example
-sets that verify each schema) is in
-[proposal 0023](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023-metadata-vocabularies.md)
-and the design notes beside it. Registration waits for this review to
+Field-level nitpicks are as welcome as structural objections. The complete design record is in [proposal
+0023](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023-metadata-vocabularies.md),
+and the design notes beside it. That covers every cut and rename, plus the
+runnable example sets that verify each schema. Registration waits for this review to
 conclude.
