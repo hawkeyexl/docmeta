@@ -1,4 +1,4 @@
-# 0016 — Which command owns a flag, and where it may be written
+# 0016: Which command owns a flag, and where it may be written
 
 - **Status:** Accepted
 - **Serves:** Every persona; it is the rule behind `CONTRIBUTING.md § Keeping

@@ -1,4 +1,4 @@
-# 0017 — What `fill` sends, and how to bound it
+# 0017: What `fill` sends, and how to bound it
 
 - **Status:** Implemented (#102)
 - **Serves:** Maya · M4; Devin · D1

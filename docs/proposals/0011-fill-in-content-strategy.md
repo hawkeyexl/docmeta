@@ -1,4 +1,4 @@
-# 0011 — Reconcile the content strategy with `fill`
+# 0011: Reconcile the content strategy with `fill`
 
 - **Status:** Implemented
 - **Serves:** The writing process itself. `content-strategy/` is the mandated

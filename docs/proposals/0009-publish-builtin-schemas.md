@@ -1,4 +1,4 @@
-# 0009 — Publish the built-in schemas at stable URLs
+# 0009: Publish the built-in schemas at stable URLs
 
 - **Status:** Implemented
 - **Serves:** Sara · S1 "Define our metadata standard as a schema"; external consumers
@@ -163,8 +163,8 @@ self-describing. Rejected:
   current id. Changing `$id` risks a resolution mismatch between the ref string and
   the registered id.
 - [0001](0001-validation-baseline.md)'s fingerprints include the schema **ref**,
-  not `$id`, so baselines survive — but only because the ref is what is hashed.
-  That is a narrow escape, not a reason to churn ids.
+  not `$id`, so baselines survive. That is only because the ref is what is
+  hashed. That is a narrow escape, not a reason to churn ids.
 
 The decision is to keep `$id` as the docmeta id, and serve the file at a URL
 that differs from its `$id`. Some strict JSON Schema tooling warns when a

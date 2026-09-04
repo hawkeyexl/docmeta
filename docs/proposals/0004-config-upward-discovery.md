@@ -1,4 +1,4 @@
-# 0004 — Config discovery walks up, and config paths resolve config-relative
+# 0004: Config discovery walks up, and config paths resolve config-relative
 
 - **Status:** Implemented (#74)
 - **Serves:** Every persona; prevents a false-green CI result

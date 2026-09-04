@@ -1,4 +1,4 @@
-# 0026 — corpus checks are findings
+# 0026: corpus checks are findings
 
 - **Status:** Implemented (#132)
 - **Serves:** Devin · D4 · Maya · M2

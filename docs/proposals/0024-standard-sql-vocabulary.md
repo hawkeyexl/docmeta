@@ -1,4 +1,4 @@
-# 0024 — standard SQL vocabulary: DML edits the files, DDL edits the schema
+# 0024: standard SQL vocabulary: DML edits the files, DDL edits the schema
 
 - **Status:** Implemented (#125, #126)
 - **Serves:** Maya · M2, M3 · Sara · S1, S3 · Devin · D3

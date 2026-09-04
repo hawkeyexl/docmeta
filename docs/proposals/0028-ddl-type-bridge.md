@@ -1,4 +1,4 @@
-# 0028 — the DDL type bridge: formats as column types, enums as CHECK IN
+# 0028: the DDL type bridge: formats as column types, enums as CHECK IN
 
 - **Status:** Implemented (#135)
 - **Serves:** Sara · S1, S3 · Maya · M2, M3

@@ -1,4 +1,4 @@
-# 0029 — query for scripts: CSV out, bound parameters in
+# 0029: query for scripts: CSV out, bound parameters in
 
 - **Status:** Implemented (#133)
 - **Serves:** Devin · D3, D4

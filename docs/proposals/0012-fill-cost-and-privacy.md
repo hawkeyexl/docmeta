@@ -1,4 +1,4 @@
-# 0012 — `fill`: what it transmits, what it costs, how to run it offline
+# 0012: `fill`: what it transmits, what it costs, how to run it offline
 
 - **Status:** Superseded by [0017](0017-fill-egress-and-bounds.md)
 - **Serves:** Maya · M4 (per [0011](0011-fill-in-content-strategy.md)), Devin · D1

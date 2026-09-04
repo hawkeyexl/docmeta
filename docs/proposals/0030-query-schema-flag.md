@@ -1,4 +1,4 @@
-# 0030 — `-s/--schema` on `query`: naming the contract DDL evolves
+# 0030: `-s/--schema` on `query`: naming the contract DDL evolves
 
 - **Status:** Implemented (#139)
 - **Serves:** Sara · S1, S3 · Maya · M2, M3

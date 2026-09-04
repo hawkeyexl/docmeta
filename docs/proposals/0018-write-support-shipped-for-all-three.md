@@ -1,4 +1,4 @@
-# 0018 — write support shipped for HTML, XML **and** DITA
+# 0018: write support shipped for HTML, XML **and** DITA
 
 - **Status:** Superseded by [0020](0020-element-metadata.md)
 - **Supersedes:** [0007](0007-html-xml-write-support.md), whose verdict was "implement HTML; keep XML and DITA read-only, permanently"

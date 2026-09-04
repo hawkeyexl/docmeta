@@ -1,4 +1,4 @@
-# 0025 — query writes by default, `--dry-run` previews
+# 0025: query writes by default, `--dry-run` previews
 
 - **Status:** Implemented
 - **Serves:** Devin · D4 · Maya · M2

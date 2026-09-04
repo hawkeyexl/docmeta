@@ -1,4 +1,4 @@
-# 0002 — Packaged Action, pre-commit hook, container
+# 0002: Packaged Action, pre-commit hook, container
 
 - **Status:** Implemented (#104). Action and pre-commit hook; the container
   image was declined
@@ -206,9 +206,9 @@ built speculatively.
 1. `action.yml` with the six inputs; a smoke workflow in `.github/workflows/` that
    uses `./` against `test/fixtures/missing-type.md` and asserts exit 1 plus an
    annotation on stdout.
-2. `"prepare": "husky || true"` and a `pre-commit try-repo` integration check —
-   red first: confirm the hook fails *before* the guard, so the guard is proven to
-   be the fix rather than assumed.
+2. `"prepare": "husky || true"` and a `pre-commit try-repo` integration
+   check, red first. Confirm the hook fails *before* the guard, so the guard is
+   proven to be the fix rather than assumed.
 3. `.pre-commit-hooks.yaml` with the explicit `files` regex; a test asserting the
    regex matches exactly `supportedExtensions()`.
 4. `release.yml`: move the `v3` tag on stable releases only, gated on the branch.

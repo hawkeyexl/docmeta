@@ -1,4 +1,4 @@
-# 0027 — named collections: override groups as views
+# 0027: named collections: override groups as views
 
 - **Status:** Implemented (#134)
 - **Serves:** Devin · D4 · Maya · M2

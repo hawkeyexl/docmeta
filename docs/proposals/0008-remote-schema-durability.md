@@ -1,4 +1,4 @@
-# 0008 — Remote schema durability: vendoring, integrity, offline
+# 0008: Remote schema durability: vendoring, integrity, offline
 
 - **Status:** Implemented
 - **Serves:** Devin · D2 "Govern one schema across many repos"

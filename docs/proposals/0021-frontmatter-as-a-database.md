@@ -1,4 +1,4 @@
-# 0021 — the corpus is a database: `docmeta query`
+# 0021: the corpus is a database: `docmeta query`
 
 - **Status:** Implemented (#120)
 - **Serves:** Devin · D1, D3 · Maya · M2

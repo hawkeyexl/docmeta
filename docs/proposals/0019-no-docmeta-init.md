@@ -1,4 +1,4 @@
-# 0019 — `docmeta init` is rejected, not deferred
+# 0019: `docmeta init` is rejected, not deferred
 
 - **Status:** Accepted
 - **Supersedes:** The `init` half of [0010](0010-init-and-schema-inference.md).

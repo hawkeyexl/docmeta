@@ -1,4 +1,4 @@
-# 0005 — Command parity: flags first, positional fallbacks kept
+# 0005: Command parity: flags first, positional fallbacks kept
 
 - **Status:** Implemented
 - **Serves:** Every persona; enforces the project's own working agreement

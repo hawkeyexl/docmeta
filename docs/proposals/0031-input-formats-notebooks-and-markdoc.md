@@ -1,4 +1,4 @@
-# 0031 — the input-format gap: notebooks and Markdoc in, standalone data files out
+# 0031: the input-format gap: notebooks and Markdoc in, standalone data files out
 
 - **Status:** Proposed
 - **Serves:** Maya · M1, M4 · Sara · S1, S2

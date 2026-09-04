@@ -1,4 +1,4 @@
-# 0003 — SARIF and JUnit reporters
+# 0003: SARIF and JUnit reporters
 
 - **Status:** Implemented
 - **Serves:** Devin · D3 "Feed results into our tooling", D1 (PR surfacing)

@@ -1,4 +1,4 @@
-# 0001 — Validation baseline (the ratchet)
+# 0001: Validation baseline (the ratchet)
 
 - **Status:** Implemented
 - **Serves:** Maya · M2 "Tighten the standard without breaking the build"

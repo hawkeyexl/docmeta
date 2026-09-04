@@ -1,4 +1,4 @@
-# 0023 — the docmeta metadata vocabularies
+# 0023: the docmeta metadata vocabularies
 
 - **Status:** Proposed. Open for community review before anything registers
 - **Serves:** Sara · S1 "Define our metadata standard as a schema" · S2 "Wire schemas to the right documents"

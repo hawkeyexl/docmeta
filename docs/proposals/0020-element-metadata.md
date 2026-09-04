@@ -1,4 +1,4 @@
-# 0020 — element metadata, and the DITA schema it unblocks
+# 0020: element metadata, and the DITA schema it unblocks
 
 - **Status:** Implemented
 - **Supersedes:** [0018](0018-write-support-shipped-for-all-three.md), whose model of DITA metadata was "the `<othermeta>` channel, and that is where a write goes"

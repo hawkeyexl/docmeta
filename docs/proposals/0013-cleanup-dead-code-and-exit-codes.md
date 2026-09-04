@@ -1,4 +1,4 @@
-# 0013 — Dead code, the unpopulated `col`, and usage exit codes
+# 0013: Dead code, the unpopulated `col`, and usage exit codes
 
 - **Status:** Implemented
 - **Serves:** Correctness and maintainability; no CUJ directly
@@ -27,15 +27,15 @@ src/extractors/stub.ts:17:    implemented: false,
 
 The knock-on effects:
 
-- `extractorForExtension` guards with `ex?.implemented ? ex : undefined` — a branch
-  that can never be false.
-- `supportedExtensions()` filters on `.implemented` — a filter that never removes
+- `extractorForExtension` guards with `ex?.implemented ? ex : undefined`, a
+  branch that can never be false.
+- `supportedExtensions()` filters on `.implemented`, a filter that never removes
   anything.
 - `src/cli.ts:357` renders `implemented` / `planned` tags in `docmeta schemas`
   output, and `planned` is unreachable.
-- `CONTRIBUTING.md § Adding a new input format` tells contributors "roadmap stubs
-  can register with `implemented: false` so the `schemas` command can report them as
-  planned" — documenting a facility with no users.
+- `CONTRIBUTING.md § Adding a new input format` tells contributors "roadmap
+  stubs can register with `implemented: false` so the `schemas` command can
+  report them as planned", which documents a facility with no users.
 - The test already concedes the situation:
 
   ```ts

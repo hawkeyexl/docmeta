@@ -1,4 +1,4 @@
-# 0022 — write-back: an UPDATE against the corpus edits the files
+# 0022: write-back: an UPDATE against the corpus edits the files
 
 - **Status:** Implemented (#122)
 - **Serves:** Maya · M2, M4 · Devin · D3

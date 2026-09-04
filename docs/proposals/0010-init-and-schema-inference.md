@@ -1,4 +1,4 @@
-# 0010 — `docmeta init` and `docmeta schemas infer`
+# 0010: `docmeta init` and `docmeta schemas infer`
 
 - **Status:** Partly shipped. `schemas infer` landed; `init` rejected by
   [0019](0019-no-docmeta-init.md)

@@ -1,4 +1,4 @@
-# 0007 — `fill` write support for HTML, and why XML/DITA must stay read-only
+# 0007: `fill` write support for HTML, and why XML/DITA must stay read-only
 
 - **Status:** Superseded by [0018](0018-write-support-shipped-for-all-three.md)
 - **Serves:** Maya · M1 (the retrofit tail), Theo · T1

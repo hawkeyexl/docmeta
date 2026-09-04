@@ -1,4 +1,4 @@
-# 0006 — `.gitignore`-aware file discovery
+# 0006: `.gitignore`-aware file discovery
 
 - **Status:** Implemented
 - **Serves:** Every persona; removes hand-maintained `exclude:` boilerplate

@@ -1,4 +1,4 @@
-# 0015 — A trust boundary for document-supplied schemas
+# 0015: A trust boundary for document-supplied schemas
 
 - **Status:** Implemented
 - **Serves:** Devin · D2 "Govern one schema across many repos"; Sara · S3

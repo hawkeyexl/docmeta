@@ -1,4 +1,4 @@
-# 0014 — An empty input set is not success
+# 0014: An empty input set is not success
 
 - **Status:** Implemented (#73)
 - **Serves:** Every persona; this is the highest-severity item in the set
