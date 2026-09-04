@@ -1,6 +1,6 @@
 ---
 title: Claude Code subagent schema
-description: The built-in schema for agent definition front matter under .claude/agents/ — every field, the enumerated sets, and the four places it differs from the SKILL.md contract it resembles.
+description: The built-in schema for agent definition front matter under .claude/agents/, covering every field, the enumerated sets, and the four places it differs from the SKILL.md contract it resembles.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -13,19 +13,20 @@ matter has one contract, and `anthropic:claude-subagent:2.1` is it.
 docmeta validate .claude/agents/**/*.md -s anthropic:claude-subagent:2.1
 ```
 
-Eighteen fields. Two of them — `name` and `description` — are required, which
-makes this the second built-in that demands anything of an agent file and the
-first that demands it because the *runtime* refuses to load without it.
+Eighteen fields. Two of them, `name` and `description`, are required. That makes
+this the second built-in that demands anything of an agent file. It is the first
+that demands it because the *runtime* refuses to load without it.
 
 ## Why it requires two fields when the skill schema requires none
 
 `anthropic:claude-skill:2.1` requires nothing, because Claude Code marks every
-`SKILL.md` field optional: a skill with no front matter at all still loads and
+`SKILL.md` field optional. A skill with no front matter at all still loads, and
 takes its description from the first paragraph of the body.
 
-An agent definition has no such fallback. Drop `name` and the file is skipped —
-treated as documentation, not reported, so the agent you wrote simply does not
-appear in the Agent tool listing. Drop `description` and it is refused outright:
+An agent definition has no such fallback. Drop `name` and the file is skipped.
+It is treated as documentation and not reported, so the agent you wrote simply
+does not appear in the Agent tool listing. Drop `description` and it is refused
+outright:
 
 ```text
 Agent file .claude/agents/reviewer.md is missing required 'description' in frontmatter
@@ -35,19 +36,19 @@ Both are load failures. The difference is that only one of them says so, which
 is exactly the kind of silence a metadata check is for.
 
 <Aside type="caution" title="This is not the `SKILL.md` schema, and the keys are not the same">
-The two contracts look alike enough to swap by accident, and the tool grants
-are where it bites: an agent spells them `tools` and `disallowedTools`, a skill
+The two contracts look alike enough to swap by accident, and the tool grants are
+where it bites. An agent spells them `tools` and `disallowedTools`. A skill
 spells them `allowed-tools` and `disallowed-tools`. Both schemas tolerate
-unknown keys, so a skill validated against this one fails on the missing
-`description` rather than on the four keys that silently did nothing. See
-[Agent Skills schemas](/docmeta/reference/agent-skills-schemas/).
+unknown keys. A skill validated against this one fails on the missing
+`description` rather than on the four keys that silently did nothing. See [Agent
+Skills schemas](/docmeta/reference/agent-skills-schemas/).
 </Aside>
 
 ## The fields
 
 | Field | Type | Notes |
 |---|---|---|
-| `name` | string | **Required.** The agent's identity — what the Agent tool, `--agent` and `Agent(...)` grants address, and what a hook sees as `agent_type`. Independent of the filename. |
+| `name` | string | **Required.** The agent's identity, which is what the Agent tool, `--agent` and `Agent(...)` grants address, and what a hook sees as `agent_type`. Independent of the filename. |
 | `description` | string | **Required.** When to delegate. "Use proactively" encourages automatic delegation. |
 | `model` | string | Same values as `/model`, plus `inherit`, which is also the default. |
 | `tools` | string \| list | Allowlist replacing the inherited set. Exact names, `Bash(npm run test:*)`, `Agent(worker, researcher)`, or `mcp__<server>`. |
@@ -59,7 +60,7 @@ unknown keys, so a skill validated against this one fails on the missing
 | `skills` | string \| list | Skills preloaded into the agent's context at startup. |
 | `mcpServers` | list | Server names to reuse from the parent session, or one-key maps defining a server inline. |
 | `hooks` | object | Hooks scoped to this agent, keyed by event. `Stop` registers as `SubagentStop`. |
-| `memory` | enum | `user`, `project`, or `local` — which `agent-memory` directory persists. |
+| `memory` | enum | `user`, `project`, or `local`, naming which `agent-memory` directory persists. |
 | `background` | boolean | Keep the agent in the background even when Claude wants the result. |
 | `isolation` | enum | `worktree` or `remote`. |
 | `initialPrompt` | string | First turn when the definition runs as the *main* session. Not read when it is spawned as a subagent. |
@@ -67,7 +68,7 @@ unknown keys, so a skill validated against this one fails on the missing
 | `observerMessage` | string | Extra instruction appended to each digest sent to the `observer`. |
 
 `permissionMode`, `hooks` and `mcpServers` are read for a project or user agent
-and **ignored for a plugin agent**, which Claude Code warns about rather than
+and **ignored for a plugin agent**. Claude Code warns about that rather than
 failing. The schema validates them wherever they appear, because a field that is
 ignored is still a field that was meant to do something.
 
@@ -93,19 +94,19 @@ background: true    # the only form both accept
 
 ## `name` is checked for one rule, not the documented three
 
-The loader enforces exactly one character rule — a name may not begin with `-`,
+The loader enforces exactly one character rule. A name may not begin with `-`,
 and a file that breaks it is dropped with an error. Nothing else about the name
 is checked at load time: capitals work, underscores work, digits work.
 
 The documentation describes a lowercase-and-hyphens convention, and it is a good
 convention. It is not what the runtime refuses, and agent types with capitals in
-them ship today, so a schema holding `name` to `^[a-z-]+$` would fail agents that
-run. docmeta checks the rule that fails the load and leaves the convention to
-you — the same call the [platform
+them ship today. A schema holding `name` to `^[a-z-]+$` would fail agents that
+run. What docmeta checks is the rule that fails the load; the convention is left
+to you. That is the same call the [platform
 schemas](/docmeta/reference/platform-schemas/) make about requiring exactly what
 the tool refuses to build without.
 
-One thing to avoid anyway: a `:` in a name. It is the separator in a
+One thing to avoid anyway is a `:` in a name. It is the separator in a
 plugin-scoped identifier such as `my-plugin:reviewer`, so a name containing one
 is asking for an ambiguous address.
 
@@ -118,36 +119,36 @@ Five fields have closed, published value sets, so a typo in one is an error:
     /permissionMode  must be equal to one of the allowed values  (line 5)  [anthropic:claude-subagent:2.1]
 ```
 
-`color` is worth checking even though it is cosmetic — an unknown colour is
+`color` is worth checking even though it is cosmetic. An unknown colour is
 dropped *without* a warning, so the only symptom is an agent that never takes
-the colour you gave it. `magenta` is the one that catches people: it is a
-perfectly ordinary terminal colour and it is not one of the eight, and it
-appears in shipped plugins today. `permissionMode` includes `manual`, which Claude Code
-normalises to `default` before checking, so both spellings are legal. `isolation`
-lists `worktree` and `remote`; the published documentation names only the first,
-and the schema follows the loader.
+the colour you gave it. `magenta` is the one that catches people. It is a
+perfectly ordinary terminal colour, it is not one of the eight, and it appears
+in shipped plugins today. `permissionMode` includes `manual`, which Claude Code
+normalises to `default` before checking, so both spellings are legal.
+`isolation` lists `worktree` and `remote`; the published documentation names
+only the first, and the schema follows the loader.
 
-`model` is not enumerated. Its accepted values move with the product and are
-narrowed further by an organisation's `availableModels` allowlist, so a list
-written here would reject agents that work. `observer` is not enumerated either,
-for the matching reason: it names an agent type, and the set includes whatever
-the project, its plugins and you define.
+`model` is not enumerated. Its accepted values move with the product, and an
+organisation's `availableModels` allowlist narrows them further. A list written
+here would reject agents that work. `observer` is not enumerated either, for the
+matching reason. It names an agent type, and the set includes whatever the
+project, its plugins and you define.
 
 `hooks` and `mcpServers` are checked for shape and no further. A hooks block is
-an object and a server list is a list — but what goes *inside* either one is a
-separate contract, versioned separately from the agent file, and pinning it here
+an object and a server list is a list. What goes *inside* either one is a
+separate contract, versioned separately from the agent file. Pinning it here
 would date this schema to whichever week it was written.
 
 `initialPrompt`, `observer` and `observerMessage` are checked for one thing
 beyond being strings: they have to contain a non-space character. That is the
-`color` rule again rather than tidiness — the loader keeps each of them only
-when the value survives a `.trim()`, and discards it silently otherwise, so
-`observer: "   "` is an observer that never spawns and never says why.
+`color` rule again rather than tidiness. The loader keeps each of them only when
+the value survives a `.trim()`, and discards it silently otherwise. So
+`observer: " "` is an observer that never spawns and never says why.
 
 ## Two fields that take a YAML number or a quoted string
 
-`maxTurns` and `effort` both reach the validator as either type, depending on how
-the value was written, so both are typed as two rather than one:
+`maxTurns` and `effort` both reach the validator as either type, depending on
+how the value was written. Both are typed as two rather than one:
 
 ```yaml
 maxTurns: 15       # integer
@@ -157,20 +158,20 @@ effort: 8          # integer — also accepted
 effort: "8"        # quoted integer — also accepted
 ```
 
-The quoted integer matters more than it looks: a templating tool that quotes
-every scalar produces it by accident, and the loader reaches the numeric form
+The quoted integer matters more than it looks. A templating tool that quotes
+every scalar produces it by accident. The loader reaches the numeric form
 through `parseInt` on the string, so `"8"` and `8` are the same value to it.
 
 The constraint keywords are type-scoped, so each applies to only one of the two
-forms and a wrong value is reported once, against the key, rather than once per
-failed branch. `maxTurns: 0`, `maxTurns: -3` and `maxTurns: null` all fail;
-the loader treats `null` as an invalid value rather than as an absent one.
+forms. A wrong value is reported once, against the key, rather than once per
+failed branch. `maxTurns: 0`, `maxTurns: -3` and `maxTurns: null` all fail; the
+loader treats `null` as an invalid value rather than as an absent one.
 
 **`effort` has no such lower bound, and that asymmetry is deliberate.**
-`maxTurns` is checked for a *positive* integer and warns otherwise, while
-`effort` is checked with a bare integer test — so `effort: 0` and `effort: -3`
-are both taken, and neither is reported. A `minimum` here would read as
-symmetry and would fail an agent that runs.
+`maxTurns` is checked for a *positive* integer and warns otherwise. `effort` is
+checked with a bare integer test, so `effort: 0` and `effort: -3` are both
+taken, and neither is reported. A `minimum` here would read as symmetry and
+would fail an agent that runs.
 
 ## One parse failure docmeta reports and Claude Code recovers from
 
@@ -187,14 +188,14 @@ description: Review a PR. Examples: a refactor, a new endpoint.
     (root)  Invalid YAML frontmatter: Nested mappings are not allowed in compact mappings  [(parse)]
 ```
 
-Claude Code recovers from this. When the first parse throws it retries once,
-re-emitting every `key: value` line whose value contains `: ` or a YAML
-indicator character as a quoted string, and parses that instead. So the agent
-loads, and docmeta reports a file that works.
+Claude Code recovers from this. When the first parse throws, it retries once.
+That retry re-emits every `key: value` line whose value contains `: ` or a YAML
+indicator character as a quoted string. Then it parses that instead. So the
+agent loads, and docmeta reports a file that works.
 
-That is worth knowing rather than working around. The repair is a fallback, it
-applies to a single-line value and nothing else, and anything it cannot rescue
-is skipped with only a debug-log line to say so. Quoting the value fixes the
+That is worth knowing rather than working around. The repair is a fallback, and
+it applies to a single-line value and nothing else. Anything it cannot rescue is
+skipped, with only a debug-log line to say so. Quoting the value fixes the
 report and removes the dependence on the fallback:
 
 ```yaml
@@ -203,8 +204,8 @@ description: "Review a PR. Examples: a refactor, a new endpoint."
 
 ## Validate agents and skills in one run
 
-They are different files, so this is two runs rather than a stacked schema set —
-but nothing stops you doing both from one script:
+They are different files, so this is two runs rather than a stacked schema set.
+Nothing stops you doing both from one script:
 
 ```bash
 docmeta validate .claude/agents/**/*.md   -s anthropic:claude-subagent:2.1
@@ -223,5 +224,5 @@ overrides:
       - anthropic:claude-skill:2.1
 ```
 
-The first matching override wins, so keep the two globs disjoint — which
-`agents/` and `skills/` already are.
+The first matching override wins, so keep the two globs disjoint. `agents/` and
+`skills/` already are.
