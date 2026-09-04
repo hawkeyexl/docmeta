@@ -1,23 +1,24 @@
 ---
 title: query command reference
-description: The complete contract of docmeta query — the docs table and its columns, the DML and DDL vocabulary, named collections as views, rows as findings, bound parameters, and every output format.
+description: The complete contract of docmeta query, covering the docs table and its columns, the DML and DDL vocabulary, named collections as views, rows as findings, bound parameters, and every output format.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
 `docmeta query` builds a SQLite database from the metadata of the files you
-point it at, runs **one** SQL statement over it, and judges what the statement
-did. A read returns rows. An edit becomes per-file changes, applied through the
-same writers `fill` uses. Where [`validate`](/docmeta/reference/cli/#validate)
-judges one file against a schema, `query` sees the whole corpus at once, which
-is what makes cross-file rules — duplicate slugs, dangling author references, a
-tag used exactly once — expressible at all.
+point it at. It runs **one** SQL statement over that database, and judges what
+the statement did. A read returns rows. An edit becomes per-file changes,
+applied through the same writers `fill` uses. Where
+[`validate`](/docmeta/reference/cli/#validate) judges one file against a schema,
+`query` sees the whole corpus at once. That is what makes cross-file rules
+expressible at all: duplicate slugs, dangling author references, a tag used
+exactly once.
 
 The engine is Node's built-in [`node:sqlite`](https://nodejs.org/api/sqlite.html).
 Nothing is installed, and it is loaded only when a query actually runs.
 
-This page is the command's data model and semantics. The **flag surface** —
-every option, its argument, and its default — lives in the [CLI
+This page is the command's data model and semantics. The **flag surface**,
+meaning every option, its argument, and its default, lives in the [CLI
 reference](/docmeta/reference/cli/#query), which is drift-checked against
 `src/cli.ts`. For the guided version, see [gate on rules that span
 files](/docmeta/ci/query-gates/).
@@ -33,17 +34,17 @@ were read: the four system columns first, then the data columns sorted by name.
 
 ### System columns
 
-Four columns are docmeta's own. They are **reserved**: a frontmatter key named
+Four columns are docmeta's own. They are **reserved**. A frontmatter key named
 exactly `_path`, `_format`, `_present`, or `_data` is not lifted to a column, so
 ordinary metadata can never shadow one. The reservation is those four names, not
-the `_` prefix — any other underscore-prefixed key lifts like any other key.
+the `_` prefix. Any other underscore-prefixed key lifts like any other key.
 
 | Column | Type | Value |
 |---|---|---|
 | `_path` | TEXT, primary key | The file's label as docmeta prints it everywhere: relative to the run's base directory, `/`-separated on every platform. `<stdin>` for piped input. |
-| `_format` | TEXT | The [extractor](/docmeta/reference/formats/) that read the file — `markdown`, `mdx`, `asciidoc`, `rst`, `xml`, `html`. |
+| `_format` | TEXT | The [extractor](/docmeta/reference/formats/) that read the file: `markdown`, `mdx`, `asciidoc`, `rst`, `xml`, `html`. |
 | `_present` | INTEGER | `1` when the file carries a metadata block or surface at all, `0` when it does not. `WHERE _present = 0` lists the files with no metadata yet. |
-| `_data` | TEXT | The complete extracted metadata as JSON text — the escape hatch for nested values and for a key a system column shadowed. |
+| `_data` | TEXT | The complete extracted metadata as JSON text. This is the escape hatch for nested values, and for a key a system column shadowed. |
 
 A shadowed key stays reachable through `_data`:
 
@@ -53,24 +54,24 @@ docmeta query "SELECT _path, _data ->> '\$._path' AS shadowed FROM docs" docs/
 
 ### Data columns
 
-The data columns are the **union of top-level metadata keys across the corpus**,
-plus any key the statement itself names as a `SET` or `INSERT` target — that is
-how a key no file has yet gets created. A key absent from a file is SQL `NULL`
-in that row.
+The data columns are the **union of top-level metadata keys across the corpus**.
+They also include any key the statement itself names as a `SET` or `INSERT`
+target. That is how a key no file has yet gets created. A key absent from a file
+is SQL `NULL` in that row.
 
 Only top-level keys are lifted. Nested values are reached through `_data` with
-SQLite's [JSON functions](https://sqlite.org/json1.html) — `->>`,
-`json_extract`, `json_each`. Keys that are not bare identifiers are ordinary
-quoted identifiers:
+SQLite's [JSON functions](https://sqlite.org/json1.html): `->>`, `json_extract`,
+and `json_each`. Keys that are not bare identifiers are ordinary quoted
+identifiers:
 
 ```sh
 docmeta query 'SELECT "sidebar position" FROM docs' docs/
 ```
 
-Data columns are declared with **no type affinity**, so SQLite stores exactly
-what each file held and never coerces one file's string into another file's
-number. The consequence worth knowing: a bound *number* `2026` never equals a
-stored *string* `"2026"` — see [bound parameters](#bound-parameters).
+Data columns are declared with **no type affinity**. SQLite stores exactly what
+each file held, and never coerces one file's string into another file's number.
+The consequence worth knowing is that a bound *number* `2026` never equals a
+stored *string* `"2026"`. See [bound parameters](#bound-parameters).
 
 ### How values are encoded
 
@@ -78,11 +79,11 @@ stored *string* `"2026"` — see [bound parameters](#bound-parameters).
 |---|---|
 | String | The string. |
 | Number | The number. A non-finite number (`NaN`, `Infinity`) is `NULL`. |
-| Boolean | `1` / `0` — `node:sqlite` refuses to bind a boolean. |
+| Boolean | `1` / `0`, because `node:sqlite` refuses to bind a boolean. |
 | Array or object | JSON text, which `json_each` and `->>` query directly. |
 | `null`, or key absent | `NULL`. The two are told apart by `_data`. |
 
-The encoding is symmetric: a write restores the value to the type the file
+The encoding is symmetric, and a write restores the value to the type the file
 had. See [type restoration](#type-restoration).
 
 ### Functions available to a statement
@@ -91,13 +92,13 @@ Beyond everything stock SQLite provides, two functions are registered per run:
 
 | Function | Returns |
 |---|---|
-| `lineFor(path, key)` | The 1-based source line the key sits on in that file, or `NULL` for an unknown path, a key the extractor cannot place, or a non-string argument. This is how a [finding](#rows-as-findings) carries a line. |
+| `lineFor(path, key)` | The 1-based source line the key sits on in that file. It is `NULL` for an unknown path, a key the extractor cannot place, or a non-string argument. This is how a [finding](#rows-as-findings) carries a line. |
 | `explicit_null()` | A per-run sentinel that writes a literal `key: null` into a file. Needed because `SET k = NULL` means *remove the key*. |
 
 ## Named collections as views
 
 Every [`overrides[]`](/docmeta/reference/configuration/#overrides) entry that
-carries a `name:` becomes a **read-only SQL view** over `docs`, so a rule can
+carries a `name:` becomes a **read-only SQL view** over `docs`. A rule can then
 say `FROM authors` instead of re-spelling the group's glob in SQL:
 
 ```yaml title="docmeta.config.yaml"
@@ -118,14 +119,14 @@ The rules that define membership:
 - **Membership is the resolution winner, not the glob match.** A view holds
   exactly the files that override *won [schema
   resolution](/docmeta/reference/schema-resolution/) for*. Because resolution is
-  first-match-wins, views are disjoint: a file two named globs both match
-  belongs to the earlier one only, and the later view simply does not contain it.
+  first-match-wins, views are disjoint. A file two named globs both match
+  belongs to the earlier one only. The later view simply does not contain it.
 - **A file whose own `$schema` outranks the override is not a member**, since it
-  is not judged by that group's schema. docmeta says so on stderr rather than
+  is not judged by that group's schema. A stderr line says so, rather than
   leaving it to be discovered.
-- **A file whose resolution fails is a member of no view.** Labeling never gates:
-  a refused or malformed `$schema` demotes that file out of the views and the
-  query still runs. `validate` is where that refusal becomes a finding.
+- **A file whose resolution fails is a member of no view.** Labeling never
+  gates. A refused or malformed `$schema` demotes that file out of the views,
+  and the query still runs. `validate` is where that refusal becomes a finding.
 - **An empty group is an empty view**, not an error.
 - **Views are read-only.** `UPDATE authors …` is refused by SQLite, and docmeta
   completes the refusal with the write-through spelling:
@@ -133,9 +134,9 @@ The rules that define membership:
 
 Views are built lazily, so a plain read that never names a collection pays no
 resolution walk at all. They are built eagerly for a [`--db`
-export](#exporting-the-database) and for statements that observe the catalog
-(`sqlite_master`, `sqlite_schema`, `PRAGMA`, `CREATE`/`DROP`/`ALTER`), where a
-missing view could not be detected and retried.
+export](#exporting-the-database), and for statements that observe the catalog.
+Those are `sqlite_master`, `sqlite_schema`, `PRAGMA`, and
+`CREATE`/`DROP`/`ALTER`, where a missing view could not be detected and retried.
 
 <Aside type="note">
 The same views exist for the named [`checks:`](/docmeta/reference/configuration/#checks)
@@ -152,23 +153,23 @@ the rest.
 Statements are judged by their **effects** on the disposable projection, never
 by parsing their syntax. A read leaves no diff and returns rows. A statement
 that changes a cell, adds a row, removes one, or changes the column set has done
-something to the corpus, and docmeta maps that effect back into file space.
+something to the corpus. That effect is mapped back into file space.
 
-The split, in one line: **DML edits the rows — the files. DDL edits the table
-definition — the schema.**
+The split, in one line. **DML edits the rows, which are the files. DDL edits the
+table definition, which is the schema.**
 
-### DML — statements that edit files
+### DML statements edit files
 
 | Statement | Meaning in file space |
 |---|---|
 | `SELECT …` | Rows out. Nothing is written, no schema is resolved, no network is used. |
 | `UPDATE docs SET k = v` | Set key `k` in every matching file. A key no file has yet widens the table and is created. |
 | `UPDATE docs SET k = NULL` | **Remove** `k` from matching files. Absent already is a no-op. |
-| `UPDATE docs SET k = explicit_null()` | Write a literal `k: null` — the rare case `SET k = NULL` cannot express. |
+| `UPDATE docs SET k = explicit_null()` | Write a literal `k: null`, the rare case `SET k = NULL` cannot express. |
 | `UPDATE docs SET b = a, a = NULL` | Rename a key. The original value is carried over verbatim, never round-tripped through its JSON-text projection. |
 | `UPDATE docs SET _path = '…'` | Move or rename the file. The body is byte-preserved; the extension may not change. |
-| `INSERT INTO docs (_path, …) VALUES (…)` | Create a file: that front matter, an empty body. |
-| `DELETE FROM docs WHERE …` | Strip the front matter **block**. The file and its body survive — SQL never deletes a file. |
+| `INSERT INTO docs (_path, …) VALUES (…)` | Create a file with that front matter and an empty body. |
+| `DELETE FROM docs WHERE …` | Strip the front matter **block**. The file and its body survive, because SQL never deletes a file. |
 
 Constraints on a DML statement:
 
@@ -176,10 +177,10 @@ Constraints on a DML statement:
   `_present`, or `_data` is an error naming the column and the file.
 - **A `_path` move may not be combined with cell edits** in one statement, so
   each has its own preview.
-- **A new path must be usable**: relative, no `..` segment, inside the corpus,
-  and not the corpus root itself. An `INSERT` or rename onto a `_path` already
-  loaded is refused by the table's primary key.
-- **A write cannot touch `<stdin>`** — there is no file behind it.
+- **A new path must be usable**, meaning relative, with no `..` segment, inside
+  the corpus, and not the corpus root itself. An `INSERT` or rename onto a
+  `_path` already loaded is refused by the table's primary key.
+- **A write cannot touch `<stdin>`**, because there is no file behind it.
 
 ### Format limits on a write
 
@@ -188,20 +189,20 @@ Constraints on a DML statement:
 | Set a key, remove a key, rename a key | Any writable format. Element-backed keys in HTML and XML refuse rather than half-apply. |
 | `DELETE` (strip the block) | Formats whose metadata lives in a fenced front matter block: markdown, MDX, AsciiDoc, reStructuredText. HTML and XML have no block to strip and refuse by name. |
 | `INSERT` (create a file) | Formats whose writer can build a block from nothing: **markdown and MDX**. Every other writer needs an existing block, `<head>`, or root element and refuses. |
-| `UPDATE … SET _path` (move) | Any format — the file is moved, not rewritten. |
+| `UPDATE … SET _path` (move) | Any format, because the file is moved rather than rewritten. |
 
 ### Type restoration
 
-A value written back is restored to the type the file held for that key: `1`/`0`
-back to a boolean, JSON text back to an array or object, a number stays a number.
-For a key **no file had**, the column's dominant type across the corpus decides;
-when the corpus is tied, or the key is new everywhere, the value is written as
-SQL handed it back. A [DDL `BOOLEAN` add](#the-type-bridge) always restores real
-booleans.
+A value written back is restored to the type the file held for that key. `1`/`0`
+goes back to a boolean, JSON text back to an array or object, and a number stays
+a number. For a key **no file had**, the column's dominant type across the
+corpus decides. When the corpus is tied, or the key is new everywhere, the value
+is written as SQL handed it back. A [DDL `BOOLEAN` add](#the-type-bridge) always
+restores real booleans.
 
-A value the target type cannot hold — a non-boolean for a boolean key, invalid
-JSON for an array key, an unquoted number for a string key, a BLOB — refuses by
-file and key.
+A value the target type cannot hold refuses by file and key. That covers a
+non-boolean for a boolean key, or invalid JSON for an array key. An unquoted
+number for a string key, or a BLOB, does the same.
 
 ### Statements that are refused
 
@@ -230,59 +231,59 @@ every command that writes:
 | `docmeta query "UPDATE …" docs/` | The edit is applied. |
 | `docmeta query --dry-run "UPDATE …" docs/` | The exact per-file diff is printed. Nothing is touched. |
 | `docmeta query --check "UPDATE …" docs/` | `--check` **implies** the dry run. Pending changes are counted as findings and the exit code carries the verdict. Nothing is touched. |
-| `docmeta query -f csv "UPDATE …" docs/` | Refused (exit 2) — a diff has no tabular shape. The run was forced dry first, so the refusal is truthful: nothing landed. |
+| `docmeta query -f csv "UPDATE …" docs/` | Refused (exit 2), because a diff has no tabular shape. The run was forced dry first, so the refusal is truthful and nothing landed. |
 
 Because `--check` never mutates, every `query --check` gate in CI is a read-only
-step by construction — including the ones whose statement is an `UPDATE`, which
-is how a backfill becomes a drift gate.
+step by construction. That includes the ones whose statement is an `UPDATE`,
+which is how a backfill becomes a drift gate.
 
-Application is **all-or-nothing**. Phase one computes every file's new content;
-any refusal — an unwritable format, a bad restoration, a file that changed on
-disk since it was read — aborts before a single byte lands. Phase two writes
-atomically. A half-applied bulk edit would leave the corpus in a state no
+Application is **all-or-nothing**. Phase one computes every file's new content.
+Any refusal aborts before a single byte lands. That covers an unwritable format,
+a bad restoration, or a file that changed on disk since it was read. Phase two
+writes atomically. A half-applied bulk edit would leave the corpus in a state no
 statement describes.
 
 ## DDL edits the schema
 
 An `ALTER TABLE docs` statement changes the corpus **and the schema that governs
-it** in one step, which is what turns a rollout that used to be two commits into
-one statement.
+it** in one step. That turns a rollout that used to be two commits into one
+statement.
 
 | Statement | Effect on the schema | Effect on the files |
 |---|---|---|
 | `ALTER TABLE docs ADD COLUMN k <type>` | `properties.k` gains the [mapped type](#the-type-bridge). | None, without a `DEFAULT`. |
-| `… ADD COLUMN k <type> NOT NULL` | `k` also joins `required`. | — |
-| `… ADD COLUMN k <type> DEFAULT v` | — | `v` is backfilled into every file. |
-| `… ADD COLUMN k TEXT CHECK (k IN ('a','b'))` | `properties.k` gains `enum: ["a", "b"]`. | — |
+| `… ADD COLUMN k <type> NOT NULL` | `k` also joins `required`. | n/a |
+| `… ADD COLUMN k <type> DEFAULT v` | n/a | `v` is backfilled into every file. |
+| `… ADD COLUMN k TEXT CHECK (k IN ('a','b'))` | `properties.k` gains `enum: ["a", "b"]`. | n/a |
 | `ALTER TABLE docs DROP COLUMN k` | `properties.k` and its `required` entry are removed. | `k` is removed from every file. |
 | `ALTER TABLE docs RENAME COLUMN a TO b` | The property is renamed, carrying its whole subschema. | The key is renamed in every file, values verbatim. |
 
-One DDL action per statement — SQLite's own `ALTER` grammar — and DDL needs at
-least one loaded file, because the backfill and the reconciliation both run over
-the corpus.
+One DDL action per statement, which is SQLite's own `ALTER` grammar. DDL needs
+at least one loaded file, because the backfill and the reconciliation both run
+over the corpus.
 
 ### Which schema an ALTER edits
 
 DDL is the one part of `query` that resolves schemas. It does so from disk and
 the bundled built-ins only, under the same trust boundary
-[`validate`](/docmeta/reference/schema-resolution/) uses: a document's `$schema`
+[`validate`](/docmeta/reference/schema-resolution/) uses. A document's `$schema`
 cannot point the edit outside the repository.
 
 - **The corpus must resolve to one schema set.** A run split across override
   groups refuses, naming each group and its glob. Scope the run to one group, or
   name the set with [`-s`](#naming-the-ddl-target-directly).
 - **A corpus on the built-in default set refuses.** There is no schema of yours
-  to evolve; the message points at the `UPDATE` spellings, which cover every
+  to evolve. The message points at the `UPDATE` spellings, which cover every
   data-only case.
-- **A local schema file is edited in place** — `properties` and `required` only,
-  your indent and line endings preserved, git as the review surface. A vendored
-  file's `integrity:` pin is refreshed in the same write.
+- **A local schema file is edited in place**, with `properties` and `required`
+  only, your indent and line endings preserved, and git as the review surface. A
+  vendored file's `integrity:` pin is refreshed in the same write.
 - **A built-in forks.** Built-ins are immutable, so the statement writes
   `schemas/<name>-<version>.local.json` beside the config, with `$id` suffixed
-  `+local`, and repoints every reference that named the built-in — the config
-  entry (either spelling, comments intact) and any in-file `$schema`, string or
-  list. Every file the statement touches, the config included, appears in the
-  preview.
+  `+local`. It repoints every reference that named the built-in. That is the
+  config entry (either spelling, comments intact) and any in-file `$schema`,
+  string or list. Every file the statement touches, the config included, appears
+  in the preview.
 - **A URL reference refuses** with "vendor it first"
   ([`docmeta schemas vendor`](/docmeta/reference/cli/#schemas-vendor)). DDL
   cannot inspect, let alone edit, a schema a server owns.
@@ -303,13 +304,13 @@ Where ownership is unclear, DDL refuses rather than guesses:
 ### The type bridge
 
 An `ALTER`'s declared column type becomes the JSON Schema property. The mapping
-is checked in this order, and the order is load-bearing — a bare affinity rule
+is checked in this order, and the order is load-bearing. A bare affinity rule
 would let `/INT/` swallow `json-pointer`:
 
 | Declared type | Property |
 |---|---|
 | A name equal (case-insensitively) to a format the validator enforces | `{ "type": "string", "format": "<name>" }` |
-| `DATETIME`, `TIMESTAMP` | `{ "type": "string", "format": "date-time" }` — a closed alias pair of exactly two |
+| `DATETIME`, `TIMESTAMP` | `{ "type": "string", "format": "date-time" }`, a closed alias pair of exactly two |
 | `BOOLEAN`, `BOOL` | `{ "type": "boolean" }` |
 | Anything matching `INT` | `{ "type": "integer" }` |
 | Anything matching `CHAR`, `CLOB`, or `TEXT` | `{ "type": "string" }` |
@@ -325,14 +326,14 @@ parallel list, so a formats upgrade widens it for free. It currently holds
 `ADD COLUMN updated "date-time"`.
 
 `BOOLEAN` columns accept only `0`, `1`, `true`, or `false` as a `DEFAULT`, and
-the backfill writes real booleans into the files — the `1`/`0` encoding is a
+the backfill writes real booleans into the files. The `1`/`0` encoding is a
 bind-layer detail, not a file-layer one.
 
-A `CHECK` becomes an `enum`, in exactly one shape:
-`CHECK (<the-new-column> IN (<literals>))`, with the literals all strings or all
-numbers, agreeing with the declared type. A mixed list, an expression, another
-column, an `AND`, or a second `CHECK` refuses and names the hand edit to the
-schema file instead — a constraint silently dropped from a schema would be worse.
+A `CHECK` becomes an `enum`, in exactly one shape: `CHECK (<the-new-column> IN
+(<literals>))`, with the literals all strings or all numbers, agreeing with the
+declared type. A mixed list, an expression, another column, an `AND`, or a
+second `CHECK` refuses, and names the hand edit to the schema file instead. A
+constraint silently dropped from a schema would be worse.
 
 The preview always prints the whole property the schema will gain, so a
 near-miss is visible before anything is written:
@@ -350,9 +351,9 @@ docs/two.md: reviewed_on: (unset) -> 2026-08-26
 ### Naming the DDL target directly
 
 `-s <ref>` (repeatable) names the schema set the statement's DDL evolves. Use it
-when resolution is ambiguous — several local schemas in one set, a corpus split
-across override groups — or when you simply know which contract you are
-evolving:
+when resolution is ambiguous, or when you simply know which contract you are
+evolving. Ambiguity means several local schemas in one set, or a corpus split
+across override groups:
 
 ```sh
 docmeta query -s ./schemas/house.json \
@@ -370,9 +371,9 @@ quietly mean nothing:
 
 | Situation | Refusal |
 |---|---|
-| The statement produced no schema-evolving effects | Exit 2, **before any file or schema write**. Judged after execution, since DDL is effect-judged — so the refusal lands on the plan side of the all-or-nothing line. A `--db` export target, written before the statement ran, persists and reflects the statement; the message says so. |
+| The statement produced no schema-evolving effects | Exit 2, **before any file or schema write**. Judged after execution, since DDL is effect-judged, so the refusal lands on the plan side of the all-or-nothing line. A `--db` export target, written before the statement ran, persists and reflects the statement; the message says so. |
 | There is no SQL at all (a bare `--db` export) | Exit 2. Nothing can evolve without a statement. |
-| A `-s`-named fork nothing would resolve afterwards | Exit 2 with nothing written. If no config `schemas:` entry and no loaded file's `$schema` names the built-in, the fork would be orphaned and `validate` would keep using the un-evolved built-in. |
+| A `-s`-named fork nothing would resolve afterwards | Exit 2 with nothing written. If no config `schemas:` entry and no loaded file's `$schema` names the built-in, the fork would be orphaned. `validate` would keep using the un-evolved built-in. |
 
 ## Rows as findings
 
@@ -382,7 +383,7 @@ what makes a mutating statement a read-only drift gate. The `pretty` verdict
 line shows ✓ or ✗.
 
 With `-f github`, `-f sarif`, or `-f junit`, the rows render as annotations,
-SARIF results, or JUnit failures — through the same **column convention** the
+SARIF results, or JUnit failures. They use the same **column convention** the
 config's [`checks:`](/docmeta/reference/configuration/#the-column-convention)
 entries use:
 
@@ -402,16 +403,16 @@ JUnit testcases ship under the classname `docmeta.query` rather than
 ::error file=docs/alpha.md,line=3::[check:query] /slug duplicate slug alpha
 ```
 
-A findings format without `--check`, a `--check` result with no `path` column, or
-a findings format on a statement that produced changes rather than rows is an
-error (exit 2).
+Three things are an error (exit 2). A findings format without `--check`. A
+`--check` result with no `path` column. A findings format on a statement that
+produced changes rather than rows.
 
 <Aside type="tip">
-`query --check` with a findings format is the **ad-hoc** spelling. The named home
-for a rule your team keeps is a config
-[`checks:`](/docmeta/reference/configuration/#checks) entry, which a bare
-`docmeta validate` runs alongside the per-file schemas — and which the
-[baseline ratchet](/docmeta/reference/cli/#baselines) covers.
+`query --check` with a findings format is the **ad-hoc** spelling. The named
+home for a rule your team keeps is a config
+[`checks:`](/docmeta/reference/configuration/#checks) entry. A bare `docmeta
+validate` runs it alongside the per-file schemas, and the [baseline
+ratchet](/docmeta/reference/cli/#baselines) covers it.
 </Aside>
 
 ## Bound parameters
@@ -427,22 +428,22 @@ docmeta query --param author="O'Brien" \
 - `--param name=value` binds the value as a **string**. The statement refers to
   it with any of SQLite's named-parameter spellings: `$name`, `:name`, or
   `@name`. (`:` is the shell-friendliest.)
-- `--param name:=json` parses the value as JSON for a deliberate typed bind:
-  `n:=5` a number, `d:=true` a boolean (as `1`/`0`, the projection's encoding),
-  `v:=null` NULL.
+- `--param name:=json` parses the value as JSON for a deliberate typed bind.
+  `n:=5` is a number, `d:=true` a boolean (as `1`/`0`, the projection's
+  encoding), and `v:=null` NULL.
 - The split happens at the **first** separator and everything after it is the
   value verbatim, so `--param msg=a=b` binds `a=b`. `:=` is checked before `=`.
 - Parameter names are letters, digits, and underscores, starting with a letter
   or underscore. Anything else is refused, because a name the scanner cannot see
   could never be bound.
-- Parameters work anywhere a value goes: reads, `--check` gates, and `UPDATE`s.
-  Anonymous `?` placeholders are not supported from the CLI — flag order is not
-  a contract to rely on.
+- Parameters work anywhere a value goes, in reads, `--check` gates, and
+  `UPDATE`s. Anonymous `?` placeholders are not supported from the CLI, because
+  flag order is not a contract to rely on.
 
-Strings are the default because metadata is mostly strings and the data columns
-have no type affinity: a bound number `2026` would never equal a stored string
+Strings are the default because metadata is mostly strings, and the data columns
+have no type affinity. A bound number `2026` would never equal a stored string
 `"2026"`. Mind the shell when a typed value is a string that looks like a
-number — `--param 'v:="5"'` binds the string `5`, while `--param v:=5` binds the
+number. `--param 'v:="5"'` binds the string `5`, while `--param v:=5` binds the
 number.
 
 Two refusals (exit 2) keep a typo from becoming a silently-green gate:
@@ -452,35 +453,40 @@ Two refusals (exit 2) keep a typo from becoming a silently-green gate:
 - A `--param` the statement **never references**, reported by the engine as an
   unknown named parameter.
 
-One bare name under two prefixes (`$p` and `:p` in one statement) is refused
-with both spellings named, rather than left to the engine's generic
-"conflicting names".
+One bare name under two prefixes (`$p` and `:p` in one statement) is refused.
+Both spellings are named, rather than left to the engine's generic "conflicting
+names".
 
 ## Output formats
 
 | Format | Renders | Gate |
 |---|---|---|
-| `pretty` | An aligned table (header, then values; SQL `NULL` prints as `(null)`) and a row count — or, for an edit, the per-file diff and the mode's verdict. | Default. |
-| `json` | The **bare array**: row objects for a read, change objects for an edit. The `--check` verdict travels in the exit code, not the envelope. | — |
+| `pretty` | An aligned table (header, then values; SQL `NULL` prints as `(null)`) and a row count. For an edit, the per-file diff and the mode's verdict. | Default. |
+| `json` | The **bare array**, with row objects for a read and change objects for an edit. The `--check` verdict travels in the exit code, not the envelope. | n/a |
 | `csv` | Result rows as CSV. | Refuses a statement that produced changes, and a `--db`-only export. |
 | `github` | One `::error` annotation per row. | Needs `--check` and a `path` column. |
 | `sarif` | One SARIF result per row. | Needs `--check` and a `path` column. |
 | `junit` | One JUnit `<failure>` per row. | Needs `--check` and a `path` column. |
 
-There is no `-q/--quiet`: `get` uses it to hide files and `validate` to hide
-passes, and a query result has no analogous noise — the rows are exactly what
-was asked for.
+There is no `-q/--quiet`. `get` uses it to hide files and `validate` to hide
+passes, and a query result has no analogous noise. The rows are exactly what was
+asked for.
 
 ### The change objects in `json`
 
 An edit's `json` output is an array of change objects. Every object carries
-`file` and `written`; the rest of the shape says which kind of change it is —
-a cell set (`key`, `from`, `to`), a deletion (`key`, `from`, `deleted`), a key
-rename (`key`, `renamedFrom`, `to`), a stripped block (`cleared`, `from`), a
-created file (`created`, `to`), a moved file (`renamed`), a schema edit
-(`schema`, `op`, `key`, and the mapped `type`/`format`/`enum`/`required`), or a
-config side effect (`config`, `key`, `from`, `to`). `from` is omitted when the
-file had no previous value.
+`file` and `written`. The rest of the shape says which kind of change it is.
+
+- A cell set (`key`, `from`, `to`).
+- A deletion (`key`, `from`, `deleted`).
+- A key rename (`key`, `renamedFrom`, `to`).
+- A stripped block (`cleared`, `from`).
+- A created file (`created`, `to`).
+- A moved file (`renamed`).
+- A schema edit (`schema`, `op`, `key`, and the mapped
+  `type`/`format`/`enum`/`required`).
+- A config side effect (`config`, `key`, `from`, `to`). `from` is omitted when
+  the file had no previous value.
 
 ```json
 [
@@ -501,13 +507,13 @@ file had no previous value.
 
 - **A header row always.** A zero-row result is the header alone, which a script
   can tell apart from a step that failed and printed nothing.
-- **LF line endings** — a deliberate divergence from RFC 4180, which specifies
-  CRLF. LF is the right default for scripts and CI; a consumer that insists on
-  CRLF (Excel double-clicking a `.csv` on Windows) should re-terminate the lines.
-  Quoting itself is RFC 4180: a field containing a comma, quote, or newline is
-  wrapped in double quotes, and quotes double.
+- **LF line endings**, a deliberate divergence from RFC 4180, which specifies
+  CRLF. LF is the right default for scripts and CI. A consumer that insists on
+  CRLF, such as Excel double-clicking a `.csv` on Windows, should re-terminate
+  the lines. Quoting itself is RFC 4180, so a field containing a comma, quote,
+  or newline is wrapped in double quotes, and quotes double.
 - **SQL `NULL` is an empty field.**
-- **Arrays and objects stay JSON text** — the same encoding `json` and the `--db`
+- **Arrays and objects stay JSON text**, the same encoding `json` and the `--db`
   export use.
 
 `-f csv --check` is legal: a check's rows are still rows, the exit code carries
@@ -515,7 +521,7 @@ the verdict, and the header-only output *is* the passing gate.
 
 ## Exporting the database
 
-`--db <path>` writes the built table — collection views included — to a SQLite
+`--db <path>` writes the built table, collection views included, to a SQLite
 file for any other tool to open. With no SQL, the export is the whole job:
 
 ```sh
@@ -529,10 +535,10 @@ Wrote docs.db (4 files, 11 columns)
 With SQL as well, the rows own stdout and the export note goes to stderr as a
 diagnostic. In `json`, an export-only run prints `{ path, files, columns }`.
 
-The file is a **regenerated artifact** of your corpus: rebuild it whenever you
-like, and do not edit it expecting the files to notice. docmeta will overwrite a
-SQLite database or an empty file at that path and refuses anything else, since
-anything else is somebody's data. Missing parent directories are created.
+The file is a **regenerated artifact** of your corpus. Rebuild it whenever you
+like, and do not edit it expecting the files to notice. A SQLite database or an
+empty file at that path is overwritten. Anything else is refused, since anything
+else is somebody's data. Missing parent directories are created.
 
 [Datasette](https://datasette.io/) is the natural front-end, and its
 [Datasette Lite](https://lite.datasette.io/) build runs entirely in the browser.
@@ -544,7 +550,7 @@ anything else is somebody's data. Missing parent directories are created.
 |---|---|
 | `0` | The statement ran. With `--check`: it returned no rows and no pending changes. For a mutating statement: it applied cleanly. |
 | `1` | **Only** from `--check`, when rows or pending changes came back. Because `--check` implies the dry run, its findings are always still pending. |
-| `2` | Operational — SQL that cannot be prepared, a refused statement, a flag that would mean nothing, and every write refusal. A broken statement is a usage error, not a finding. |
+| `2` | Operational. SQL that cannot be prepared, a refused statement, a flag that would mean nothing, and every write refusal. A broken statement is a usage error, not a finding. |
 
 {/* Doc Detective inline tests: verify this page's documented behavior against
     the local build, exposed as `docmeta` / `npx docmeta` via `npm link` (see
