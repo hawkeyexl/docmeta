@@ -94,6 +94,12 @@ jobs:
       # src/types.ts becomes published API without the entry point being edited,
       # so the surface can grow with nobody deciding to grow it.
       - run: npm run docs:check-api
+      # A GFM table row has to be one source line. #154 reflowed fifteen of
+      # them onto a second line and every gate here stayed green, because the
+      # site still built and every link still resolved — the cells just
+      # rendered cut off mid-sentence. This reads the Markdown source, since
+      # by the time the HTML exists the defect is invisible.
+      - run: npm run docs:check-tables
       # A published schema URL is a promise: its content never changes. This
       # fails if an already-published `src/schemas/<dir>/<version>.json` was
       # edited in place, or if the copies the docs site serves have drifted
