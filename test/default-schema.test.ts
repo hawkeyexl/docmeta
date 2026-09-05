@@ -26,7 +26,7 @@
  *    attributed to exactly one intent.
  *
  * 3. **Companion namespaces are not claimed.** `evals` (docmeta:evals:1.0.0-proposal.2),
- *    `kg` (docmeta:kg:1.0.0-proposal.1) and `metadata` (docmeta:artifact-evals:1.0.0-proposal.2) are
+ *    `kg` (docmeta:kg:1.0.0-proposal.2) and `metadata` (docmeta:artifact-evals:1.0.0-proposal.2) are
  *    common vocabularies validated by their own schemas and implemented by
  *    their own tools; claiming them here — even loosely — would put them on
  *    `docmeta fill`'s menu, and each has its own fill loop.

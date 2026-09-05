@@ -1,5 +1,5 @@
 ---
-title: "docmeta:kg:1.0.0-proposal.1"
+title: "docmeta:kg:1.0.0-proposal.2"
 description: "The proposed knowledge-graph vocabulary: SKOS concepts, iiRDS typing, and PROV provenance under one closed kg block."
 sidebar:
   order: 8
@@ -9,7 +9,7 @@ sidebar:
 :::caution[Proposal under review]
 Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-vocabularies/),
 open for community review. Draft schema:
-[`docs/proposals/0023/schemas/kg/1.0.0-proposal.1.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/kg/1.0.0-proposal.1.json).
+[`docs/proposals/0023/schemas/kg/1.0.0-proposal.2.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/kg/1.0.0-proposal.2.json).
 :::
 
 **The question it answers: what does the knowledge graph know about this
@@ -31,7 +31,7 @@ a misspelled field fails loudly.
 | `about-product-lifecycle` | Which product phases the content covers (never the page's own lifecycle): `administration` · `customization` · `update` · `deployment` · `integration` · `deinstallation` |
 | `about-product-aspect` · `not-about-product-aspect` | `architecture` · `interface` · `system-requirement` (iiRDS Software domain) |
 | `sections` | Per-heading typing, keyed by heading slug: the same fields, one heading down |
-| `revision-of` · `derived-from` | Document lineage (`prov:wasRevisionOf`, `prov:wasDerivedFrom`) |
+| `revision-of` · `derived-from` · `translation-of` | Document lineage (`prov:wasRevisionOf`, `prov:wasDerivedFrom`, `schema:translationOfWork`) |
 | `provenance` | The machine-proposal trail: which model proposed which kg fields, at what confidence |
 
 Every label field takes one string or a non-empty list without duplicates. The
