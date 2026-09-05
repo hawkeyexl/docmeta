@@ -1,4 +1,4 @@
-// Validate the docmeta:kg:1.0.0-proposal.1 example ladder against the draft schema,
+// Validate the docmeta:kg:1.0.0-proposal.2 example ladder against the draft schema,
 // without registering anything. Run from the repo root:
 //   node docs/proposals/0023/ladders/kg-examples.cjs
 const fs = require("fs");
@@ -10,7 +10,7 @@ const { parse } = req("yaml");
 
 // The drafts' semver prerelease, spelled once per ladder so a bump is a
 // one-line edit here rather than a literal buried mid-expression.
-const V = "1.0.0-proposal.1";
+const V = "1.0.0-proposal.2";
 const schema = JSON.parse(fs.readFileSync(`docs/proposals/0023/schemas/kg/${V}.json`, "utf8"));
 const ajv = new Ajv({ allErrors: true, allowUnionTypes: true });
 const validate = ajv.compile(schema);
@@ -90,6 +90,44 @@ kg:
   sections:
     options:
       not-about-product-aspect: [architecture]`],
+
+  ["10 the three document-lineage relations, side by side", true,
+`kg:
+  label: Installation
+  revision-of: docs/install-v1.md
+  derived-from: https://example.org/spec
+  translation-of: ../en/install.md`],
+
+  ["11 translation-of as a list — one page can translate several sources", true,
+`kg:
+  label: Installation
+  translation-of: [../en/install.md, ../en/setup.md]`],
+
+  ["12 translation-of needs no label — it is lineage, not hierarchy", true,
+`kg:
+  translation-of: ../en/install.md`],
+
+  ["N13 an empty translation-of string", false,
+`kg:
+  label: Installation
+  translation-of: ""`],
+
+  ["N14 an empty translation-of list", false,
+`kg:
+  label: Installation
+  translation-of: []`],
+
+  ["N15 duplicate translation sources", false,
+`kg:
+  label: Installation
+  translation-of: [../en/install.md, ../en/install.md]`],
+
+  ["N16 translation-of is lineage, so it is not a proposable provenance field", false,
+`kg:
+  label: Installation
+  provenance:
+    - generated-by: some-model
+      fields: [translation-of]`],
 
   ["N1 hierarchy without a label (dependentRequired)", false,
 `kg:

@@ -242,12 +242,14 @@ vale with severity-map, and differentiation. The negatives pin six failures. The
 fails. Misspelled entry fields fail, ai and human without assertion fail, and
 `eval-skip` as a string fails.
 
-## docmeta:kg:1.0.0-proposal.1 (revised from dockg frontmatter-0.8)
+## docmeta:kg:1.0.0-proposal.2 (revised from dockg frontmatter-0.8)
 
 One closed `kg` envelope (kept on purpose: a closed typo-catching block
 coexisting with an open page), nothing required, files without `kg` pass.
-Verified ladder: `ladders/kg-examples.cjs` (9 positive + 7 negative,
-including the 0.8 worked example translated, the fidelity proof).
+Verified ladder: `ladders/kg-examples.cjs` (12 positive + 16 negative,
+including the 0.8 worked example translated, the fidelity proof, and the three
+document-lineage relations side by side). Round 7 added `translation-of`; the
+count claimed here had also drifted from what the file ran.
 
 **Fidelity ledger vs 0.8:**
 
@@ -380,7 +382,7 @@ required, and broadcast over every file in a directory.
 ## Family walk status: COMPLETE
 
 - **docevals** → docmeta:evals:1.0.0-proposal.2
-- **dockg** → docmeta:kg:1.0.0-proposal.1
+- **dockg** → docmeta:kg:1.0.0-proposal.2
 - **moose-tracevals** → docmeta:artifact-evals:1.0.0-proposal.2
 
 All drafts live under `docs/proposals/0023/schemas/`, outside the frozen

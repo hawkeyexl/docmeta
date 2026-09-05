@@ -27,12 +27,14 @@ Nine metadata vocabularies, published by docmeta, designed as one family:
 | `docmeta:structure:1.0.0-proposal.1` | What does it connect to? | 6 |
 | `docmeta:ai-context:1.0.0-proposal.1` | How did machines make it; how may they use it? | 4 |
 | `docmeta:evals:1.0.0-proposal.2` | What must be true of this page? | 4 keys |
-| `docmeta:kg:1.0.0-proposal.1` | What does the knowledge graph know about it? | the `kg` envelope |
+| `docmeta:kg:1.0.0-proposal.2` | What does the knowledge graph know about it? | the `kg` envelope |
 | `docmeta:artifact-evals:1.0.0-proposal.2` | What must a session using this artifact have done? | 4 keys under `metadata` |
 
-Three families (`core`, `evals`, `artifact-evals`) are at `1.0.0-proposal.2`
-after review round 6; the other six stay at `1.0.0-proposal.1`. The round-6
-section below records what changed and why the rest did not move.
+Four families have moved past `1.0.0-proposal.1`: `evals` and
+`artifact-evals` to `proposal.2` in review round 6, `core` to `proposal.3` for
+`locale`, and `kg` to `proposal.2` for `translation-of`. The other five stay
+where they are. The round sections below record what changed each time, and why
+the rest did not move.
 
 **Nothing in this proposal is registered.** The drafts live at
 `docs/proposals/0023/schemas/`, outside `src/schemas/`, which is the
@@ -285,7 +287,7 @@ as `proposal.2`, added `weight`, `target`, `runs` and `model` to entries, and
 `weight` to the `use:` form. It also moved the prefix guard from prose into the
 schema. See the round-6 section.
 
-**docmeta:kg:1.0.0-proposal.1** is the ledger against dockg's draft
+**docmeta:kg:1.0.0-proposal.2** is the ledger against dockg's draft
 `frontmatter-0.8`. The closed `kg` envelope survives, because it is what lets a
 typo-catching block coexist with an open page. It carries `label` (was
 `prefLabel`), `alt-labels`, `broader`, `narrower`, `related-concepts` (was
@@ -293,7 +295,8 @@ typo-catching block coexist with an open page. It carries `label` (was
 `topicType`, which is the deeper twin of the page's `type` and derivable from it
 when absent. It carries `applies-to`, `about-product-lifecycle` (was
 `softwareLifecyclePhase`), `about-product-aspect` (was `softwareSubject`), the
-negations, `sections`, `revision-of` and `derived-from`. Finally `provenance`,
+negations, `sections`, `revision-of`, `derived-from` and `translation-of`.
+Finally `provenance`,
 array-only, with the deprecated single-object shape dropped. Every label list
 gains the single-string shorthand, so every 0.8-valid document stays valid. The
 RDF mapping lives in field descriptions, where it always did. iiRDS spells its
@@ -441,6 +444,63 @@ The decisions were these:
   keeps its open `anyOf`, a kebab pattern plus the recommended enum, rather than
   a top-level `pattern`. Read shallowly this looks like a missing constraint. It
   is a documented decision.
+
+## Review round 7, on translation lineage
+
+`kg` gains one key, `translation-of`, and moves to `proposal.2`. A new key is a
+shape change, and round 6 bumped a version for one.
+
+**The gap.** A localized docset carries a fact no vocabulary in this family
+records: that `de/install.md` is the German of `en/install.md`. `core.language`
+says what language a document is *in*, which is a different fact and cannot
+substitute — knowing two pages are German and English says nothing about
+whether either is a translation of the other, or of a third page. Without the
+relation, the question a localization owner actually has, *what needs
+re-translating now that this page changed*, has no answer in the metadata at
+all. It is answerable only by a naming convention a tool has to guess at.
+
+**Why it belongs in `kg` and not on the page.** It is a relation between two
+documents, which is what this block already models: `revision-of` and
+`derived-from` are the two that exist, and this is the third. `structure`
+holds relations too, but the ones it holds — `prerequisites`, `next-steps`,
+`related-pages` — are about how a reader moves between pages. Lineage is about
+where a document came from, and that is `kg`'s.
+
+**Why it is not one of the two that already exist.** A translation is not a
+later version of its source, so it is not `revision-of`, which carries
+`prov:wasRevisionOf` and would put a German page in the revision chain of an
+English one. Nor is it `derived-from`: `prov:wasDerivedFrom` is already claimed
+for hand-curated document lineage, and overloading it would make two different
+relations indistinguishable to a consumer reading the graph. The three say
+different things about the same pair of documents, and a consumer has to be able
+to tell them apart.
+
+**The predicate is schema.org's, not a new one.** `schema:translationOfWork` is
+defined as the work a work was translated from, with `schema:workTranslation`
+as its inverse — exactly the fact, needing no reinterpretation. A builder may
+materialize the inverse back onto the source, which turns "every localization of
+this page" into one lookup rather than a scan, but the vocabulary claims only
+the authored direction.
+
+**It is lineage, so it is not proposable.** `translation-of` is deliberately
+absent from `provenance.fields`, alongside `revision-of`, `derived-from` and
+`sections`. That enum lists what a model may propose; which document something
+was translated from is a fact somebody knows, not one a model should infer from
+prose. Ladder case N16 pins it.
+
+**Shape, unchanged from its siblings.** `labelList`: one non-empty string or a
+non-empty unique list of them, so a page assembled from several sources can name
+them all. No `dependentRequired` on `label` — lineage is not hierarchy, and a
+page can record where it came from without being a concept.
+
+The family's field count is untouched. The 34 counted there are the top-level
+keys the six page-level vocabularies claim; `kg` claims one top-level key, its
+envelope, and this key lives inside it.
+
+**Verified.** `ladders/kg-examples.cjs` at 12 positive + 16 negative, all
+passing, and `ladders/compat-check.cjs` clean at 0 unexpected findings with `kg`
+pointed at `proposal.2`. The ladder's own note had drifted — it claimed 7
+negatives when there were 12 — and now states what it runs.
 
 ## Placement intent (decided in design, applied only after review)
 
