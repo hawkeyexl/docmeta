@@ -1,5 +1,14 @@
 # docmeta
 
+> **docmeta is now [`manni`](https://github.com/hawkeyexl/manni).** This
+> release is the last one under this name; its only change is a notice on
+> stderr saying so. Install `manni` and replace `docmeta` with `manni meta` in
+> your scripts (`docmeta …` keeps working there too, as a second bin). The
+> config file is `manni.config.yaml` with your keys under `meta:`; the GitHub
+> Action is `hawkeyexl/manni@v1`; the docs are at
+> <https://hawkeyexl.github.io/manni/>. The published schema URLs under
+> `hawkeyexl.github.io/docmeta/schemas/` stay byte-stable.
+
 Validate the **presence and format** of document metadata against **JSON Schema**, built for CI.
 
 [![npm](https://img.shields.io/npm/v/docmeta?color=cb3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/docmeta)
