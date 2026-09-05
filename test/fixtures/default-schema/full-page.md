@@ -9,7 +9,7 @@ language: en
 authors: [Jane Doe]
 owner: platform-docs
 created: 2025-11-04
-updated: 2026-08-20
+last-updated: 2026-08-20
 stakeholders: [jane.doe, pm-alex]
 reviewed-by: [sam.reviewer]
 last-reviewed: 2026-08-20

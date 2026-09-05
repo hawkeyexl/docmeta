@@ -80,13 +80,14 @@ const SIBLINGS = [ref("evals"), ref("kg"), ref("artifact-evals")];
 
 /**
  * Every date the family carries, all three on stewardship and all three
- * W3CDTF. `created` and `updated` joined `last-reviewed` in stewardship's
- * proposal.2: git's timestamps answer a neighbouring question (when the path
- * changed) rather than this one (when the document was written, and when its
- * content last did), and the published page a consumer reads has no repo
- * attached at all.
+ * W3CDTF. `created` and `last-updated` joined `last-reviewed` in
+ * stewardship's proposal.2: git's timestamps answer a neighbouring question
+ * (when the path changed) rather than this one (when the document was
+ * written, and when its content last did), and the published page a consumer
+ * reads has no repo attached at all. Both review and revision are events with
+ * a most recent instance, so both spell it `last-`.
  */
-const DATE_FIELDS = ["created", "last-reviewed", "updated"];
+const DATE_FIELDS = ["created", "last-reviewed", "last-updated"];
 
 /** The fields each house schema claims, pinned so growth is deliberate. */
 const FIELDS: Record<string, string[]> = {
@@ -103,12 +104,12 @@ const FIELDS: Record<string, string[]> = {
     "authors",
     "created",
     "last-reviewed",
+    "last-updated",
     "owner",
     "review-interval",
     "reviewed-by",
     "source-of-truth",
     "stakeholders",
-    "updated",
     "verified-against",
   ],
   audience: ["audiences", "intent", "journeys", "personas", "visibility"],
@@ -329,7 +330,7 @@ describe("the six house vocabularies", () => {
     // sibling values, so an impossible ordering is a reviewer's catch — or a
     // check run by tooling that can read both fields and the repo.
     const r = await checkStdin(
-      "title: T\ndescription: D\ncreated: 2026-08-20\nupdated: 2019-01-05",
+      "title: T\ndescription: D\ncreated: 2026-08-20\nlast-updated: 2019-01-05",
     );
     expect(r.errors).toEqual([]);
     expect(r.ok).toBe(true);

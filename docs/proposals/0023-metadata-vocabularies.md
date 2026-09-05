@@ -90,8 +90,8 @@ cutting, and each names what it cut.
 4. **Derivable facts lie.** Cut `date` and the stored review due-date. A
    stored copy of a value two other fields already give can only agree with
    them or lie, and `last-reviewed` plus `review-interval` give the deadline.
-   Round 9 held `created` and `updated` up against this principle and put them
-   back, in stewardship. Git's timestamps are about the path rather than the
+   Round 9 held `created` and `last-updated` up against this principle and put
+   them back, in stewardship. Git's timestamps are about the path rather than the
    document, and a published page carries no repo at all. The line this
    principle draws is between a fact another *field* derives and a fact a
    person asserts. It is not a line between what git can report and what it
@@ -170,18 +170,19 @@ lists follow. It is set only where the two differ, as in `language: en` with
 recommended for `locale` and not enforced. See the round-8 note below.
 
 **docmeta:stewardship:1.0.0-proposal.2**: `authors`, `owner`, `stakeholders`,
-`reviewed-by`, `created`, `updated`, `last-reviewed`, `review-interval` (ISO
-8601 duration), `verified-against`, `source-of-truth`. This is every people
+`reviewed-by`, `created`, `last-updated`, `last-reviewed`, `review-interval`
+(ISO 8601 duration), `verified-against`, `source-of-truth`. This is every people
 fact in the family, plus the document's own dates, behind one adoption
 decision. `authors` is attribution and `owner` is answerability, and the two
 part company the moment an author moves on. `authors` is claimed at the loosest
 lawful definition, up to MyST and Docusaurus person objects and nothing looser.
 List members are strings or objects, and never bare numbers. No claimant asks
-`owner` or `reviewed-by` to be anything but plain names. `created` and `updated`
-are the document's dates rather than the file's, added in round 9. All three
+`owner` or `reviewed-by` to be anything but plain names. `created` and
+`last-updated` are the document's dates rather than the file's, added in round
+9. All three
 dates are W3CDTF, and all three are records rather than gates. JSON Schema
 cannot compare a date to today, or one sibling date to another. So both the
-overdue review and an `updated` older than its `created` are pinned as
+overdue review and a `last-updated` older than its `created` are pinned as
 *passing*. A freshness grader reads the same `last-reviewed` field, and is the
 thing that owns the clock. `verified-against` and `source-of-truth` take a
 string, an object, or a list of either, which round 9 also settled.
@@ -457,8 +458,8 @@ Round 9 revised `stewardship` to `1.0.0-proposal.2`, taking it from 8 fields to
 10 and the family from 34 to 36. The other eight stay where they are. One of
 the decisions reopens a principle.
 
-- **`created` and `updated` are in stewardship, against principle 4 as first
-  written.** Principle 4 cut them because git owns change dates. That reasoning
+- **`created` and `last-updated` are in stewardship, against principle 4 as
+  first written.** Principle 4 cut them because git owns change dates. That reasoning
   does not survive contact with what git stores. `git log` reports the history
   of a *path in this repo*: the commit that added it, and the last commit that
   touched any byte of it. A page migrated from a CMS, or split out of a longer
@@ -471,7 +472,7 @@ the decisions reopens a principle.
   `authors` here in round 6. There is a consumer argument too. The page a
   static site, a retrieval index or a model reads has no repo attached. A
   stamped date travels with the document, where a derived one cannot.
-- **The cost is real, and it is accepted.** A hand-typed `updated` goes stale
+- **The cost is real, and it is accepted.** A hand-typed `last-updated` goes stale
   quietly, and no JSON Schema can catch that. The answer has the same shape as
   the freshness answer: tooling that can read both the field and the repo
   compares the two. Principle 4 still holds against a stored copy of a value
@@ -479,19 +480,25 @@ the decisions reopens a principle.
   and no `next-review`.
 - **Both are W3CDTF, like `last-reviewed`, and neither is compared to
   anything.** Reduced precision is legal, an impossible date such as
-  `2026-13-45` fails, and an `updated` earlier than its `created` passes. JSON
+  `2026-13-45` fails, and a `last-updated` earlier than its `created` passes. JSON
   Schema cannot relate two sibling values. The test pins that rather than
   leaving it to be discovered, as it does for the overdue review and the
   contradicting `applies-to` pair.
-- **The names are `created` and `updated`, not `date` or `lastmod`.** Six
+- **The names are `created` and `last-updated`, not `date` or `lastmod`.** Six
   built-ins claim `date`: MyST, Docusaurus blog, mkdocs-material, DCMI, Hugo
   and Jekyll. The composability law would hold it at their loosest form, which
-  does not require a date at all. Nothing claims a bare `created` or `updated`.
-  Every near neighbour is spelled otherwise: `critdates.created` and
-  `critdates.revised` in DITA, `date` and `lastmod` in Hugo, `last_update` in
-  Docusaurus, `lastUpdated` in Starlight and VitePress, and
-  `article:published_time` and `article:modified_time` in Open Graph. This is
-  the move that named `reviewed-by` around MyST's `reviewers`.
+  does not require a date at all. Nothing claims a bare `created` or
+  `last-updated`. Every near neighbour is spelled otherwise:
+  `critdates.created` and `critdates.revised` in DITA, `date` and `lastmod` in
+  Hugo, `last_update` in Docusaurus, `lastUpdated` in Starlight and VitePress,
+  and `article:published_time` and `article:modified_time` in Open Graph. This
+  is the move that named `reviewed-by` around MyST's `reviewers`.
+- **`last-updated` carries the prefix, for the reason `last-reviewed` does.**
+  The round first proposed a bare `updated`, on the grounds that this is what
+  the key means wherever it already appears. The owner settled it the other
+  way. Both fields name the most recent instance of a repeating event, so both
+  say `last-`, and the two read as the pair they are. `created` needs no
+  prefix, because a document is written once.
 - **`verified-against` and `source-of-truth` take a string, an object, or a
   list of either.** Both name something outside the page. A string is the short
   human spelling, as in `operator 1.4.2`. An object is the form a drift check
@@ -591,21 +598,15 @@ anything else. It is the reproducible evidence behind principles 1 and 7.
    frontmatter. That holds until the TOML date normalization in the in-flight
    platform schemas PR (#117) lands. This is a sequencing dependency, not a
    design choice. Round 9 widened the surface rather than changing the
-   question. `created` and `updated` are the two dates a TOML page is most
-   likely to carry. Five W3CDTF fields now wait on that normalization.
-9. **Is `updated` the right spelling next to `last-reviewed`?** The family's
-   other date carries a `last-` prefix, because a review is a discrete event
-   with a most recent instance worth naming. An edit history has no such
-   instance, and `updated` is what the key means everywhere it already appears.
-   `last-updated` would be the parallel spelling, at the cost of the pair
-   `created`/`updated` reading as a pair.
-10. **Should the structured anchor form require a key?** `verified-against` and
-    `source-of-truth` accept an object with any keys, on the "recommend openly"
-    rule, so `{name, version}` and `{path, kind}` are recommendations rather
-    than contracts. A drift checker therefore cannot rely on finding either. The
-    alternative is one required key per field, which is a vocabulary this
-    proposal has not reviewed.
-11. **What users pin, now that patch bumps are real.** Three-segment semver makes
+   question. `created` and `last-updated` are the two dates a TOML page is
+   most likely to carry. Five W3CDTF fields now wait on that normalization.
+9. **Should the structured anchor form require a key?** `verified-against` and
+   `source-of-truth` accept an object with any keys, on the "recommend openly"
+   rule, so `{name, version}` and `{path, kind}` are recommendations rather
+   than contracts. A drift checker therefore cannot rely on finding either. The
+   alternative is one required key per field, which is a vocabulary this
+   proposal has not reviewed.
+10. **What users pin, now that patch bumps are real.** Three-segment semver makes
     a documentation fix a new id, and pinning `docmeta:core:1.0.0` everywhere
     means every such fix churns every config. The usual answer is a second,
     *moving* reference, with `docmeta:core:1` resolving to the latest `1.x`. But

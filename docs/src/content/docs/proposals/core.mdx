@@ -93,8 +93,9 @@ locale: en-GB
   key here, and no stored review deadline. `last-reviewed` plus
   `review-interval` give that deadline, so a stored copy could only agree
   with them or lie. The document's own dates are a different case, and they
-  live in stewardship. Review round 9 added `created` and `updated` there,
-  because git's timestamps describe the path rather than the document.
+  live in stewardship. Review round 9 added `created` and `last-updated`
+  there, because git's timestamps describe the path rather than the
+  document.
 - **People are in stewardship.** `authors` was a core field until review
   round 6. It now sits with `owner`, `stakeholders`, and `reviewed-by` in
   the [stewardship vocabulary](/docmeta/proposals/stewardship/). Core

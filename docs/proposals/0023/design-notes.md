@@ -99,37 +99,41 @@ page migrated from a CMS, or split out of a longer one, has a path younger than
 its content. So does one imported from another repo, or landed through a
 squashed history. A last-commit date also moves for a typo fix, a link sweep or
 a bulk frontmatter migration. None of those change what the page says. So
-`created` and `updated` are editorial facts a person asserts. That is the line
-that moved `authors` here on 2026-08-31. Git records who committed a change,
-not who wrote the prose. The consumer argument is the second half. A published
-page carries no repo. A stamped date travels with the document, where a derived
-one cannot. The cost stands as principle 4 stated it, and is accepted. A
-hand-typed `updated` goes stale quietly, and no JSON Schema catches that. What
-principle 4 still forbids is a stored copy of a value this vocabulary itself
-derives. So there is still no due-date field and no `next-review`. Both new
-fields are `w3cdtf`, like `last-reviewed`. Reduced precision passes, and an
-impossible date fails. An `updated` older than its `created` passes, because
-JSON Schema cannot relate two siblings. The test pins that the way it pins the
-overdue review. The names avoid `date`, which six built-ins claim. The law
-would take that key down to their loosest form. They also avoid every near
-neighbour's spelling: `critdates.created`, `critdates.revised`, `lastmod`,
-`last_update`, `lastUpdated` and `article:modified_time`. Nothing claims a bare
-`created` or `updated`. So the compat ladder pins the family's own shape, as it
-does for `locale`. The same round widened `verified-against` and
-`source-of-truth` to a string, an object, or a list of either. That lifts
-`authors`'s shape into `$defs/entryList`. A string is the short human spelling.
-An object is what a drift check can compare without parsing prose. A list is
-there because a page is usually anchored to more than one thing.
-`verified-against` was a single string, and could not say that at all.
-`authors` keeps its inline copy, because MyST and Docusaurus claim that key and
-the law holds it at their definition. Nobody else claims these two. So
-`entryList` can add `uniqueItems` and a non-empty floor on members. Object keys
-stay open, under the same recommend-openly rule as `language`. Stewardship goes
-from 8 fields to 10, and the family from 34 to 36. It ships as stewardship
-`1.0.0-proposal.2`, because a new key is a shape change. So proposal.1 keeps
-the bytes it had. The test pin, the compat probes and the stewardship page are
-updated. The page asks reviewers whether `updated` should be spelled
-`last-updated` beside `last-reviewed`.
+`created` and `last-updated` are editorial facts a person asserts. That is the
+line that moved `authors` here on 2026-08-31. Git records who committed a
+change, not who wrote the prose. The consumer argument is the second half. A
+published page carries no repo. A stamped date travels with the document, where
+a derived one cannot. The cost stands as principle 4 stated it, and is
+accepted. A hand-typed `last-updated` goes stale quietly, and no JSON Schema
+catches that. What principle 4 still forbids is a stored copy of a value this
+vocabulary itself derives. So there is still no due-date field and no
+`next-review`. Both new fields are `w3cdtf`, like `last-reviewed`. Reduced
+precision passes, and an impossible date fails. A `last-updated` older than its
+`created` passes, because JSON Schema cannot relate two siblings. The test pins
+that the way it pins the overdue review. The names avoid `date`, which six
+built-ins claim. The law would take that key down to their loosest form. They
+also avoid every near neighbour's spelling: `critdates.created`,
+`critdates.revised`, `lastmod`, `last_update`, `lastUpdated` and
+`article:modified_time`. Nothing claims a bare `created` or `last-updated`. So
+the compat ladder pins the family's own shape, as it does for `locale`. The
+same round widened `verified-against` and `source-of-truth` to a string, an
+object, or a list of either. That lifts `authors`'s shape into
+`$defs/entryList`. A string is the short human spelling. An object is what a
+drift check can compare without parsing prose. A list is there because a page
+is usually anchored to more than one thing. `verified-against` was a single
+string, and could not say that at all. `authors` keeps its inline copy, because
+MyST and Docusaurus claim that key and the law holds it at their definition.
+Nobody else claims these two. So `entryList` can add `uniqueItems` and a
+non-empty floor on members. Object keys stay open, under the same
+recommend-openly rule as `language`. Stewardship goes from 8 fields to 10, and
+the family from 34 to 36. It ships as stewardship `1.0.0-proposal.2`, because a
+new key is a shape change. So proposal.1 keeps the bytes it had. The test pin,
+the compat probes and the stewardship page are updated. The round first
+proposed a bare `updated`, on the grounds that this is what the key means
+wherever it already appears. The spelling went to reviewers. The owner
+settled it the other way on 2026-09-05. Both fields name the most recent
+instance of a repeating event, so both say `last-`. `created` needs no prefix,
+because a document is written once.
 
 **2026-08-26 correction: the whole family is default.** All nine append to
 `DEFAULT_SCHEMAS`, superseding the core-only intent below wherever it
@@ -150,7 +154,7 @@ and put the full menu on bare `fill`, accepted as the teaching surface.
 4. **Derivable facts lie.** Cut `date`, `next-review`, and `contact` as a
    second reach field. `last-reviewed` plus `review-interval` derive the due
    date, so a stored copy of it can only agree or lie. Round 9 narrowed this on
-   2026-09-05. `updated` and `created` came back, in stewardship, because git's
+   2026-09-05. `last-updated` and `created` came back, in stewardship, because git's
    dates are about the path rather than the document. The line is between a fact
    another field derives and a fact a person asserts.
 5. **Facts live at their altitude.** `stakeholders` is page-level, meaning who
@@ -190,12 +194,12 @@ registration. The field homes are:
   `language` is what the text is written in, and `locale` the preferences its
   content follows, set only where the two differ.
 - **Stewardship (docmeta:stewardship:1.0.0-proposal.2):** authors, owner,
-  stakeholders, reviewed-by, created, updated, last-reviewed, review-interval,
-  verified-against, source-of-truth. `authors` moved from core 2026-08-31,
-  because attribution is a fact about care rather than about what the page is.
-  It keeps its own shape, since person objects are legal here and not in
-  `stringList`. `created` and `updated` arrived 2026-09-05 with the same
-  argument. Git's dates are about the path rather than the document.
+  stakeholders, reviewed-by, created, last-updated, last-reviewed,
+  review-interval, verified-against, source-of-truth. `authors` moved from core
+  2026-08-31, because attribution is a fact about care rather than about what
+  the page is. It keeps its own shape, since person objects are legal here and
+  not in `stringList`. `created` and `last-updated` arrived 2026-09-05 with the
+  same argument. Git's dates are about the path rather than the document.
   `verified-against` and `source-of-truth` widened to `entryList` in the same
   round.
 - **Audience & intent (docmeta:audience:1.0.0-proposal.1):** audiences,
