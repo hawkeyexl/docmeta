@@ -64,6 +64,65 @@ function run(
   }
 }
 
+describe("the rename notice (built bin)", () => {
+  // `run()` above drops stderr on a successful exit, and the notice is
+  // stderr on *every* exit, so these spawn the bin directly.
+  const spawn = (args: string[], env: Record<string, string> = {}) =>
+    spawnSync("node", [bin, ...args], {
+      cwd: root,
+      encoding: "utf8",
+      env: { ...process.env, ...env },
+    });
+
+  beforeAll(() => {
+    if (!existsSync(bin)) execSync("npm run build", { cwd: root, stdio: "ignore" });
+  }, 180000);
+
+  it("says on stderr that the package is now manni, and exits as before", () => {
+    const r = spawn(["validate", "test/fixtures/valid.md"]);
+    expect(r.status).toBe(0);
+    expect(r.stderr).toContain("docmeta: this package is now manni");
+    expect(r.stderr).toContain("npm i -D manni");
+    expect(r.stderr).toContain("`manni meta`");
+    expect(r.stderr).toContain("DOCMETA_NO_RENAME_NOTICE=1");
+    // stdout is the report and only the report.
+    expect(r.stdout).not.toContain("manni");
+  });
+
+  it("never lands in stdout, so -f json still parses", () => {
+    const r = spawn(["validate", "test/fixtures/valid.md", "-f", "json"]);
+    expect(r.status).toBe(0);
+    expect(() => JSON.parse(r.stdout)).not.toThrow();
+    expect(r.stderr).toContain("this package is now manni");
+  });
+
+  it("shows for --version and --help, where preAction would not fire", () => {
+    const version = spawn(["--version"]);
+    expect(version.status).toBe(0);
+    expect(version.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
+    expect(version.stderr).toContain("this package is now manni");
+    const help = spawn(["--help"]);
+    expect(help.status).toBe(0);
+    expect(help.stderr).toContain("this package is now manni");
+  });
+
+  it("is silenced by DOCMETA_NO_RENAME_NOTICE, and by nothing else", () => {
+    const quiet = spawn(["validate", "test/fixtures/valid.md"], {
+      DOCMETA_NO_RENAME_NOTICE: "1",
+    });
+    expect(quiet.status).toBe(0);
+    expect(quiet.stderr).not.toContain("manni");
+    // CI is exactly where a team first notices, so CI=true does not silence it.
+    const ci = spawn(["validate", "test/fixtures/valid.md"], { CI: "true" });
+    expect(ci.stderr).toContain("this package is now manni");
+  });
+
+  it("carries no ANSI codes when stderr is not a terminal", () => {
+    const r = spawn(["validate", "test/fixtures/valid.md"]);
+    expect(r.stderr).not.toMatch(/\x1b\[/);
+  });
+});
+
 describe("docmeta CLI (built bin)", () => {
   beforeAll(() => {
     if (!existsSync(bin)) execSync("npm run build", { cwd: root, stdio: "ignore" });
