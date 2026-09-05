@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
-<concept id="prolog-target" type="concept">
-  <title>Metadata belongs in the prolog</title>
-  <conbody>
-    <p>Writing a root attribute here would break DTD validity.</p>
-  </conbody>
-</concept>

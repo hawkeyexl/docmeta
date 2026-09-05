@@ -1,7 +1,0 @@
----
-type: concept
----
-
-= Hello
-
-Body content behind a fenced front matter block.
