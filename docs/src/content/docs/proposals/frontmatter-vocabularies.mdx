@@ -39,7 +39,7 @@ examples, design rationale, and its own questions for reviewers:
 | Id | The question it answers | Fields |
 |---|---|---|
 | [`docmeta:core:1.0.0-proposal.3`](/docmeta/proposals/core/) | What is this page? | `title`* · `description`* · `id` · `type` · `keywords` · `language` · `locale` |
-| [`docmeta:stewardship:1.0.0-proposal.1`](/docmeta/proposals/stewardship/) | Is it cared for? | `authors` · `owner` · `stakeholders` · `reviewed-by` · `last-reviewed` · `review-interval` · `verified-against` · `source-of-truth` |
+| [`docmeta:stewardship:1.0.0-proposal.2`](/docmeta/proposals/stewardship/) | Is it cared for? | `authors` · `owner` · `stakeholders` · `reviewed-by` · `created` · `last-updated` · `last-reviewed` · `review-interval` · `verified-against` · `source-of-truth` |
 | [`docmeta:audience:1.0.0-proposal.1`](/docmeta/proposals/audience/) | Who does it serve, and who may see it? | `audiences` · `personas` · `journeys` · `intent` · `visibility` |
 | [`docmeta:lifecycle:1.0.0-proposal.1`](/docmeta/proposals/lifecycle/) | Where is it in its life? | `lifecycle` · `replaced-by` · `supersedes` · `remove-by` |
 | [`docmeta:structure:1.0.0-proposal.1`](/docmeta/proposals/structure/) | What does it connect to? | `applies-to` · `not-applicable-to` · `concepts` · `prerequisites` · `next-steps` · `related-pages` |
@@ -48,9 +48,10 @@ examples, design rationale, and its own questions for reviewers:
 | [`docmeta:kg:1.0.0-proposal.1`](/docmeta/proposals/kg/) | What does the knowledge graph know about it? | `kg`, one closed block: SKOS concepts, iiRDS typing, PROV provenance |
 | [`docmeta:artifact-evals:1.0.0-proposal.2`](/docmeta/proposals/artifact-evals/) | What must a session using this artifact have done? | `metadata.evals` · `metadata.eval-skip` · `metadata.eval-provenance` |
 
-Three families are at `1.0.0-proposal.2` after review round 6: core,
-evals, and artifact-evals. The other six stay at `1.0.0-proposal.1`,
-because a bump would announce a revision none of them made.
+Four families have moved past `1.0.0-proposal.1`. Those are core (now
+`1.0.0-proposal.3`), evals and artifact-evals from review round 6, and
+stewardship from round 9. The other five stay where they started, because
+a bump would announce a revision none of them made.
 
 All nine are intended for docmeta's default set, the schemas a run uses
 when no schema is configured. Such a run would then require every page
@@ -70,6 +71,8 @@ type: how-to
 owner: platform-docs
 stakeholders: [jane.doe, pm-alex]
 reviewed-by: [sam.reviewer]
+created: 2025-11-04
+last-updated: 2026-08-20
 last-reviewed: 2026-08-20
 review-interval: P90D
 verified-against: operator 1.4.2
@@ -125,10 +128,12 @@ take when you are ready for it.
    `image`, `tags`, ordering, or navigation here. The generator owns how
    a page is displayed and where it sits. These vocabularies only
    describe what a page is.
-4. **Derivable facts lie.** There is no `updated` stamp, no creation
-   `date`, and no stored review deadline. Git knows when files change,
-   and `last-reviewed` plus `review-interval` give the due date. The
-   dates that remain are the ones only a human can assert.
+4. **Derivable facts lie.** There is no `date` key and no stored review
+   deadline. `last-reviewed` plus `review-interval` give the due date, so a
+   stored copy could only agree with them or lie. Review round 9 held the
+   document's own dates up against this and put them back. `created` and
+   `last-updated` sit in stewardship, because git's timestamps describe the path
+   rather than the document.
 5. **Facts live at their altitude.** A fact belongs at the level that
    owns it. Reader expertise belongs in your persona definitions, not on
    every page. Style guides belong in config. `stakeholders` stays at

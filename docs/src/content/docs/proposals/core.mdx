@@ -89,9 +89,13 @@ locale: en-GB
   already in the text. The recommended value is a Unicode locale identifier: a
   BCP 47 tag with optional `-u-` extension keywords, in hyphen form. Open
   Graph's `og:locale` spells it `en_US`, and that key belongs to Open Graph.
-- **Derivable facts stay out.** There is no creation `date` and no
-  `updated` stamp. Git already knows both, and a hand-typed copy goes
-  stale without anyone noticing.
+- **No stored copy of a value the vocabulary derives.** There is no `date`
+  key here, and no stored review deadline. `last-reviewed` plus
+  `review-interval` give that deadline, so a stored copy could only agree
+  with them or lie. The document's own dates are a different case, and they
+  live in stewardship. Review round 9 added `created` and `last-updated`
+  there, because git's timestamps describe the path rather than the
+  document.
 - **People are in stewardship.** `authors` was a core field until review
   round 6. It now sits with `owner`, `stakeholders`, and `reviewed-by` in
   the [stewardship vocabulary](/docmeta/proposals/stewardship/). Core

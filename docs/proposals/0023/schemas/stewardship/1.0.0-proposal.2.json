@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docmeta:stewardship:1.0.0-proposal.2",
+  "title": "docmeta stewardship vocabulary (1.0.0-proposal.2)",
+  "description": "Is this page cared for: attribution, ownership, review, the document's own dates, and the anchors that make drift detectable. Every field records a fact a person asserts about the document, rather than one a tool reads off the file. `created` and `last-updated` are here on that line, and proposal.1 left them out on the other one. Git's timestamps answer a neighbouring question: when this path first appeared in this repo, and when any byte of it last moved. That parts company with the document's own history at every migration, split, squashed import, typo fix and bulk frontmatter sweep. It is the same reason `authors` sits here — git records who committed a change, not who wrote the prose. A published page carries no repo, so a stamped date travels with the document where a derived one cannot. The cost is the one proposal.1 named: a hand-typed `last-updated` goes stale quietly, and no JSON Schema can catch that. The review dates are records, not freshness gates: JSON Schema cannot compare a date to today, and deriving the due date from `last-reviewed` + `review-interval` belongs to tooling that can read a clock (any freshness grader reads `last-reviewed`).",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "authors": {
+      "type": [
+        "string",
+        "object",
+        "array"
+      ],
+      "description": "Who wrote the page: a name, a list of names, or the structured person objects MyST and Docusaurus define. Attribution rather than answerability — `owner` is the party on the hook for the page now, and the two part company the moment an author moves on. Not a `stringList`, and since proposal.2 not the only field here that isn't: `verified-against` and `source-of-truth` take the same string-or-object-or-list shape, as `entryList`. `authors` keeps its own inline copy rather than sharing that definition, because MyST and Docusaurus claim this key too and the composability law holds it at their loosest published definition, which `entryList`'s uniqueness and member floors go past. List members are names or person objects — never bare numbers or nulls. Never empty in any form: minLength, minItems and minProperties each bind to their own type and are ignored for the others.",
+      "items": {
+        "type": [
+          "string",
+          "object"
+        ]
+      },
+      "minLength": 1,
+      "minItems": 1,
+      "minProperties": 1
+    },
+    "owner": {
+      "$ref": "#/$defs/stringList",
+      "description": "The person or team answerable for this page — the one required field of every docs-ownership system from Backstage to GitLab. A name, a handle, a chat channel, a team slug, or a list of them; write the spelling people can actually reach."
+    },
+    "stakeholders": {
+      "$ref": "#/$defs/stringList",
+      "description": "Who has a stake in this page being right: the feature's engineer, the product owner, the support lead who fields its tickets. The standing parties to consult before changing the page — where `reviewed-by` records who actually did the last pass. Page-level on purpose: the right stakeholders differ page by page, and project-wide ones belong in your project docs, not in every file's frontmatter."
+    },
+    "reviewed-by": {
+      "$ref": "#/$defs/stringList",
+      "description": "Who last reviewed the page. Named `reviewed-by` rather than `reviewers` because MyST already defines `reviewers` as scholarly person objects."
+    },
+    "created": {
+      "$ref": "#/$defs/w3cdtf",
+      "description": "When the document was written, as a W3CDTF date. The document's date, not the file's: a page migrated from a CMS, imported from another repo, split out of a longer one, or landed through a squashed history has a path in this repo that is younger than the content it holds, and `git log` can only report the path. Where the two agree, git agreeing is a bonus rather than the source."
+    },
+    "last-updated": {
+      "$ref": "#/$defs/w3cdtf",
+      "description": "When the content last changed in a way a reader would notice, as a W3CDTF date. The editorial fact, not the file's: a commit date also moves for a typo fix, a link sweep, a formatting pass and a bulk frontmatter migration, none of which change what the page says. Distinct from `last-reviewed`, which records the page being checked and found still true — an update changes the content, a review confirms it, and a page can have either without the other. Spelled with the `last-` prefix for exactly the reason `last-reviewed` carries one: both name the most recent instance of a repeating event, and the two read as the pair they are. That also keeps the key clear of every neighbour's spelling of the same fact, which are `lastmod`, `last_update`, `lastUpdated` and `article:modified_time`. A stale value here is the accepted cost of stamping a date instead of deriving one, and a check comparing it against the repo's own last-change date is the tooling answer, not a schema's."
+    },
+    "last-reviewed": {
+      "$ref": "#/$defs/w3cdtf",
+      "description": "When the page was last reviewed, as a W3CDTF date. The field freshness tooling reads to derive review deadlines. A record, not a freshness gate — JSON Schema cannot compare a date to today."
+    },
+    "review-interval": {
+      "type": "string",
+      "pattern": "^P(?:\\d+W|(?=\\d|T\\d)(?:\\d+Y)?(?:\\d+M)?(?:\\d+D)?(?:T(?=\\d)(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?)$",
+      "description": "How often the page should be reviewed, as an ISO 8601 duration: `P90D`, `P1Y`. ISO rather than `90d` so the value is machine-comparable. With `last-reviewed`, this is everything review tooling needs to derive the due date — a stored due date would only ever agree with them or lie."
+    },
+    "verified-against": {
+      "$ref": "#/$defs/entryList",
+      "description": "The product version, API revision, or spec the content was last verified against. A string is the short spelling — `operator 1.4.2` — and an object the checkable one, such as `{name: operator, version: 1.4.2}`, which a drift check can compare without parsing prose. A list says a page was verified against more than one thing, such as the operator and the cluster it runs on; proposal.1 held this to a single string and could not say that at all. What turns \"reviewed\" into \"reviewed against something\"."
+    },
+    "source-of-truth": {
+      "$ref": "#/$defs/entryList",
+      "description": "Where reality lives for this page: a repo path, an API spec, a schema file. A string names it, an object structures it — `{path: charts/operator/values.yaml, kind: helm-values}` — and a list carries several, because a page usually answers to more than one source. The anchor a drift check compares the page against; a page without one cannot be drift-monitored."
+    }
+  },
+  "$defs": {
+    "stringList": {
+      "if": {
+        "type": "array"
+      },
+      "then": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "else": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "One non-empty string, or a non-empty list of unique ones — the same shape as kg's labelList."
+    },
+    "entryList": {
+      "type": [
+        "string",
+        "object",
+        "array"
+      ],
+      "items": {
+        "$comment": "The parent's keyword-per-type pattern again, one level down: minLength binds to a string member, minProperties to an object one, and each is ignored for the other. Repeated here rather than hoisted because a member's floor is a different assertion from the whole value's.",
+        "type": [
+          "string",
+          "object"
+        ],
+        "minLength": 1,
+        "minProperties": 1
+      },
+      "minLength": 1,
+      "minItems": 1,
+      "minProperties": 1,
+      "uniqueItems": true,
+      "description": "One entry, or a non-empty list of unique ones, where an entry is a non-empty string or a non-empty object. The shape `authors` carries, made a definition in proposal.2 where two more fields needed it: the short human spelling and the structured machine-checkable one, without minting a second field name for the same fact. Object keys are left open on purpose, since enumerating them would freeze a vocabulary this proposal has not put to review; the recommendations live in each field's description. Every non-empty floor binds to its own type — minLength for the string, minProperties for the object, minItems and uniqueItems for the list — and `items` repeats the first two, so `\"\"`, `[]`, `{}`, `[\"\"]` and `[{}]` all fail. Unlike `authors`, no other schema claims the keys that use this, so the family is free to set that floor.",
+      "$comment": "minLength, minItems, minProperties and uniqueItems each apply to one instance type and are ignored for the others; that is what lets one subschema hold three shapes without an anyOf whose errors name all three branches."
+    },
+    "w3cdtf": {
+      "type": "string",
+      "pattern": "^[0-9]{4}(-(0[1-9]|1[0-2])(-(0[1-9]|[12][0-9]|3[01])(T([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9](\\.[0-9]+)?)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9]))?)?)?$",
+      "description": "A W3CDTF date, permitting reduced precision: `2026`, `2026-08`, `2026-08-23`, or a full timestamp — in which case the timezone designator is required, as the W3CDTF profile itself mandates (no local-time form). Field-ranged (month 01-12, day 01-31, hour 00-23) so an impossible date fails here rather than becoming Invalid Date in the tooling that derives review deadlines; not calendar-exact — February 31 is a reviewer's catch."
+    }
+  }
+}

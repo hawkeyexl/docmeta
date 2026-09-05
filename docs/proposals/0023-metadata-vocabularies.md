@@ -21,7 +21,7 @@ Nine metadata vocabularies, published by docmeta, designed as one family:
 | Id | One question it answers | Fields |
 |---|---|---|
 | `docmeta:core:1.0.0-proposal.3` | What is this page? | 7 (requires `title`, `description`) |
-| `docmeta:stewardship:1.0.0-proposal.1` | Is it cared for? | 8 |
+| `docmeta:stewardship:1.0.0-proposal.2` | Is it cared for? | 10 |
 | `docmeta:audience:1.0.0-proposal.1` | Who does it serve; who may see it? | 5 |
 | `docmeta:lifecycle:1.0.0-proposal.1` | Where is it in its life? | 4 (+ the deprecation rule) |
 | `docmeta:structure:1.0.0-proposal.1` | What does it connect to? | 6 |
@@ -30,9 +30,10 @@ Nine metadata vocabularies, published by docmeta, designed as one family:
 | `docmeta:kg:1.0.0-proposal.1` | What does the knowledge graph know about it? | the `kg` envelope |
 | `docmeta:artifact-evals:1.0.0-proposal.2` | What must a session using this artifact have done? | 4 keys under `metadata` |
 
-Three families (`core`, `evals`, `artifact-evals`) are at `1.0.0-proposal.2`
-after review round 6; the other six stay at `1.0.0-proposal.1`. The round-6
-section below records what changed and why the rest did not move.
+Four families have moved past `1.0.0-proposal.1`. Those are `core` (rounds 6
+and 8), `evals` and `artifact-evals` (round 6), and `stewardship` (round 9).
+The other five stay where they started. The round sections below record what
+changed each time, and why the rest did not move.
 
 **Nothing in this proposal is registered.** The drafts live at
 `docs/proposals/0023/schemas/`, outside `src/schemas/`, which is the
@@ -86,10 +87,15 @@ cutting, and each names what it cut.
    and every navigation and position field. A generator-owned fact carried
    under a second name is worse than a collision, because a collision at
    least fails loudly.
-4. **Derivable facts lie.** Cut `updated`, `date`, and the stored review
-   due-date. Git owns change dates, and `last-reviewed` plus `review-interval`
-   derive the deadline. The dates that stay are the ones only a human can
-   assert, which are `last-reviewed` and `remove-by`.
+4. **Derivable facts lie.** Cut `date` and the stored review due-date. A
+   stored copy of a value two other fields already give can only agree with
+   them or lie, and `last-reviewed` plus `review-interval` give the deadline.
+   Round 9 held `created` and `last-updated` up against this principle and put
+   them back, in stewardship. Git's timestamps are about the path rather than the
+   document, and a published page carries no repo at all. The line this
+   principle draws is between a fact another *field* derives and a fact a
+   person asserts. It is not a line between what git can report and what it
+   cannot. See the round-9 section.
 5. **Facts live at their altitude.** `stakeholders` is page-level, meaning who
    to consult about *this* page. It is distinct from the project-level
    stakeholders the earlier exploration cut. Reader `expertise` fell, because
@@ -135,7 +141,7 @@ for three reasons the split then proved:
 - **Immutability makes fat ids expensive.** Fields on different cadences
   frozen behind one version number means any movement is a new 33-field id.
 
-The six claim **disjoint** field sets (34 fields, zero collisions, pinned by
+The six claim **disjoint** field sets (36 fields, zero collisions, pinned by
 test), so stacking all six behaves like the monolith did.
 
 ## The six house vocabularies
@@ -163,19 +169,23 @@ lists follow. It is set only where the two differ, as in `language: en` with
 `locale: de-DE`. Both are one non-empty string. A Unicode locale identifier is
 recommended for `locale` and not enforced. See the round-8 note below.
 
-**docmeta:stewardship:1.0.0-proposal.1**: `authors`, `owner`, `stakeholders`,
-`reviewed-by`, `last-reviewed`, `review-interval` (ISO 8601 duration),
-`verified-against`, `source-of-truth`. This is every people fact in the family,
-behind one adoption decision. `authors` is attribution and `owner` is
-answerability, and the two part company the moment an author moves on. `authors`
-is the one field here claimed at the loosest lawful definition, up to MyST and
-Docusaurus person objects and nothing looser. List members are strings or
-objects, and never bare numbers. It is therefore the one field here that is not
-a `stringList`. No claimant asks `owner` or `reviewed-by` to be anything but
-plain names. The review dates are records, not freshness gates. JSON Schema
-cannot compare a date to today, and the overdue-review case is pinned as
+**docmeta:stewardship:1.0.0-proposal.2**: `authors`, `owner`, `stakeholders`,
+`reviewed-by`, `created`, `last-updated`, `last-reviewed`, `review-interval`
+(ISO 8601 duration), `verified-against`, `source-of-truth`. This is every people
+fact in the family, plus the document's own dates, behind one adoption
+decision. `authors` is attribution and `owner` is answerability, and the two
+part company the moment an author moves on. `authors` is claimed at the loosest
+lawful definition, up to MyST and Docusaurus person objects and nothing looser.
+List members are strings or objects, and never bare numbers. No claimant asks
+`owner` or `reviewed-by` to be anything but plain names. `created` and
+`last-updated` are the document's dates rather than the file's, added in round
+9. All three
+dates are W3CDTF, and all three are records rather than gates. JSON Schema
+cannot compare a date to today, or one sibling date to another. So both the
+overdue review and a `last-updated` older than its `created` are pinned as
 *passing*. A freshness grader reads the same `last-reviewed` field, and is the
-thing that owns the clock.
+thing that owns the clock. `verified-against` and `source-of-truth` take a
+string, an object, or a list of either, which round 9 also settled.
 
 **docmeta:audience:1.0.0-proposal.1**: `audiences`, `personas`, `journeys`, `intent`,
 `visibility` (enum `draft → restricted → confidential → internal → public`,
@@ -442,6 +452,72 @@ The decisions were these:
   a top-level `pattern`. Read shallowly this looks like a missing constraint. It
   is a documented decision.
 
+## Review round 9, on the document's own dates
+
+Round 9 revised `stewardship` to `1.0.0-proposal.2`, taking it from 8 fields to
+10 and the family from 34 to 36. The other eight stay where they are. One of
+the decisions reopens a principle.
+
+- **`created` and `last-updated` are in stewardship, against principle 4 as
+  first written.** Principle 4 cut them because git owns change dates. That reasoning
+  does not survive contact with what git stores. `git log` reports the history
+  of a *path in this repo*: the commit that added it, and the last commit that
+  touched any byte of it. A page migrated from a CMS, or split out of a longer
+  one, has a path younger than the document it holds. So does one imported from
+  another repo, or landed through a squashed history. A last-commit date also
+  moves for a typo fix, a link sweep or a bulk frontmatter migration. None of
+  those change what the page says. So both dates are editorial facts a
+  person asserts, in the same way `authors` is. Git records who committed a
+  change rather than who wrote the prose, which is the argument that moved
+  `authors` here in round 6. There is a consumer argument too. The page a
+  static site, a retrieval index or a model reads has no repo attached. A
+  stamped date travels with the document, where a derived one cannot.
+- **The cost is real, and it is accepted.** A hand-typed `last-updated` goes stale
+  quietly, and no JSON Schema can catch that. The answer has the same shape as
+  the freshness answer: tooling that can read both the field and the repo
+  compares the two. Principle 4 still holds against a stored copy of a value
+  this vocabulary already derives. That is why there is still no due-date field
+  and no `next-review`.
+- **Both are W3CDTF, like `last-reviewed`, and neither is compared to
+  anything.** Reduced precision is legal, an impossible date such as
+  `2026-13-45` fails, and a `last-updated` earlier than its `created` passes. JSON
+  Schema cannot relate two sibling values. The test pins that rather than
+  leaving it to be discovered, as it does for the overdue review and the
+  contradicting `applies-to` pair.
+- **The names are `created` and `last-updated`, not `date` or `lastmod`.** Six
+  built-ins claim `date`: MyST, Docusaurus blog, mkdocs-material, DCMI, Hugo
+  and Jekyll. The composability law would hold it at their loosest form, which
+  does not require a date at all. Nothing claims a bare `created` or
+  `last-updated`. Every near neighbour is spelled otherwise:
+  `critdates.created` and `critdates.revised` in DITA, `date` and `lastmod` in
+  Hugo, `last_update` in Docusaurus, `lastUpdated` in Starlight and VitePress,
+  and `article:published_time` and `article:modified_time` in Open Graph. This
+  is the move that named `reviewed-by` around MyST's `reviewers`.
+- **`last-updated` carries the prefix, for the reason `last-reviewed` does.**
+  The round first proposed a bare `updated`, on the grounds that this is what
+  the key means wherever it already appears. The owner settled it the other
+  way. Both fields name the most recent instance of a repeating event, so both
+  say `last-`, and the two read as the pair they are. `created` needs no
+  prefix, because a document is written once.
+- **`verified-against` and `source-of-truth` take a string, an object, or a
+  list of either.** Both name something outside the page. A string is the short
+  human spelling, as in `operator 1.4.2`. An object is the form a drift check
+  can compare without parsing prose, as in `{name: operator, version: 1.4.2}`.
+  A list is there because a page is often anchored to more than one thing.
+  `verified-against` was a single string in proposal.1, and could not say that
+  at all. The shape is `authors`'s, lifted into a `$defs/entryList` now
+  that three fields want it. `authors` keeps its own inline copy, because MyST
+  and Docusaurus claim that key and the law holds it at their definition. No
+  one else claims these two, so the family is free to add `uniqueItems` and a
+  non-empty floor on list members.
+- **The object's keys are left open.** Enumerating them would freeze a
+  vocabulary this proposal has not put to review. The recommendations live in
+  the field descriptions, under the same "recommend openly" rule as `language`.
+- **The version moves because the shape changed.** Two new keys and two widened
+  ones take `stewardship` to `proposal.2`, for the reason round 8 took core to
+  `proposal.3`. Nothing valid under proposal.1 fails under proposal.2, so this
+  is a MINOR-shaped change in the table above.
+
 ## Placement intent (decided in design, applied only after review)
 
 - **All nine append to `DEFAULT_SCHEMAS`.** Corrected 2026-08-26 from core-only,
@@ -521,19 +597,36 @@ anything else. It is the reproducible evidence behind principles 1 and 7.
    objects. So the W3CDTF string fields validate only for YAML and JSON
    frontmatter. That holds until the TOML date normalization in the in-flight
    platform schemas PR (#117) lands. This is a sequencing dependency, not a
-   design choice.
-9. **What users pin, now that patch bumps are real.** Three-segment semver makes
-   a documentation fix a new id, and pinning `docmeta:core:1.0.0` everywhere
-   means every such fix churns every config. The usual answer is a second,
-   *moving* reference, with `docmeta:core:1` resolving to the latest `1.x`. But
-   that cuts against `PUBLISHED_ALIAS`. That is an exact-string table with no
-   prefix rule, on purpose. A URL naming a version that does not exist then
-   stays a 404, instead of resolving to something else
-   ([`schema-registry.ts:105`](../../src/core/schema-registry.ts)). A moving
-   alias also cannot be byte-pinned, so `check-published-schemas.mjs` would have
-   to assert it resolves to *some* known exact version rather than to a fixed
-   hash. Deferred to the registration PR, but it is the question the version
-   scheme creates.
+   design choice. Round 9 widened the surface rather than changing the
+   question. `created` and `last-updated` are the two dates a TOML page is
+   most likely to carry. Five W3CDTF fields now wait on that normalization.
+9. **Should the structured anchor form require a key?** `verified-against` and
+   `source-of-truth` accept an object with any keys, on the "recommend openly"
+   rule, so `{name, version}` and `{path, kind}` are recommendations rather
+   than contracts. A drift checker therefore cannot rely on finding either. The
+   alternative is one required key per field, which is a vocabulary this
+   proposal has not reviewed. Round 9's automated reviewer proposed a third
+   way, a `oneOf` between named-key branches and the open-object form. Probed
+   against Ajv, that construction inverts its own intent.
+   `{name: operator, version: 1.4.2}` matches the named branch and the open
+   branch, so "exactly one" fails and the structured anchor is rejected.
+   `{anything: value}` matches only the open branch, and passes. Spelled
+   `anyOf`, every object matches the open branch, so the named ones constrain
+   nothing. The only spelling that constrains is dropping the open branch,
+   which is the required-key alternative above. The question is a real choice,
+   and its obvious implementation is a trap.
+10. **What users pin, now that patch bumps are real.** Three-segment semver makes
+    a documentation fix a new id, and pinning `docmeta:core:1.0.0` everywhere
+    means every such fix churns every config. The usual answer is a second,
+    *moving* reference, with `docmeta:core:1` resolving to the latest `1.x`. But
+    that cuts against `PUBLISHED_ALIAS`. That is an exact-string table with no
+    prefix rule, on purpose. A URL naming a version that does not exist then
+    stays a 404, instead of resolving to something else
+    ([`schema-registry.ts:105`](../../src/core/schema-registry.ts)). A moving
+    alias also cannot be byte-pinned, so `check-published-schemas.mjs` would have
+    to assert it resolves to *some* known exact version rather than to a fixed
+    hash. Deferred to the registration PR, but it is the question the version
+    scheme creates.
 
 ## Stress test
 

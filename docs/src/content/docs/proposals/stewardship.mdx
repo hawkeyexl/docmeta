@@ -1,6 +1,6 @@
 ---
-title: "docmeta:stewardship:1.0.0-proposal.1"
-description: "The proposed attribution, ownership, and review vocabulary: who wrote a page, who answers for it, when it was verified, and against what."
+title: "docmeta:stewardship:1.0.0-proposal.2"
+description: "The proposed attribution, ownership, and review vocabulary: who wrote a page, who answers for it, when it was written and last changed, and what it was verified against."
 sidebar:
   order: 2
   label: "stewardship"
@@ -9,14 +9,17 @@ sidebar:
 :::caution[Proposal under review]
 Part of the [metadata vocabularies proposal](/docmeta/proposals/frontmatter-vocabularies/),
 open for community review. Draft schema:
-[`docs/proposals/0023/schemas/stewardship/1.0.0-proposal.1.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/stewardship/1.0.0-proposal.1.json).
+[`docs/proposals/0023/schemas/stewardship/1.0.0-proposal.2.json`](https://github.com/hawkeyexl/docmeta/blob/main/docs/proposals/0023/schemas/stewardship/1.0.0-proposal.2.json).
 :::
 
 **The question it answers: is this page cared for?** Every field here is a fact
-that is best asserted by humans, though some can be inferred from version
-control systems. That is who wrote the page, who owns it, who to consult, when
-it was last verified, and against what. Dates the repo can derive (creation,
-last change) are left out. Git owns them, and a hand-typed copy goes stale.
+a person asserts about the document, though a version control system can
+approximate some of them. That is who wrote the page, who owns it, and who to
+consult. It is also when the page was written, when it last changed, when it
+was last verified, and against what. Review round 9 added `created` and
+`last-updated`. Git's
+timestamps answer a neighbouring question, which is when a path in this repo
+changed, and a published page carries no repo at all.
 
 ## Fields
 
@@ -26,14 +29,19 @@ last change) are left out. Git owns them, and a hand-typed copy goes stale.
 | `owner` | string or list | Who answers for the page, as a name, handle, chat channel, or team slug. Ownership systems such as Backstage make this field mandatory |
 | `stakeholders` | string or list | Who has a stake in this page being right, such as the feature's engineer, the product owner, or the support lead. It is page-level because the right people differ from page to page |
 | `reviewed-by` | string or list | Who did the last review. The spelling avoids `reviewers`, which MyST uses for scholarly metadata |
+| `created` | W3CDTF date | When the document was written. The document's date, not the date its path appeared in this repo |
+| `last-updated` | W3CDTF date | When the content last changed in a way a reader would notice. Not every commit that touched the file |
 | `last-reviewed` | W3CDTF date | When the last review happened. Freshness tooling reads this field |
 | `review-interval` | ISO 8601 duration | How often review is due: `P90D`, `P1Y`. Machines can compare these, unlike `90d` |
-| `verified-against` | string, non-empty | The product version or spec the content was checked against: `operator 1.4.2` |
-| `source-of-truth` | string or list | Where the facts live, as a repo path or an API spec. A drift check compares the page against it |
+| `verified-against` | string, object, or list of them | The product version or spec the content was checked against: `operator 1.4.2`, or `{name: operator, version: 1.4.2}` |
+| `source-of-truth` | string, object, or list of them | Where the facts live, as a repo path or an API spec. A drift check compares the page against it |
 
 All list fields accept one string or a non-empty list without
-duplicates. `authors` is the exception: it also accepts the person
-objects that MyST and Docusaurus define.
+duplicates. Three fields go further and take objects as well.
+`authors` accepts the person objects that MyST and Docusaurus define.
+`verified-against` and `source-of-truth` accept an object with any keys,
+so an anchor can be structured for a checker instead of written for a
+reader. Every form still refuses to be empty.
 
 ## Example
 
@@ -47,10 +55,28 @@ authors:
 owner: platform-docs
 stakeholders: [jane.doe, pm-alex]
 reviewed-by: [sam.reviewer]
+created: 2025-11-04
+last-updated: 2026-08-20
 last-reviewed: 2026-08-20
 review-interval: P90D
 verified-against: operator 1.4.2
 source-of-truth: https://github.com/example/operator/tree/main/helm
+---
+```
+
+An anchor can also be structured, or carry more than one entry:
+
+```yaml
+---
+title: Roll out the admission webhook
+description: Enable the operator's admission webhook and confirm it is serving.
+verified-against:
+  - name: operator
+    version: 1.4.2
+  - kubernetes 1.31
+source-of-truth:
+  path: charts/operator/values.yaml
+  kind: helm-values
 ---
 ```
 
@@ -64,14 +90,52 @@ source-of-truth: https://github.com/example/operator/tree/main/helm
   Git records who committed a change, not who wrote the prose. The two differ
   whenever a page is landed by a bot, a CMS, or a colleague merging someone
   else's draft.
-- **`authors` keeps its own shape.** Every other list here is a plain
-  name or a list of names. `authors` must also accept every documented
-  MyST and Docusaurus person form, so it cannot share the `stringList`
-  definition the other fields use. The cost is that stewardship is no
-  longer uniform in shape. Normalizing `authors` for tidiness would break
-  the family's compatibility rule against two schemas that define the
-  field. It still refuses every empty form: `""`, `[]`, `{}`, and bare
-  numbers.
+- **`authors` keeps its own shape.** `owner`, `stakeholders`, and
+  `reviewed-by` are a plain name or a list of names. `authors` must also
+  accept every documented MyST and Docusaurus person form, so it cannot
+  share the `stringList` definition those fields use. The cost is that
+  stewardship is not uniform in shape. Normalizing `authors` for tidiness
+  would break the family's compatibility rule against two schemas that
+  define the field. It still refuses every empty form: `""`, `[]`, `{}`,
+  and bare numbers.
+- **The document's own dates are asserted, not derived.** Review round 9
+  added `created` and `last-updated` here, against the family's own principle
+  that derivable facts lie. The reason is that git answers a neighbouring
+  question. `git log` reports the history of a path in this repo. A page
+  migrated from a CMS, or split out of a longer one, has a path younger
+  than its content. A last commit date also moves for a typo fix, a link
+  sweep, or a bulk frontmatter migration. None of those change what the
+  page says. This is the argument that put `authors` here too. Git records
+  who committed a change, not who wrote the prose. The second half is the
+  reader. A published page carries no repo, so a stamped date travels with
+  the document where a derived one cannot.
+- **The cost of stamping a date is real.** A hand-typed `last-updated` goes
+  stale quietly, and no JSON Schema can catch that. Comparing the field
+  against the repository's own history is a job for tooling that can read
+  both. What stays out is a stored copy of a value this vocabulary already
+  derives, which is why there is no due-date field.
+- **`last-updated` is not `last-reviewed`.** An update changes the
+  content. A review confirms it is still true. A page can have either
+  without the other, which is why both dates exist. Both carry the
+  `last-` prefix because both name the most recent instance of a
+  repeating event. `created` needs no prefix, because a document is
+  written once.
+- **The names avoid every neighbour's spelling.** Six built-ins claim
+  `date`. The family's compatibility rule would hold that key at their
+  loosest definition, which does not require a date at all. Nothing claims
+  a bare `created` or `last-updated`. The near neighbours are all spelled
+  otherwise: `critdates.created` and `critdates.revised` in DITA, `lastmod`
+  in Hugo, `last_update` in Docusaurus, `lastUpdated` in Starlight and
+  VitePress, and `article:modified_time` in Open Graph.
+- **An anchor can be written for a reader or for a checker.**
+  `verified-against` and `source-of-truth` take a string, an object, or a
+  list of either. `operator 1.4.2` is the short spelling.
+  `{name: operator, version: 1.4.2}` is the one a drift check can compare
+  without parsing prose. The list form is there because a page is usually
+  anchored to more than one thing. `verified-against` was a single string
+  until round 9, and could not say that at all. Object keys are left open,
+  so `{name, version}` and `{path, kind}` are recommendations rather than
+  contracts.
 - **The review dates are records only.** JSON Schema cannot compare a
   date to today, so a `last-reviewed` from 1998 validates, and a test
   asserts that it keeps doing so. Computing the due date (`last-reviewed`
@@ -79,14 +143,16 @@ source-of-truth: https://github.com/example/operator/tree/main/helm
   a clock. Any freshness grader can consume these fields.
 - **There is no stored due-date field.** It would duplicate a value the
   two existing fields already give, and a hand-maintained copy of a
-  derived value goes stale. The same rule keeps `updated` out of core.
-- **Dates use W3CDTF with a field-range check.** Reduced precision is
-  legal (`2026`, `2026-08`). A timestamp requires its timezone, because
-  the W3CDTF profile mandates one. An impossible date such as
-  `2026-13-45` fails here. Without that check it would reach downstream
-  tooling as `Invalid Date`, and the page would silently never come due.
-  The check is not calendar-exact: February 31 passes and is left for a
-  reviewer to catch.
+  derived value goes stale.
+- **All three dates use W3CDTF with a field-range check.** Reduced
+  precision is legal (`2026`, `2026-08`). A timestamp requires its
+  timezone, because the W3CDTF profile mandates one. An impossible date
+  such as `2026-13-45` fails here. Without that check it would reach
+  downstream tooling as `Invalid Date`, and the page would silently never
+  come due. The check is not calendar-exact: February 31 passes and is
+  left for a reviewer to catch. No date is compared to another one
+  either, so a `last-updated` older than its `created` validates. A test
+  pins that, the same way it pins the overdue review.
 - **The field is `stakeholders` rather than `sme`.** It is broader than a
   subject-matter expert on purpose. The product owner and the support lead have
   a stake in the page being right, without being its technical authority.
@@ -95,7 +161,7 @@ source-of-truth: https://github.com/example/operator/tree/main/helm
 
 ## What reviewers should poke at
 
-Three questions. Should `owner` eventually be required for teams
+Four questions. Should `owner` eventually be required for teams
 adopting this vocabulary? (It is optional as proposed.) Do the field
 names alone make the distinction between `verified-against` and
 `last-reviewed` clear, that is, reviewed against something versus
@@ -104,3 +170,8 @@ Generators put it next to `title`, so expecting it in
 [core](/docmeta/proposals/core/) is reasonable. The counter-argument is
 that every other people field is here, and splitting them means two
 adoption decisions for one habit.
+
+Round 9 adds one more. Should the object form of an anchor require a
+key? As proposed it accepts any object, so a drift checker cannot rely
+on finding a `name` or a `path`. Requiring one would be a small
+vocabulary this proposal has not yet reviewed.

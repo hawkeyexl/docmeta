@@ -50,14 +50,16 @@ const DRAFTS = "./docs/proposals/0023/schemas";
  *
  * Revisions are **per family**, not per set. proposal.2 of `evals`,
  * `artifact-evals` and `core` carries scoring, targeting and versioning fields
- * the other six had no part in, and core's proposal.3 adds `locale`; bumping
- * the others alongside would announce a revision none of them made and leave
- * pairs of byte-identical files to explain. `ref()` keeps the mapping in one
- * table, so a family's next bump is still a one-line edit.
+ * the other six had no part in, core's proposal.3 adds `locale`, and
+ * stewardship's proposal.2 adds the editorial dates and widens the two anchor
+ * fields; bumping the rest alongside would announce a revision none of them
+ * made and leave pairs of byte-identical files to explain. `ref()` keeps the
+ * mapping in one table, so a family's next bump is still a one-line edit.
  */
 const DRAFT_V = "1.0.0-proposal.1";
 const VERSIONS: Record<string, string> = {
   core: "1.0.0-proposal.3",
+  stewardship: "1.0.0-proposal.2",
   evals: "1.0.0-proposal.2",
   "artifact-evals": "1.0.0-proposal.2",
 };
@@ -76,6 +78,17 @@ const HOUSE = [
 ];
 const SIBLINGS = [ref("evals"), ref("kg"), ref("artifact-evals")];
 
+/**
+ * Every date the family carries, all three on stewardship and all three
+ * W3CDTF. `created` and `last-updated` joined `last-reviewed` in
+ * stewardship's proposal.2: git's timestamps answer a neighbouring question
+ * (when the path changed) rather than this one (when the document was
+ * written, and when its content last did), and the published page a consumer
+ * reads has no repo attached at all. Both review and revision are events with
+ * a most recent instance, so both spell it `last-`.
+ */
+const DATE_FIELDS = ["created", "last-reviewed", "last-updated"];
+
 /** The fields each house schema claims, pinned so growth is deliberate. */
 const FIELDS: Record<string, string[]> = {
   core: [
@@ -89,7 +102,9 @@ const FIELDS: Record<string, string[]> = {
   ],
   stewardship: [
     "authors",
+    "created",
     "last-reviewed",
+    "last-updated",
     "owner",
     "review-interval",
     "reviewed-by",
@@ -167,7 +182,7 @@ describe("the six house vocabularies", () => {
         seen.set(key, ref);
       }
     }
-    expect(seen.size).toBe(34);
+    expect(seen.size).toBe(36);
   });
 
   it("spells every field in lowercase kebab-case", async () => {
@@ -277,12 +292,14 @@ describe("the six house vocabularies", () => {
     expect(r.errors[0]?.instancePath).toBe("/locale");
   });
 
-  it("accepts the reduced W3CDTF precisions on review dates", async () => {
-    for (const value of ["2026", "2026-08", "2026-08-23", "2026-08-23T09:00:00Z"]) {
-      const r = await checkStdin(
-        `title: T\ndescription: D\nlast-reviewed: "${value}"`,
-      );
-      expect(r.ok, `last-reviewed: ${value}`).toBe(true);
+  it("accepts the reduced W3CDTF precisions on every date field", async () => {
+    for (const field of DATE_FIELDS) {
+      for (const value of ["2026", "2026-08", "2026-08-23", "2026-08-23T09:00:00Z"]) {
+        const r = await checkStdin(
+          `title: T\ndescription: D\n${field}: "${value}"`,
+        );
+        expect(r.ok, `${field}: ${value}`).toBe(true);
+      }
     }
   });
 
@@ -290,11 +307,90 @@ describe("the six house vocabularies", () => {
     // Field-ranged, not calendar-exact: 2026-13-45 fails here instead of
     // becoming Invalid Date (and a NaN age) in the tooling that derives
     // review deadlines; February 31 remains a reviewer's catch.
-    for (const value of ["2026-13-01", "2026-00-10", "2026-01-32", "0000-13-99"]) {
-      const r = await checkStdin(
-        `title: T\ndescription: D\nlast-reviewed: "${value}"`,
-      );
-      expect(r.ok, `last-reviewed: ${value}`).toBe(false);
+    for (const field of DATE_FIELDS) {
+      for (const value of ["2026-13-01", "2026-00-10", "2026-01-32", "0000-13-99"]) {
+        const r = await checkStdin(
+          `title: T\ndescription: D\n${field}: "${value}"`,
+        );
+        expect(r.ok, `${field}: ${value}`).toBe(false);
+      }
+    }
+  });
+
+  it("rejects a prose creation date, attributed to stewardship", async () => {
+    const r = await check("bad-created.md");
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]?.schema).toBe(STEWARDSHIP);
+    expect(r.errors[0]?.instancePath).toBe("/created");
+  });
+
+  it("passes an update dated before the creation, because a schema cannot compare two siblings", async () => {
+    // Pinned as intended behavior, the same way the overdue review and the
+    // contradicting applies-to pair are. JSON Schema cannot relate two
+    // sibling values, so an impossible ordering is a reviewer's catch — or a
+    // check run by tooling that can read both fields and the repo.
+    const r = await checkStdin(
+      "title: T\ndescription: D\ncreated: 2026-08-20\nlast-updated: 2019-01-05",
+    );
+    expect(r.errors).toEqual([]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("takes an anchor as a string, an object, or a list of either", async () => {
+    // `verified-against` and `source-of-truth` name a thing outside the page.
+    // A version string is the shortest way to say it and a structured entry
+    // the checkable one, so both are legal, and a page may be anchored to
+    // more than one thing.
+    const fixture = await check("structured-anchors.md");
+    expect(fixture.errors).toEqual([]);
+    expect(fixture.ok).toBe(true);
+
+    for (const yaml of [
+      "verified-against: operator 1.4.2",
+      "verified-against:\n  name: operator\n  version: 1.4.2",
+      "verified-against: [operator 1.4.2, kubernetes 1.31]",
+      "verified-against:\n  - name: operator\n    version: 1.4.2\n  - kubernetes 1.31",
+      "source-of-truth: charts/operator/values.yaml",
+      "source-of-truth:\n  path: charts/operator/values.yaml\n  kind: helm-values",
+      "source-of-truth:\n  - charts/operator/values.yaml\n  - path: api/openapi.yaml\n    kind: openapi",
+    ]) {
+      const r = await checkStdin(`title: T\ndescription: D\n${yaml}`, [
+        STEWARDSHIP,
+      ]);
+      expect(r.ok, yaml).toBe(true);
+    }
+  });
+
+  it("holds the anchor fields non-empty in every form, attributed to stewardship", async () => {
+    // The same floor `authors` sits on, extended to the two fields that now
+    // share its shape: minLength, minItems and minProperties each bind to
+    // their own type, and the item schema repeats the pair so no spelling of
+    // "an anchor I did not name" gets through. Unlike `authors`, nobody else
+    // claims these keys, so the family is free to add uniqueItems too.
+    for (const field of ["verified-against", "source-of-truth"]) {
+      for (const value of [
+        '""',
+        "[]",
+        "{}",
+        '[\"\"]',
+        "[{}]",
+        "[1, 2]",
+        "[~]",
+        "[a, a]",
+      ]) {
+        const r = await checkStdin(
+          `title: T\ndescription: D\n${field}: ${value}`,
+          [STEWARDSHIP],
+        );
+        expect(r.ok, `${field}: ${value}`).toBe(false);
+        expect(
+          r.errors.some(
+            (e) =>
+              e.schema === STEWARDSHIP && e.instancePath.startsWith(`/${field}`),
+          ),
+          `${field}: ${value}`,
+        ).toBe(true);
+      }
     }
   });
 
@@ -584,8 +680,8 @@ describe.skip("the default set (flips on registration)", () => {
   // Derived from the same table `ref()` reads, not repeated as literals. This
   // block is skipped until the registration PR flips it, so a stale version
   // here fails nothing in CI and is found only when that PR runs it — which
-  // is exactly when a "no compiled schema" error is most confusing. Three
-  // families have moved to proposal.2 since these strings were written.
+  // is exactly when a "no compiled schema" error is most confusing. Four
+  // families have moved past proposal.1 since these strings were written.
   const idFor = (family: string): string =>
     `docmeta:${family}:${VERSIONS[family] ?? DRAFT_V}`;
   const CORE_ID = idFor("core");
