@@ -368,7 +368,16 @@ describe("the six house vocabularies", () => {
     // "an anchor I did not name" gets through. Unlike `authors`, nobody else
     // claims these keys, so the family is free to add uniqueItems too.
     for (const field of ["verified-against", "source-of-truth"]) {
-      for (const value of ['""', "[]", "{}", '[\"\"]', "[{}]", "[1, 2]", "[a, a]"]) {
+      for (const value of [
+        '""',
+        "[]",
+        "{}",
+        '[\"\"]',
+        "[{}]",
+        "[1, 2]",
+        "[~]",
+        "[a, a]",
+      ]) {
         const r = await checkStdin(
           `title: T\ndescription: D\n${field}: ${value}`,
           [STEWARDSHIP],

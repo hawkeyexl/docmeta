@@ -88,6 +88,7 @@
         "array"
       ],
       "items": {
+        "$comment": "The parent's keyword-per-type pattern again, one level down: minLength binds to a string member, minProperties to an object one, and each is ignored for the other. Repeated here rather than hoisted because a member's floor is a different assertion from the whole value's.",
         "type": [
           "string",
           "object"
