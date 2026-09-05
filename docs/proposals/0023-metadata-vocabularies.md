@@ -605,7 +605,16 @@ anything else. It is the reproducible evidence behind principles 1 and 7.
    rule, so `{name, version}` and `{path, kind}` are recommendations rather
    than contracts. A drift checker therefore cannot rely on finding either. The
    alternative is one required key per field, which is a vocabulary this
-   proposal has not reviewed.
+   proposal has not reviewed. Round 9's automated reviewer proposed a third
+   way, a `oneOf` between named-key branches and the open-object form. Probed
+   against Ajv, that construction inverts its own intent.
+   `{name: operator, version: 1.4.2}` matches the named branch and the open
+   branch, so "exactly one" fails and the structured anchor is rejected.
+   `{anything: value}` matches only the open branch, and passes. Spelled
+   `anyOf`, every object matches the open branch, so the named ones constrain
+   nothing. The only spelling that constrains is dropping the open branch,
+   which is the required-key alternative above. The question is a real choice,
+   and its obvious implementation is a trap.
 10. **What users pin, now that patch bumps are real.** Three-segment semver makes
     a documentation fix a new id, and pinning `docmeta:core:1.0.0` everywhere
     means every such fix churns every config. The usual answer is a second,
