@@ -8,8 +8,9 @@ one dedicated page per vocabulary, nine in all. All pass the dogfood gate and
 the docs build. Nine draft schemas live unregistered under
 `docs/proposals/0023/schemas/`: the six house ids below, plus evals, kg and
 artifact-evals. Round 6 moved `core`, `evals` and `artifact-evals` to
-`1.0.0-proposal.2`, and round 8 moved `core` on to `1.0.0-proposal.3`. The other
-six stay at `1.0.0-proposal.1`. Spec-by-example lives in
+`1.0.0-proposal.2`, round 8 moved `core` on to `1.0.0-proposal.3`, and round 9
+moved `stewardship` to `1.0.0-proposal.2`. The other five stay at
+`1.0.0-proposal.1`. Spec-by-example lives in
 `test/default-schema.test.ts`, which is red until registration by design, and in
 the runnable ladders at `docs/proposals/0023/ladders/*.cjs`, plus
 `compat-check.cjs`, the composability cross-check. `test/default-schema.test.ts`
@@ -89,6 +90,47 @@ from 33 to 34. The test pin and the compat probes are updated. The core page
 records the decision, and asks reviewers whether the hyphen form should be
 enforced.
 
+**2026-09-05 ruling: the document's own dates join stewardship, and the two
+anchor fields widen.** Principle 4 cut `updated` and `date` because git owns
+change dates. Held against what git stores, that reasoning is about a
+neighbouring fact. `git log` reports the history of a path in this repo. That
+is the commit that added it, and the last commit that touched any byte of it. A
+page migrated from a CMS, or split out of a longer one, has a path younger than
+its content. So does one imported from another repo, or landed through a
+squashed history. A last-commit date also moves for a typo fix, a link sweep or
+a bulk frontmatter migration. None of those change what the page says. So
+`created` and `updated` are editorial facts a person asserts. That is the line
+that moved `authors` here on 2026-08-31. Git records who committed a change,
+not who wrote the prose. The consumer argument is the second half. A published
+page carries no repo. A stamped date travels with the document, where a derived
+one cannot. The cost stands as principle 4 stated it, and is accepted. A
+hand-typed `updated` goes stale quietly, and no JSON Schema catches that. What
+principle 4 still forbids is a stored copy of a value this vocabulary itself
+derives. So there is still no due-date field and no `next-review`. Both new
+fields are `w3cdtf`, like `last-reviewed`. Reduced precision passes, and an
+impossible date fails. An `updated` older than its `created` passes, because
+JSON Schema cannot relate two siblings. The test pins that the way it pins the
+overdue review. The names avoid `date`, which six built-ins claim. The law
+would take that key down to their loosest form. They also avoid every near
+neighbour's spelling: `critdates.created`, `critdates.revised`, `lastmod`,
+`last_update`, `lastUpdated` and `article:modified_time`. Nothing claims a bare
+`created` or `updated`. So the compat ladder pins the family's own shape, as it
+does for `locale`. The same round widened `verified-against` and
+`source-of-truth` to a string, an object, or a list of either. That lifts
+`authors`'s shape into `$defs/entryList`. A string is the short human spelling.
+An object is what a drift check can compare without parsing prose. A list is
+there because a page is usually anchored to more than one thing.
+`verified-against` was a single string, and could not say that at all.
+`authors` keeps its inline copy, because MyST and Docusaurus claim that key and
+the law holds it at their definition. Nobody else claims these two. So
+`entryList` can add `uniqueItems` and a non-empty floor on members. Object keys
+stay open, under the same recommend-openly rule as `language`. Stewardship goes
+from 8 fields to 10, and the family from 34 to 36. It ships as stewardship
+`1.0.0-proposal.2`, because a new key is a shape change. So proposal.1 keeps
+the bytes it had. The test pin, the compat probes and the stewardship page are
+updated. The page asks reviewers whether `updated` should be spelled
+`last-updated` beside `last-reviewed`.
+
 **2026-08-26 correction: the whole family is default.** All nine append to
 `DEFAULT_SCHEMAS`, superseding the core-only intent below wherever it
 appears. Bare runs require the pair, validate every family key present,
@@ -105,10 +147,12 @@ and put the full menu on bare `fill`, accepted as the teaching surface.
    cases.
 3. **Claim content, never rendering.** Cut `tags`, `slug`, `image` and `layout`,
    and the presentation group as a concept.
-4. **Derivable facts lie.** Cut `updated`, `date`, `next-review`, and `contact`
-   as a second reach field. Git owns change dates. `last-reviewed` plus
-   `review-interval` derive the due date. Dates only a human can assert stay,
-   which are `last-reviewed` and `remove-by`.
+4. **Derivable facts lie.** Cut `date`, `next-review`, and `contact` as a
+   second reach field. `last-reviewed` plus `review-interval` derive the due
+   date, so a stored copy of it can only agree or lie. Round 9 narrowed this on
+   2026-09-05. `updated` and `created` came back, in stewardship, because git's
+   dates are about the path rather than the document. The line is between a fact
+   another field derives and a fact a person asserts.
 5. **Facts live at their altitude.** `stakeholders` is page-level, meaning who
    to consult about THIS page. It is distinct from the project-level
    `stakeholders` cut in the exploration brief's addendum, which was its draft
@@ -123,7 +167,7 @@ and put the full menu on bare `fill`, accepted as the teaching surface.
    story is three layers: `type` for what the page is, `action` for what the
    reader is doing, and `intent` for the specific job.
 
-## The six house vocabularies: 34 fields, split by intent
+## The six house vocabularies: 36 fields, split by intent
 
 Designed as one large schema, then split by owner directive into six
 intent-scoped ids. That supersedes the earlier `docmeta:frontmatter:1.0` id
@@ -131,8 +175,9 @@ ruling, and the split is why. The six are `docmeta:core` (the required pair),
 `docmeta:stewardship`, `docmeta:audience`, `docmeta:lifecycle`,
 `docmeta:structure` (honoring the naming decision recorded in the exploration
 brief for the relational schema), and `docmeta:ai-context`. Core is at
-`1.0.0-proposal.3` since round 8, and the other five are at `1.0.0-proposal.1`.
-They are disjoint by construction, at 34 fields with 0 collisions, pinned.
+`1.0.0-proposal.3` since round 8, stewardship at `1.0.0-proposal.2` since round
+9, and the other four are at `1.0.0-proposal.1`. They are disjoint by
+construction, at 36 fields with 0 collisions, pinned.
 Stacking all six behaves like the monolith, and every error is attributed to one
 intent. Verified with `npx vitest run test/default-schema.test.ts`, green via
 file refs into the drafts, with default-set membership skipped until
@@ -144,11 +189,15 @@ registration. The field homes are:
   exception family. `locale` was added 2026-09-03 on the W3C LTLI line.
   `language` is what the text is written in, and `locale` the preferences its
   content follows, set only where the two differ.
-- **Stewardship (docmeta:stewardship:1.0.0-proposal.1):** authors, owner,
-  stakeholders, reviewed-by, last-reviewed, review-interval, verified-against,
-  source-of-truth. `authors` moved from core 2026-08-31, because attribution is
-  a fact about care rather than about what the page is. It keeps its own shape,
-  since person objects are legal here and not in `stringList`.
+- **Stewardship (docmeta:stewardship:1.0.0-proposal.2):** authors, owner,
+  stakeholders, reviewed-by, created, updated, last-reviewed, review-interval,
+  verified-against, source-of-truth. `authors` moved from core 2026-08-31,
+  because attribution is a fact about care rather than about what the page is.
+  It keeps its own shape, since person objects are legal here and not in
+  `stringList`. `created` and `updated` arrived 2026-09-05 with the same
+  argument. Git's dates are about the path rather than the document.
+  `verified-against` and `source-of-truth` widened to `entryList` in the same
+  round.
 - **Audience & intent (docmeta:audience:1.0.0-proposal.1):** audiences,
   personas, journeys, intent, visibility. The `visibility` enum is draft →
   restricted → confidential → internal → public.

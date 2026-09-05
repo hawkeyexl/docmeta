@@ -28,11 +28,13 @@ const PROPOSED_ROOT = "docs/proposals/0023/schemas";
 // function" rather than as a failed probe.
 const DRAFT_V = "1.0.0-proposal.1";
 // Revisions are per family: evals, artifact-evals and core moved to
-// proposal.2 for the scoring, targeting and versioning fields, and core to
-// proposal.3 for `locale`; the other six had no part in that and stay where
-// they are. One table so the next bump is still a one-line edit.
+// proposal.2 for the scoring, targeting and versioning fields, core to
+// proposal.3 for `locale`, and stewardship to proposal.2 for the editorial
+// dates and the widened anchor fields; the rest had no part in that and stay
+// where they are. One table so the next bump is still a one-line edit.
 const VERSIONS = {
   core: "1.0.0-proposal.3",
+  stewardship: "1.0.0-proposal.2",
   evals: "1.0.0-proposal.2",
   "artifact-evals": "1.0.0-proposal.2",
 };
@@ -147,6 +149,32 @@ const probes = [
   ["authors: MyST person objects", { ...base, authors: [{ name: "J", orcid: "0000-0002-1825-0097", roles: ["Writing"] }] }, "stewardship", false],
   ["authors: Docusaurus authors.yml key", { ...base, authors: "jdoe" }, "stewardship", false],
   ["authors: Docusaurus mixed list", { ...base, authors: ["jdoe", { name: "J", imageURL: "/j.png" }] }, "stewardship", false],
+  // No built-in claims a bare `created` or `updated`. DITA's are the dotted
+  // `critdates.created` and `critdates.revised`, Hugo's are `date` and
+  // `lastmod`, Docusaurus's is `last_update`, Starlight's and VitePress's is
+  // `lastUpdated`, and Open Graph's are `article:published_time` and
+  // `article:modified_time`. That is why the pair is spelled this way: `date`
+  // is claimed by six built-ins, and the law would take it down to their
+  // loosest form, which does not require a W3CDTF date at all. These probes
+  // pin the family's own shape, as the `locale` ones do.
+  ["created: W3CDTF day precision", { ...base, created: "2025-11-04" }, "stewardship", false],
+  ["created: reduced precision, year only", { ...base, created: "2025" }, "stewardship", false],
+  ["updated: full timestamp with a zone", { ...base, updated: "2026-08-20T09:00:00Z" }, "stewardship", false],
+  ["updated: local timestamp, no zone", { ...base, updated: "2026-08-20T09:00:00" }, "stewardship", true],
+  ["updated: prose date", { ...base, updated: "last spring" }, "stewardship", true],
+  ["updated: earlier than created (siblings are not compared)", { ...base, created: "2026-08-20", updated: "2019-01-05" }, "stewardship", false],
+  // The anchor pair is proposed-only too, and takes the `entryList` shape:
+  // a string, an object, or a list of either, on a non-empty floor.
+  ["verified-against: short string form", { ...base, "verified-against": "operator 1.4.2" }, "stewardship", false],
+  ["verified-against: structured entry", { ...base, "verified-against": { name: "operator", version: "1.4.2" } }, "stewardship", false],
+  ["verified-against: mixed list", { ...base, "verified-against": [{ name: "operator", version: "1.4.2" }, "kubernetes 1.31"] }, "stewardship", false],
+  ["verified-against: empty string", { ...base, "verified-against": "" }, "stewardship", true],
+  ["verified-against: empty object", { ...base, "verified-against": {} }, "stewardship", true],
+  ["source-of-truth: repo path", { ...base, "source-of-truth": "charts/operator/values.yaml" }, "stewardship", false],
+  ["source-of-truth: structured entry", { ...base, "source-of-truth": { path: "api/openapi.yaml", kind: "openapi" } }, "stewardship", false],
+  ["source-of-truth: empty list member", { ...base, "source-of-truth": [""] }, "stewardship", true],
+  ["source-of-truth: duplicate members", { ...base, "source-of-truth": ["a", "a"] }, "stewardship", true],
+  ["source-of-truth: bare number member", { ...base, "source-of-truth": [1] }, "stewardship", true],
 ];
 
 console.log("\n=== law probes (other claimants' extreme legal values vs the proposed owner) ===");
