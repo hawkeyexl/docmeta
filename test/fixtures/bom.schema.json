@@ -1,8 +1,0 @@
-﻿{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "test:bom:1.0",
-  "title": "Saved by an editor that writes a UTF-8 BOM",
-  "type": "object",
-  "required": ["owner"],
-  "properties": { "owner": { "type": "string" } }
-}

@@ -1,5 +1,0 @@
-paths:
-  - "docs/**/*.md"
-schemas:
-  - google:okf:0.1
-baseline: .docmeta-baseline.json

@@ -18,7 +18,7 @@ no backports to older majors.
 
 **Use GitHub private vulnerability reporting**, not a public issue:
 
-> [Security tab → Report a vulnerability](https://github.com/hawkeyexl/docmeta/security/advisories/new)
+> [Security tab → Report a vulnerability](https://github.com/hawkeyexl/manni/security/advisories/new)
 
 A public issue about a CI tool is a disclosure to everyone already running it.
 It lands days or weeks before there is a version to upgrade to. Private
@@ -59,7 +59,7 @@ requests, one line of frontmatter can otherwise choose the contract that
 document is judged against. That is what the `schemaTrust:` config key exists to
 close. See [proposal 0015](docs/proposals/0015-schema-trust-boundary.md) and
 [the configuration
-reference](https://hawkeyexl.github.io/docmeta/reference/configuration/#schema-trust).
+reference](https://hawkeyexl.github.io/manni/reference/configuration/#schema-trust).
 
 The following are **known and accepted**, documented where the key is
 documented, and not vulnerabilities:
@@ -90,7 +90,7 @@ The following **are** in scope:
 `fill` sends document content to an LLM provider. **That** it does so is
 documented, intended, and not a report. [Proposal
 0017](docs/proposals/0017-fill-egress-and-bounds.md) and the [`fill`
-reference](https://hawkeyexl.github.io/docmeta/reference/cli/#fill) enumerate
+reference](https://hawkeyexl.github.io/manni/reference/cli/#fill) enumerate
 exactly what leaves the machine. That includes the file path and the full
 `$defs` of every resolved schema. They also cover what the on-disk cache
 retains, which is the proposal set *before* confidence gating.

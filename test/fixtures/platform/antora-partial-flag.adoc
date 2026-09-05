@@ -1,4 +1,0 @@
-= Reusable Fragment
-:page-partial:
-
-Included elsewhere.

@@ -1,4 +1,0 @@
-# Invalid: `paths` must be a list of strings, not a scalar.
-paths: "not-a-list"
-schemas:
-  - google:okf:0.1

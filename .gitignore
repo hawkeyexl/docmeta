@@ -1,25 +1,2 @@
-node_modules/
-dist/
-.husky/_/
-*.log
+site/
 .DS_Store
-coverage/
-.vitest/
-
-# Doc Detective generated output. The tests live inline in docs/ (.mdx) and the
-# config is .doc-detective.json at the repo root; this directory is run output only.
-.doc-detective/
-
-# `docmeta fill` proposal cache — machine-local, safe to delete at any time.
-.docmeta/
-
-# Feature demo videos (see CLAUDE.md). Generated per feature, handed to the
-# user or attached to the PR — never committed, since binaries bloat history.
-media/
-
-# Baseline written by the Doc Detective steps in set-up/new-required-field.mdx.
-# Run output, not a source file.
-.dd-baseline.json
-
-# Vale styles are fetched by `vale sync`, not committed
-.vale/styles/

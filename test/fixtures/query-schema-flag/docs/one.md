@@ -1,5 +1,0 @@
----
-title: One
----
-
-Body one.

@@ -1,5 +1,0 @@
-paths:
-  - "docs/**/*.md"
-schemas:
-  - ./strict.schema.json
-baseline: .docmeta-baseline.json
