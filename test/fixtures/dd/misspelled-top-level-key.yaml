@@ -1,6 +1,0 @@
-# `schemaTust:` is a typo for `schemaTrust:`. It used to be dropped in silence,
-# leaving a repository that reads as guarded and is not.
-schemas:
-  - google:okf:0.1
-schemaTust:
-  documentRefs: local

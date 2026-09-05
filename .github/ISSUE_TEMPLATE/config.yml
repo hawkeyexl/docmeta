@@ -1,11 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Documentation
-    url: https://hawkeyexl.github.io/docmeta/
-    about: Flags, config keys, the schema-resolution precedence chain, and CI recipes. Most "how do I" answers are here.
-  - name: Questions and ideas
-    url: https://github.com/hawkeyexl/docmeta/discussions
-    about: For anything that is not yet a bug or a concrete request — ask here rather than filing an issue.
-  - name: Report a security vulnerability
-    url: https://github.com/hawkeyexl/docmeta/security/advisories/new
-    about: Privately, not as a public issue. docmeta runs in other people's CI pipelines.
+  - name: docmeta is now manni
+    url: https://github.com/hawkeyexl/manni/issues
+    about: This repository only serves the published schema bytes. Report everything at hawkeyexl/manni.
+  - name: Report a security issue
+    url: https://github.com/hawkeyexl/manni/security/advisories/new
+    about: Privately, not as a public issue.

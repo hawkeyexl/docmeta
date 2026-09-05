@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
-<task id="no-prolog">
-  <title>No prolog at all</title>
-  <shortdesc>A prolog must be created after this and before the body.</shortdesc>
-  <taskbody>
-    <context>Nothing here yet.</context>
-  </taskbody>
-</task>

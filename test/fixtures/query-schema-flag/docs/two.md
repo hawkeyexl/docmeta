@@ -1,5 +1,0 @@
----
-title: Two
----
-
-Body two.
