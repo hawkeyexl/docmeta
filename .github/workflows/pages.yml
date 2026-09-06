@@ -1,6 +1,7 @@
 # The only thing this repository still publishes: the built-in schema bytes at
 # their original URLs (https://hawkeyexl.github.io/docmeta/schemas/…), plus a
-# redirect from the old site root to manni. Proposal 0009 promised those URLs
+# redirect banner from the old site root, and from every old page URL
+# (via 404.html), to the same page on the manni site. Proposal 0009 promised those URLs
 # never change; keeping the repository, even archived, is what keeps the
 # promise. Archived repositories keep serving Pages.
 name: Pages
@@ -34,6 +35,10 @@ jobs:
           mkdir -p site
           cp -r schemas site/schemas
           cp index.html site/index.html
+          # Pages serves 404.html for every path that no longer exists, which
+          # is every old docs URL. It carries the banner and forwards
+          # /docmeta/<page> to /manni/meta/<page>; schema URLs are exempt.
+          cp 404.html site/404.html
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site
