@@ -1604,7 +1604,7 @@ function renameNotice(argv: string[]): void {
 
   const lines = [
     `docmeta: this package is now ${c.bold("manni")}. docmeta ${pkg.version} is its final release.`,
-    `docmeta:   npm i -D manni   then replace \`docmeta\` with \`manni meta\` in your scripts`,
+    `docmeta:   npm i -D @hawkeyexl/manni   then replace \`docmeta\` with \`manni meta\` in your scripts`,
     `docmeta: ${c.dim("https://hawkeyexl.github.io/manni/  ·  silence: DOCMETA_NO_RENAME_NOTICE=1")}`,
   ];
   process.stderr.write(`${lines.join("\n")}\n`);

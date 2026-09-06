@@ -87,7 +87,7 @@ describe("the rename notice (built bin)", () => {
     const r = spawn(["validate", "test/fixtures/valid.md"]);
     expect(r.status).toBe(0);
     expect(r.stderr).toContain("docmeta: this package is now manni");
-    expect(r.stderr).toContain("npm i -D manni");
+    expect(r.stderr).toContain("npm i -D @hawkeyexl/manni");
     expect(r.stderr).toContain("`manni meta`");
     expect(r.stderr).toContain("DOCMETA_NO_RENAME_NOTICE=1");
     // stdout is the report and only the report.
