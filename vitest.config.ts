@@ -4,6 +4,14 @@ export default defineConfig({
   test: {
     include: ["test/**/*.test.ts"],
     environment: "node",
+    env: {
+      // The rename notice goes to stderr on every run of the built bin, and a
+      // dozen integration tests assert that stderr is empty. Those tests are
+      // about the commands, not the notice, so the suite runs with it
+      // silenced; the notice's own tests in cli.integration.test.ts remove
+      // this variable from the child environment before spawning.
+      DOCMETA_NO_RENAME_NOTICE: "1",
+    },
     coverage: {
       provider: "v8",
       // `text` for the CI log, `lcov` for anything that wants to ingest it.
