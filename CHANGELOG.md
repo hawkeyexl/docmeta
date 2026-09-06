@@ -1,3 +1,15 @@
+# [4.14.0](https://github.com/hawkeyexl/docmeta/compare/v4.13.1...v4.14.0) (2026-09-06)
+
+
+### Bug Fixes
+
+* the notice names the scoped package ([171eb37](https://github.com/hawkeyexl/docmeta/commit/171eb37319be841624ff39a924335ae0458bb032))
+
+
+### Features
+
+* say on stderr that docmeta is now manni ([0b807f9](https://github.com/hawkeyexl/docmeta/commit/0b807f913bc59305e7744559a17a1c3a2a70f3cf))
+
 ## [4.13.1](https://github.com/hawkeyexl/docmeta/compare/v4.13.0...v4.13.1) (2026-09-04)
 
 
