@@ -66,13 +66,18 @@ function run(
 
 describe("the rename notice (built bin)", () => {
   // `run()` above drops stderr on a successful exit, and the notice is
-  // stderr on *every* exit, so these spawn the bin directly.
-  const spawn = (args: string[], env: Record<string, string> = {}) =>
-    spawnSync("node", [bin, ...args], {
+  // stderr on *every* exit, so these spawn the bin directly. vitest.config.ts
+  // silences the notice for the rest of the suite; these tests are the one
+  // place it must fire, so the variable is removed before `env` is applied.
+  const spawn = (args: string[], env: Record<string, string> = {}) => {
+    const inherited = { ...process.env };
+    delete inherited.DOCMETA_NO_RENAME_NOTICE;
+    return spawnSync("node", [bin, ...args], {
       cwd: root,
       encoding: "utf8",
-      env: { ...process.env, ...env },
+      env: { ...inherited, ...env },
     });
+  };
 
   beforeAll(() => {
     if (!existsSync(bin)) execSync("npm run build", { cwd: root, stdio: "ignore" });

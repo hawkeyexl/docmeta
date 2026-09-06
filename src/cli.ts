@@ -1587,6 +1587,8 @@ export function buildProgram(): Command {
  * notice.
  */
 function renameNotice(argv: string[]): void {
+  // Any non-empty value silences it, the way NO_COLOR works; the notice
+  // advertises `=1` because that is the spelling people will copy.
   if (process.env.DOCMETA_NO_RENAME_NOTICE) return;
 
   // Parsing has not happened yet, so --no-color is read straight off argv.

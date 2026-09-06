@@ -100,7 +100,13 @@ jobs:
           --model granite-4.1-3b-q2
           --fields title --dry-run --no-cache
       # Third-party action pinned to a full commit SHA (supply-chain hardening).
+      # The rename notice goes to stderr on every run, and Doc Detective matches
+      # `stdio` against stdout *and* stderr, so a step that documents "prints
+      # nothing" would fail on it. The docs describe the commands, not the
+      # notice, so it is silenced here; its own tests live in the vitest suite.
       - uses: doc-detective/github-action@a2a4f5ceb1abfa55d567e4f6766223082ece2c18 # v1
+        env:
+          DOCMETA_NO_RENAME_NOTICE: "1"
         with:
           config: .doc-detective.json
           exit_on_fail: true
