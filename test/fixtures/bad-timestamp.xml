@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<document type="concept"
-          title="Bad Timestamp"
-          timestamp="last Tuesday">
-  <body>The timestamp is not ISO 8601.</body>
-</document>
